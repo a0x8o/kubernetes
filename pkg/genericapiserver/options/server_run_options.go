@@ -71,6 +71,7 @@ type ServerRunOptions struct {
 	AuthorizationWebhookCacheUnauthorizedTTL time.Duration
 	AuthorizationRBACSuperUser               string
 
+	AnonymousAuth             bool
 	BasicAuthFile             string
 	BindAddress               net.IP
 	CertDirectory             string
@@ -119,6 +120,7 @@ type ServerRunOptions struct {
 	TLSCertFile            string
 	TLSPrivateKeyFile      string
 	TokenAuthFile          string
+	EnableAnyToken         bool
 	WatchCacheSizes        []string
 }
 
@@ -127,6 +129,7 @@ func NewServerRunOptions() *ServerRunOptions {
 		APIGroupPrefix:                           "/apis",
 		APIPrefix:                                "/api",
 		AdmissionControl:                         "AlwaysAdmit",
+		AnonymousAuth:                            true,
 		AuthorizationMode:                        "AlwaysAllow",
 		AuthorizationWebhookCacheAuthorizedTTL:   5 * time.Minute,
 		AuthorizationWebhookCacheUnauthorizedTTL: 30 * time.Second,
@@ -268,6 +271,11 @@ func (s *ServerRunOptions) AddUniversalFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&s.AuthorizationRBACSuperUser, "authorization-rbac-super-user", s.AuthorizationRBACSuperUser, ""+
 		"If specified, a username which avoids RBAC authorization checks and role binding "+
 		"privilege escalation checks, to be used with --authorization-mode=RBAC.")
+
+	fs.BoolVar(&s.AnonymousAuth, "anonymous-auth", s.AnonymousAuth, ""+
+		"Enables anonymous requests to the secure port of the API server. "+
+		"Requests that are not rejected by another authentication method are treated as anonymous requests. "+
+		"Anonymous requests have a username of system:anonymous, and a group name of system:unauthenticated.")
 
 	fs.StringVar(&s.BasicAuthFile, "basic-auth-file", s.BasicAuthFile, ""+
 		"If set, the file that will be used to admit requests to the secure port of the API server "+
@@ -465,6 +473,10 @@ func (s *ServerRunOptions) AddUniversalFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&s.TokenAuthFile, "token-auth-file", s.TokenAuthFile, ""+
 		"If set, the file that will be used to secure the secure port of the API server "+
 		"via token authentication.")
+
+	fs.BoolVar(&s.EnableAnyToken, "insecure-allow-any-token", s.EnableAnyToken, ""+
+		"If set, your server will be INSECURE.  Any token will be allowed and user information will be parsed "+
+		"from the token as `username/group1,group2`")
 
 	fs.StringSliceVar(&s.WatchCacheSizes, "watch-cache-sizes", s.WatchCacheSizes, ""+
 		"List of watch cache sizes for every resource (pods, nodes, etc.), comma separated. "+
