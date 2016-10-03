@@ -17,7 +17,6 @@ limitations under the License.
 package authenticator
 
 import (
-	"crypto/rsa"
 	"time"
 
 	"k8s.io/kubernetes/pkg/auth/authenticator"
@@ -141,7 +140,7 @@ func New(config AuthenticatorConfig) (authenticator.Request, error) {
 
 	authenticator := union.New(authenticators...)
 
-	authenticator = group.NewGroupAdder(authenticator, []string{"system:authenticated"})
+	authenticator = group.NewGroupAdder(authenticator, []string{user.AllAuthenticated})
 
 	if config.Anonymous {
 		// If the authenticator chain returns an error, return an error (don't consider a bad bearer token anonymous).
@@ -205,7 +204,7 @@ func newServiceAccountAuthenticator(keyfile string, lookup bool, serviceAccountG
 		return nil, err
 	}
 
-	tokenAuthenticator := serviceaccount.JWTTokenAuthenticator([]*rsa.PublicKey{publicKey}, lookup, serviceAccountGetter)
+	tokenAuthenticator := serviceaccount.JWTTokenAuthenticator([]interface{}{publicKey}, lookup, serviceAccountGetter)
 	return bearertoken.New(tokenAuthenticator), nil
 }
 
