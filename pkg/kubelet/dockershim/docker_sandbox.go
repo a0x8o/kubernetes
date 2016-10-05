@@ -26,6 +26,7 @@ import (
 
 	runtimeApi "k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/runtime"
 	"k8s.io/kubernetes/pkg/kubelet/qos"
+	"k8s.io/kubernetes/pkg/kubelet/types"
 )
 
 const (
@@ -45,9 +46,14 @@ const (
 // Note: docker doesn't use LogDirectory (yet).
 func (ds *dockerService) RunPodSandbox(config *runtimeApi.PodSandboxConfig) (string, error) {
 	// Step 1: Pull the image for the sandbox.
-	// TODO: How should we handle pulling custom pod infra container image
-	// (with credentials)?
 	image := defaultSandboxImage
+	podSandboxImage := ds.podSandboxImage
+	if len(podSandboxImage) != 0 {
+		image = podSandboxImage
+	}
+
+	// NOTE: To use a custom sandbox image in a private repository, users need to configure the nodes with credentials properly.
+	// see: http://kubernetes.io/docs/user-guide/images/#configuring-nodes-to-authenticate-to-a-private-repository
 	if err := ds.client.PullImage(image, dockertypes.AuthConfig{}, dockertypes.ImagePullOptions{}); err != nil {
 		return "", fmt.Errorf("unable to pull image for the sandbox container: %v", err)
 	}
@@ -202,6 +208,9 @@ func (ds *dockerService) makeSandboxDockerConfig(c *runtimeApi.PodSandboxConfig,
 	labels := makeLabels(c.GetLabels(), c.GetAnnotations())
 	// Apply a label to distinguish sandboxes from regular containers.
 	labels[containerTypeLabelKey] = containerTypeLabelSandbox
+	// Apply a container name label for infra container. This is used in summary api.
+	// TODO(random-liu): Deprecate this label once container metrics is directly got from CRI.
+	labels[types.KubernetesContainerNameLabel] = sandboxContainerName
 
 	hc := &dockercontainer.HostConfig{}
 	createConfig := &dockertypes.ContainerCreateConfig{
