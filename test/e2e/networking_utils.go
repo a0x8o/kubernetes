@@ -43,7 +43,7 @@ const (
 	testContainerHttpPort = 8080
 	clusterHttpPort       = 80
 	clusterUdpPort        = 90
-	netexecImageName      = "gcr.io/google_containers/netexec:1.5"
+	netexecImageName      = "gcr.io/google_containers/netexec:1.7"
 	hostexecImageName     = "gcr.io/google_containers/hostexec:1.2"
 	testPodName           = "test-container-pod"
 	hostTestPodName       = "host-test-container-pod"
@@ -170,7 +170,10 @@ func (config *NetworkingTestConfig) dialFromContainer(protocol, containerIP, tar
 				continue
 			}
 			for _, hostName := range output["responses"] {
-				eps.Insert(hostName)
+				trimmed := strings.TrimSpace(hostName)
+				if trimmed != "" {
+					eps.Insert(trimmed)
+				}
 			}
 		}
 		framework.Logf("Waiting for endpoints: %v", expectedEps.Difference(eps))
@@ -217,7 +220,10 @@ func (config *NetworkingTestConfig) dialFromNode(protocol, targetIP string, targ
 			// we confirm unreachability.
 			framework.Logf("Failed to execute %v: %v", filterCmd, err)
 		} else {
-			eps.Insert(strings.TrimSpace(stdout))
+			trimmed := strings.TrimSpace(stdout)
+			if trimmed != "" {
+				eps.Insert(trimmed)
+			}
 		}
 		framework.Logf("Waiting for %+v endpoints, got endpoints %+v", expectedEps.Difference(eps), eps)
 
