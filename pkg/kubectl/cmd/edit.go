@@ -39,6 +39,7 @@ import (
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/util/crlf"
 	"k8s.io/kubernetes/pkg/util/strategicpatch"
+	"k8s.io/kubernetes/pkg/util/validation/field"
 	"k8s.io/kubernetes/pkg/util/yaml"
 
 	"github.com/golang/glog"
@@ -80,7 +81,7 @@ var (
 
 var errExit = fmt.Errorf("exit directly")
 
-func NewCmdEdit(f *cmdutil.Factory, out, errOut io.Writer) *cobra.Command {
+func NewCmdEdit(f cmdutil.Factory, out, errOut io.Writer) *cobra.Command {
 	options := &resource.FilenameOptions{}
 
 	// retrieve a list of handled resources from printer as valid args
@@ -121,7 +122,7 @@ func NewCmdEdit(f *cmdutil.Factory, out, errOut io.Writer) *cobra.Command {
 	return cmd
 }
 
-func RunEdit(f *cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args []string, options *resource.FilenameOptions) error {
+func RunEdit(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args []string, options *resource.FilenameOptions) error {
 	o, err := getPrinter(cmd)
 	if err != nil {
 		return err
@@ -216,7 +217,12 @@ func RunEdit(f *cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args
 			}
 			err = schema.ValidateBytes(stripComments(edited))
 			if err != nil {
-				return preservedFile(err, file, errOut)
+				results = editResults{
+					file: file,
+				}
+				containsError = true
+				fmt.Fprintln(out, results.addError(errors.NewInvalid(api.Kind(""), "", field.ErrorList{field.Invalid(nil, "The edited file failed validation", fmt.Sprintf("%v", err))}), info))
+				continue
 			}
 
 			// Compare content without comments
@@ -295,8 +301,9 @@ func RunEdit(f *cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args
 				return nil
 			}
 
-			// loop again and edit the remaining items
-			infos = results.edit
+			if len(results.header.reasons) > 0 {
+				containsError = true
+			}
 		}
 	})
 	return err
@@ -321,7 +328,7 @@ func getPrinter(cmd *cobra.Command) (*editPrinterOptions, error) {
 	}
 }
 
-func getMapperAndResult(f *cmdutil.Factory, args []string, options *resource.FilenameOptions) (meta.RESTMapper, *resource.Mapper, *resource.Result, string, error) {
+func getMapperAndResult(f cmdutil.Factory, args []string, options *resource.FilenameOptions) (meta.RESTMapper, *resource.Mapper, *resource.Result, string, error) {
 	cmdNamespace, enforceNamespace, err := f.DefaultNamespace()
 	if err != nil {
 		return nil, nil, nil, "", err
@@ -441,7 +448,7 @@ func visitToPatch(originalObj runtime.Object, updates *resource.Info, mapper met
 	return err
 }
 
-func visitAnnotation(cmd *cobra.Command, f *cmdutil.Factory, updates *resource.Info, resourceMapper *resource.Mapper, encoder runtime.Encoder) ([]runtime.Object, error) {
+func visitAnnotation(cmd *cobra.Command, f cmdutil.Factory, updates *resource.Info, resourceMapper *resource.Mapper, encoder runtime.Encoder) ([]runtime.Object, error) {
 	mutatedObjects := []runtime.Object{}
 	annotationVisitor := resource.NewFlattenListVisitor(updates, resourceMapper)
 	// iterate through all items to apply annotations

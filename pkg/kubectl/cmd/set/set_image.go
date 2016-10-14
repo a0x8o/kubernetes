@@ -78,9 +78,10 @@ var (
 		kubectl set image -f path/to/file.yaml nginx=nginx:1.9.1 --local -o yaml`)
 )
 
-func NewCmdImage(f *cmdutil.Factory, out io.Writer) *cobra.Command {
+func NewCmdImage(f cmdutil.Factory, out, err io.Writer) *cobra.Command {
 	options := &ImageOptions{
 		Out: out,
+		Err: err,
 	}
 
 	cmd := &cobra.Command{
@@ -105,7 +106,7 @@ func NewCmdImage(f *cmdutil.Factory, out io.Writer) *cobra.Command {
 	return cmd
 }
 
-func (o *ImageOptions) Complete(f *cmdutil.Factory, cmd *cobra.Command, args []string) error {
+func (o *ImageOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 	o.Mapper, o.Typer = f.Object()
 	o.UpdatePodSpecForObject = f.UpdatePodSpecForObject
 	o.Encoder = f.JSONEncoder()

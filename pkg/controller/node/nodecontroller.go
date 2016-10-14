@@ -131,9 +131,13 @@ type NodeController struct {
 	// The maximum duration before a pod evicted from a node can be forcefully terminated.
 	maximumGracePeriod time.Duration
 	recorder           record.EventRecorder
-	podStore           cache.StoreToPodLister
-	nodeStore          cache.StoreToNodeLister
-	daemonSetStore     cache.StoreToDaemonSetLister
+	podInformer        informers.PodInformer
+	nodeInformer       informers.NodeInformer
+	daemonSetInformer  informers.DaemonSetInformer
+
+	podStore       cache.StoreToPodLister
+	nodeStore      cache.StoreToNodeLister
+	daemonSetStore cache.StoreToDaemonSetLister
 	// allocate/recycle CIDRs for node if allocateNodeCIDRs == true
 	cidrAllocator CIDRAllocator
 
@@ -228,6 +232,9 @@ func NewNodeController(
 		largeClusterThreshold:       largeClusterThreshold,
 		unhealthyZoneThreshold:      unhealthyZoneThreshold,
 		zoneStates:                  make(map[string]zoneState),
+		podInformer:                 podInformer,
+		nodeInformer:                nodeInformer,
+		daemonSetInformer:           daemonSetInformer,
 	}
 	nc.enterPartialDisruptionFunc = nc.ReducedQPSFunc
 	nc.enterFullDisruptionFunc = nc.HealthyQPSFunc
@@ -294,7 +301,20 @@ func NewNodeController(
 					return
 				}
 
-				node := obj.(*api.Node)
+				node, isNode := obj.(*api.Node)
+				// We can get DeletedFinalStateUnknown instead of *api.Node here and we need to handle that correctly. #34692
+				if !isNode {
+					deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
+					if !ok {
+						glog.Errorf("Received unexpected object: %v", obj)
+						return
+					}
+					node, ok = deletedState.Obj.(*api.Node)
+					if !ok {
+						glog.Errorf("DeletedFinalStateUnknown contained non-Node object: %v", deletedState.Obj)
+						return
+					}
+				}
 				if err := nc.cidrAllocator.ReleaseCIDR(node); err != nil {
 					glog.Errorf("Error releasing CIDR: %v", err)
 				}
@@ -338,6 +358,10 @@ func NewNodeController(
 func (nc *NodeController) Run() {
 	// Incorporate the results of node status pushed from kubelet to master.
 	go wait.Until(func() {
+		if !cache.WaitForCacheSync(wait.NeverStop, nc.nodeInformer.Informer().HasSynced, nc.podInformer.Informer().HasSynced, nc.daemonSetInformer.Informer().HasSynced) {
+			glog.Errorf("NodeController timed out while waiting for informers to sync...")
+			return
+		}
 		if err := nc.monitorNodeStatus(); err != nil {
 			glog.Errorf("Error monitoring node status: %v", err)
 		}
@@ -356,6 +380,10 @@ func (nc *NodeController) Run() {
 	//    c. If there are pods still terminating, wait for their estimated completion
 	//       before retrying
 	go wait.Until(func() {
+		if !cache.WaitForCacheSync(wait.NeverStop, nc.nodeInformer.Informer().HasSynced, nc.podInformer.Informer().HasSynced, nc.daemonSetInformer.Informer().HasSynced) {
+			glog.Errorf("NodeController timed out while waiting for informers to sync...")
+			return
+		}
 		nc.evictorLock.Lock()
 		defer nc.evictorLock.Unlock()
 		for k := range nc.zonePodEvictor {
@@ -389,6 +417,10 @@ func (nc *NodeController) Run() {
 	// TODO: replace with a controller that ensures pods that are terminating complete
 	// in a particular time period
 	go wait.Until(func() {
+		if !cache.WaitForCacheSync(wait.NeverStop, nc.nodeInformer.Informer().HasSynced, nc.podInformer.Informer().HasSynced, nc.daemonSetInformer.Informer().HasSynced) {
+			glog.Errorf("NodeController timed out while waiting for informers to sync...")
+			return
+		}
 		nc.evictorLock.Lock()
 		defer nc.evictorLock.Unlock()
 		for k := range nc.zoneTerminationEvictor {
@@ -491,13 +523,13 @@ func (nc *NodeController) monitorNodeStatus() error {
 			if observedReadyCondition.Status == api.ConditionFalse &&
 				decisionTimestamp.After(nc.nodeStatusMap[node.Name].readyTransitionTimestamp.Add(nc.podEvictionTimeout)) {
 				if nc.evictPods(node) {
-					glog.V(4).Infof("Evicting pods on node %s: %v is later than %v + %v", node.Name, decisionTimestamp, nc.nodeStatusMap[node.Name].readyTransitionTimestamp, nc.podEvictionTimeout)
+					glog.V(2).Infof("Evicting pods on node %s: %v is later than %v + %v", node.Name, decisionTimestamp, nc.nodeStatusMap[node.Name].readyTransitionTimestamp, nc.podEvictionTimeout)
 				}
 			}
 			if observedReadyCondition.Status == api.ConditionUnknown &&
 				decisionTimestamp.After(nc.nodeStatusMap[node.Name].probeTimestamp.Add(nc.podEvictionTimeout)) {
 				if nc.evictPods(node) {
-					glog.V(4).Infof("Evicting pods on node %s: %v is later than %v + %v", node.Name, decisionTimestamp, nc.nodeStatusMap[node.Name].readyTransitionTimestamp, nc.podEvictionTimeout-gracePeriod)
+					glog.V(2).Infof("Evicting pods on node %s: %v is later than %v + %v", node.Name, decisionTimestamp, nc.nodeStatusMap[node.Name].readyTransitionTimestamp, nc.podEvictionTimeout-gracePeriod)
 				}
 			}
 			if observedReadyCondition.Status == api.ConditionTrue {

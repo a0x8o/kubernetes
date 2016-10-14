@@ -31,7 +31,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = framework.KubeDescribe("Cluster level logging using GCL", func() {
+var _ = framework.KubeDescribe("Cluster level logging using GCL [Flaky]", func() {
 	f := framework.NewDefaultFramework("gcl-logging")
 
 	BeforeEach(func() {
@@ -43,7 +43,7 @@ var _ = framework.KubeDescribe("Cluster level logging using GCL", func() {
 		By("Running synthetic logger")
 		createSynthLogger(f, expectedLinesCount)
 		defer f.PodClient().Delete(synthLoggerPodName, &api.DeleteOptions{})
-		err := framework.WaitForPodSuccessInNamespace(f.Client, synthLoggerPodName, synthLoggerPodName, f.Namespace.Name)
+		err := framework.WaitForPodSuccessInNamespace(f.Client, synthLoggerPodName, f.Namespace.Name)
 		framework.ExpectNoError(err, fmt.Sprintf("Should've successfully waited for pod %s to succeed", synthLoggerPodName))
 
 		By("Waiting for logs to ingest")
@@ -60,6 +60,12 @@ var _ = framework.KubeDescribe("Cluster level logging using GCL", func() {
 
 			if totalMissing == 0 {
 				break
+			}
+		}
+
+		if totalMissing > 0 {
+			if err := reportLogsFromFluentdPod(f); err != nil {
+				framework.Logf("Failed to report logs from fluentd pod due to %v", err)
 			}
 		}
 

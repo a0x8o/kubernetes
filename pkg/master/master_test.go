@@ -44,9 +44,10 @@ import (
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	extensionsapiv1beta1 "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	"k8s.io/kubernetes/pkg/apis/rbac"
+	"k8s.io/kubernetes/pkg/apiserver/openapi"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/fake"
 	"k8s.io/kubernetes/pkg/client/restclient"
-	"k8s.io/kubernetes/pkg/generated/openapi"
+	openapigen "k8s.io/kubernetes/pkg/generated/openapi"
 	"k8s.io/kubernetes/pkg/genericapiserver"
 	"k8s.io/kubernetes/pkg/kubelet/client"
 	ipallocator "k8s.io/kubernetes/pkg/registry/core/service/ipallocator"
@@ -69,7 +70,7 @@ func setUp(t *testing.T) (*Master, *etcdtesting.EtcdTestServer, Config, *assert.
 	server, storageConfig := etcdtesting.NewUnsecuredEtcd3TestClientServer(t)
 
 	config := &Config{
-		GenericConfig: &genericapiserver.Config{},
+		GenericConfig: genericapiserver.NewConfig(),
 	}
 
 	resourceEncoding := genericapiserver.NewDefaultResourceEncodingConfig()
@@ -88,7 +89,7 @@ func setUp(t *testing.T) (*Master, *etcdtesting.EtcdTestServer, Config, *assert.
 	config.GenericConfig.PublicAddress = net.ParseIP("192.168.10.4")
 	config.GenericConfig.Serializer = api.Codecs
 	config.KubeletClient = client.FakeKubeletClient{}
-	config.GenericConfig.APIPrefix = "/api"
+	config.GenericConfig.LegacyAPIGroupPrefixes = sets.NewString("/api")
 	config.GenericConfig.APIGroupPrefix = "/apis"
 	config.GenericConfig.APIResourceConfigSource = DefaultAPIResourceConfigSource()
 	config.GenericConfig.ProxyDialer = func(network, addr string) (net.Conn, error) { return nil, nil }
@@ -159,10 +160,6 @@ func newLimitedMaster(t *testing.T) (*Master, *etcdtesting.EtcdTestServer, Confi
 func TestNew(t *testing.T) {
 	master, etcdserver, config, assert := newMaster(t)
 	defer etcdserver.Terminate(t)
-
-	// Verify many of the variables match their config counterparts
-	assert.Equal(master.GenericAPIServer.RequestContextMapper(), config.GenericConfig.RequestContextMapper)
-	assert.Equal(master.GenericAPIServer.ClusterIP, config.GenericConfig.PublicAddress)
 
 	// these values get defaulted
 	_, serviceClusterIPRange, _ := net.ParseCIDR("10.0.0.0/24")
@@ -499,15 +496,16 @@ func TestValidOpenAPISpec(t *testing.T) {
 	_, etcdserver, config, assert := setUp(t)
 	defer etcdserver.Terminate(t)
 
-	config.GenericConfig.OpenAPIDefinitions = openapi.OpenAPIDefinitions
+	config.GenericConfig.OpenAPIConfig.Definitions = openapigen.OpenAPIDefinitions
 	config.GenericConfig.EnableOpenAPISupport = true
 	config.GenericConfig.EnableIndex = true
-	config.GenericConfig.OpenAPIInfo = spec.Info{
+	config.GenericConfig.OpenAPIConfig.Info = &spec.Info{
 		InfoProps: spec.InfoProps{
 			Title:   "Kubernetes",
 			Version: "unversioned",
 		},
 	}
+	config.GenericConfig.OpenAPIConfig.GetOperationID = openapi.GetOperationID
 	master, err := config.Complete().New()
 	if err != nil {
 		t.Fatalf("Error in bringing up the master: %v", err)
@@ -592,7 +590,7 @@ func TestValidOpenAPISpec(t *testing.T) {
 						t.Logf("Open API spec on %v has some warnings : %v", path, warns)
 					}
 				} else {
-					t.Logf("Validation is disabled because it is timing out on jenkins put passing locally.")
+					t.Logf("Validation is disabled because it is timing out on jenkins but passing locally.")
 				}
 			}
 

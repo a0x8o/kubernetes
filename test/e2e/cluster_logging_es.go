@@ -53,7 +53,7 @@ var _ = framework.KubeDescribe("Cluster level logging using Elasticsearch [Featu
 		By("Running synthetic logger")
 		createSynthLogger(f, expectedLinesCount)
 		defer f.PodClient().Delete(synthLoggerPodName, &api.DeleteOptions{})
-		err = framework.WaitForPodSuccessInNamespace(f.Client, synthLoggerPodName, synthLoggerPodName, f.Namespace.Name)
+		err = framework.WaitForPodSuccessInNamespace(f.Client, synthLoggerPodName, f.Namespace.Name)
 		framework.ExpectNoError(err, fmt.Sprintf("Should've successfully waited for pod %s to succeed", synthLoggerPodName))
 
 		By("Waiting for logs to ingest")
@@ -69,6 +69,12 @@ var _ = framework.KubeDescribe("Cluster level logging using Elasticsearch [Featu
 
 			if totalMissing == 0 {
 				break
+			}
+		}
+
+		if totalMissing > 0 {
+			if err := reportLogsFromFluentdPod(f); err != nil {
+				framework.Logf("Failed to report logs from fluentd pod due to %v", err)
 			}
 		}
 
@@ -218,17 +224,16 @@ func getMissingLinesCountElasticsearch(f *framework.Framework, expectedCount int
 		return 0, fmt.Errorf("Failed to get services proxy request: %v", errProxy)
 	}
 
-	// Ask Elasticsearch to return all the log lines that were tagged with the underscore
-	// version of the name. Ask for twice as many log lines as we expect to check for
-	// duplication bugs.
+	// Ask Elasticsearch to return all the log lines that were tagged with the
+	// pod name. Ask for ten times as many log lines because duplication is possible.
 	body, err := proxyRequest.Namespace(api.NamespaceSystem).
 		Name("elasticsearch-logging").
 		Suffix("_search").
 		// TODO: Change filter to only match records from current test run
 		// after fluent-plugin-kubernetes_metadata_filter is enabled
 		// and optimize current query
-		Param("q", "tag:*synthlogger*").
-		Param("size", strconv.Itoa(expectedCount)).
+		Param("q", fmt.Sprintf("tag:*%s*", synthLoggerPodName)).
+		Param("size", strconv.Itoa(expectedCount*10)).
 		DoRaw()
 	if err != nil {
 		return 0, fmt.Errorf("Failed to make proxy call to elasticsearch-logging: %v", err)

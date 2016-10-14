@@ -40,13 +40,17 @@ service RuntimeService {
 
     // Exec executes the command in the container.
     rpc Exec(stream ExecRequest) returns (stream ExecResponse) {}
+
+    // UpdateRuntimeConfig updates the runtime configuration based on request
+    rpc UpdateRuntimeConfig(UpdateRuntimeConfigRequest) returns (UpdateRuntimeConfigResponse) {}
 }
 
 // Image service defines the public APIs for managing images
 service ImageService {
     // ListImages lists existing images.
     rpc ListImages(ListImagesRequest) returns (ListImagesResponse) {}
-    // ImageStatus returns the status of the image.
+    // ImageStatus returns the status of the image. If the image is not
+    // present, returns nil.
     rpc ImageStatus(ImageStatusRequest) returns (ImageStatusResponse) {}
     // PullImage pulls an image with authentication config.
     rpc PullImage(PullImageRequest) returns (PullImageResponse) {}
@@ -676,3 +680,18 @@ message RemoveImageRequest {
 }
 
 message RemoveImageResponse {}
+
+message NetworkConfig {
+    // The CIDR to use for pod IP addresses
+    optional string pod_cidr = 1;
+}
+
+message RuntimeConfig {
+    optional NetworkConfig network_config = 1;
+}
+
+message UpdateRuntimeConfigRequest {
+    optional RuntimeConfig runtime_config = 1;
+}
+
+message UpdateRuntimeConfigResponse {}

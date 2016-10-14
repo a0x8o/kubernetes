@@ -128,6 +128,7 @@ deserialization-cache-size
 dest-file
 disable-filter
 disable-kubenet
+dns-bind-address
 dns-port
 dns-provider
 dns-provider-config
@@ -512,6 +513,7 @@ since-seconds
 since-time
 skip-generated-rewrite
 skip-munges
+skip-preflight-checks
 sort-by
 source-file
 ssh-env
