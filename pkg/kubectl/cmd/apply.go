@@ -101,7 +101,8 @@ func NewCmdApply(f cmdutil.Factory, out io.Writer) *cobra.Command {
 	cmdutil.AddValidateFlags(cmd)
 	cmd.Flags().StringVarP(&options.Selector, "selector", "l", "", "Selector (label query) to filter on")
 	cmd.Flags().Bool("all", false, "[-all] to select all the specified resources.")
-	cmdutil.AddOutputFlagsForMutation(cmd)
+	cmdutil.AddDryRunFlag(cmd)
+	cmdutil.AddPrinterFlags(cmd)
 	cmdutil.AddRecordFlag(cmd)
 	cmdutil.AddInclude3rdPartyFlags(cmd)
 	return cmd
@@ -147,6 +148,8 @@ func RunApply(f cmdutil.Factory, cmd *cobra.Command, out io.Writer, options *App
 	if err != nil {
 		return err
 	}
+
+	dryRun := cmdutil.GetFlagBool(cmd, "dry-run")
 
 	encoder := f.JSONEncoder()
 	decoder := f.Decoder(false)
@@ -195,47 +198,52 @@ func RunApply(f cmdutil.Factory, cmd *cobra.Command, out io.Writer, options *App
 				}
 			}
 
-			// Then create the resource and skip the three-way merge
-			if err := createAndRefresh(info); err != nil {
-				return cmdutil.AddSourceToErr("creating", info.Source, err)
+			if !dryRun {
+				// Then create the resource and skip the three-way merge
+				if err := createAndRefresh(info); err != nil {
+					return cmdutil.AddSourceToErr("creating", info.Source, err)
+				}
+				if uid, err := info.Mapping.UID(info.Object); err != nil {
+					return err
+				} else {
+					visitedUids.Insert(string(uid))
+				}
 			}
+
+			count++
+			cmdutil.PrintSuccess(mapper, shortOutput, out, info.Mapping.Resource, info.Name, dryRun, "created")
+			return nil
+		}
+
+		if !dryRun {
+			overwrite := cmdutil.GetFlagBool(cmd, "overwrite")
+			helper := resource.NewHelper(info.Client, info.Mapping)
+			patcher := NewPatcher(encoder, decoder, info.Mapping, helper, overwrite)
+
+			patchBytes, err := patcher.patch(info.Object, modified, info.Source, info.Namespace, info.Name)
+			if err != nil {
+				return cmdutil.AddSourceToErr(fmt.Sprintf("applying patch:\n%s\nto:\n%v\nfor:", patchBytes, info), info.Source, err)
+			}
+
+			if cmdutil.ShouldRecord(cmd, info) {
+				patch, err := cmdutil.ChangeResourcePatch(info, f.Command())
+				if err != nil {
+					return err
+				}
+				_, err = helper.Patch(info.Namespace, info.Name, api.StrategicMergePatchType, patch)
+				if err != nil {
+					return cmdutil.AddSourceToErr(fmt.Sprintf("applying patch:\n%s\nto:\n%v\nfor:", patch, info), info.Source, err)
+				}
+			}
+
 			if uid, err := info.Mapping.UID(info.Object); err != nil {
 				return err
 			} else {
 				visitedUids.Insert(string(uid))
 			}
-			count++
-			cmdutil.PrintSuccess(mapper, shortOutput, out, info.Mapping.Resource, info.Name, false, "created")
-			return nil
-		}
-
-		overwrite := cmdutil.GetFlagBool(cmd, "overwrite")
-		helper := resource.NewHelper(info.Client, info.Mapping)
-		patcher := NewPatcher(encoder, decoder, info.Mapping, helper, overwrite)
-
-		patchBytes, err := patcher.patch(info.Object, modified, info.Source, info.Namespace, info.Name)
-		if err != nil {
-			return cmdutil.AddSourceToErr(fmt.Sprintf("applying patch:\n%s\nto:\n%v\nfor:", patchBytes, info), info.Source, err)
-		}
-
-		if cmdutil.ShouldRecord(cmd, info) {
-			patch, err := cmdutil.ChangeResourcePatch(info, f.Command())
-			if err != nil {
-				return err
-			}
-			_, err = helper.Patch(info.Namespace, info.Name, api.StrategicMergePatchType, patch)
-			if err != nil {
-				return cmdutil.AddSourceToErr(fmt.Sprintf("applying patch:\n%s\nto:\n%v\nfor:", patch, info), info.Source, err)
-			}
-		}
-
-		if uid, err := info.Mapping.UID(info.Object); err != nil {
-			return err
-		} else {
-			visitedUids.Insert(string(uid))
 		}
 		count++
-		cmdutil.PrintSuccess(mapper, shortOutput, out, info.Mapping.Resource, info.Name, false, "configured")
+		cmdutil.PrintSuccess(mapper, shortOutput, out, info.Mapping.Resource, info.Name, dryRun, "configured")
 		return nil
 	})
 
@@ -343,10 +351,7 @@ func (p *pruner) prune(namespace string, mapping *meta.RESTMapping, shortOutput 
 
 func (p *pruner) delete(namespace, name string, mapping *meta.RESTMapping, c resource.RESTClient) error {
 	if !p.cascade {
-		if err := resource.NewHelper(c, mapping).Delete(namespace, name); err != nil {
-			return err
-		}
-		return nil
+		return resource.NewHelper(c, mapping).Delete(namespace, name)
 	}
 	cs, err := p.clientsetFunc()
 	if err != nil {
@@ -354,7 +359,10 @@ func (p *pruner) delete(namespace, name string, mapping *meta.RESTMapping, c res
 	}
 	r, err := kubectl.ReaperFor(mapping.GroupVersionKind.GroupKind(), cs)
 	if err != nil {
-		return err
+		if _, ok := err.(*kubectl.NoSuchReaperError); !ok {
+			return err
+		}
+		return resource.NewHelper(c, mapping).Delete(namespace, name)
 	}
 	if err := r.Stop(namespace, name, 2*time.Minute, api.NewDeleteOptions(int64(p.gracePeriod))); err != nil {
 		return err

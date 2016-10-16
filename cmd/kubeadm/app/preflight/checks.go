@@ -17,6 +17,7 @@ limitations under the License.
 package preflight
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -27,12 +28,11 @@ import (
 )
 
 type PreFlightError struct {
-	Msg   string
-	Count int
+	Msg string
 }
 
 func (e *PreFlightError) Error() string {
-	return fmt.Sprintf("preflight check error\n  count: %d \n  msg: %s", e.Count, e.Msg)
+	return fmt.Sprintf("preflight check errors:\n%s", e.Msg)
 }
 
 // PreFlightCheck validates the state of the system to ensure kubeadm will be
@@ -45,32 +45,32 @@ type PreFlightCheck interface {
 // detect a supported init system however, all checks are skipped and a warning is
 // returned.
 type ServiceCheck struct {
-	service string
+	Service string
 }
 
 func (sc ServiceCheck) Check() (warnings, errors []error) {
-	initSystem := initsystem.GetInitSystem()
-	if initSystem == nil {
-		return []error{fmt.Errorf("no supported init system detected, skipping service checks for %s", sc.service)}, nil
+	initSystem, err := initsystem.GetInitSystem()
+	if err != nil {
+		return []error{err}, nil
 	}
 
 	warnings = []error{}
 
-	if !initSystem.ServiceExists(sc.service) {
-		warnings = append(warnings, fmt.Errorf("%s service does not exist", sc.service))
+	if !initSystem.ServiceExists(sc.Service) {
+		warnings = append(warnings, fmt.Errorf("%s service does not exist", sc.Service))
 		return warnings, nil
 	}
 
-	if !initSystem.ServiceIsEnabled(sc.service) {
+	if !initSystem.ServiceIsEnabled(sc.Service) {
 		warnings = append(warnings,
 			fmt.Errorf("%s service is not enabled, please run 'systemctl enable %s.service'",
-				sc.service, sc.service))
+				sc.Service, sc.Service))
 	}
 
-	if !initSystem.ServiceIsActive(sc.service) {
+	if !initSystem.ServiceIsActive(sc.Service) {
 		errors = append(errors,
 			fmt.Errorf("%s service is not active, please run 'systemctl start %s.service'",
-				sc.service, sc.service))
+				sc.Service, sc.Service))
 	}
 
 	return warnings, errors
@@ -160,8 +160,8 @@ func RunInitMasterChecks() error {
 	// TODO: Some of these ports should come from kubeadm config eventually:
 	checks := []PreFlightCheck{
 		IsRootCheck{root: true},
-		ServiceCheck{service: "kubelet"},
-		ServiceCheck{service: "docker"},
+		ServiceCheck{Service: "kubelet"},
+		ServiceCheck{Service: "docker"},
 		PortOpenCheck{port: 443},
 		PortOpenCheck{port: 2379},
 		PortOpenCheck{port: 8080},
@@ -189,12 +189,9 @@ func RunJoinNodeChecks() error {
 	// TODO: Some of these ports should come from kubeadm config eventually:
 	checks := []PreFlightCheck{
 		IsRootCheck{root: true},
-		ServiceCheck{service: "docker"},
-		ServiceCheck{service: "kubelet"},
-		PortOpenCheck{port: 8080},
+		ServiceCheck{Service: "docker"},
+		ServiceCheck{Service: "kubelet"},
 		PortOpenCheck{port: 10250},
-		PortOpenCheck{port: 10251},
-		PortOpenCheck{port: 10252},
 		DirAvailableCheck{path: "/etc/kubernetes"},
 		DirAvailableCheck{path: "/var/lib/kubelet"},
 		InPathCheck{executable: "ebtables", mandatory: true},
@@ -211,28 +208,33 @@ func RunJoinNodeChecks() error {
 	return runChecks(checks)
 }
 
+func RunResetCheck() error {
+	checks := []PreFlightCheck{
+		IsRootCheck{root: true},
+	}
+
+	return runChecks(checks)
+}
+
 // runChecks runs each check, displays it's warnings/errors, and once all
 // are processed will exit if any errors occurred.
 func runChecks(checks []PreFlightCheck) error {
 	found := []error{}
 	for _, c := range checks {
-		warnings, errors := c.Check()
+		warnings, errs := c.Check()
 		for _, w := range warnings {
-			fmt.Printf("<preflight/checks> WARNING: %s\n", w)
+			fmt.Printf("WARNING: %s\n", w)
 		}
-		for _, e := range errors {
+		for _, e := range errs {
 			found = append(found, e)
 		}
 	}
 	if len(found) > 0 {
-		errors := "\n"
+		errs := ""
 		for _, i := range found {
-			errors += "\t" + i.Error() + "\n"
+			errs += "\t" + i.Error() + "\n"
 		}
-		return &PreFlightError{
-			Msg:   errors,
-			Count: len(found),
-		}
+		return errors.New(errs)
 	}
 	return nil
 }
