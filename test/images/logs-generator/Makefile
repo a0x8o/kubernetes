@@ -1,6 +1,4 @@
-#!/bin/bash
-
-# Copyright 2015 The Kubernetes Authors.
+# Copyright 2016 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export ELASTICSEARCH_URL=${ELASTICSEARCH_URL:-"http://localhost:9200"}
-echo ELASTICSEARCH_URL=${ELASTICSEARCH_URL}
+TAG = v0.1.0
+PREFIX = gcr.io/google_containers
 
-/kibana/bin/kibana -e ${ELASTICSEARCH_URL}
+all: build
+
+build: binary container
+
+binary:
+	go build -a --ldflags '-w' -o logs-generator .
+
+container:
+	docker build -t $(PREFIX)/logs-generator:$(TAG) .
+
+push:
+	gcloud docker push $(PREFIX)/logs-generator:$(TAG)
+
+clean:
+	rm -f logs-generator

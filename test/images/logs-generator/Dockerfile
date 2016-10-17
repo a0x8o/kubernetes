@@ -1,6 +1,4 @@
-#!/bin/bash
-
-# Copyright 2015 The Kubernetes Authors.
+# Copyright 2016 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export ELASTICSEARCH_URL=${ELASTICSEARCH_URL:-"http://localhost:9200"}
-echo ELASTICSEARCH_URL=${ELASTICSEARCH_URL}
+FROM gcr.io/google_containers/ubuntu-slim:0.4
 
-/kibana/bin/kibana -e ${ELASTICSEARCH_URL}
+MAINTAINER Mik Vyatskov <vmik@google.com>
+
+COPY logs-generator /
+
+CMD /logs-generator --logtostderr \
+  --log-lines-total=${LOGS_GENERATOR_LINES_TOTAL} \
+  --run-duration=${LOGS_GENERATOR_DURATION}
