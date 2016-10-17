@@ -2880,10 +2880,6 @@ func WaitForDeploymentStatusValid(c clientset.Interface, d *extensions.Deploymen
 			}
 		}
 		totalCreated := deploymentutil.GetReplicaCountForReplicaSets(allRSs)
-		totalAvailable, err := deploymentutil.GetAvailablePodsForDeployment(c, deployment)
-		if err != nil {
-			return false, err
-		}
 		maxCreated := deployment.Spec.Replicas + deploymentutil.MaxSurge(*deployment)
 		if totalCreated > maxCreated {
 			reason = fmt.Sprintf("total pods created: %d, more than the max allowed: %d", totalCreated, maxCreated)
@@ -2891,12 +2887,23 @@ func WaitForDeploymentStatusValid(c clientset.Interface, d *extensions.Deploymen
 			return false, nil
 		}
 		minAvailable := deploymentutil.MinAvailable(deployment)
-		if totalAvailable < minAvailable {
-			reason = fmt.Sprintf("total pods available: %d, less than the min required: %d", totalAvailable, minAvailable)
+		if deployment.Status.AvailableReplicas < minAvailable {
+			reason = fmt.Sprintf("total pods available: %d, less than the min required: %d", deployment.Status.AvailableReplicas, minAvailable)
 			Logf(reason)
 			return false, nil
 		}
-		return true, nil
+
+		// When the deployment status and its underlying resources reach the desired state, we're done
+		if deployment.Status.Replicas == deployment.Spec.Replicas &&
+			deployment.Status.UpdatedReplicas == deployment.Spec.Replicas &&
+			deployment.Status.AvailableReplicas == deployment.Spec.Replicas {
+			return true, nil
+		}
+
+		reason = fmt.Sprintf("deployment status: %#v", deployment.Status)
+		Logf(reason)
+
+		return false, nil
 	})
 
 	if err == wait.ErrWaitTimeout {
@@ -2941,10 +2948,6 @@ func WaitForDeploymentStatus(c clientset.Interface, d *extensions.Deployment) er
 			}
 		}
 		totalCreated := deploymentutil.GetReplicaCountForReplicaSets(allRSs)
-		totalAvailable, err := deploymentutil.GetAvailablePodsForDeployment(c, deployment)
-		if err != nil {
-			return false, err
-		}
 		maxCreated := deployment.Spec.Replicas + deploymentutil.MaxSurge(*deployment)
 		if totalCreated > maxCreated {
 			logReplicaSetsOfDeployment(deployment, allOldRSs, newRS)
@@ -2952,17 +2955,15 @@ func WaitForDeploymentStatus(c clientset.Interface, d *extensions.Deployment) er
 			return false, fmt.Errorf("total pods created: %d, more than the max allowed: %d", totalCreated, maxCreated)
 		}
 		minAvailable := deploymentutil.MinAvailable(deployment)
-		if totalAvailable < minAvailable {
+		if deployment.Status.AvailableReplicas < minAvailable {
 			logReplicaSetsOfDeployment(deployment, allOldRSs, newRS)
 			logPodsOfDeployment(c, deployment)
-			return false, fmt.Errorf("total pods available: %d, less than the min required: %d", totalAvailable, minAvailable)
+			return false, fmt.Errorf("total pods available: %d, less than the min required: %d", deployment.Status.AvailableReplicas, minAvailable)
 		}
 
 		// When the deployment status and its underlying resources reach the desired state, we're done
 		if deployment.Status.Replicas == deployment.Spec.Replicas &&
-			deployment.Status.UpdatedReplicas == deployment.Spec.Replicas &&
-			deploymentutil.GetReplicaCountForReplicaSets(oldRSs) == 0 &&
-			deploymentutil.GetReplicaCountForReplicaSets([]*extensions.ReplicaSet{newRS}) == deployment.Spec.Replicas {
+			deployment.Status.UpdatedReplicas == deployment.Spec.Replicas {
 			return true, nil
 		}
 		return false, nil
