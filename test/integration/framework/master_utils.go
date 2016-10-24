@@ -61,6 +61,7 @@ import (
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/storage/storagebackend"
 	"k8s.io/kubernetes/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/version"
 	"k8s.io/kubernetes/pkg/watch"
 	"k8s.io/kubernetes/plugin/pkg/admission/admit"
 	authenticatorunion "k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/union"
@@ -258,6 +259,7 @@ func startMasterOrDie(masterConfig *master.Config, incomingServer *httptest.Serv
 	// TODO have this start method actually use the normal start sequence for the API server
 	// this method never actually calls the `Run` method for the API server
 	// fire the post hooks ourselves
+	m.GenericAPIServer.PrepareRun()
 	m.GenericAPIServer.RunPostStartHooks()
 
 	// wait for services to be ready
@@ -344,17 +346,18 @@ func NewMasterConfig() *master.Config {
 		NewSingleContentTypeSerializer(api.Scheme, testapi.Storage.Codec(), runtime.ContentTypeJSON))
 
 	genericConfig := genericapiserver.NewConfig()
+	kubeVersion := version.Get()
+	genericConfig.Version = &kubeVersion
 	genericConfig.APIResourceConfigSource = master.DefaultAPIResourceConfigSource()
 	genericConfig.Authorizer = authorizer.NewAlwaysAllowAuthorizer()
 	genericConfig.AdmissionControl = admit.NewAlwaysAdmit()
-	genericConfig.EnableOpenAPISupport = true
 
 	return &master.Config{
 		GenericConfig:         genericConfig,
 		StorageFactory:        storageFactory,
 		EnableCoreControllers: true,
 		EnableWatchCache:      true,
-		KubeletClient:         kubeletclient.FakeKubeletClient{},
+		KubeletClientConfig:   kubeletclient.KubeletClientConfig{Port: 10250},
 	}
 }
 

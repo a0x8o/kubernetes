@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/emicklei/go-restful/swagger"
+	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -337,7 +338,7 @@ func (f *factory) Object() (meta.RESTMapper, runtime.ObjectTyper) {
 		// register third party resources with the api machinery groups.  This probably should be done, but
 		// its consistent with old code, so we'll start with it.
 		if err := registerThirdPartyResources(discoveryClient); err != nil {
-			fmt.Fprintf(os.Stderr, "Unable to register third party resources: %v\n", err)
+			glog.V(1).Infof("Unable to register third party resources: %v", err)
 		}
 		// ThirdPartyResourceData is special.  It's not discoverable, but needed for thirdparty resource listing
 		// TODO eliminate this once we're truly generic.
@@ -758,10 +759,14 @@ func (f *factory) Validator(validate bool, cacheDir string) (validation.Schema, 
 		if err != nil {
 			return nil, err
 		}
-		return &clientSwaggerSchema{
+		swaggerSchema := &clientSwaggerSchema{
 			c:        restclient,
 			fedc:     fedClient,
 			cacheDir: dir,
+		}
+		return validation.ConjunctiveSchema{
+			swaggerSchema,
+			validation.NoDoubleKeySchema{},
 		}, nil
 	}
 	return validation.NullSchema{}, nil

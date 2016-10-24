@@ -107,7 +107,7 @@ var _ = framework.KubeDescribe("Load capacity", func() {
 		framework.ExpectNoError(framework.WaitForAllNodesSchedulable(c))
 
 		ns = f.Namespace.Name
-		nodes := framework.GetReadySchedulableNodesOrDie(c)
+		nodes := framework.GetReadySchedulableNodesOrDie(f.ClientSet)
 		nodeCount = len(nodes.Items)
 		Expect(nodeCount).NotTo(BeZero())
 
@@ -133,12 +133,11 @@ var _ = framework.KubeDescribe("Load capacity", func() {
 	}
 
 	for _, testArg := range loadTests {
-		name := fmt.Sprintf("should be able to handle %v pods per node", testArg.podsPerNode)
+		feature := "ManualPerformance"
 		if testArg.podsPerNode == 30 {
-			name = "[Feature:Performance] " + name
-		} else {
-			name = "[Feature:ManualPerformance] " + name
+			feature = "Performance"
 		}
+		name := fmt.Sprintf("[Feature:%s] should be able to handle %v pods per node", feature, testArg.podsPerNode)
 		itArg := testArg
 
 		It(name, func() {

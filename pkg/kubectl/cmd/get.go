@@ -20,12 +20,12 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/renstrom/dedent"
 	"github.com/spf13/cobra"
 
 	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/kubectl"
+	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
 	"k8s.io/kubernetes/pkg/runtime"
@@ -43,17 +43,18 @@ type GetOptions struct {
 }
 
 var (
-	get_long = dedent.Dedent(`
+	get_long = templates.LongDesc(`
 		Display one or many resources.
 
-		`) + valid_resources + dedent.Dedent(`
+		` + valid_resources + `
 
 		This command will hide resources that have completed. For instance, pods that are in the Succeeded or Failed phases.
 		You can see the full results for any resource by providing the '--show-all' flag.
 
 		By specifying the output as 'template' and providing a Go template as the value
 		of the --template flag, you can filter the attributes of the fetched resource(s).`)
-	get_example = dedent.Dedent(`
+
+	get_example = templates.Examples(`
 		# List all pods in ps output format.
 		kubectl get pods
 
@@ -248,7 +249,7 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 				return fmt.Errorf("unable to output the provided object: %v", err)
 			}
 			filteredResourceCount++
-			cmdutil.PrintFilterCount(filteredResourceCount, mapping.Resource, errOut, filterOpts)
+			cmdutil.PrintFilterCount(filteredResourceCount, mapping.Resource, filterOpts)
 		}
 
 		// print watched changes
@@ -272,7 +273,7 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 					return false, err
 				}
 				filteredResourceCount++
-				cmdutil.PrintFilterCount(filteredResourceCount, mapping.Resource, errOut, filterOpts)
+				cmdutil.PrintFilterCount(filteredResourceCount, mapping.Resource, filterOpts)
 				return false, nil
 			})
 			return err
@@ -322,7 +323,7 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 			}
 			errs = append(errs, err)
 		}
-		if len(infos) == 0 {
+		if len(infos) == 0 && len(errs) == 0 {
 			outputEmptyListWarning(errOut)
 		}
 
@@ -350,7 +351,7 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 				errs = append(errs, err)
 			}
 
-			cmdutil.PrintFilterCount(filteredResourceCount, res, errOut, filterOpts)
+			cmdutil.PrintFilterCount(filteredResourceCount, res, filterOpts)
 			return utilerrors.Reduce(utilerrors.Flatten(utilerrors.NewAggregate(errs)))
 		}
 
@@ -365,7 +366,7 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 			filteredResourceCount++
 		}
 
-		cmdutil.PrintFilterCount(filteredResourceCount, res, errOut, filterOpts)
+		cmdutil.PrintFilterCount(filteredResourceCount, res, filterOpts)
 		return utilerrors.Reduce(utilerrors.Flatten(utilerrors.NewAggregate(errs)))
 	}
 
@@ -374,7 +375,7 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 	if err != nil {
 		allErrs = append(allErrs, err)
 	}
-	if len(infos) == 0 {
+	if len(infos) == 0 && len(allErrs) == 0 {
 		outputEmptyListWarning(errOut)
 	}
 
@@ -436,7 +437,7 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 		if printer == nil || lastMapping == nil || mapping == nil || mapping.Resource != lastMapping.Resource {
 			if printer != nil {
 				w.Flush()
-				cmdutil.PrintFilterCount(filteredResourceCount, lastMapping.Resource, errOut, filterOpts)
+				cmdutil.PrintFilterCount(filteredResourceCount, lastMapping.Resource, filterOpts)
 			}
 			printer, err = f.PrinterForMapping(cmd, mapping, allNamespaces)
 			if err != nil {
@@ -494,7 +495,7 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 	}
 	w.Flush()
 	if printer != nil && lastMapping != nil {
-		cmdutil.PrintFilterCount(filteredResourceCount, lastMapping.Resource, errOut, filterOpts)
+		cmdutil.PrintFilterCount(filteredResourceCount, lastMapping.Resource, filterOpts)
 	}
 	return utilerrors.NewAggregate(allErrs)
 }

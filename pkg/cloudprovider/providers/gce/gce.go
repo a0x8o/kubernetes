@@ -736,9 +736,7 @@ func (gce *GCECloud) EnsureLoadBalancer(clusterName string, apiService *api.Serv
 			// This logic exists to detect a transition for a pre-existing service and turn on
 			// the tpNeedsUpdate flag to delete/recreate fwdrule/tpool adding the health check
 			// to the target pool.
-			glog.V(2).Infof("Annotation %s=%s added to new or pre-existing service",
-				apiservice.AnnotationExternalTraffic,
-				apiservice.AnnotationValueExternalTrafficLocal)
+			glog.V(2).Infof("Annotation external-traffic=OnlyLocal added to new or pre-existing service")
 			tpNeedsUpdate = true
 		}
 		hcToCreate, err = gce.ensureHttpHealthCheck(loadBalancerName, path, healthCheckNodePort)
@@ -2562,21 +2560,6 @@ func (gce *GCECloud) GetAutoLabelsForPD(name string, zone string) (map[string]st
 	return labels, nil
 }
 
-// TestDisk checks that a disk has given type. It should be used only for
-// testing!
-func (gce *GCECloud) TestDisk(diskName, volumeType string) error {
-	disk, err := gce.getDiskByNameUnknownZone(diskName)
-	if err != nil {
-		return err
-	}
-
-	if strings.HasSuffix(disk.Type, volumeType) {
-		return nil
-	}
-
-	return fmt.Errorf("unexpected disk type %q, expected suffix %q", disk.Type, volumeType)
-}
-
 func (gce *GCECloud) AttachDisk(diskName string, nodeName types.NodeName, readOnly bool) error {
 	instanceName := mapNodeNameToInstanceName(nodeName)
 	instance, err := gce.getInstanceByName(instanceName)
@@ -2660,7 +2643,6 @@ func (gce *GCECloud) findDiskByName(diskName string, zone string) (*gceDisk, err
 			Zone: lastComponent(disk.Zone),
 			Name: disk.Name,
 			Kind: disk.Kind,
-			Type: disk.Type,
 		}
 		return d, nil
 	}
@@ -2781,7 +2763,6 @@ type gceDisk struct {
 	Zone string
 	Name string
 	Kind string
-	Type string
 }
 
 // Gets the named instances, returning cloudprovider.InstanceNotFound if any instance is not found
@@ -2849,6 +2830,7 @@ func (gce *GCECloud) getInstancesByNames(names []string) ([]*gceInstance, error)
 
 	instanceArray := make([]*gceInstance, len(names))
 	for i, name := range names {
+		name = canonicalizeInstanceName(name)
 		instance := instances[name]
 		if instance == nil {
 			glog.Errorf("Failed to retrieve instance: %q", name)

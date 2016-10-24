@@ -117,7 +117,7 @@ func UnsecuredKubeletDeps(s *options.KubeletServer) (*kubelet.KubeletDeps, error
 		return nil, err
 	}
 
-	mounter := mount.New()
+	mounter := mount.New(s.MounterPath)
 	var writer kubeio.Writer = &kubeio.StdWriter{}
 	if s.Containerized {
 		glog.V(2).Info("Running kubelet in containerized mode (experimental)")
@@ -246,6 +246,7 @@ func initKubeletConfigSync(s *options.KubeletServer) (*componentconfig.KubeletCo
 		if err != nil {
 			return nil, err
 		}
+		api.Scheme.Default(&extKC)
 		kc := componentconfig.KubeletConfiguration{}
 		err = api.Scheme.Convert(&extKC, &kc, nil)
 		if err != nil {

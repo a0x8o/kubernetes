@@ -23,6 +23,10 @@ source "${KUBE_ROOT}/hack/lib/init.sh"
 
 kube::golang::setup_env
 
+# start the cache mutation detector by default so that cache mutators will be found
+KUBE_CACHE_MUTATION_DETECTOR="${KUBE_CACHE_MUTATION_DETECTOR:-true}"
+export KUBE_CACHE_MUTATION_DETECTOR
+
 kube::test::find_dirs() {
   (
     cd ${KUBE_ROOT}
@@ -43,12 +47,12 @@ kube::test::find_dirs() {
           -o -path './staging/*' \
           -o -path './vendor/*' \
         \) -prune \
-      \) -name '*_test.go' -print0 | xargs -0n1 dirname | sed 's|^\./||' | sort -u
+      \) -name '*_test.go' -print0 | xargs -0n1 dirname | sed 's|^\./||' | LC_ALL=C sort -u
 
     find -L . \
         -path './_output' -prune \
         -o -path './vendor/k8s.io/client-go/*' \
-      -name '*_test.go' -print0 | xargs -0n1 dirname | sed 's|^\./||' | sort -u
+      -name '*_test.go' -print0 | xargs -0n1 dirname | sed 's|^\./||' | LC_ALL=C sort -u
   )
 }
 
