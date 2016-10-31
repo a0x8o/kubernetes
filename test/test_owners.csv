@@ -149,7 +149,8 @@ Garbage collector should delete pods created by rc when not orphaning,justinsb,1
 Garbage collector should orphan pods created by rc if delete options say so,fabioy,1
 Garbage collector should orphan pods created by rc if deleteOptions.OrphanDependents is nil,zmerlynn,1
 "Generated release_1_5 clientset should create pods, delete pods, watch pods",ghodss,1
-HA-master pods survive addition/removal,davidopp,1
+"Generated release_1_5 clientset should create v2alpha1 scheduleJobs, delete scheduleJobs, watch scheduleJobs",caesarxuchao,0
+HA-master pods survive addition/removal,roberthbailey,1
 Hazelcast should create and scale hazelcast,mikedanese,1
 Horizontal pod autoscaling (scale resource: CPU) Deployment Should scale from 1 pod to 3 pods and from 3 to 5,jszczepkowski,0
 Horizontal pod autoscaling (scale resource: CPU) Deployment Should scale from 5 pods to 3 pods and from 3 to 1,jszczepkowski,0
@@ -281,13 +282,13 @@ Opaque resources should account opaque integer resources in pods with multiple c
 Opaque resources should not break pods that do not consume opaque integer resources.,ConnorDoyle,0
 Opaque resources should not schedule pods that exceed the available amount of opaque integer resource.,ConnorDoyle,0
 Opaque resources should schedule pods that do consume opaque integer resources.,ConnorDoyle,0
-PersistentVolumes with Single PV - PVC pairs create a PV and a pre-bound PVC: test write access,roberthbailey,1
-PersistentVolumes with Single PV - PVC pairs create a PVC and a pre-bound PV: test write access,piosz,1
-PersistentVolumes with Single PV - PVC pairs create a PVC and non-pre-bound PV: test write access,sttts,1
-PersistentVolumes with Single PV - PVC pairs should create a non-pre-bound PV and PVC: test write access,yujuhong,1
-PersistentVolumes with multiple PVs and PVCs all in same ns should create 2 PVs and 4 PVCs: test write access,brendandburns,1
-PersistentVolumes with multiple PVs and PVCs all in same ns should create 3 PVs and 3 PVCs: test write access,hurf,1
-PersistentVolumes with multiple PVs and PVCs all in same ns should create 4 PVs and 2 PVCs: test write access,jlowdermilk,1
+PersistentVolumes with Single PV - PVC pairs create a PV and a pre-bound PVC: test write access,caesarxuchao,1
+PersistentVolumes with Single PV - PVC pairs create a PVC and a pre-bound PV: test write access,caesarxuchao,1
+PersistentVolumes with Single PV - PVC pairs create a PVC and non-pre-bound PV: test write access,caesarxuchao,1
+PersistentVolumes with Single PV - PVC pairs should create a non-pre-bound PV and PVC: test write access,caesarxuchao,1
+PersistentVolumes with multiple PVs and PVCs all in same ns should create 2 PVs and 4 PVCs: test write access,caesarxuchao,1
+PersistentVolumes with multiple PVs and PVCs all in same ns should create 3 PVs and 3 PVCs: test write access,caesarxuchao,1
+PersistentVolumes with multiple PVs and PVCs all in same ns should create 4 PVs and 2 PVCs: test write access,caesarxuchao,1
 Pet Store should scale to persist a nominal number ( * ) of transactions in * seconds,xiang90,1
 Pet set recreate should recreate evicted statefulset,roberthbailey,1
 "Pod Disks Should schedule a pod w/ a RW PD, gracefully remove it, then schedule it on another host",alex-mohr,1
@@ -452,11 +453,13 @@ k8s.io/kubernetes/cmd/kube-apiserver/app,nikhiljindal,0
 k8s.io/kubernetes/cmd/kube-apiserver/app/options,nikhiljindal,0
 k8s.io/kubernetes/cmd/kube-discovery/app,pmorie,1
 k8s.io/kubernetes/cmd/kube-proxy/app,luxas,1
-k8s.io/kubernetes/cmd/kubeadm/app/cmd,davidopp,1
-k8s.io/kubernetes/cmd/kubeadm/app/images,saad-ali,1
-k8s.io/kubernetes/cmd/kubeadm/app/util,eparis,1
+k8s.io/kubernetes/cmd/kubeadm/app/cmd,caesarxuchao,1
+k8s.io/kubernetes/cmd/kubeadm/app/images,davidopp,1
+k8s.io/kubernetes/cmd/kubeadm/app/preflight,apprenda,0
+k8s.io/kubernetes/cmd/kubeadm/app/util,krousey,1
 k8s.io/kubernetes/cmd/kubelet/app,hurf,1
-k8s.io/kubernetes/cmd/libs/go2idl/client-gen/testoutput/clientset_generated/test_internalclientset/typed/testgroup.k8s.io/unversioned,eparis,1
+k8s.io/kubernetes/cmd/libs/go2idl/client-gen/types,caesarxuchao,0
+k8s.io/kubernetes/cmd/libs/go2idl/go-to-protobuf/protobuf,smarterclayton,0
 k8s.io/kubernetes/cmd/libs/go2idl/openapi-gen/generators,davidopp,1
 k8s.io/kubernetes/cmd/mungedocs,mwielgus,1
 k8s.io/kubernetes/examples,Random-Liu,0
@@ -625,9 +628,9 @@ k8s.io/kubernetes/pkg/kubelet/qos,vishh,0
 k8s.io/kubernetes/pkg/kubelet/rkt,apelisse,1
 k8s.io/kubernetes/pkg/kubelet/rktshim,mml,1
 k8s.io/kubernetes/pkg/kubelet/server,timstclair,0
-k8s.io/kubernetes/pkg/kubelet/server/portforward,saad-ali,1
+k8s.io/kubernetes/pkg/kubelet/server/portforward,caesarxuchao,1
 k8s.io/kubernetes/pkg/kubelet/server/stats,timstclair,0
-k8s.io/kubernetes/pkg/kubelet/server/streaming,derekwaynecarr,1
+k8s.io/kubernetes/pkg/kubelet/server/streaming,caesarxuchao,1
 k8s.io/kubernetes/pkg/kubelet/status,mwielgus,1
 k8s.io/kubernetes/pkg/kubelet/sysctl,piosz,1
 k8s.io/kubernetes/pkg/kubelet/types,jlowdermilk,1
@@ -844,6 +847,7 @@ k8s.io/kubernetes/plugin/pkg/auth/authenticator/password/allow,liggitt,0
 k8s.io/kubernetes/plugin/pkg/auth/authenticator/password/passwordfile,liggitt,0
 k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/anonymous,justinsb,1
 k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/basicauth,liggitt,0
+k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/headerrequest,deads2k,0
 k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/union,liggitt,0
 k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/x509,liggitt,0
 k8s.io/kubernetes/plugin/pkg/auth/authenticator/token/anytoken,krousey,1

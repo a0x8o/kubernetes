@@ -720,6 +720,25 @@ runTests() {
   # Pre-condition: no POD exists
   create_and_use_new_namespace
   kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" ''
+  ## kubectl create --edit can update the image field of a POD. tmp-editor.sh is a fake editor
+  TEMP=$(mktemp /tmp/tmp-editor-XXXXXXXX.sh)
+  echo -e "#!/bin/bash\n$SED -i \"s/gcr.io\/google_containers\/serve_hostname/nginx/g\" \$1" > ${TEMP}
+  chmod +x ${TEMP}
+  # Command
+  EDITOR=${TEMP} kubectl create --edit -f test/fixtures/doc-yaml/admin/limitrange/valid-pod.yaml "${kube_flags[@]}"
+  # Post-condition: valid-pod POD is created and has image gcr.io/google_containers/serve_hostname
+  kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" 'valid-pod:'
+  kube::test::get_object_assert pods "{{range.items}}{{$image_field}}:{{end}}" 'nginx:'
+  # Clean up
+  rm ${TEMP}
+  kubectl delete pods/valid-pod "${kube_flags[@]}"
+
+  ## kubectl create --edit won't create anything if user makes no changes
+  [ "$(EDITOR=cat kubectl create --edit -f test/fixtures/doc-yaml/admin/limitrange/valid-pod.yaml -o json 2>&1 | grep 'Edit cancelled')" ]
+
+  ## Create valid-pod POD
+  # Pre-condition: no POD exists
+  kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" ''
   # Command
   kubectl create -f test/fixtures/doc-yaml/admin/limitrange/valid-pod.yaml "${kube_flags[@]}"
   # Post-condition: valid-pod POD is created
@@ -2162,18 +2181,34 @@ __EOF__
   ## Set resource limits/request of a deployment
   # Pre-condition: no deployment exists
   kube::test::get_object_assert deployment "{{range.items}}{{$id_field}}:{{end}}" ''
+  # Set resources of a local file without talking to the server
+  kubectl set resources -f hack/testdata/deployment-multicontainer.yaml -c=perl --limits=cpu=300m --requests=cpu=300m --local -o yaml "${kube_flags[@]}"
+  ! kubectl set resources -f hack/testdata/deployment-multicontainer.yaml -c=perl --limits=cpu=300m --requests=cpu=300m --dry-run -o yaml "${kube_flags[@]}"
   # Create a deployment
   kubectl create -f hack/testdata/deployment-multicontainer.yaml "${kube_flags[@]}"
   kube::test::get_object_assert deployment "{{range.items}}{{$id_field}}:{{end}}" 'nginx-deployment:'
   kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
   kube::test::get_object_assert deployment "{{range.items}}{{$deployment_second_image_field}}:{{end}}" "${IMAGE_PERL}:"
   # Set the deployment's cpu limits
-  kubectl set resources deployment nginx-deployment --limits=cpu=100m "${kube_flags[@]}"
-  kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 0).resources.limits.cpu}}:{{end}}" "100m:"
-  kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 1).resources.limits.cpu}}:{{end}}" "100m:"
+  kubectl set resources deployment nginx-deployment --limits=cpu=200m "${kube_flags[@]}"
+  kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 0).resources.limits.cpu}}:{{end}}" "200m:"
+  kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 1).resources.limits.cpu}}:{{end}}" "200m:"
+  # Set the deployments memory limits without affecting the cpu limits
+  kubectl set resources deployment nginx-deployment --limits=memory=256Mi "${kube_flags[@]}"
+  kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 0).resources.limits.cpu}}:{{end}}" "200m:"
+  kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 0).resources.limits.memory}}:{{end}}" "256Mi:"
+  # Set the deployments resource requests without effecting the deployments limits
+  kubectl set resources deployment nginx-deployment --requests=cpu=100m,memory=256Mi "${kube_flags[@]}"
+  kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 0).resources.limits.cpu}}:{{end}}" "200m:"
+  kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 0).resources.limits.memory}}:{{end}}" "256Mi:"
+  kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 0).resources.requests.cpu}}:{{end}}" "100m:"
+  kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 0).resources.requests.memory}}:{{end}}" "256Mi:"
+  # Set the deployments resource requests and limits to zero
+  kubectl set resources deployment nginx-deployment --requests=cpu=0,memory=0 --limits=cpu=0,memory=0 "${kube_flags[@]}"
   # Set a non-existing container should fail
   ! kubectl set resources deployment nginx-deployment -c=redis --limits=cpu=100m
   # Set the limit of a specific container in deployment
+  kubectl set resources deployment nginx-deployment --limits=cpu=100m "${kube_flags[@]}"
   kubectl set resources deployment nginx-deployment -c=nginx --limits=cpu=200m "${kube_flags[@]}"
   kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 0).resources.limits.cpu}}:{{end}}" "200m:"
   kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 1).resources.limits.cpu}}:{{end}}" "100m:"
@@ -2183,7 +2218,9 @@ __EOF__
   kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 1).resources.limits.cpu}}:{{end}}" "300m:"
   kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 1).resources.requests.cpu}}:{{end}}" "300m:"
   # Set limits on a local file without talking to the server
-  kubectl set resources deployment -f hack/testdata/deployment-multicontainer.yaml -c=perl --limits=cpu=300m --requests=cpu=300m --dry-run -o yaml "${kube_flags[@]}"
+  kubectl set resources -f hack/testdata/deployment-multicontainer.yaml -c=perl --limits=cpu=500m --requests=cpu=500m --dry-run -o yaml "${kube_flags[@]}"
+  kubectl set resources deployment nginx-deployment -c=perl --limits=cpu=500m --requests=cpu=500m --dry-run -o yaml "${kube_flags[@]}"
+  ! kubectl set resources deployment nginx-deployment -c=perl --limits=cpu=500m --requests=cpu=500m --local -o yaml "${kube_flags[@]}"
   kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 0).resources.limits.cpu}}:{{end}}" "200m:"
   kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 1).resources.limits.cpu}}:{{end}}" "300m:"
   kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 1).resources.requests.cpu}}:{{end}}" "300m:"
@@ -2249,6 +2286,13 @@ __EOF__
   kubectl get rs nginx-618515232 -o yaml | grep "deployment.kubernetes.io/revision-history: 1,3"
   # Check that trying to watch the status of a superseded revision returns an error
   ! kubectl rollout status deployment/nginx --revision=3
+  cat hack/testdata/deployment-revision1.yaml | $SED "s/name: nginx$/name: nginx2/" | kubectl create -f - "${kube_flags[@]}"
+  # Newest deployment should be marked as overlapping
+  kubectl get deployment nginx2 -o yaml "${kube_flags[@]}" | grep "deployment.kubernetes.io/error-selector-overlapping-with"
+  # Oldest deployment should not be marked as overlapping
+  ! kubectl get deployment nginx -o yaml "${kube_flags[@]}" | grep "deployment.kubernetes.io/error-selector-overlapping-with"
+  # Deletion of both deployments should not be blocked
+   kubectl delete deployment nginx2 "${kube_flags[@]}"
   # Clean up
   kubectl delete deployment nginx "${kube_flags[@]}"
 

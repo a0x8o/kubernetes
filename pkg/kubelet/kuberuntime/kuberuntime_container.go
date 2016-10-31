@@ -150,7 +150,7 @@ func (m *kubeGenericRuntimeManager) generateContainerConfig(container *api.Conta
 		WorkingDir:  &container.WorkingDir,
 		Labels:      newContainerLabels(container, pod),
 		Annotations: newContainerAnnotations(container, pod, restartCount),
-		Mounts:      makeMounts(opts, container, podHasSELinuxLabel),
+		Mounts:      m.makeMounts(opts, container, podHasSELinuxLabel),
 		LogPath:     &containerLogsPath,
 		Stdin:       &container.Stdin,
 		StdinOnce:   &container.StdinOnce,
@@ -252,7 +252,7 @@ func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *api.
 }
 
 // makeMounts generates container volume mounts for kubelet runtime api.
-func makeMounts(opts *kubecontainer.RunContainerOptions, container *api.Container, podHasSELinuxLabel bool) []*runtimeApi.Mount {
+func (m *kubeGenericRuntimeManager) makeMounts(opts *kubecontainer.RunContainerOptions, container *api.Container, podHasSELinuxLabel bool) []*runtimeApi.Mount {
 	volumeMounts := []*runtimeApi.Mount{}
 
 	for idx := range opts.Mounts {
@@ -278,8 +278,7 @@ func makeMounts(opts *kubecontainer.RunContainerOptions, container *api.Containe
 		// of the same container.
 		cid := makeUID()
 		containerLogPath := filepath.Join(opts.PodContainerDir, cid)
-		// TODO: We should try to use os interface here.
-		fs, err := os.Create(containerLogPath)
+		fs, err := m.osInterface.Create(containerLogPath)
 		if err != nil {
 			glog.Errorf("Error on creating termination-log file %q: %v", containerLogPath, err)
 		} else {
@@ -668,7 +667,7 @@ func (m *kubeGenericRuntimeManager) AttachContainer(id kubecontainer.ContainerID
 	// now to unblock other tests.
 	// TODO: remove this hack after attach is defined in CRI.
 	if ds, ok := m.runtimeService.(dockershim.DockerLegacyService); ok {
-		return ds.AttachContainer(id, stdin, stdout, stderr, tty, resize)
+		return ds.LegacyAttach(id, stdin, stdout, stderr, tty, resize)
 	}
 	return fmt.Errorf("not implemented")
 }
@@ -694,7 +693,7 @@ func (m *kubeGenericRuntimeManager) ExecInContainer(containerID kubecontainer.Co
 	// now to unblock other tests.
 	// TODO: remove this hack after exec is defined in CRI.
 	if ds, ok := m.runtimeService.(dockershim.DockerLegacyService); ok {
-		return ds.ExecInContainer(containerID, cmd, stdin, stdout, stderr, tty, resize)
+		return ds.LegacyExec(containerID, cmd, stdin, stdout, stderr, tty, resize)
 	}
 	return fmt.Errorf("not implemented")
 }

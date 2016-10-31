@@ -33,8 +33,8 @@ import (
 	"k8s.io/kubernetes/pkg/apimachinery/registered"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/client/restclient"
+	"k8s.io/kubernetes/pkg/client/restclient/fake"
 	"k8s.io/kubernetes/pkg/client/typed/discovery"
-	"k8s.io/kubernetes/pkg/client/unversioned/fake"
 	"k8s.io/kubernetes/pkg/kubectl"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
@@ -281,8 +281,15 @@ func (f *FakeFactory) DefaultNamespace() (string, bool, error) {
 	return f.tf.Namespace, false, f.tf.Err
 }
 
-func (f *FakeFactory) Generators(string) map[string]kubectl.Generator {
-	return nil
+func (f *FakeFactory) Generators(cmdName string) map[string]kubectl.Generator {
+	var generator map[string]kubectl.Generator
+	switch cmdName {
+	case "run":
+		generator = map[string]kubectl.Generator{
+			cmdutil.DeploymentV1Beta1GeneratorName: kubectl.DeploymentV1Beta1{},
+		}
+	}
+	return generator
 }
 
 func (f *FakeFactory) CanBeExposed(unversioned.GroupKind) error {
@@ -336,6 +343,10 @@ func (f *FakeFactory) DefaultResourceFilterOptions(cmd *cobra.Command, withNames
 
 func (f *FakeFactory) DefaultResourceFilterFunc() kubectl.Filters {
 	return nil
+}
+
+func (f *FakeFactory) SuggestedPodTemplateResources() []unversioned.GroupResource {
+	return []unversioned.GroupResource{}
 }
 
 type fakeMixedFactory struct {
@@ -503,6 +514,10 @@ func (f *fakeAPIFactory) NewBuilder() *resource.Builder {
 	mapper, typer := f.Object()
 
 	return resource.NewBuilder(mapper, typer, resource.ClientMapperFunc(f.ClientForMapping), f.Decoder(true))
+}
+
+func (f *fakeAPIFactory) SuggestedPodTemplateResources() []unversioned.GroupResource {
+	return []unversioned.GroupResource{}
 }
 
 func NewAPIFactory() (cmdutil.Factory, *TestFactory, runtime.Codec, runtime.NegotiatedSerializer) {
