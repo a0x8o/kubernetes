@@ -30,8 +30,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/ghodss/yaml"
-	"github.com/golang/glog"
 	"k8s.io/kubernetes/federation/apis/federation"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/events"
@@ -49,7 +47,11 @@ import (
 	"k8s.io/kubernetes/pkg/runtime"
 	utilerrors "k8s.io/kubernetes/pkg/util/errors"
 	"k8s.io/kubernetes/pkg/util/jsonpath"
+	"k8s.io/kubernetes/pkg/util/node"
 	"k8s.io/kubernetes/pkg/util/sets"
+
+	"github.com/ghodss/yaml"
+	"github.com/golang/glog"
 )
 
 const (
@@ -489,6 +491,7 @@ var (
 	clusterRoleColumns           = []string{"NAME", "AGE"}
 	clusterRoleBindingColumns    = []string{"NAME", "AGE"}
 	storageClassColumns          = []string{"NAME", "TYPE"}
+	statusColumns                = []string{"STATUS", "REASON", "MESSAGE"}
 
 	// TODO: consider having 'KIND' for third party resource data
 	thirdPartyResourceDataColumns    = []string{"NAME", "LABELS", "DATA"}
@@ -591,6 +594,7 @@ func (h *HumanReadablePrinter) addDefaultHandlers() {
 	h.Handler(certificateSigningRequestColumns, printCertificateSigningRequestList)
 	h.Handler(storageClassColumns, printStorageClass)
 	h.Handler(storageClassColumns, printStorageClassList)
+	h.Handler(statusColumns, printStatus)
 }
 
 func (h *HumanReadablePrinter) unknown(data []byte, w io.Writer) error {
@@ -729,7 +733,10 @@ func printPodBase(pod *api.Pod, w io.Writer, options PrintOptions) error {
 			}
 		}
 	}
-	if pod.DeletionTimestamp != nil {
+
+	if pod.DeletionTimestamp != nil && pod.Status.Reason == node.NodeUnreachablePodReason {
+		reason = "Unknown"
+	} else if pod.DeletionTimestamp != nil {
 		reason = "Terminating"
 	}
 
@@ -2111,6 +2118,14 @@ func printStorageClassList(scList *storage.StorageClassList, w io.Writer, option
 			return err
 		}
 	}
+	return nil
+}
+
+func printStatus(status *unversioned.Status, w io.Writer, options PrintOptions) error {
+	if _, err := fmt.Fprintf(w, "%s\t%s\t%s\n", status.Status, status.Reason, status.Message); err != nil {
+		return err
+	}
+
 	return nil
 }
 

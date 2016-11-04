@@ -69,7 +69,7 @@ func (ds *dockerService) ListContainers(filter *runtimeApi.ContainerFilter) ([]*
 
 		converted, err := toRuntimeAPIContainer(&c)
 		if err != nil {
-			glog.V(5).Infof("Unable to convert docker to runtime API container: %v", err)
+			glog.V(4).Infof("Unable to convert docker to runtime API container: %v", err)
 			continue
 		}
 
@@ -125,17 +125,11 @@ func (ds *dockerService) CreateContainer(podSandboxID string, config *runtimeApi
 		Privileged:     config.GetPrivileged(),
 	}
 
-	// Set sysctls if requested
-	sysctls, err := getSysctlsFromAnnotations(config.Annotations)
-	if err != nil {
-		return "", fmt.Errorf("failed to get sysctls from annotations %v for container %q: %v", config.Annotations, config.Metadata.GetName(), err)
-	}
-	hc.Sysctls = sysctls
-
 	// Apply options derived from the sandbox config.
 	if lc := sandboxConfig.GetLinux(); lc != nil {
 		// Apply Cgroup options.
 		// TODO: Check if this works with per-pod cgroups.
+		// TODO: we need to pass the cgroup in syntax expected by cgroup driver but shim does not use docker info yet...
 		hc.CgroupParent = lc.GetCgroupParent()
 
 		// Apply namespace options.
@@ -176,6 +170,7 @@ func (ds *dockerService) CreateContainer(podSandboxID string, config *runtimeApi
 		// Note: ShmSize is handled in kube_docker_client.go
 	}
 
+	var err error
 	hc.SecurityOpt, err = getContainerSecurityOpts(config.Metadata.GetName(), sandboxConfig, ds.seccompProfileRoot)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate container security options for container %q: %v", config.Metadata.GetName(), err)
@@ -327,7 +322,7 @@ func (ds *dockerService) ContainerStatus(containerID string) (*runtimeApi.Contai
 	var reason, message string
 	if r.State.Running {
 		// Container is running.
-		state = runtimeApi.ContainerState_RUNNING
+		state = runtimeApi.ContainerState_CONTAINER_RUNNING
 	} else {
 		// Container is *not* running. We need to get more details.
 		//    * Case 1: container has run and exited with non-zero finishedAt
@@ -336,7 +331,7 @@ func (ds *dockerService) ContainerStatus(containerID string) (*runtimeApi.Contai
 		//              time, but a non-zero exit code.
 		//    * Case 3: container has been created, but not started (yet).
 		if !finishedAt.IsZero() { // Case 1
-			state = runtimeApi.ContainerState_EXITED
+			state = runtimeApi.ContainerState_CONTAINER_EXITED
 			switch {
 			case r.State.OOMKilled:
 				// TODO: consider exposing OOMKilled via the runtimeAPI.
@@ -349,13 +344,13 @@ func (ds *dockerService) ContainerStatus(containerID string) (*runtimeApi.Contai
 				reason = "Error"
 			}
 		} else if r.State.ExitCode != 0 { // Case 2
-			state = runtimeApi.ContainerState_EXITED
+			state = runtimeApi.ContainerState_CONTAINER_EXITED
 			// Adjust finshedAt and startedAt time to createdAt time to avoid
 			// the confusion.
 			finishedAt, startedAt = createdAt, createdAt
 			reason = "ContainerCannotRun"
 		} else { // Case 3
-			state = runtimeApi.ContainerState_CREATED
+			state = runtimeApi.ContainerState_CONTAINER_CREATED
 		}
 		message = r.State.Error
 	}

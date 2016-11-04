@@ -25,14 +25,14 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	apiv1 "k8s.io/kubernetes/pkg/api/v1"
-	appsapi "k8s.io/kubernetes/pkg/apis/apps/v1alpha1"
+	appsapi "k8s.io/kubernetes/pkg/apis/apps/v1beta1"
 	authenticationv1beta1 "k8s.io/kubernetes/pkg/apis/authentication/v1beta1"
 	authorizationapiv1beta1 "k8s.io/kubernetes/pkg/apis/authorization/v1beta1"
 	autoscalingapiv1 "k8s.io/kubernetes/pkg/apis/autoscaling/v1"
 	batchapiv1 "k8s.io/kubernetes/pkg/apis/batch/v1"
 	certificatesapiv1alpha1 "k8s.io/kubernetes/pkg/apis/certificates/v1alpha1"
 	extensionsapiv1beta1 "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
-	policyapiv1alpha1 "k8s.io/kubernetes/pkg/apis/policy/v1alpha1"
+	policyapiv1beta1 "k8s.io/kubernetes/pkg/apis/policy/v1beta1"
 	rbacapi "k8s.io/kubernetes/pkg/apis/rbac/v1alpha1"
 	storageapiv1beta1 "k8s.io/kubernetes/pkg/apis/storage/v1beta1"
 	coreclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
@@ -119,6 +119,9 @@ func (c *Config) Complete() completedConfig {
 		c.EndpointReconcilerConfig.Reconciler = NewMasterCountEndpointReconciler(c.GenericConfig.MasterCount, endpointClient)
 	}
 
+	// this has always been hardcoded true in the past
+	c.GenericConfig.EnableMetrics = true
+
 	return completedConfig{c}
 }
 
@@ -192,7 +195,9 @@ func (c completedConfig) New() (*Master, error) {
 	}
 	m.InstallAPIs(c.Config.GenericConfig.APIResourceConfigSource, restOptionsFactory.NewFor, restStorageProviders...)
 
-	m.InstallGeneralEndpoints(c.Config)
+	if c.Tunneler != nil {
+		m.installTunneler(c.Tunneler, coreclient.NewForConfigOrDie(c.GenericConfig.LoopbackClientConfig).Nodes())
+	}
 
 	return m, nil
 }
@@ -215,29 +220,13 @@ func (m *Master) InstallLegacyAPI(c *Config, restOptionsGetter genericapiserver.
 	}
 }
 
-// TODO this needs to be refactored so we have a way to add general health checks to genericapiserver
-// TODO profiling should be generic
-func (m *Master) InstallGeneralEndpoints(c *Config) {
-	// Run the tunneler.
-	healthzChecks := []healthz.HealthzChecker{}
-	if c.Tunneler != nil {
-		nodeClient := coreclient.NewForConfigOrDie(c.GenericConfig.LoopbackClientConfig).Nodes()
-		c.Tunneler.Run(nodeAddressProvider{nodeClient}.externalAddresses)
-
-		healthzChecks = append(healthzChecks, healthz.NamedCheck("SSH Tunnel Check", genericapiserver.TunnelSyncHealthChecker(c.Tunneler)))
-		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-			Name: "apiserver_proxy_tunnel_sync_latency_secs",
-			Help: "The time since the last successful synchronization of the SSH tunnels for proxy requests.",
-		}, func() float64 { return float64(c.Tunneler.SecondsSinceSync()) })
-	}
-	healthz.InstallHandler(&m.GenericAPIServer.HandlerContainer.NonSwaggerRoutes, healthzChecks...)
-
-	if c.GenericConfig.EnableProfiling {
-		routes.MetricsWithReset{}.Install(m.GenericAPIServer.HandlerContainer)
-	} else {
-		routes.DefaultMetrics{}.Install(m.GenericAPIServer.HandlerContainer)
-	}
-
+func (m *Master) installTunneler(tunneler genericapiserver.Tunneler, nodeClient coreclient.NodeInterface) {
+	tunneler.Run(nodeAddressProvider{nodeClient}.externalAddresses)
+	m.GenericAPIServer.AddHealthzChecks(healthz.NamedCheck("SSH Tunnel Check", genericapiserver.TunnelSyncHealthChecker(tunneler)))
+	prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "apiserver_proxy_tunnel_sync_latency_secs",
+		Help: "The time since the last successful synchronization of the SSH tunnels for proxy requests.",
+	}, func() float64 { return float64(tunneler.SecondsSinceSync()) })
 }
 
 // InstallAPIs will install the APIs for the restStorageProviders if they are enabled.
@@ -347,7 +336,7 @@ func DefaultAPIResourceConfigSource() *genericapiserver.ResourceConfig {
 		authenticationv1beta1.SchemeGroupVersion,
 		autoscalingapiv1.SchemeGroupVersion,
 		appsapi.SchemeGroupVersion,
-		policyapiv1alpha1.SchemeGroupVersion,
+		policyapiv1beta1.SchemeGroupVersion,
 		rbacapi.SchemeGroupVersion,
 		storageapiv1beta1.SchemeGroupVersion,
 		certificatesapiv1alpha1.SchemeGroupVersion,
