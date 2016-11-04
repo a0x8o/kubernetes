@@ -261,6 +261,7 @@ Network Partition should come back up if node goes down,foxish,0
 Network Partition should create new pods when node is partitioned,foxish,0
 Network Partition should eagerly create replacement pod during network partition when termination grace is non-zero,foxish,0
 Network Partition should not reschedule pets if there is a network partition,foxish,0
+Network should set TCP CLOSE_WAIT timeout,bowei,0
 Networking Granular Checks: Pods should function for intra-pod communication: http,stts,0
 Networking Granular Checks: Pods should function for intra-pod communication: udp,freehan,0
 Networking Granular Checks: Pods should function for node-pod communication: http,spxtr,1
@@ -340,8 +341,10 @@ Reboot each node by triggering kernel panic and ensure they function upon restar
 Redis should create and stop redis servers,timstclair,1
 ReplicaSet should serve a basic image on each replica with a private image,pmorie,1
 ReplicaSet should serve a basic image on each replica with a public image,krousey,0
+ReplicaSet should surface a failure condition on a common issue like exceeded quota,kargakis,0
 ReplicationController should serve a basic image on each replica with a private image,jbeda,1
 ReplicationController should serve a basic image on each replica with a public image,krousey,1
+ReplicationController should surface a failure condition on a common issue like exceeded quota,kargakis,0
 Rescheduler should ensure that critical pod is scheduled in case there is no resources available,mtaufen,1
 Resource-usage regular resource usage tracking resource tracking for * pods per node,janetkuo,1
 ResourceQuota should create a ResourceQuota and capture the life of a configMap.,timstclair,1

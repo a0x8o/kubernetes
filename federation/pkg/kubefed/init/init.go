@@ -15,6 +15,7 @@ limitations under the License.
 */
 
 // TODO(madhusdancs):
+// 1. Make printSuccess prepend protocol/scheme to the IPs/hostnames.
 // 1. Add a dry-run support.
 // 2. Make all the API object names customizable.
 //    Ex: federation-apiserver, federation-controller-manager, etc.
@@ -26,11 +27,13 @@ limitations under the License.
 // 6. Add the ability to customize DNS domain suffix. It should probably be derived
 //    from cluster config.
 // 7. Make etcd PVC size configurable.
+// 8. Make API server and controller manager replicas customizable via the HA work.
 package init
 
 import (
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
@@ -193,11 +196,12 @@ func initFederation(cmdOut io.Writer, config util.AdminConfig, cmd *cobra.Comman
 	}
 
 	// 7. Create federation controller manager
-	_, err = createControllerManager(hostClientset, initFlags.FederationSystemNamespace, cmName, cmKubeconfigName, dnsZoneName)
+	_, err = createControllerManager(hostClientset, initFlags.FederationSystemNamespace, initFlags.Name, cmName, cmKubeconfigName, dnsZoneName)
 	if err != nil {
 		return err
 	}
-	return nil
+
+	return printSuccess(cmdOut, ips, hostnames)
 }
 
 func createNamespace(clientset *client.Clientset, namespace string) (*api.Namespace, error) {
@@ -380,6 +384,7 @@ func createAPIServer(clientset *client.Clientset, namespace, name, credentialsNa
 			Labels:    componentLabel,
 		},
 		Spec: extensions.DeploymentSpec{
+			Replicas: 1,
 			Template: api.PodTemplateSpec{
 				ObjectMeta: api.ObjectMeta{
 					Name:   name,
@@ -451,17 +456,18 @@ func createAPIServer(clientset *client.Clientset, namespace, name, credentialsNa
 	return clientset.Extensions().Deployments(namespace).Create(dep)
 }
 
-func createControllerManager(clientset *client.Clientset, namespace, name, kubeconfigName, dnsZoneName string) (*extensions.Deployment, error) {
+func createControllerManager(clientset *client.Clientset, namespace, name, cmName, kubeconfigName, dnsZoneName string) (*extensions.Deployment, error) {
 	dep := &extensions.Deployment{
 		ObjectMeta: api.ObjectMeta{
-			Name:      name,
+			Name:      cmName,
 			Namespace: namespace,
 			Labels:    componentLabel,
 		},
 		Spec: extensions.DeploymentSpec{
+			Replicas: 1,
 			Template: api.PodTemplateSpec{
 				ObjectMeta: api.ObjectMeta{
-					Name:   name,
+					Name:   cmName,
 					Labels: controllerManagerPodLabels,
 				},
 				Spec: api.PodSpec{
@@ -514,4 +520,10 @@ func createControllerManager(clientset *client.Clientset, namespace, name, kubec
 	}
 
 	return clientset.Extensions().Deployments(namespace).Create(dep)
+}
+
+func printSuccess(cmdOut io.Writer, ips, hostnames []string) error {
+	svcEndpoints := append(ips, hostnames...)
+	_, err := fmt.Fprintf(cmdOut, "Federation API server is running at: %s\n", strings.Join(svcEndpoints, ", "))
+	return err
 }

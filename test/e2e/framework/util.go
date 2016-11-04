@@ -3232,7 +3232,8 @@ type updateDeploymentFunc func(d *extensions.Deployment)
 
 func UpdateDeploymentWithRetries(c clientset.Interface, namespace, name string, applyUpdate updateDeploymentFunc) (deployment *extensions.Deployment, err error) {
 	deployments := c.Extensions().Deployments(namespace)
-	err = wait.Poll(10*time.Millisecond, 1*time.Minute, func() (bool, error) {
+	var updateErr error
+	pollErr := wait.Poll(10*time.Millisecond, 1*time.Minute, func() (bool, error) {
 		if deployment, err = deployments.Get(name); err != nil {
 			return false, err
 		}
@@ -3242,9 +3243,63 @@ func UpdateDeploymentWithRetries(c clientset.Interface, namespace, name string, 
 			Logf("Updating deployment %s", name)
 			return true, nil
 		}
+		updateErr = err
 		return false, nil
 	})
-	return deployment, err
+	if pollErr == wait.ErrWaitTimeout {
+		pollErr = fmt.Errorf("couldn't apply the provided updated to deployment %q: %v", name, updateErr)
+	}
+	return deployment, pollErr
+}
+
+type updateRsFunc func(d *extensions.ReplicaSet)
+
+func UpdateReplicaSetWithRetries(c clientset.Interface, namespace, name string, applyUpdate updateRsFunc) (*extensions.ReplicaSet, error) {
+	var rs *extensions.ReplicaSet
+	var updateErr error
+	pollErr := wait.PollImmediate(10*time.Millisecond, 1*time.Minute, func() (bool, error) {
+		var err error
+		if rs, err = c.Extensions().ReplicaSets(namespace).Get(name); err != nil {
+			return false, err
+		}
+		// Apply the update, then attempt to push it to the apiserver.
+		applyUpdate(rs)
+		if rs, err = c.Extensions().ReplicaSets(namespace).Update(rs); err == nil {
+			Logf("Updating replica set %q", name)
+			return true, nil
+		}
+		updateErr = err
+		return false, nil
+	})
+	if pollErr == wait.ErrWaitTimeout {
+		pollErr = fmt.Errorf("couldn't apply the provided updated to replicaset %q: %v", name, updateErr)
+	}
+	return rs, pollErr
+}
+
+type updateRcFunc func(d *api.ReplicationController)
+
+func UpdateReplicationControllerWithRetries(c clientset.Interface, namespace, name string, applyUpdate updateRcFunc) (*api.ReplicationController, error) {
+	var rc *api.ReplicationController
+	var updateErr error
+	pollErr := wait.PollImmediate(10*time.Millisecond, 1*time.Minute, func() (bool, error) {
+		var err error
+		if rc, err = c.Core().ReplicationControllers(namespace).Get(name); err != nil {
+			return false, err
+		}
+		// Apply the update, then attempt to push it to the apiserver.
+		applyUpdate(rc)
+		if rc, err = c.Core().ReplicationControllers(namespace).Update(rc); err == nil {
+			Logf("Updating replication controller %q", name)
+			return true, nil
+		}
+		updateErr = err
+		return false, nil
+	})
+	if pollErr == wait.ErrWaitTimeout {
+		pollErr = fmt.Errorf("couldn't apply the provided updated to rc %q: %v", name, updateErr)
+	}
+	return rc, pollErr
 }
 
 // NodeAddresses returns the first address of the given type of each node.
@@ -3332,7 +3387,7 @@ func LogSSHResult(result SSHResult) {
 	Logf("ssh %s: exit code: %d", remote, result.Code)
 }
 
-func IssueSSHCommand(cmd, provider string, node *api.Node) error {
+func IssueSSHCommandWithResult(cmd, provider string, node *api.Node) (*SSHResult, error) {
 	Logf("Getting external IP address for %s", node.Name)
 	host := ""
 	for _, a := range node.Status.Addresses {
@@ -3341,15 +3396,34 @@ func IssueSSHCommand(cmd, provider string, node *api.Node) error {
 			break
 		}
 	}
+
 	if host == "" {
-		return fmt.Errorf("couldn't find external IP address for node %s", node.Name)
+		return nil, fmt.Errorf("couldn't find external IP address for node %s", node.Name)
 	}
-	Logf("Calling %s on %s(%s)", cmd, node.Name, host)
+
+	Logf("SSH %q on %s(%s)", cmd, node.Name, host)
 	result, err := SSH(cmd, host, provider)
 	LogSSHResult(result)
+
 	if result.Code != 0 || err != nil {
-		return fmt.Errorf("failed running %q: %v (exit code %d)", cmd, err, result.Code)
+		return nil, fmt.Errorf("failed running %q: %v (exit code %d)",
+			cmd, err, result.Code)
 	}
+
+	return &result, nil
+}
+
+func IssueSSHCommand(cmd, provider string, node *api.Node) error {
+	result, err := IssueSSHCommandWithResult(cmd, provider, node)
+	if result != nil {
+		LogSSHResult(*result)
+	}
+
+	if result.Code != 0 || err != nil {
+		return fmt.Errorf("failed running %q: %v (exit code %d)",
+			cmd, err, result.Code)
+	}
+
 	return nil
 }
 
