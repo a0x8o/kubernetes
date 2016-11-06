@@ -21,7 +21,8 @@ import (
 	"io"
 
 	"github.com/golang/glog"
-	"k8s.io/kubernetes/pkg/api"
+	"github.com/golang/protobuf/proto"
+
 	"k8s.io/kubernetes/pkg/apis/componentconfig"
 	internalApi "k8s.io/kubernetes/pkg/kubelet/api"
 	runtimeApi "k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/runtime"
@@ -59,7 +60,7 @@ const (
 	sandboxIDLabelKey           = "io.kubernetes.sandbox.id"
 )
 
-// NetworkPluginArgs is the subset of kubelet runtime args we pass
+// NetworkPluginSettings is the subset of kubelet runtime args we pass
 // to the container runtime shim so it can probe for network plugins.
 // In the future we will feed these directly to a standalone container
 // runtime process.
@@ -145,8 +146,6 @@ type DockerService interface {
 // backward compatibility.
 type DockerLegacyService interface {
 	// Supporting legacy methods for docker.
-	GetContainerLogs(pod *api.Pod, containerID kubecontainer.ContainerID, logOptions *api.PodLogOptions, stdout, stderr io.Writer) (err error)
-
 	LegacyExec(containerID kubecontainer.ContainerID, cmd []string, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool, resize <-chan term.Size) error
 	LegacyAttach(id kubecontainer.ContainerID, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool, resize <-chan term.Size) error
 	LegacyPortForward(sandboxID string, port uint16, stream io.ReadWriteCloser) error
@@ -224,4 +223,29 @@ type dockerNetworkHost struct {
 // Start initializes and starts components in dockerService.
 func (ds *dockerService) Start() error {
 	return ds.containerManager.Start()
+}
+
+// Status returns the status of the runtime.
+// TODO(random-liu): Set network condition accordingly here.
+func (ds *dockerService) Status() (*runtimeApi.RuntimeStatus, error) {
+	runtimeReady := &runtimeApi.RuntimeCondition{
+		Type:   proto.String(runtimeApi.RuntimeReady),
+		Status: proto.Bool(true),
+	}
+	networkReady := &runtimeApi.RuntimeCondition{
+		Type:   proto.String(runtimeApi.NetworkReady),
+		Status: proto.Bool(true),
+	}
+	conditions := []*runtimeApi.RuntimeCondition{runtimeReady, networkReady}
+	if _, err := ds.client.Version(); err != nil {
+		runtimeReady.Status = proto.Bool(false)
+		runtimeReady.Reason = proto.String("DockerDaemonNotReady")
+		runtimeReady.Message = proto.String(fmt.Sprintf("docker: failed to get docker version: %v", err))
+	}
+	if err := ds.networkPlugin.Status(); err != nil {
+		networkReady.Status = proto.Bool(false)
+		networkReady.Reason = proto.String("NetworkPluginNotReady")
+		networkReady.Message = proto.String(fmt.Sprintf("docker: network plugin is not ready: %v", err))
+	}
+	return &runtimeApi.RuntimeStatus{Conditions: conditions}, nil
 }

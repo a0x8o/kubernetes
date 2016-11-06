@@ -302,6 +302,7 @@ kube-master
 kube-master
 kube-master-url
 kube-reserved
+kubeadm-path
 kubecfg-file
 kubectl-path
 kubelet-address
@@ -513,6 +514,7 @@ service-address
 service-cidr
 service-cluster-ip-range
 service-dns-domain
+service-dns-suffix
 service-generator
 service-node-port-range
 service-node-ports
@@ -574,6 +576,7 @@ unix-socket
 update-period
 upgrade-image
 upgrade-target
+use-service-account-credentials
 use-kubernetes-cluster-service
 use-kubernetes-version
 user-whitelist

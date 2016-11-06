@@ -42,17 +42,16 @@ import (
 
 // fakeVolumeHost is useful for testing volume plugins.
 type fakeVolumeHost struct {
-	rootDir     string
-	kubeClient  clientset.Interface
-	pluginMgr   VolumePluginMgr
-	cloud       cloudprovider.Interface
-	mounter     mount.Interface
-	writer      io.Writer
-	rootContext string
+	rootDir    string
+	kubeClient clientset.Interface
+	pluginMgr  VolumePluginMgr
+	cloud      cloudprovider.Interface
+	mounter    mount.Interface
+	writer     io.Writer
 }
 
-func NewFakeVolumeHost(rootDir string, kubeClient clientset.Interface, plugins []VolumePlugin, rootContext string) *fakeVolumeHost {
-	host := &fakeVolumeHost{rootDir: rootDir, kubeClient: kubeClient, cloud: nil, rootContext: rootContext}
+func NewFakeVolumeHost(rootDir string, kubeClient clientset.Interface, plugins []VolumePlugin) *fakeVolumeHost {
+	host := &fakeVolumeHost{rootDir: rootDir, kubeClient: kubeClient, cloud: nil}
 	host.mounter = &mount.FakeMounter{}
 	host.writer = &io.StdWriter{}
 	host.pluginMgr.InitPlugins(plugins, host)
@@ -121,10 +120,6 @@ func (f *fakeVolumeHost) GetHostName() string {
 // Returns host IP or nil in the case of error.
 func (f *fakeVolumeHost) GetHostIP() (net.IP, error) {
 	return nil, fmt.Errorf("GetHostIP() not implemented")
-}
-
-func (f *fakeVolumeHost) GetRootContext() string {
-	return f.rootContext
 }
 
 func (f *fakeVolumeHost) GetNodeAllocatable() (api.ResourceList, error) {
@@ -312,7 +307,6 @@ type FakeVolume struct {
 	AttachCallCount             int
 	DetachCallCount             int
 	WaitForAttachCallCount      int
-	WaitForDetachCallCount      int
 	MountDeviceCallCount        int
 	UnmountDeviceCallCount      int
 	GetDeviceMountPathCallCount int
@@ -433,13 +427,6 @@ func (fv *FakeVolume) GetDetachCallCount() int {
 	fv.RLock()
 	defer fv.RUnlock()
 	return fv.DetachCallCount
-}
-
-func (fv *FakeVolume) WaitForDetach(devicePath string, timeout time.Duration) error {
-	fv.Lock()
-	defer fv.Unlock()
-	fv.WaitForDetachCallCount++
-	return nil
 }
 
 func (fv *FakeVolume) UnmountDevice(globalMountPath string) error {
@@ -743,7 +730,6 @@ func GetTestVolumePluginMgr(
 		"",  /* rootDir */
 		nil, /* kubeClient */
 		nil, /* plugins */
-		"",  /* rootContext */
 	)
 	plugins := ProbeVolumePlugins(VolumeConfig{})
 	if err := v.pluginMgr.InitPlugins(plugins, v); err != nil {

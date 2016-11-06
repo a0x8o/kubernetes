@@ -1471,6 +1471,13 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 							Format:      "",
 						},
 					},
+					"useServiceAccountCredentials": {
+						SchemaProps: spec.SchemaProps{
+							Description: "useServiceAccountCredentials indicates whether controllers should be run with individual service account credentials.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"cloudProvider": {
 						SchemaProps: spec.SchemaProps{
 							Description: "cloudProvider is the provider for cloud services.",
@@ -1848,7 +1855,7 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 						},
 					},
 				},
-				Required: []string{"TypeMeta", "port", "address", "cloudProvider", "cloudConfigFile", "concurrentEndpointSyncs", "concurrentRSSyncs", "concurrentRCSyncs", "concurrentServiceSyncs", "concurrentResourceQuotaSyncs", "concurrentDeploymentSyncs", "concurrentDaemonSetSyncs", "concurrentJobSyncs", "concurrentNamespaceSyncs", "concurrentSATokenSyncs", "lookupCacheSizeForRC", "lookupCacheSizeForRS", "lookupCacheSizeForDaemonSet", "serviceSyncPeriod", "nodeSyncPeriod", "routeReconciliationPeriod", "resourceQuotaSyncPeriod", "namespaceSyncPeriod", "pvClaimBinderSyncPeriod", "minResyncPeriod", "terminatedPodGCThreshold", "horizontalPodAutoscalerSyncPeriod", "deploymentControllerSyncPeriod", "podEvictionTimeout", "deletingPodsQps", "deletingPodsBurst", "nodeMonitorGracePeriod", "registerRetryCount", "nodeStartupGracePeriod", "nodeMonitorPeriod", "serviceAccountKeyFile", "clusterSigningCertFile", "clusterSigningKeyFile", "approveAllKubeletCSRsForGroup", "enableProfiling", "clusterName", "clusterCIDR", "serviceCIDR", "nodeCIDRMaskSize", "allocateNodeCIDRs", "configureCloudRoutes", "rootCAFile", "contentType", "kubeAPIQPS", "kubeAPIBurst", "leaderElection", "volumeConfiguration", "controllerStartInterval", "enableGarbageCollector", "concurrentGCSyncs", "nodeEvictionRate", "secondaryNodeEvictionRate", "largeClusterSizeThreshold", "unhealthyZoneThreshold"},
+				Required: []string{"TypeMeta", "port", "address", "useServiceAccountCredentials", "cloudProvider", "cloudConfigFile", "concurrentEndpointSyncs", "concurrentRSSyncs", "concurrentRCSyncs", "concurrentServiceSyncs", "concurrentResourceQuotaSyncs", "concurrentDeploymentSyncs", "concurrentDaemonSetSyncs", "concurrentJobSyncs", "concurrentNamespaceSyncs", "concurrentSATokenSyncs", "lookupCacheSizeForRC", "lookupCacheSizeForRS", "lookupCacheSizeForDaemonSet", "serviceSyncPeriod", "nodeSyncPeriod", "routeReconciliationPeriod", "resourceQuotaSyncPeriod", "namespaceSyncPeriod", "pvClaimBinderSyncPeriod", "minResyncPeriod", "terminatedPodGCThreshold", "horizontalPodAutoscalerSyncPeriod", "deploymentControllerSyncPeriod", "podEvictionTimeout", "deletingPodsQps", "deletingPodsBurst", "nodeMonitorGracePeriod", "registerRetryCount", "nodeStartupGracePeriod", "nodeMonitorPeriod", "serviceAccountKeyFile", "clusterSigningCertFile", "clusterSigningKeyFile", "approveAllKubeletCSRsForGroup", "enableProfiling", "clusterName", "clusterCIDR", "serviceCIDR", "nodeCIDRMaskSize", "allocateNodeCIDRs", "configureCloudRoutes", "rootCAFile", "contentType", "kubeAPIQPS", "kubeAPIBurst", "leaderElection", "volumeConfiguration", "controllerStartInterval", "enableGarbageCollector", "concurrentGCSyncs", "nodeEvictionRate", "secondaryNodeEvictionRate", "largeClusterSizeThreshold", "unhealthyZoneThreshold"},
 			},
 		},
 		Dependencies: []string{
@@ -10016,7 +10023,7 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 					},
 					"deletionTimestamp": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DeletionTimestamp is RFC 3339 date and time at which this resource will be deleted. This field is set by the server when a graceful deletion is requested by the user, and is not directly settable by a client. The resource will be deleted (no longer visible from resource lists, and not reachable by name) after the time in this field. Once set, this value may not be unset or be set further into the future, although it may be shortened or the resource may be deleted prior to this time. For example, a user may request that a pod is deleted in 30 seconds. The Kubelet will react by sending a graceful termination signal to the containers in the pod. Once the resource is deleted in the API, the Kubelet will send a hard termination signal to the container. If not set, graceful deletion of the object has not been requested.\n\nPopulated by the system when a graceful deletion is requested. Read-only. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata",
+							Description: "DeletionTimestamp is RFC 3339 date and time at which this resource will be deleted. This field is set by the server when a graceful deletion is requested by the user, and is not directly settable by a client. The resource is expected to be deleted (no longer visible from resource lists, and not reachable by name) after the time in this field. Once set, this value may not be unset or be set further into the future, although it may be shortened or the resource may be deleted prior to this time. For example, a user may request that a pod is deleted in 30 seconds. The Kubelet will react by sending a graceful termination signal to the containers in the pod. After that 30 seconds, the Kubelet will send a hard termination signal (SIGKILL) to the container and after cleanup, remove the pod from the API. In the presence of network partitions, this object may still exist after this timestamp, until an administrator or automated process can determine the resource is fully terminated. If not set, graceful deletion of the object has not been requested.\n\nPopulated by the system when a graceful deletion is requested. Read-only. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata",
 							Ref:         spec.MustCreateRef("#/definitions/unversioned.Time"),
 						},
 					},
