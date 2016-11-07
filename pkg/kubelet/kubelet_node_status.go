@@ -404,10 +404,11 @@ func (kl *Kubelet) setNodeAddress(node *api.Node) error {
 		}
 		if addressNodeHostName == nil {
 			hostnameAddress := api.NodeAddress{Type: api.NodeHostName, Address: kl.GetHostname()}
-			node.Status.Addresses = append(nodeAddresses, hostnameAddress)
+			nodeAddresses = append(nodeAddresses, hostnameAddress)
 		} else {
 			glog.V(2).Infof("Using Node Hostname from cloudprovider: %q", addressNodeHostName.Address)
 		}
+		node.Status.Addresses = nodeAddresses
 	} else {
 		var ipAddr net.IP
 		var err error
@@ -591,7 +592,8 @@ func (kl *Kubelet) setNodeReadyCondition(node *api.Node) {
 	// ref: https://github.com/kubernetes/kubernetes/issues/16961
 	currentTime := unversioned.NewTime(kl.clock.Now())
 	var newNodeReadyCondition api.NodeCondition
-	if rs := kl.runtimeState.errors(); len(rs) == 0 {
+	rs := append(kl.runtimeState.runtimeErrors(), kl.runtimeState.networkErrors()...)
+	if len(rs) == 0 {
 		newNodeReadyCondition = api.NodeCondition{
 			Type:              api.NodeReady,
 			Status:            api.ConditionTrue,

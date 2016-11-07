@@ -138,7 +138,10 @@ Federation API server authentication should not accept cluster resources when th
 Federation apiserver Admission control should not be able to create resources if namespace does not exist,alex-mohr,1
 Federation apiserver Cluster objects should be created and deleted successfully,ghodss,1
 Federation events Event objects should be created and deleted successfully,karlkfi,1
+Federation namespace Namespace objects all resources in the namespace should be deleted when namespace is deleted,nikhiljindal,0
 Federation namespace Namespace objects should be created and deleted successfully,xiang90,1
+Federation namespace Namespace objects should be deleted from underlying clusters when OrphanDependents is false,nikhiljindal,0
+Federation namespace Namespace objects should not be deleted from underlying clusters when OrphanDependents is true,nikhiljindal,0
 Federation replicasets Federated ReplicaSet should create and update matching replicasets in underling clusters,childsb,1
 Federation replicasets ReplicaSet objects should be created and deleted successfully,apelisse,1
 Federation secrets Secret objects should be created and deleted successfully,pmorie,1
@@ -586,7 +589,7 @@ k8s.io/kubernetes/pkg/controller/replicaset,fgrzadkowski,0
 k8s.io/kubernetes/pkg/controller/replication,fgrzadkowski,0
 k8s.io/kubernetes/pkg/controller/resourcequota,ghodss,1
 k8s.io/kubernetes/pkg/controller/route,gmarek,0
-k8s.io/kubernetes/pkg/controller/scheduledjob,soltysh,1
+k8s.io/kubernetes/pkg/controller/cronjob,soltysh,1
 k8s.io/kubernetes/pkg/controller/service,asalkeld,0
 k8s.io/kubernetes/pkg/controller/serviceaccount,liggitt,0
 k8s.io/kubernetes/pkg/controller/volume/attachdetach,luxas,1
@@ -674,8 +677,8 @@ k8s.io/kubernetes/pkg/registry/autoscaling/horizontalpodautoscaler,bgrant0607,1
 k8s.io/kubernetes/pkg/registry/autoscaling/horizontalpodautoscaler/etcd,justinsb,1
 k8s.io/kubernetes/pkg/registry/batch/job,kargakis,1
 k8s.io/kubernetes/pkg/registry/batch/job/etcd,Q-Lee,1
-k8s.io/kubernetes/pkg/registry/batch/scheduledjob,nikhiljindal,1
-k8s.io/kubernetes/pkg/registry/batch/scheduledjob/etcd,mtaufen,1
+k8s.io/kubernetes/pkg/registry/batch/cronjob,nikhiljindal,1
+k8s.io/kubernetes/pkg/registry/batch/cronjob/etcd,mtaufen,1
 k8s.io/kubernetes/pkg/registry/certificates/certificates,smarterclayton,1
 k8s.io/kubernetes/pkg/registry/core/componentstatus,krousey,1
 k8s.io/kubernetes/pkg/registry/core/configmap,janetkuo,1
@@ -802,6 +805,7 @@ k8s.io/kubernetes/pkg/util/parsers,derekwaynecarr,1
 k8s.io/kubernetes/pkg/util/procfs,roberthbailey,1
 k8s.io/kubernetes/pkg/util/proxy,cjcullen,1
 k8s.io/kubernetes/pkg/util/rand,madhusudancs,1
+k8s.io/kubernetes/pkg/util/ratelimit,justinsb,1
 k8s.io/kubernetes/pkg/util/runtime,davidopp,1
 k8s.io/kubernetes/pkg/util/sets,quinton-hoole,0
 k8s.io/kubernetes/pkg/util/slice,quinton-hoole,0

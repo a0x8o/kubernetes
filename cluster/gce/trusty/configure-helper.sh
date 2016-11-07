@@ -155,7 +155,7 @@ assemble_kubelet_flags() {
     if [ ! -z "${KUBELET_APISERVER:-}" ] && \
        [ ! -z "${KUBELET_CERT:-}" ] && \
        [ ! -z "${KUBELET_KEY:-}" ]; then
-      KUBELET_CMD_FLAGS="${KUBELET_CMD_FLAGS} --api-servers=https://${KUBELET_APISERVER} --register-schedulable=false --pod-cidr=10.123.45.0/29"
+      KUBELET_CMD_FLAGS="${KUBELET_CMD_FLAGS} --api-servers=https://${KUBELET_APISERVER} --register-schedulable=false"
     else
       KUBELET_CMD_FLAGS="${KUBELET_CMD_FLAGS} --pod-cidr=${MASTER_IP_RANGE}"
     fi
@@ -457,6 +457,11 @@ prepare_etcd_manifest() {
   sed -i -e "s@{{ *hostname *}}@$host_name@g" "${etcd_temp_file}"
   sed -i -e "s@{{ *etcd_cluster *}}@$etcd_cluster@g" "${etcd_temp_file}"
   sed -i -e "s@{{ *storage_backend *}}@${STORAGE_BACKEND:-}@g" "${temp_file}"
+  if [[ "${STORAGE_BACKEND:-}" == "etcd3" ]]; then
+    sed -i -e "s@{{ *quota_bytes *}}@--quota-backend-bytes=4294967296@g" "${temp_file}"
+  else
+    sed -i -e "s@{{ *quota_bytes *}}@@g" "${temp_file}"
+  fi
   sed -i -e "s@{{ *cluster_state *}}@$cluster_state@g" "${etcd_temp_file}"
   if [[ -n "${ETCD_IMAGE:-}" ]]; then
     sed -i -e "s@{{ *pillar\.get('etcd_docker_tag', '\(.*\)') *}}@${ETCD_IMAGE}@g" "${etcd_temp_file}"

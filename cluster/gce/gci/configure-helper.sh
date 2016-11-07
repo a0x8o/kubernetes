@@ -483,11 +483,8 @@ function start-kubelet {
     if [[ ! -z "${KUBELET_APISERVER:-}" && ! -z "${KUBELET_CERT:-}" && ! -z "${KUBELET_KEY:-}" ]]; then
       flags+=" --api-servers=https://${KUBELET_APISERVER}"
       flags+=" --register-schedulable=false"
-      # need at least a /29 pod cidr for now due to #32844
-      # TODO: determine if we still allow non-hostnetwork pods to run on master, clean up master pod setup
-      # WARNING: potential ip range collision with 10.123.45.0/29
-      flags+=" --pod-cidr=10.123.45.0/29"
     else
+      # Standalone mode (not widely used?)
       flags+=" --pod-cidr=${MASTER_IP_RANGE}"
     fi
   else # For nodes
@@ -625,6 +622,11 @@ function prepare-etcd-manifest {
   sed -i -e "s@{{ *hostname *}}@$host_name@g" "${temp_file}"
   sed -i -e "s@{{ *etcd_cluster *}}@$etcd_cluster@g" "${temp_file}"
   sed -i -e "s@{{ *storage_backend *}}@${STORAGE_BACKEND:-}@g" "${temp_file}"
+  if [[ "${STORAGE_BACKEND:-}" == "etcd3" ]]; then
+    sed -i -e "s@{{ *quota_bytes *}}@--quota-backend-bytes=4294967296@g" "${temp_file}"
+  else
+    sed -i -e "s@{{ *quota_bytes *}}@@g" "${temp_file}"
+  fi
   sed -i -e "s@{{ *cluster_state *}}@$cluster_state@g" "${temp_file}"
   if [[ -n "${ETCD_IMAGE:-}" ]]; then
     sed -i -e "s@{{ *pillar\.get('etcd_docker_tag', '\(.*\)') *}}@${ETCD_IMAGE}@g" "${temp_file}"
