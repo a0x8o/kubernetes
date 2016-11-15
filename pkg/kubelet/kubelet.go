@@ -102,7 +102,7 @@ const (
 	nodeStatusUpdateRetry = 5
 
 	// Location of container logs.
-	containerLogsDir = "/var/log/containers"
+	ContainerLogsDir = "/var/log/containers"
 
 	// max backoff period, exported for the e2e test
 	MaxContainerBackOff = 300 * time.Second
@@ -435,7 +435,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		nodeStatusUpdateFrequency: kubeCfg.NodeStatusUpdateFrequency.Duration,
 		os:                kubeDeps.OSInterface,
 		oomWatcher:        oomWatcher,
-		cgroupsPerQOS:     kubeCfg.CgroupsPerQOS,
+		cgroupsPerQOS:     kubeCfg.ExperimentalCgroupsPerQOS,
 		cgroupRoot:        kubeCfg.CgroupRoot,
 		mounter:           kubeDeps.Mounter,
 		writer:            kubeDeps.Writer,
@@ -450,15 +450,20 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		containerManager:  kubeDeps.ContainerManager,
 		nodeIP:            net.ParseIP(kubeCfg.NodeIP),
 		clock:             clock.RealClock{},
-		outOfDiskTransitionFrequency: kubeCfg.OutOfDiskTransitionFrequency.Duration,
-		reservation:                  *reservation,
-		enableCustomMetrics:          kubeCfg.EnableCustomMetrics,
-		babysitDaemons:               kubeCfg.BabysitDaemons,
-		enableControllerAttachDetach: kubeCfg.EnableControllerAttachDetach,
-		iptClient:                    utilipt.New(utilexec.New(), utildbus.New(), utilipt.ProtocolIpv4),
-		makeIPTablesUtilChains:       kubeCfg.MakeIPTablesUtilChains,
-		iptablesMasqueradeBit:        int(kubeCfg.IPTablesMasqueradeBit),
-		iptablesDropBit:              int(kubeCfg.IPTablesDropBit),
+		outOfDiskTransitionFrequency:            kubeCfg.OutOfDiskTransitionFrequency.Duration,
+		reservation:                             *reservation,
+		enableCustomMetrics:                     kubeCfg.EnableCustomMetrics,
+		babysitDaemons:                          kubeCfg.BabysitDaemons,
+		enableControllerAttachDetach:            kubeCfg.EnableControllerAttachDetach,
+		iptClient:                               utilipt.New(utilexec.New(), utildbus.New(), utilipt.ProtocolIpv4),
+		makeIPTablesUtilChains:                  kubeCfg.MakeIPTablesUtilChains,
+		iptablesMasqueradeBit:                   int(kubeCfg.IPTablesMasqueradeBit),
+		iptablesDropBit:                         int(kubeCfg.IPTablesDropBit),
+		experimentalHostUserNamespaceDefaulting: utilconfig.DefaultFeatureGate.ExperimentalHostUserNamespaceDefaulting(),
+	}
+
+	if klet.experimentalHostUserNamespaceDefaulting {
+		glog.Infof("Experimental host user namespace defaulting is enabled.")
 	}
 
 	if mode, err := effectiveHairpinMode(componentconfig.HairpinMode(kubeCfg.HairpinMode), kubeCfg.ContainerRuntime, kubeCfg.NetworkPluginName); err != nil {
@@ -617,7 +622,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 				kubeCfg.PodInfraContainerImage,
 				float32(kubeCfg.RegistryPullQPS),
 				int(kubeCfg.RegistryBurst),
-				containerLogsDir,
+				ContainerLogsDir,
 				kubeDeps.OSInterface,
 				klet.networkPlugin,
 				klet,
@@ -1087,6 +1092,13 @@ type Kubelet struct {
 
 	// The handler serving CRI streaming calls (exec/attach/port-forward).
 	criHandler http.Handler
+
+	// experimentalHostUserNamespaceDefaulting sets userns=true when users request host namespaces (pid, ipc, net),
+	// are using non-namespaced capabilities (mknod, sys_time, sys_module), the pod contains a privileged container,
+	// or using host path volumes.
+	// This should only be enabled when the container runtime is performing user remapping AND if the
+	// experimental behavior is desired.
+	experimentalHostUserNamespaceDefaulting bool
 }
 
 // setupDataDirs creates:
@@ -1156,9 +1168,9 @@ func (kl *Kubelet) initializeModules() error {
 	}
 
 	// Step 3: If the container logs directory does not exist, create it.
-	if _, err := os.Stat(containerLogsDir); err != nil {
-		if err := kl.os.MkdirAll(containerLogsDir, 0755); err != nil {
-			glog.Errorf("Failed to create directory %q: %v", containerLogsDir, err)
+	if _, err := os.Stat(ContainerLogsDir); err != nil {
+		if err := kl.os.MkdirAll(ContainerLogsDir, 0755); err != nil {
+			glog.Errorf("Failed to create directory %q: %v", ContainerLogsDir, err)
 		}
 	}
 
