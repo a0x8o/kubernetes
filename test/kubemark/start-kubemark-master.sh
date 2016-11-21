@@ -111,15 +111,12 @@ retry sudo docker run --net=host \
 	--listen-client-urls=http://0.0.0.0:2379 \
 	--data-dir=/var/etcd/data ${ETCD_QUOTA_BYTES} 1>> /var/log/etcd.log 2>&1"
 
-# Run logrotate regularly
-echo '*/5 * * * * root logrotate /etc/logrotate.conf' >> "/etc/crontab"
-
 # Increase the allowed number of open file descriptors
 ulimit -n 65536
 
 tar xzf kubernetes-server-linux-amd64.tar.gz
 
-kubernetes/server/bin/kube-scheduler --master=127.0.0.1:8080 $(cat scheduler_flags) &> /var/log/kube-scheduler.log &
+kubernetes/server/bin/kube-scheduler --master=127.0.0.1:8080 $(cat scheduler_flags) &>> /var/log/kube-scheduler.log &
 
 kubernetes/server/bin/kube-apiserver \
 	--insecure-bind-address=0.0.0.0 \
@@ -132,7 +129,7 @@ kubernetes/server/bin/kube-apiserver \
 	--secure-port=443 \
 	--basic-auth-file=/srv/kubernetes/basic_auth.csv \
 	--target-ram-mb=$((${NUM_NODES} * 60)) \
-	$(cat apiserver_flags) &> /var/log/kube-apiserver.log &
+	$(cat apiserver_flags) &>> /var/log/kube-apiserver.log &
 
 # kube-contoller-manager now needs running kube-api server to actually start
 until [ "$(curl 127.0.0.1:8080/healthz 2> /dev/null)" == "ok" ]; do
@@ -142,4 +139,4 @@ kubernetes/server/bin/kube-controller-manager \
   --master=127.0.0.1:8080 \
   --service-account-private-key-file=/srv/kubernetes/server.key \
   --root-ca-file=/srv/kubernetes/ca.crt \
-  $(cat controllers_flags) &> /var/log/kube-controller-manager.log &
+  $(cat controllers_flags) &>> /var/log/kube-controller-manager.log &
