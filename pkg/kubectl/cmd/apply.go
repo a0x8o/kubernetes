@@ -29,7 +29,6 @@ import (
 	"k8s.io/kubernetes/pkg/api/annotations"
 	"k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/meta"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/apimachinery/registered"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/kubectl"
@@ -38,6 +37,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubectl/resource"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/runtime/schema"
 	"k8s.io/kubernetes/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/util/strategicpatch"
 	"k8s.io/kubernetes/pkg/util/wait"
@@ -379,7 +379,7 @@ func getRESTMappings(pruneResources *[]pruneResource) (namespaced, nonNamespaced
 	}
 	registeredMapper := registered.RESTMapper()
 	for _, resource := range *pruneResources {
-		addedMapping, err := registeredMapper.RESTMapping(unversioned.GroupKind{Group: resource.group, Kind: resource.kind}, resource.version)
+		addedMapping, err := registeredMapper.RESTMapping(schema.GroupKind{Group: resource.group, Kind: resource.kind}, resource.version)
 		if err != nil {
 			return nil, nil, fmt.Errorf("invalid resource %v: %v", resource, err)
 		}
@@ -531,23 +531,13 @@ func (p *patcher) patchSimple(obj runtime.Object, modified []byte, source, names
 	}
 
 	// Compute a three way strategic merge patch to send to server.
-	patch, err := strategicpatch.CreateThreeWayMergePatch(original, modified, current, versionedObject, p.overwrite, strategicpatch.SMPatchVersion_1_5)
-	// If creating a patch fails, retrying with SMPatchVersion_1_0 is not helpful. So we return the error.
+	patch, err := strategicpatch.CreateThreeWayMergePatch(original, modified, current, versionedObject, p.overwrite)
 	if err != nil {
 		format := "creating patch with:\noriginal:\n%s\nmodified:\n%s\ncurrent:\n%s\nfor:"
 		return nil, cmdutil.AddSourceToErr(fmt.Sprintf(format, original, modified, current), source, err)
 	}
+
 	_, err = p.helper.Patch(namespace, name, api.StrategicMergePatchType, patch)
-	if errors.IsInternalError(err) {
-		// Retry SMPatchVersion_1_0 when applying the SMPatchVersion_1_5 patch returns an Internal Error (500).
-		// Because the failure may be due to the server not supporting the SMPatchVersion_1_5 patch.
-		patch, err = strategicpatch.CreateThreeWayMergePatch(original, modified, current, versionedObject, p.overwrite, strategicpatch.SMPatchVersion_1_0)
-		if err != nil {
-			format := "creating patch with:\noriginal:\n%s\nmodified:\n%s\ncurrent:\n%s\nfor:"
-			return nil, cmdutil.AddSourceToErr(fmt.Sprintf(format, original, modified, current), source, err)
-		}
-		_, err = p.helper.Patch(namespace, name, api.StrategicMergePatchType, patch)
-	}
 	return patch, err
 }
 
