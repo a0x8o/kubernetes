@@ -141,6 +141,22 @@ function test_docker {
     fi
 }
 
+function test_rkt {
+    if [[ -n "${RKT_PATH}" ]]; then
+      ${RKT_PATH} list 2> /dev/null 1> /dev/null
+      if [ "$?" != "0" ]; then
+        echo "Failed to successfully run 'rkt list', please verify that ${RKT_PATH} is the path of rkt binary."
+        exit 1
+      fi
+    else
+      rkt list 2> /dev/null 1> /dev/null
+      if [ "$?" != "0" ]; then
+        echo "Failed to successfully run 'rkt list', please verify that rkt is in \$PATH."
+        exit 1
+      fi
+    fi
+}
+
 function test_openssl_installed {
     openssl version >& /dev/null
     if [ "$?" != "0" ]; then
@@ -513,13 +529,19 @@ function start_kubelet {
         ${image_service_endpoint_args} \
         --port="$KUBELET_PORT" >"${KUBELET_LOG}" 2>&1 &
       KUBELET_PID=$!
+      # Quick check that kubelet is running.
+      if ps -p $KUBELET_PID > /dev/null ; then 
+	echo "kubelet ( $KUBELET_PID ) is running."
+      else
+	cat ${KUBELET_LOG} ; exit 1
+      fi	
     else
       # Docker won't run a container with a cidfile (container id file)
       # unless that file does not already exist; clean up an existing
       # dockerized kubelet that might be running.
       cleanup_dockerized_kubelet
       cred_bind=""
-      # path to cloud credentails.
+      # path to cloud credentials.
       cloud_cred=""
       if [ "${CLOUD_PROVIDER}" == "aws" ]; then
           cloud_cred="${HOME}/.aws/credentials"
@@ -651,7 +673,13 @@ EOF
 fi
 }
 
-test_docker
+if [[ "${CONTAINER_RUNTIME}" == "docker" ]]; then
+  test_docker
+fi
+
+if [[ "${CONTAINER_RUNTIME}" == "rkt" ]]; then
+  test_rkt
+fi
 
 if [[ "${START_MODE}" != "kubeletonly" ]]; then
   test_apiserver_off
