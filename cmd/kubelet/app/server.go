@@ -392,6 +392,9 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 			eventClientConfig.QPS = float32(s.EventRecordQPS)
 			eventClientConfig.Burst = int(s.EventBurst)
 			eventClient, err = clientset.NewForConfig(&eventClientConfig)
+			if err != nil {
+				glog.Warningf("Failed to create API Server client: %v", err)
+			}
 		} else {
 			if s.RequireKubeConfig {
 				return fmt.Errorf("invalid kubeconfig: %v", err)
@@ -768,16 +771,13 @@ func RunKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *kubelet
 		}
 		glog.Infof("Started kubelet %s as runonce", version.Get().String())
 	} else {
-		err := startKubelet(k, podCfg, kubeCfg, kubeDeps)
-		if err != nil {
-			return err
-		}
+		startKubelet(k, podCfg, kubeCfg, kubeDeps)
 		glog.Infof("Started kubelet %s", version.Get().String())
 	}
 	return nil
 }
 
-func startKubelet(k kubelet.KubeletBootstrap, podCfg *config.PodConfig, kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *kubelet.KubeletDeps) error {
+func startKubelet(k kubelet.KubeletBootstrap, podCfg *config.PodConfig, kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *kubelet.KubeletDeps) {
 	// start the kubelet
 	go wait.Until(func() { k.Run(podCfg.Updates()) }, 0, wait.NeverStop)
 
@@ -792,8 +792,6 @@ func startKubelet(k kubelet.KubeletBootstrap, podCfg *config.PodConfig, kubeCfg 
 			k.ListenAndServeReadOnly(net.ParseIP(kubeCfg.Address), uint(kubeCfg.ReadOnlyPort))
 		}, 0, wait.NeverStop)
 	}
-
-	return nil
 }
 
 func CreateAndInitKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *kubelet.KubeletDeps, standaloneMode bool) (k kubelet.KubeletBootstrap, err error) {
