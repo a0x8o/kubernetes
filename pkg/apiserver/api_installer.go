@@ -31,8 +31,8 @@ import (
 	"k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/api/rest"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/apis/extensions"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/apiserver/metrics"
 	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/runtime"
@@ -62,11 +62,26 @@ type documentable interface {
 	SwaggerDoc() map[string]string
 }
 
+// toDiscoveryKubeVerb maps an action.Verb to the logical kube verb, used for discovery
+var toDiscoveryKubeVerb = map[string]string{
+	"CONNECT":          "", // do not list in discovery.
+	"DELETE":           "delete",
+	"DELETECOLLECTION": "deletecollection",
+	"GET":              "get",
+	"LIST":             "list",
+	"PATCH":            "patch",
+	"POST":             "create",
+	"PROXY":            "proxy",
+	"PUT":              "update",
+	"WATCH":            "watch",
+	"WATCHLIST":        "watch",
+}
+
 // errEmptyName is returned when API requests do not fill the name section of the path.
 var errEmptyName = errors.NewBadRequest("name must be provided")
 
 // Installs handlers for API resources.
-func (a *APIInstaller) Install(ws *restful.WebService) (apiResources []unversioned.APIResource, errors []error) {
+func (a *APIInstaller) Install(ws *restful.WebService) (apiResources []metav1.APIResource, errors []error) {
 	errors = make([]error, 0)
 
 	proxyHandler := (&ProxyHandler{
@@ -170,7 +185,7 @@ func (a *APIInstaller) restMapping(resource string) (*meta.RESTMapping, error) {
 	return a.group.Mapper.RESTMapping(fqKindToRegister.GroupKind(), fqKindToRegister.Version)
 }
 
-func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storage, ws *restful.WebService, proxyHandler http.Handler) (*unversioned.APIResource, error) {
+func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storage, ws *restful.WebService, proxyHandler http.Handler) (*metav1.APIResource, error) {
 	admit := a.group.Admit
 	context := a.group.Context
 
@@ -350,7 +365,7 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 		resourceKind = kind
 	}
 
-	var apiResource unversioned.APIResource
+	var apiResource metav1.APIResource
 	// Get the list of actions for the given scope.
 	switch scope.Name() {
 	case meta.RESTScopeNameRoot:
@@ -490,6 +505,7 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 	allMediaTypes := append(mediaTypes, streamMediaTypes...)
 	ws.Produces(allMediaTypes...)
 
+	kubeVerbs := map[string]struct{}{}
 	reqScope := RequestScope{
 		ContextFunc:    ctxFn,
 		Serializer:     a.group.Serializer,
@@ -516,6 +532,14 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 		if action.AllNamespaces {
 			operationSuffix = operationSuffix + "ForAllNamespaces"
 			namespaced = ""
+		}
+
+		if kubeVerb, found := toDiscoveryKubeVerb[action.Verb]; found {
+			if len(kubeVerb) != 0 {
+				kubeVerbs[kubeVerb] = struct{}{}
+			}
+		} else {
+			return nil, fmt.Errorf("unknown action verb for discovery: %s", action.Verb)
 		}
 
 		switch action.Verb {
@@ -611,7 +635,7 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 				Operation("patch"+namespaced+kind+strings.Title(subresource)+operationSuffix).
 				Produces(append(storageMeta.ProducesMIMETypes(action.Verb), mediaTypes...)...).
 				Returns(http.StatusOK, "OK", versionedObject).
-				Reads(unversioned.Patch{}).
+				Reads(metav1.Patch{}).
 				Writes(versionedObject)
 			addParams(route, action.Params)
 			ws.Route(route)
@@ -752,8 +776,15 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 		default:
 			return nil, fmt.Errorf("unrecognized action verb: %s", action.Verb)
 		}
-		// Note: update GetAttribs() when adding a custom handler.
+		// Note: update GetAuthorizerAttributes() when adding a custom handler.
 	}
+
+	apiResource.Verbs = make([]string, 0, len(kubeVerbs))
+	for kubeVerb := range kubeVerbs {
+		apiResource.Verbs = append(apiResource.Verbs, kubeVerb)
+	}
+	sort.Strings(apiResource.Verbs)
+
 	return &apiResource, nil
 }
 
@@ -964,8 +995,8 @@ func addObjectParams(ws *restful.WebService, route *restful.RouteBuilder, obj in
 			switch sf.Type.Kind() {
 			case reflect.Interface, reflect.Struct:
 			case reflect.Ptr:
-				// TODO: This is a hack to let unversioned.Time through. This needs to be fixed in a more generic way eventually. bug #36191
-				if (sf.Type.Elem().Kind() == reflect.Interface || sf.Type.Elem().Kind() == reflect.Struct) && strings.TrimPrefix(sf.Type.String(), "*") != "unversioned.Time" {
+				// TODO: This is a hack to let metav1.Time through. This needs to be fixed in a more generic way eventually. bug #36191
+				if (sf.Type.Elem().Kind() == reflect.Interface || sf.Type.Elem().Kind() == reflect.Struct) && strings.TrimPrefix(sf.Type.String(), "*") != "metav1.Time" {
 					continue
 				}
 				fallthrough
@@ -1000,7 +1031,7 @@ func typeToJSON(typeName string) string {
 		return "integer"
 	case "float64", "*float64", "float32", "*float32":
 		return "number"
-	case "unversioned.Time", "*unversioned.Time":
+	case "metav1.Time", "*metav1.Time":
 		return "string"
 	case "byte", "*byte":
 		return "string"

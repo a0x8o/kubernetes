@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"k8s.io/kubernetes/pkg/api/unversioned"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/runtime/schema"
@@ -172,31 +172,11 @@ func GetTestScheme() (*runtime.Scheme, runtime.Codec) {
 	s.AddKnownTypeWithName(externalGV.WithKind("TestType3"), &ExternalTestType1{})
 	s.AddKnownTypeWithName(externalGV2.WithKind("TestType1"), &ExternalTestType1{})
 
-	s.AddUnversionedTypes(externalGV, &unversioned.Status{})
+	s.AddUnversionedTypes(externalGV, &metav1.Status{})
 
 	cf := newCodecFactory(s, newSerializersForScheme(s, testMetaFactory{}))
 	codec := cf.LegacyCodec(schema.GroupVersion{Version: "v1"})
 	return s, codec
-}
-
-func objDiff(a, b interface{}) string {
-	ab, err := json.Marshal(a)
-	if err != nil {
-		panic("a")
-	}
-	bb, err := json.Marshal(b)
-	if err != nil {
-		panic("b")
-	}
-	return diff.StringDiff(string(ab), string(bb))
-
-	// An alternate diff attempt, in case json isn't showing you
-	// the difference. (reflect.DeepEqual makes a distinction between
-	// nil and empty slices, for example.)
-	//return diff.StringDiff(
-	//  fmt.Sprintf("%#v", a),
-	//  fmt.Sprintf("%#v", b),
-	//)
 }
 
 var semantic = conversion.EqualitiesOrDie(
@@ -232,7 +212,7 @@ func runTest(t *testing.T, source interface{}) {
 		return
 	}
 	if !semantic.DeepEqual(source, obj3) {
-		t.Errorf("3: %v: diff: %v", name, objDiff(source, obj3))
+		t.Errorf("3: %v: diff: %v", name, diff.ObjectDiff(source, obj3))
 		return
 	}
 }
@@ -410,7 +390,7 @@ func GetDirectCodecTestScheme() *runtime.Scheme {
 	s.AddKnownTypes(internalGV, &TestType1{})
 	s.AddKnownTypes(externalGV, &ExternalTestType1{})
 
-	s.AddUnversionedTypes(externalGV, &unversioned.Status{})
+	s.AddUnversionedTypes(externalGV, &metav1.Status{})
 	return s
 }
 

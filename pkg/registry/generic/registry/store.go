@@ -28,8 +28,8 @@ import (
 	storeerr "k8s.io/kubernetes/pkg/api/errors/storage"
 	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/api/rest"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/validation/path"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
@@ -43,7 +43,7 @@ import (
 	"github.com/golang/glog"
 )
 
-// Store implements generic.Registry.
+// Store implements pkg/api/rest.StandardStorage.
 // It's intended to be embeddable, so that you can implement any
 // non-generic functions if needed.
 // You must supply a value for every field below before use; these are
@@ -125,6 +125,8 @@ type Store struct {
 	// Used for all storage access functions
 	Storage storage.Interface
 }
+
+var _ rest.StandardStorage = &Store{}
 
 const OptimisticLockErrorMsg = "the object has been modified; please apply your changes to the latest version and try again"
 
@@ -262,7 +264,7 @@ func (e *Store) Create(ctx api.Context, obj runtime.Object) (runtime.Object, err
 		if !kubeerr.IsAlreadyExists(err) {
 			return nil, err
 		}
-		if errGet := e.Storage.Get(ctx, key, out, false); errGet != nil {
+		if errGet := e.Storage.Get(ctx, key, "", out, false); errGet != nil {
 			return nil, err
 		}
 		accessor, errGetAcc := meta.Accessor(out)
@@ -327,7 +329,7 @@ func (e *Store) deleteForEmptyFinalizers(ctx api.Context, name, key string, obj 
 		if storage.IsNotFound(err) {
 			_, err := e.finalizeDelete(obj, true)
 			// clients are expecting an updated object if a PUT succeeded,
-			// but finalizeDelete returns a unversioned.Status, so return
+			// but finalizeDelete returns a metav1.Status, so return
 			// the object in the request instead.
 			return obj, false, err
 		}
@@ -335,7 +337,7 @@ func (e *Store) deleteForEmptyFinalizers(ctx api.Context, name, key string, obj 
 	}
 	_, err := e.finalizeDelete(out, true)
 	// clients are expecting an updated object if a PUT succeeded, but
-	// finalizeDelete returns a unversioned.Status, so return the object in
+	// finalizeDelete returns a metav1.Status, so return the object in
 	// the request instead.
 	return obj, false, err
 }
@@ -483,7 +485,8 @@ func (e *Store) Get(ctx api.Context, name string) (runtime.Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := e.Storage.Get(ctx, key, obj, false); err != nil {
+	// TODO: Once we pass GetOptions to this method, pass the ResourceVersion from it.
+	if err := e.Storage.Get(ctx, key, "", obj, false); err != nil {
 		return nil, storeerr.InterpretGetError(err, e.QualifiedResource, name)
 	}
 	if e.Decorator != nil {
@@ -553,7 +556,7 @@ func markAsDeleting(obj runtime.Object) (err error) {
 	if kerr != nil {
 		return kerr
 	}
-	now := unversioned.NewTime(time.Now())
+	now := metav1.NewTime(time.Now())
 	// This handles Generation bump for resources that don't support graceful deletion. For resources that support graceful deletion is handle in pkg/api/rest/delete.go
 	if objectMeta.DeletionTimestamp == nil && objectMeta.Generation > 0 {
 		objectMeta.Generation++
@@ -695,7 +698,7 @@ func (e *Store) Delete(ctx api.Context, name string, options *api.DeleteOptions)
 	}
 
 	obj := e.NewFunc()
-	if err := e.Storage.Get(ctx, key, obj, false); err != nil {
+	if err := e.Storage.Get(ctx, key, "", obj, false); err != nil {
 		return nil, storeerr.InterpretDeleteError(err, e.QualifiedResource, name)
 	}
 	// support older consumers of delete by treating "nil" as delete immediately
@@ -848,7 +851,7 @@ func (e *Store) finalizeDelete(obj runtime.Object, runHooks bool) (runtime.Objec
 		}
 		return obj, nil
 	}
-	return &unversioned.Status{Status: unversioned.StatusSuccess}, nil
+	return &metav1.Status{Status: metav1.StatusSuccess}, nil
 }
 
 // Watch makes a matcher for the given label and field, and calls
@@ -922,7 +925,7 @@ func exportObjectMeta(accessor meta.Object, exact bool) {
 	if !exact {
 		accessor.SetNamespace("")
 	}
-	accessor.SetCreationTimestamp(unversioned.Time{})
+	accessor.SetCreationTimestamp(metav1.Time{})
 	accessor.SetDeletionTimestamp(nil)
 	accessor.SetResourceVersion("")
 	accessor.SetSelfLink("")
@@ -932,7 +935,7 @@ func exportObjectMeta(accessor meta.Object, exact bool) {
 }
 
 // Implements the rest.Exporter interface
-func (e *Store) Export(ctx api.Context, name string, opts unversioned.ExportOptions) (runtime.Object, error) {
+func (e *Store) Export(ctx api.Context, name string, opts metav1.ExportOptions) (runtime.Object, error) {
 	obj, err := e.Get(ctx, name)
 	if err != nil {
 		return nil, err

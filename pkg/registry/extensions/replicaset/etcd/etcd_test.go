@@ -22,14 +22,13 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/rest"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/apis/extensions"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/registry/generic"
 	"k8s.io/kubernetes/pkg/registry/registrytest"
 	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/storage/etcd/etcdtest"
 	etcdtesting "k8s.io/kubernetes/pkg/storage/etcd/testing"
 	"k8s.io/kubernetes/pkg/util/diff"
 )
@@ -61,7 +60,7 @@ func validNewReplicaSet() *extensions.ReplicaSet {
 			Namespace: api.NamespaceDefault,
 		},
 		Spec: extensions.ReplicaSetSpec{
-			Selector: &unversioned.LabelSelector{MatchLabels: map[string]string{"a": "b"}},
+			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"a": "b"}},
 			Template: api.PodTemplateSpec{
 				ObjectMeta: api.ObjectMeta{
 					Labels: map[string]string{"a": "b"},
@@ -102,7 +101,7 @@ func TestCreate(t *testing.T) {
 		&extensions.ReplicaSet{
 			Spec: extensions.ReplicaSetSpec{
 				Replicas: 2,
-				Selector: &unversioned.LabelSelector{MatchLabels: map[string]string{}},
+				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{}},
 				Template: validReplicaSet.Spec.Template,
 			},
 		},
@@ -131,7 +130,7 @@ func TestUpdate(t *testing.T) {
 		},
 		func(obj runtime.Object) runtime.Object {
 			object := obj.(*extensions.ReplicaSet)
-			object.Spec.Selector = &unversioned.LabelSelector{MatchLabels: map[string]string{}}
+			object.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{}}
 			return object
 		},
 	)
@@ -254,7 +253,7 @@ func TestScaleGet(t *testing.T) {
 
 	var rs extensions.ReplicaSet
 	ctx := api.WithNamespace(api.NewContext(), api.NamespaceDefault)
-	key := etcdtest.AddPrefix("/replicasets/" + api.NamespaceDefault + "/" + name)
+	key := "/replicasets/" + api.NamespaceDefault + "/" + name
 	if err := storage.ReplicaSet.Storage.Create(ctx, key, &validReplicaSet, &rs, 0); err != nil {
 		t.Fatalf("error setting new replica set (key: %s) %v: %v", key, validReplicaSet, err)
 	}
@@ -294,7 +293,7 @@ func TestScaleUpdate(t *testing.T) {
 
 	var rs extensions.ReplicaSet
 	ctx := api.WithNamespace(api.NewContext(), api.NamespaceDefault)
-	key := etcdtest.AddPrefix("/replicasets/" + api.NamespaceDefault + "/" + name)
+	key := "/replicasets/" + api.NamespaceDefault + "/" + name
 	if err := storage.ReplicaSet.Storage.Create(ctx, key, &validReplicaSet, &rs, 0); err != nil {
 		t.Fatalf("error setting new replica set (key: %s) %v: %v", key, validReplicaSet, err)
 	}
@@ -336,7 +335,7 @@ func TestStatusUpdate(t *testing.T) {
 	defer storage.ReplicaSet.Store.DestroyFunc()
 
 	ctx := api.WithNamespace(api.NewContext(), api.NamespaceDefault)
-	key := etcdtest.AddPrefix("/replicasets/" + api.NamespaceDefault + "/foo")
+	key := "/replicasets/" + api.NamespaceDefault + "/foo"
 	if err := storage.ReplicaSet.Storage.Create(ctx, key, &validReplicaSet, nil, 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

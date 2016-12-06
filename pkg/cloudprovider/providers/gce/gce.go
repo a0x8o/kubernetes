@@ -30,9 +30,9 @@ import (
 
 	"gopkg.in/gcfg.v1"
 
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/v1"
 	apiservice "k8s.io/kubernetes/pkg/api/v1/service"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/types"
 	utilerrors "k8s.io/kubernetes/pkg/util/errors"
@@ -547,6 +547,14 @@ func isHTTPErrorCode(err error, code int) bool {
 	return ok && apiErr.Code == code
 }
 
+func nodeNames(nodes []*v1.Node) []string {
+	ret := make([]string, len(nodes))
+	for i, node := range nodes {
+		ret[i] = node.Name
+	}
+	return ret
+}
+
 // EnsureLoadBalancer is an implementation of LoadBalancer.EnsureLoadBalancer.
 // Our load balancers in GCE consist of four separate GCE resources - a static
 // IP address, a firewall rule, a target pool, and a forwarding rule. This
@@ -554,11 +562,12 @@ func isHTTPErrorCode(err error, code int) bool {
 // Due to an interesting series of design decisions, this handles both creating
 // new load balancers and updating existing load balancers, recognizing when
 // each is needed.
-func (gce *GCECloud) EnsureLoadBalancer(clusterName string, apiService *v1.Service, hostNames []string) (*v1.LoadBalancerStatus, error) {
-	if len(hostNames) == 0 {
+func (gce *GCECloud) EnsureLoadBalancer(clusterName string, apiService *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
+	if len(nodes) == 0 {
 		return nil, fmt.Errorf("Cannot EnsureLoadBalancer() with no hosts")
 	}
 
+	hostNames := nodeNames(nodes)
 	hosts, err := gce.getInstancesByNames(hostNames)
 	if err != nil {
 		return nil, err
@@ -1331,8 +1340,8 @@ func (gce *GCECloud) ensureStaticIP(name, serviceName, region, existingIP string
 }
 
 // UpdateLoadBalancer is an implementation of LoadBalancer.UpdateLoadBalancer.
-func (gce *GCECloud) UpdateLoadBalancer(clusterName string, service *v1.Service, hostNames []string) error {
-	hosts, err := gce.getInstancesByNames(hostNames)
+func (gce *GCECloud) UpdateLoadBalancer(clusterName string, service *v1.Service, nodes []*v1.Node) error {
+	hosts, err := gce.getInstancesByNames(nodeNames(nodes))
 	if err != nil {
 		return err
 	}
@@ -2582,8 +2591,8 @@ func (gce *GCECloud) GetAutoLabelsForPD(name string, zone string) (map[string]st
 	}
 
 	labels := make(map[string]string)
-	labels[unversioned.LabelZoneFailureDomain] = zone
-	labels[unversioned.LabelZoneRegion] = region
+	labels[metav1.LabelZoneFailureDomain] = zone
+	labels[metav1.LabelZoneRegion] = region
 
 	return labels, nil
 }

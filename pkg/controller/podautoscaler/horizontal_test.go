@@ -33,6 +33,7 @@ import (
 	_ "k8s.io/kubernetes/pkg/apimachinery/registered"
 	autoscaling "k8s.io/kubernetes/pkg/apis/autoscaling/v1"
 	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/release_1_5/fake"
 	v1core "k8s.io/kubernetes/pkg/client/clientset_generated/release_1_5/typed/core/v1"
 	"k8s.io/kubernetes/pkg/client/record"
@@ -95,6 +96,9 @@ type testCase struct {
 
 	// Target resource information.
 	resource *fakeResource
+
+	// Last scale time
+	lastScaleTime *metav1.Time
 }
 
 // Needs to be called under a lock.
@@ -117,7 +121,7 @@ func (tc *testCase) prepareTestClient(t *testing.T) *fake.Clientset {
 	namespace := "test-namespace"
 	hpaName := "test-hpa"
 	podNamePrefix := "test-pod"
-	selector := &unversioned.LabelSelector{
+	selector := &metav1.LabelSelector{
 		MatchLabels: map[string]string{"name": podNamePrefix},
 	}
 
@@ -1039,6 +1043,38 @@ func TestComputedToleranceAlgImplementation(t *testing.T) {
 	tc.CPUTarget = finalCpuPercentTarget
 	tc.initialReplicas = startPods
 	tc.desiredReplicas = startPods
+	tc.runTest(t)
+}
+
+func TestScaleUpRCImmediately(t *testing.T) {
+	time := metav1.Time{Time: time.Now()}
+	tc := testCase{
+		minReplicas:         2,
+		maxReplicas:         6,
+		initialReplicas:     1,
+		desiredReplicas:     2,
+		verifyCPUCurrent:    true,
+		reportedLevels:      []uint64{0, 0, 0, 0},
+		reportedCPURequests: []resource.Quantity{resource.MustParse("1.0"), resource.MustParse("1.0"), resource.MustParse("1.0"), resource.MustParse("1.0")},
+		useMetricsApi:       true,
+		lastScaleTime:       &time,
+	}
+	tc.runTest(t)
+}
+
+func TestScaleDownRCImmediately(t *testing.T) {
+	time := metav1.Time{Time: time.Now()}
+	tc := testCase{
+		minReplicas:         2,
+		maxReplicas:         5,
+		initialReplicas:     6,
+		desiredReplicas:     5,
+		CPUTarget:           50,
+		reportedLevels:      []uint64{8000, 9500, 1000},
+		reportedCPURequests: []resource.Quantity{resource.MustParse("0.9"), resource.MustParse("1.0"), resource.MustParse("1.1")},
+		useMetricsApi:       true,
+		lastScaleTime:       &time,
+	}
 	tc.runTest(t)
 }
 

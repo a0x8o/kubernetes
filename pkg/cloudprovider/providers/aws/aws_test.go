@@ -28,8 +28,8 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/golang/glog"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/v1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/util/sets"
 
 	"github.com/stretchr/testify/assert"
@@ -1176,8 +1176,8 @@ func TestGetVolumeLabels(t *testing.T) {
 
 	assert.Nil(t, err, "Error creating Volume %v", err)
 	assert.Equal(t, map[string]string{
-		unversioned.LabelZoneFailureDomain: "us-east-1a",
-		unversioned.LabelZoneRegion:        "us-east-1"}, labels)
+		metav1.LabelZoneFailureDomain: "us-east-1a",
+		metav1.LabelZoneRegion:        "us-east-1"}, labels)
 	awsServices.ec2.AssertExpectations(t)
 }
 
@@ -1200,7 +1200,7 @@ func TestDescribeLoadBalancerOnUpdate(t *testing.T) {
 	c, _ := newAWSCloud(strings.NewReader("[global]"), awsServices)
 	awsServices.elb.expectDescribeLoadBalancers("aid")
 
-	c.UpdateLoadBalancer(TestClusterName, &v1.Service{ObjectMeta: v1.ObjectMeta{Name: "myservice", UID: "id"}}, []string{})
+	c.UpdateLoadBalancer(TestClusterName, &v1.Service{ObjectMeta: v1.ObjectMeta{Name: "myservice", UID: "id"}}, []*v1.Node{})
 }
 
 func TestDescribeLoadBalancerOnGet(t *testing.T) {
@@ -1216,7 +1216,7 @@ func TestDescribeLoadBalancerOnEnsure(t *testing.T) {
 	c, _ := newAWSCloud(strings.NewReader("[global]"), awsServices)
 	awsServices.elb.expectDescribeLoadBalancers("aid")
 
-	c.EnsureLoadBalancer(TestClusterName, &v1.Service{ObjectMeta: v1.ObjectMeta{Name: "myservice", UID: "id"}}, []string{})
+	c.EnsureLoadBalancer(TestClusterName, &v1.Service{ObjectMeta: v1.ObjectMeta{Name: "myservice", UID: "id"}}, []*v1.Node{})
 }
 
 func TestBuildListener(t *testing.T) {

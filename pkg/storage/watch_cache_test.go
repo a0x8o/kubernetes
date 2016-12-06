@@ -23,9 +23,11 @@ import (
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/v1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/client/cache"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/util/clock"
 	"k8s.io/kubernetes/pkg/util/sets"
@@ -48,7 +50,10 @@ func newTestWatchCache(capacity int) *watchCache {
 	keyFunc := func(obj runtime.Object) (string, error) {
 		return NamespaceKeyFunc("prefix", obj)
 	}
-	wc := newWatchCache(capacity, keyFunc)
+	getAttrsFunc := func(obj runtime.Object) (labels.Set, fields.Set, error) {
+		return nil, nil, nil
+	}
+	wc := newWatchCache(capacity, keyFunc, getAttrsFunc)
 	wc.clock = clock.NewFakeClock(time.Now())
 	return wc
 }
@@ -344,7 +349,7 @@ func TestReflectorForWatchCache(t *testing.T) {
 			return fw, nil
 		},
 		ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
-			return &api.PodList{ListMeta: unversioned.ListMeta{ResourceVersion: "10"}}, nil
+			return &api.PodList{ListMeta: metav1.ListMeta{ResourceVersion: "10"}}, nil
 		},
 	}
 	r := cache.NewReflector(lw, &api.Pod{}, store, 0)

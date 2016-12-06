@@ -589,7 +589,7 @@ start_kube_apiserver() {
   if [ -n "${NUM_NODES:-}" ]; then
     # If the cluster is large, increase max-requests-inflight limit in apiserver.
     if [[ "${NUM_NODES}" -ge 1000 ]]; then
-      params+=" --max-requests-inflight=1500"
+      params+=" --max-requests-inflight=1500 --max-mutating-requests-inflight=500"
     fi
     # Set amount of memory available for apiserver based on number of nodes.
     # TODO: Once we start setting proper requests and limits for apiserver
@@ -598,6 +598,9 @@ start_kube_apiserver() {
   fi
   if [ -n "${SERVICE_CLUSTER_IP_RANGE:-}" ]; then
     params="${params} --service-cluster-ip-range=${SERVICE_CLUSTER_IP_RANGE}"
+  fi
+  if [ -n "${ETCD_QUORUM_READ:-}" ]; then
+    params="${params} --etcd-quorum-read=${ETCD_QUORUM_READ}"
   fi
 
   local admission_controller_config_mount=""

@@ -17,9 +17,12 @@ limitations under the License.
 package fake
 
 import (
+	"fmt"
+
 	"github.com/emicklei/go-restful/swagger"
-	"k8s.io/kubernetes/pkg/api/unversioned"
+
 	"k8s.io/kubernetes/pkg/api/v1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/client/testing/core"
 	"k8s.io/kubernetes/pkg/runtime/schema"
@@ -30,16 +33,21 @@ type FakeDiscovery struct {
 	*core.Fake
 }
 
-func (c *FakeDiscovery) ServerResourcesForGroupVersion(groupVersion string) (*unversioned.APIResourceList, error) {
+func (c *FakeDiscovery) ServerResourcesForGroupVersion(groupVersion string) (*metav1.APIResourceList, error) {
 	action := core.ActionImpl{
 		Verb:     "get",
 		Resource: schema.GroupVersionResource{Resource: "resource"},
 	}
 	c.Invokes(action, nil)
-	return c.Resources[groupVersion], nil
+	for _, resourceList := range c.Resources {
+		if resourceList.GroupVersion == groupVersion {
+			return resourceList, nil
+		}
+	}
+	return nil, fmt.Errorf("GroupVersion %q not found", groupVersion)
 }
 
-func (c *FakeDiscovery) ServerResources() (map[string]*unversioned.APIResourceList, error) {
+func (c *FakeDiscovery) ServerResources() ([]*metav1.APIResourceList, error) {
 	action := core.ActionImpl{
 		Verb:     "get",
 		Resource: schema.GroupVersionResource{Resource: "resource"},
@@ -48,15 +56,15 @@ func (c *FakeDiscovery) ServerResources() (map[string]*unversioned.APIResourceLi
 	return c.Resources, nil
 }
 
-func (c *FakeDiscovery) ServerPreferredResources() ([]schema.GroupVersionResource, error) {
+func (c *FakeDiscovery) ServerPreferredResources() ([]*metav1.APIResourceList, error) {
 	return nil, nil
 }
 
-func (c *FakeDiscovery) ServerPreferredNamespacedResources() ([]schema.GroupVersionResource, error) {
+func (c *FakeDiscovery) ServerPreferredNamespacedResources() ([]*metav1.APIResourceList, error) {
 	return nil, nil
 }
 
-func (c *FakeDiscovery) ServerGroups() (*unversioned.APIGroupList, error) {
+func (c *FakeDiscovery) ServerGroups() (*metav1.APIGroupList, error) {
 	return nil, nil
 }
 

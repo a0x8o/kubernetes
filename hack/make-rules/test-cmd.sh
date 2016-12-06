@@ -342,6 +342,7 @@ runTests() {
   deployment_image_field="(index .spec.template.spec.containers 0).image"
   deployment_second_image_field="(index .spec.template.spec.containers 1).image"
   change_cause_annotation='.*kubernetes.io/change-cause.*'
+  pdb_min_available=".spec.minAvailable"
 
   # Passing no arguments to create is an error
   ! kubectl create
@@ -422,6 +423,8 @@ runTests() {
   # make sure the server was properly bootstrapped with clusterroles and bindings
   kube::test::get_object_assert clusterroles/cluster-admin "{{.metadata.name}}" 'cluster-admin'
   kube::test::get_object_assert clusterrolebindings/cluster-admin "{{.metadata.name}}" 'cluster-admin'
+  kubectl create "${kube_flags[@]}" clusterrolebinding super-admin --clusterrole=admin --user=super-admin
+  kube::test::get_object_assert clusterrolebinding/super-admin "{{range.subjects}}{{.name}}:{{end}}" 'super-admin:'
 
   ###########################
   # POD creation / deletion #
@@ -588,6 +591,16 @@ runTests() {
   # Post-condition: configmap exists and has expected values
   kube::test::get_object_assert 'configmap/test-configmap --namespace=test-kubectl-describe-pod' "{{$id_field}}" 'test-configmap'
 
+  ### Create a pod disruption budget
+  # Command
+  kubectl create pdb test-pdb --selector=app=rails --min-available=2 --namespace=test-kubectl-describe-pod
+  # Post-condition: pdb exists and has expected values
+  kube::test::get_object_assert 'pdb/test-pdb --namespace=test-kubectl-describe-pod' "{{$pdb_min_available}}" '2'
+  # Command
+  kubectl create pdb test-pdb-2 --selector=app=rails --min-available=50% --namespace=test-kubectl-describe-pod
+  # Post-condition: pdb exists and has expected values
+  kube::test::get_object_assert 'pdb/test-pdb-2 --namespace=test-kubectl-describe-pod' "{{$pdb_min_available}}" '50%'
+
   # Create a pod that consumes secret, configmap, and downward API keys as envs
   kube::test::get_object_assert 'pods --namespace=test-kubectl-describe-pod' "{{range.items}}{{$id_field}}:{{end}}" ''
   kubectl create -f hack/testdata/pod-with-api-env.yaml --namespace=test-kubectl-describe-pod
@@ -600,6 +613,7 @@ runTests() {
   kubectl delete pod env-test-pod --namespace=test-kubectl-describe-pod
   kubectl delete secret test-secret --namespace=test-kubectl-describe-pod
   kubectl delete configmap test-configmap --namespace=test-kubectl-describe-pod
+  kubectl delete pdb/test-pdb pdb/test-pdb-2 --namespace=test-kubectl-describe-pod
   kubectl delete namespace test-kubectl-describe-pod
 
   ### Create two PODs
@@ -1993,6 +2007,22 @@ __EOF__
   kube::test::get_object_assert services "{{range.items}}{{$id_field}}:{{end}}" 'kubernetes:redis-master:redis-slave:'
   # Command
   kubectl delete services redis-master redis-slave "${kube_flags[@]}" # delete multiple services at once
+  # Post-condition: Only the default kubernetes services exist
+  kube::test::get_object_assert services "{{range.items}}{{$id_field}}:{{end}}" 'kubernetes:'
+
+  ### Create an ExternalName service
+  # Pre-condition: Only the default kubernetes service exist
+  kube::test::get_object_assert services "{{range.items}}{{$id_field}}:{{end}}" 'kubernetes:'
+  # Command
+  kubectl create service externalname beep-boop --external-name bar.com
+  # Post-condition: beep-boop service is created
+  kube::test::get_object_assert services "{{range.items}}{{$id_field}}:{{end}}" 'beep-boop:kubernetes:'
+
+  ### Delete beep-boop service by id
+  # Pre-condition: beep-boop service exists
+  kube::test::get_object_assert services "{{range.items}}{{$id_field}}:{{end}}" 'beep-boop:kubernetes:'
+  # Command
+  kubectl delete service beep-boop "${kube_flags[@]}"
   # Post-condition: Only the default kubernetes services exist
   kube::test::get_object_assert services "{{range.items}}{{$id_field}}:{{end}}" 'kubernetes:'
 

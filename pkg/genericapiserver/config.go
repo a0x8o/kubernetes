@@ -17,12 +17,14 @@ limitations under the License.
 package genericapiserver
 
 import (
+	"crypto/tls"
+	"encoding/pem"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
-	"path"
 	"regexp"
 	goruntime "runtime"
 	"sort"
@@ -32,20 +34,25 @@ import (
 
 	"github.com/go-openapi/spec"
 	"github.com/golang/glog"
+	"github.com/pborman/uuid"
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"k8s.io/kubernetes/pkg/admission"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/v1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
+	apiserverauthenticator "k8s.io/kubernetes/pkg/apiserver/authenticator"
 	apiserverfilters "k8s.io/kubernetes/pkg/apiserver/filters"
 	apiserveropenapi "k8s.io/kubernetes/pkg/apiserver/openapi"
 	"k8s.io/kubernetes/pkg/apiserver/request"
 	"k8s.io/kubernetes/pkg/auth/authenticator"
 	"k8s.io/kubernetes/pkg/auth/authorizer"
+	authorizerunion "k8s.io/kubernetes/pkg/auth/authorizer/union"
 	authhandlers "k8s.io/kubernetes/pkg/auth/handlers"
+	"k8s.io/kubernetes/pkg/auth/user"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/cloudprovider"
+	apiserverauthorizer "k8s.io/kubernetes/pkg/genericapiserver/authorizer"
 	genericfilters "k8s.io/kubernetes/pkg/genericapiserver/filters"
 	"k8s.io/kubernetes/pkg/genericapiserver/mux"
 	"k8s.io/kubernetes/pkg/genericapiserver/openapi/common"
@@ -53,10 +60,9 @@ import (
 	"k8s.io/kubernetes/pkg/genericapiserver/routes"
 	genericvalidation "k8s.io/kubernetes/pkg/genericapiserver/validation"
 	"k8s.io/kubernetes/pkg/runtime"
-	certutil "k8s.io/kubernetes/pkg/util/cert"
-	utilnet "k8s.io/kubernetes/pkg/util/net"
 	"k8s.io/kubernetes/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/version"
+	authenticatorunion "k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/union"
 )
 
 const (
@@ -94,8 +100,6 @@ type Config struct {
 	SupportsBasicAuth bool
 	Authorizer        authorizer.Authorizer
 	AdmissionControl  admission.Interface
-	// TODO(ericchiang): Determine if policy escalation checks should be an admission controller.
-	AuthorizerRBACSuperUser string
 
 	// LoopbackClientConfig is a config for a privileged loopback connection to the API server
 	LoopbackClientConfig *restclient.Config
@@ -136,8 +140,11 @@ type Config struct {
 	OpenAPIConfig *common.Config
 
 	// MaxRequestsInFlight is the maximum number of parallel non-long-running requests. Every further
-	// request has to wait.
+	// request has to wait. Applies only to non-mutating requests.
 	MaxRequestsInFlight int
+	// MaxMutatingRequestsInFlight is the maximum number of parallel mutating requests. Every further
+	// request has to wait.
+	MaxMutatingRequestsInFlight int
 
 	// Predicate which is true for paths of long-running http requests
 	LongRunningFunc genericfilters.LongRunningRequestCheck
@@ -161,33 +168,19 @@ type ServingInfo struct {
 type SecureServingInfo struct {
 	ServingInfo
 
-	// ServerCert is the TLS cert info for serving secure traffic
-	ServerCert GeneratableKeyCert
-	// SNICerts are named CertKeys for serving secure traffic with SNI support.
-	SNICerts []NamedCertKey
+	// Cert is the main server cert which is used if SNI does not match. Cert must be non-nil and is
+	// allowed to be in SNICerts.
+	Cert *tls.Certificate
+
+	// CACert is an optional certificate authority used for the loopback connection of the Admission controllers.
+	// If this is nil, the certificate authority is extracted from Cert or a matching SNI certificate.
+	CACert *tls.Certificate
+
+	// SNICerts are the TLS certificates by name used for SNI.
+	SNICerts map[string]*tls.Certificate
+
 	// ClientCA is the certificate bundle for all the signers that you'll recognize for incoming client certificates
 	ClientCA string
-}
-
-type CertKey struct {
-	// CertFile is a file containing a PEM-encoded certificate
-	CertFile string
-	// KeyFile is a file containing a PEM-encoded private key for the certificate specified by CertFile
-	KeyFile string
-}
-
-type NamedCertKey struct {
-	CertKey
-
-	// Names is a list of domain patterns: fully qualified domain names, possibly prefixed with
-	// wildcard segments.
-	Names []string
-}
-
-type GeneratableKeyCert struct {
-	CertKey
-	// Generate indicates that the cert/key pair should be generated if its not present.
-	Generate bool
 }
 
 // NewConfig returns a Config struct with the default values
@@ -226,10 +219,94 @@ func NewConfig() *Config {
 	defaultOptions := options.NewServerRunOptions()
 	// unset fields that can be overridden to avoid setting values so that we won't end up with lingering values.
 	// TODO we probably want to run the defaults the other way.  A default here drives it in the CLI flags
-	defaultOptions.SecurePort = 0
-	defaultOptions.InsecurePort = 0
 	defaultOptions.AuditLogPath = ""
 	return config.ApplyOptions(defaultOptions)
+}
+
+func (c *Config) ApplySecureServingOptions(secureServing *options.SecureServingOptions) (*Config, error) {
+	if secureServing == nil || secureServing.ServingOptions.BindPort <= 0 {
+		return c, nil
+	}
+
+	secureServingInfo := &SecureServingInfo{
+		ServingInfo: ServingInfo{
+			BindAddress: net.JoinHostPort(secureServing.ServingOptions.BindAddress.String(), strconv.Itoa(secureServing.ServingOptions.BindPort)),
+		},
+		ClientCA: secureServing.ClientCA,
+	}
+
+	serverCertFile, serverKeyFile := secureServing.ServerCert.CertKey.CertFile, secureServing.ServerCert.CertKey.KeyFile
+
+	// load main cert
+	if len(serverCertFile) != 0 || len(serverKeyFile) != 0 {
+		tlsCert, err := tls.LoadX509KeyPair(serverCertFile, serverKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("unable to load server certificate: %v", err)
+		}
+		secureServingInfo.Cert = &tlsCert
+	}
+
+	// optionally load CA cert
+	if len(secureServing.ServerCert.CACertFile) != 0 {
+		pemData, err := ioutil.ReadFile(secureServing.ServerCert.CACertFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read certificate authority from %q: %v", secureServing.ServerCert.CACertFile, err)
+		}
+		block, pemData := pem.Decode(pemData)
+		if block == nil {
+			return nil, fmt.Errorf("no certificate found in certificate authority file %q", secureServing.ServerCert.CACertFile)
+		}
+		if block.Type != "CERTIFICATE" {
+			return nil, fmt.Errorf("expected CERTIFICATE block in certiticate authority file %q, found: %s", secureServing.ServerCert.CACertFile, block.Type)
+		}
+		secureServingInfo.CACert = &tls.Certificate{
+			Certificate: [][]byte{block.Bytes},
+		}
+	}
+
+	// load SNI certs
+	namedTlsCerts := make([]namedTlsCert, 0, len(secureServing.SNICertKeys))
+	for _, nck := range secureServing.SNICertKeys {
+		tlsCert, err := tls.LoadX509KeyPair(nck.CertFile, nck.KeyFile)
+		namedTlsCerts = append(namedTlsCerts, namedTlsCert{
+			tlsCert: tlsCert,
+			names:   nck.Names,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to load SNI cert and key: %v", err)
+		}
+	}
+	var err error
+	secureServingInfo.SNICerts, err = getNamedCertificateMap(namedTlsCerts)
+	if err != nil {
+		return nil, err
+	}
+
+	c.SecureServingInfo = secureServingInfo
+	c.ReadWritePort = secureServing.ServingOptions.BindPort
+
+	return c, nil
+}
+
+func (c *Config) ApplyInsecureServingOptions(insecureServing *options.ServingOptions) *Config {
+	if insecureServing == nil || insecureServing.BindPort <= 0 {
+		return c
+	}
+
+	c.InsecureServingInfo = &ServingInfo{
+		BindAddress: net.JoinHostPort(insecureServing.BindAddress.String(), strconv.Itoa(insecureServing.BindPort)),
+	}
+
+	return c
+}
+
+func (c *Config) ApplyAuthenticationOptions(o *options.BuiltInAuthenticationOptions) *Config {
+	if o == nil || o.PasswordFile == nil {
+		return c
+	}
+
+	c.SupportsBasicAuth = len(o.PasswordFile.BasicAuthFile) > 0
+	return c
 }
 
 // ApplyOptions applies the run options to the method receiver and returns self
@@ -243,49 +320,6 @@ func (c *Config) ApplyOptions(options *options.ServerRunOptions) *Config {
 		}
 	}
 
-	if options.SecurePort > 0 {
-		secureServingInfo := &SecureServingInfo{
-			ServingInfo: ServingInfo{
-				BindAddress: net.JoinHostPort(options.BindAddress.String(), strconv.Itoa(options.SecurePort)),
-			},
-			ServerCert: GeneratableKeyCert{
-				CertKey: CertKey{
-					CertFile: options.TLSCertFile,
-					KeyFile:  options.TLSPrivateKeyFile,
-				},
-			},
-			SNICerts: []NamedCertKey{},
-			ClientCA: options.ClientCAFile,
-		}
-		if options.TLSCertFile == "" && options.TLSPrivateKeyFile == "" {
-			secureServingInfo.ServerCert.Generate = true
-			secureServingInfo.ServerCert.CertFile = path.Join(options.CertDirectory, "apiserver.crt")
-			secureServingInfo.ServerCert.KeyFile = path.Join(options.CertDirectory, "apiserver.key")
-		}
-
-		secureServingInfo.SNICerts = nil
-		for _, nkc := range options.SNICertKeys {
-			secureServingInfo.SNICerts = append(secureServingInfo.SNICerts, NamedCertKey{
-				CertKey: CertKey{
-					KeyFile:  nkc.KeyFile,
-					CertFile: nkc.CertFile,
-				},
-				Names: nkc.Names,
-			})
-		}
-
-		c.SecureServingInfo = secureServingInfo
-		c.ReadWritePort = options.SecurePort
-	}
-
-	if options.InsecurePort > 0 {
-		insecureServingInfo := &ServingInfo{
-			BindAddress: net.JoinHostPort(options.InsecureBindAddress.String(), strconv.Itoa(options.InsecurePort)),
-		}
-		c.InsecureServingInfo = insecureServingInfo
-	}
-
-	c.AuthorizerRBACSuperUser = options.AuthorizationRBACSuperUser
 	c.CorsAllowedOriginList = options.CorsAllowedOriginList
 	c.EnableGarbageCollection = options.EnableGarbageCollection
 	c.EnableProfiling = options.EnableProfiling
@@ -293,9 +327,9 @@ func (c *Config) ApplyOptions(options *options.ServerRunOptions) *Config {
 	c.EnableSwaggerUI = options.EnableSwaggerUI
 	c.ExternalAddress = options.ExternalHost
 	c.MaxRequestsInFlight = options.MaxRequestsInFlight
+	c.MaxMutatingRequestsInFlight = options.MaxMutatingRequestsInFlight
 	c.MinRequestTimeout = options.MinRequestTimeout
 	c.PublicAddress = options.AdvertiseAddress
-	c.SupportsBasicAuth = len(options.BasicAuthFile) > 0
 
 	return c
 }
@@ -338,6 +372,25 @@ func (c *Config) Complete() completedConfig {
 	}
 	if c.DiscoveryAddresses == nil {
 		c.DiscoveryAddresses = DefaultDiscoveryAddresses{DefaultAddress: c.ExternalAddress}
+	}
+
+	// If the loopbackclientconfig is specified AND it has a token for use against the API server
+	// wrap the authenticator and authorizer in loopback authentication logic
+	if c.Authenticator != nil && c.Authorizer != nil && c.LoopbackClientConfig != nil && len(c.LoopbackClientConfig.BearerToken) > 0 {
+		privilegedLoopbackToken := c.LoopbackClientConfig.BearerToken
+		var uid = uuid.NewRandom().String()
+		tokens := make(map[string]*user.DefaultInfo)
+		tokens[privilegedLoopbackToken] = &user.DefaultInfo{
+			Name:   user.APIServerUser,
+			UID:    uid,
+			Groups: []string{user.SystemPrivilegedGroup},
+		}
+
+		tokenAuthenticator := apiserverauthenticator.NewAuthenticatorFromTokens(tokens)
+		c.Authenticator = authenticatorunion.New(tokenAuthenticator, c.Authenticator)
+
+		tokenAuthorizer := apiserverauthorizer.NewPrivilegedGroups(user.SystemPrivilegedGroup)
+		c.Authorizer = authorizerunion.New(tokenAuthorizer, c.Authorizer)
 	}
 
 	return completedConfig{c}
@@ -390,7 +443,7 @@ func (c completedConfig) New() (*GenericAPIServer, error) {
 		InsecureServingInfo: c.InsecureServingInfo,
 		ExternalAddress:     c.ExternalAddress,
 
-		apiGroupsForDiscovery: map[string]unversioned.APIGroup{},
+		apiGroupsForDiscovery: map[string]metav1.APIGroup{},
 
 		enableOpenAPISupport: c.EnableOpenAPISupport,
 		openAPIConfig:        c.OpenAPIConfig,
@@ -407,48 +460,21 @@ func (c completedConfig) New() (*GenericAPIServer, error) {
 	return s, nil
 }
 
-// MaybeGenerateServingCerts generates serving certificates if requested and needed.
-func (c completedConfig) MaybeGenerateServingCerts(alternateIPs ...net.IP) error {
-	// It would be nice to set a fqdn subject alt name, but only the kubelets know, the apiserver is clueless
-	// alternateDNS = append(alternateDNS, "kubernetes.default.svc.CLUSTER.DNS.NAME")
-	if c.SecureServingInfo != nil && c.SecureServingInfo.ServerCert.Generate && !certutil.CanReadCertOrKey(c.SecureServingInfo.ServerCert.CertFile, c.SecureServingInfo.ServerCert.KeyFile) {
-		// TODO (cjcullen): Is ClusterIP the right address to sign a cert with?
-		alternateDNS := []string{"kubernetes.default.svc", "kubernetes.default", "kubernetes", "localhost"}
-
-		if cert, key, err := certutil.GenerateSelfSignedCertKey(c.PublicAddress.String(), alternateIPs, alternateDNS); err != nil {
-			return fmt.Errorf("unable to generate self signed cert: %v", err)
-		} else {
-			if err := certutil.WriteCert(c.SecureServingInfo.ServerCert.CertFile, cert); err != nil {
-				return err
-			}
-
-			if err := certutil.WriteKey(c.SecureServingInfo.ServerCert.KeyFile, key); err != nil {
-				return err
-			}
-			glog.Infof("Generated self-signed cert (%s, %s)", c.SecureServingInfo.ServerCert.CertFile, c.SecureServingInfo.ServerCert.KeyFile)
-		}
-	}
-
-	return nil
-}
-
 func DefaultBuildHandlerChain(apiHandler http.Handler, c *Config) (secure, insecure http.Handler) {
-	attributeGetter := apiserverfilters.NewRequestAttributeGetter(c.RequestContextMapper)
-
 	generic := func(handler http.Handler) http.Handler {
 		handler = genericfilters.WithCORS(handler, c.CorsAllowedOriginList, nil, nil, nil, "true")
 		handler = genericfilters.WithPanicRecovery(handler, c.RequestContextMapper)
+		handler = genericfilters.WithTimeoutForNonLongRunningRequests(handler, c.LongRunningFunc)
+		handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight, c.MaxMutatingRequestsInFlight, c.RequestContextMapper, c.LongRunningFunc)
 		handler = apiserverfilters.WithRequestInfo(handler, NewRequestInfoResolver(c), c.RequestContextMapper)
 		handler = api.WithRequestContext(handler, c.RequestContextMapper)
-		handler = genericfilters.WithTimeoutForNonLongRunningRequests(handler, c.LongRunningFunc)
-		handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight, c.LongRunningFunc)
 		return handler
 	}
 	audit := func(handler http.Handler) http.Handler {
-		return apiserverfilters.WithAudit(handler, attributeGetter, c.AuditWriter)
+		return apiserverfilters.WithAudit(handler, c.RequestContextMapper, c.AuditWriter)
 	}
 	protect := func(handler http.Handler) http.Handler {
-		handler = apiserverfilters.WithAuthorization(handler, attributeGetter, c.Authorizer)
+		handler = apiserverfilters.WithAuthorization(handler, c.RequestContextMapper, c.Authorizer)
 		handler = apiserverfilters.WithImpersonation(handler, c.RequestContextMapper, c.Authorizer)
 		handler = audit(handler) // before impersonation to read original user
 		handler = authhandlers.WithAuthentication(handler, c.RequestContextMapper, c.Authenticator, authhandlers.Unauthorized(c.SupportsBasicAuth))
@@ -485,17 +511,6 @@ func (s *GenericAPIServer) installAPI(c *Config) {
 func DefaultAndValidateRunOptions(options *options.ServerRunOptions) {
 	genericvalidation.ValidateRunOptions(options)
 
-	// If advertise-address is not specified, use bind-address. If bind-address
-	// is not usable (unset, 0.0.0.0, or loopback), we will use the host's default
-	// interface as valid public addr for master (see: util/net#ValidPublicAddrForMaster)
-	if options.AdvertiseAddress == nil || options.AdvertiseAddress.IsUnspecified() {
-		hostIP, err := utilnet.ChooseBindAddress(options.BindAddress)
-		if err != nil {
-			glog.Fatalf("Unable to find suitable network address.error='%v' . "+
-				"Try to set the AdvertiseAddress directly or provide a valid BindAddress to fix this.", err)
-		}
-		options.AdvertiseAddress = hostIP
-	}
 	glog.Infof("Will report %v as public IP address.", options.AdvertiseAddress)
 
 	// Set default value for ExternalAddress if not specified.

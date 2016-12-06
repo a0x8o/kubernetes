@@ -41,13 +41,13 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/api/service"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/api/validation"
 	"k8s.io/kubernetes/pkg/apimachinery/registered"
 	"k8s.io/kubernetes/pkg/apis/apps"
 	"k8s.io/kubernetes/pkg/apis/batch"
 	"k8s.io/kubernetes/pkg/apis/extensions"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	coreclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
 	"k8s.io/kubernetes/pkg/client/restclient"
@@ -193,6 +193,7 @@ const (
 	ServiceNodePortGeneratorV1Name              = "service-nodeport/v1"
 	ServiceClusterIPGeneratorV1Name             = "service-clusterip/v1"
 	ServiceLoadBalancerGeneratorV1Name          = "service-loadbalancer/v1"
+	ServiceExternalNameGeneratorV1Name          = "service-externalname/v1"
 	ServiceAccountV1GeneratorName               = "serviceaccount/v1"
 	HorizontalPodAutoscalerV1Beta1GeneratorName = "horizontalpodautoscaler/v1beta1"
 	HorizontalPodAutoscalerV1GeneratorName      = "horizontalpodautoscaler/v1"
@@ -208,7 +209,9 @@ const (
 	SecretForDockerRegistryV1GeneratorName      = "secret-for-docker-registry/v1"
 	SecretForTLSV1GeneratorName                 = "secret-for-tls/v1"
 	ConfigMapV1GeneratorName                    = "configmap/v1"
+	ClusterRoleBindingV1GeneratorName           = "clusterrolebinding.rbac.authorization.k8s.io/v1alpha1"
 	ClusterV1Beta1GeneratorName                 = "cluster/v1beta1"
+	PodDisruptionBudgetV1GeneratorName          = "poddisruptionbudget/v1beta1"
 )
 
 // DefaultGenerators returns the set of default generators for use in Factory instances
@@ -614,7 +617,7 @@ func (f *factory) LogsForObject(object, options runtime.Object) (*restclient.Req
 		if !ok {
 			return nil, errors.New("provided options object is not a PodLogOptions")
 		}
-		selector, err := unversioned.LabelSelectorAsSelector(t.Spec.Selector)
+		selector, err := metav1.LabelSelectorAsSelector(t.Spec.Selector)
 		if err != nil {
 			return nil, fmt.Errorf("invalid label selector: %v", err)
 		}
@@ -803,7 +806,7 @@ func (f *factory) AttachablePodForObject(object runtime.Object) (*api.Pod, error
 		pod, _, err := GetFirstPod(clientset.Core(), t.Namespace, selector, 1*time.Minute, sortBy)
 		return pod, err
 	case *extensions.Deployment:
-		selector, err := unversioned.LabelSelectorAsSelector(t.Spec.Selector)
+		selector, err := metav1.LabelSelectorAsSelector(t.Spec.Selector)
 		if err != nil {
 			return nil, fmt.Errorf("invalid label selector: %v", err)
 		}
@@ -811,7 +814,7 @@ func (f *factory) AttachablePodForObject(object runtime.Object) (*api.Pod, error
 		pod, _, err := GetFirstPod(clientset.Core(), t.Namespace, selector, 1*time.Minute, sortBy)
 		return pod, err
 	case *batch.Job:
-		selector, err := unversioned.LabelSelectorAsSelector(t.Spec.Selector)
+		selector, err := metav1.LabelSelectorAsSelector(t.Spec.Selector)
 		if err != nil {
 			return nil, fmt.Errorf("invalid label selector: %v", err)
 		}

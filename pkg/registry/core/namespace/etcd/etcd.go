@@ -23,29 +23,29 @@ import (
 	apierrors "k8s.io/kubernetes/pkg/api/errors"
 	storageerr "k8s.io/kubernetes/pkg/api/errors/storage"
 	"k8s.io/kubernetes/pkg/api/rest"
-	"k8s.io/kubernetes/pkg/api/unversioned"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/registry/cachesize"
 	"k8s.io/kubernetes/pkg/registry/core/namespace"
 	"k8s.io/kubernetes/pkg/registry/generic"
-	"k8s.io/kubernetes/pkg/registry/generic/registry"
+	genericregistry "k8s.io/kubernetes/pkg/registry/generic/registry"
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/storage"
 )
 
 // rest implements a RESTStorage for namespaces against etcd
 type REST struct {
-	*registry.Store
-	status *registry.Store
+	*genericregistry.Store
+	status *genericregistry.Store
 }
 
 // StatusREST implements the REST endpoint for changing the status of a namespace.
 type StatusREST struct {
-	store *registry.Store
+	store *genericregistry.Store
 }
 
 // FinalizeREST implements the REST endpoint for finalizing a namespace.
 type FinalizeREST struct {
-	store *registry.Store
+	store *genericregistry.Store
 }
 
 // NewREST returns a RESTStorage object that will work against namespaces.
@@ -60,17 +60,18 @@ func NewREST(opts generic.RESTOptions) (*REST, *StatusREST, *FinalizeREST) {
 		prefix,
 		namespace.Strategy,
 		newListFunc,
+		namespace.GetAttrs,
 		storage.NoTriggerPublisher,
 	)
 
-	store := &registry.Store{
+	store := &genericregistry.Store{
 		NewFunc:     func() runtime.Object { return &api.Namespace{} },
 		NewListFunc: newListFunc,
 		KeyRootFunc: func(ctx api.Context) string {
 			return prefix
 		},
 		KeyFunc: func(ctx api.Context, name string) (string, error) {
-			return registry.NoNamespaceKeyFunc(ctx, prefix, name)
+			return genericregistry.NoNamespaceKeyFunc(ctx, prefix, name)
 		},
 		ObjectNameFunc: func(obj runtime.Object) (string, error) {
 			return obj.(*api.Namespace).Name, nil
@@ -146,7 +147,7 @@ func (r *REST) Delete(ctx api.Context, name string, options *api.DeleteOptions) 
 				}
 				// Set the deletion timestamp if needed
 				if existingNamespace.DeletionTimestamp.IsZero() {
-					now := unversioned.Now()
+					now := metav1.Now()
 					existingNamespace.DeletionTimestamp = &now
 				}
 				// Set the namespace phase to terminating, if needed

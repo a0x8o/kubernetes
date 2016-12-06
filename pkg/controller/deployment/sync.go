@@ -25,9 +25,9 @@ import (
 	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/v1"
 	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/controller"
 	deploymentutil "k8s.io/kubernetes/pkg/controller/deployment/util"
 	"k8s.io/kubernetes/pkg/labels"
@@ -203,7 +203,7 @@ func (dc *DeploymentController) addHashKeyToRSAndPods(rs *extensions.ReplicaSet)
 	glog.V(4).Infof("Observed the update of %s %s/%s's pod template with hash %s.", rs.Kind, rs.Namespace, rs.Name, hash)
 
 	// 2. Update all pods managed by the rs to have the new hash label, so they will be correctly adopted.
-	selector, err := unversioned.LabelSelectorAsSelector(updatedRS.Spec.Selector)
+	selector, err := metav1.LabelSelectorAsSelector(updatedRS.Spec.Selector)
 	if err != nil {
 		return nil, fmt.Errorf("error in converting selector to label selector for replica set %s: %s", updatedRS.Name, err)
 	}
@@ -500,7 +500,7 @@ func (dc *DeploymentController) scale(deployment *extensions.Deployment, newRS *
 			}
 
 			// TODO: Use transactions when we have them.
-			if _, err := dc.scaleReplicaSet(rs, nameToSize[rs.Name], deployment, scalingOperation); err != nil {
+			if _, _, err := dc.scaleReplicaSet(rs, nameToSize[rs.Name], deployment, scalingOperation); err != nil {
 				// Return as soon as we fail, the deployment is requeued
 				return err
 			}
@@ -520,28 +520,33 @@ func (dc *DeploymentController) scaleReplicaSetAndRecordEvent(rs *extensions.Rep
 	} else {
 		scalingOperation = "down"
 	}
-	newRS, err := dc.scaleReplicaSet(rs, newScale, deployment, scalingOperation)
-	return true, newRS, err
+	scaled, newRS, err := dc.scaleReplicaSet(rs, newScale, deployment, scalingOperation)
+	return scaled, newRS, err
 }
 
-func (dc *DeploymentController) scaleReplicaSet(rs *extensions.ReplicaSet, newScale int32, deployment *extensions.Deployment, scalingOperation string) (*extensions.ReplicaSet, error) {
+func (dc *DeploymentController) scaleReplicaSet(rs *extensions.ReplicaSet, newScale int32, deployment *extensions.Deployment, scalingOperation string) (bool, *extensions.ReplicaSet, error) {
 	objCopy, err := api.Scheme.Copy(rs)
 	if err != nil {
-		return nil, err
+		return false, nil, err
 	}
 	rsCopy := objCopy.(*extensions.ReplicaSet)
 
 	sizeNeedsUpdate := *(rsCopy.Spec.Replicas) != newScale
+	// TODO: Do not mutate the replica set here, instead simply compare the annotation and if they mismatch
+	// call SetReplicasAnnotations inside the following if clause. Then we can also move the deep-copy from
+	// above inside the if too.
 	annotationsNeedUpdate := deploymentutil.SetReplicasAnnotations(rsCopy, *(deployment.Spec.Replicas), *(deployment.Spec.Replicas)+deploymentutil.MaxSurge(*deployment))
 
+	scaled := false
 	if sizeNeedsUpdate || annotationsNeedUpdate {
 		*(rsCopy.Spec.Replicas) = newScale
 		rs, err = dc.client.Extensions().ReplicaSets(rsCopy.Namespace).Update(rsCopy)
 		if err == nil && sizeNeedsUpdate {
+			scaled = true
 			dc.eventRecorder.Eventf(deployment, v1.EventTypeNormal, "ScalingReplicaSet", "Scaled %s replica set %s to %d", scalingOperation, rs.Name, newScale)
 		}
 	}
-	return rs, err
+	return scaled, rs, err
 }
 
 // cleanupDeployment is responsible for cleaning up a deployment ie. retains all but the latest N old replica sets

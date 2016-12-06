@@ -392,8 +392,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 			eventClientConfig.QPS = float32(s.EventRecordQPS)
 			eventClientConfig.Burst = int(s.EventBurst)
 			eventClient, err = clientset.NewForConfig(&eventClientConfig)
-		}
-		if err != nil {
+		} else {
 			if s.RequireKubeConfig {
 				return fmt.Errorf("invalid kubeconfig: %v", err)
 			}
@@ -520,7 +519,12 @@ func InitializeTLS(kc *componentconfig.KubeletConfiguration) (*server.TLSOptions
 	if kc.TLSCertFile == "" && kc.TLSPrivateKeyFile == "" {
 		kc.TLSCertFile = path.Join(kc.CertDirectory, "kubelet.crt")
 		kc.TLSPrivateKeyFile = path.Join(kc.CertDirectory, "kubelet.key")
-		if !certutil.CanReadCertOrKey(kc.TLSCertFile, kc.TLSPrivateKeyFile) {
+
+		canReadCertAndKey, err := certutil.CanReadCertAndKey(kc.TLSCertFile, kc.TLSPrivateKeyFile)
+		if err != nil {
+			return nil, err
+		}
+		if !canReadCertAndKey {
 			cert, key, err := certutil.GenerateSelfSignedCertKey(nodeutil.GetHostname(kc.HostnameOverride), nil, nil)
 			if err != nil {
 				return nil, fmt.Errorf("unable to generate self signed cert: %v", err)

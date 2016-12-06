@@ -25,8 +25,8 @@ import (
 
 	"github.com/golang/glog"
 
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/v1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/client/record"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/runtime"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
@@ -161,7 +161,7 @@ func (irecorder *innerEventRecorder) Eventf(object runtime.Object, eventtype, re
 
 }
 
-func (irecorder *innerEventRecorder) PastEventf(object runtime.Object, timestamp unversioned.Time, eventtype, reason, messageFmt string, args ...interface{}) {
+func (irecorder *innerEventRecorder) PastEventf(object runtime.Object, timestamp metav1.Time, eventtype, reason, messageFmt string, args ...interface{}) {
 	if ref, ok := irecorder.shouldRecordEvent(object); ok {
 		irecorder.recorder.PastEventf(ref, timestamp, eventtype, reason, messageFmt, args...)
 	}
@@ -245,4 +245,19 @@ func (r *containerCommandRunnerWrapper) RunInContainer(id ContainerID, cmd []str
 	// the command returned a nonzero exit code). Therefore, always return the output along with the
 	// error.
 	return buffer.Bytes(), err
+}
+
+// GetContainerSpec gets the container spec by containerName.
+func GetContainerSpec(pod *v1.Pod, containerName string) *v1.Container {
+	for i, c := range pod.Spec.Containers {
+		if containerName == c.Name {
+			return &pod.Spec.Containers[i]
+		}
+	}
+	for i, c := range pod.Spec.InitContainers {
+		if containerName == c.Name {
+			return &pod.Spec.InitContainers[i]
+		}
+	}
+	return nil
 }

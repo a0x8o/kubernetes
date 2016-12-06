@@ -409,9 +409,22 @@ function assemble-docker-flags {
   fi
 
   echo "DOCKER_OPTS=\"${docker_opts} ${EXTRA_DOCKER_OPTS:-}\"" > /etc/default/docker
-  # If using a network plugin, we need to explicitly restart docker daemon, because
-  # kubelet will not do it.
+
   if [[ "${use_net_plugin}" == "true" ]]; then
+    # If using a network plugin, extend the docker configuration to always remove
+    # the network checkpoint to avoid corrupt checkpoints.
+    # (https://github.com/docker/docker/issues/18283).
+    echo "Extend the default docker.service configuration"
+    mkdir -p /etc/systemd/system/docker.service.d
+    cat <<EOF >/etc/systemd/system/docker.service.d/01network.conf
+[Service]
+ExecStartPre=/bin/sh -x -c "rm -rf /var/lib/docker/network"
+EOF
+
+    systemctl daemon-reload
+
+    # If using a network plugin, we need to explicitly restart docker daemon, because
+    # kubelet will not do it.
     echo "Docker command line is updated. Restart docker to pick it up"
     systemctl restart docker
   fi
@@ -762,7 +775,7 @@ function start-kube-apiserver {
   if [[ -n "${NUM_NODES:-}" ]]; then
     # If the cluster is large, increase max-requests-inflight limit in apiserver.
     if [[ "${NUM_NODES}" -ge 1000 ]]; then
-      params+=" --max-requests-inflight=1500"
+      params+=" --max-requests-inflight=1500 --max-mutating-requests-inflight=500"
     fi
     # Set amount of memory available for apiserver based on number of nodes.
     # TODO: Once we start setting proper requests and limits for apiserver
@@ -771,6 +784,9 @@ function start-kube-apiserver {
   fi
   if [[ -n "${SERVICE_CLUSTER_IP_RANGE:-}" ]]; then
     params+=" --service-cluster-ip-range=${SERVICE_CLUSTER_IP_RANGE}"
+  fi
+  if [[ -n "${ETCD_QUORUM_READ:-}" ]]; then
+    params+=" --etcd-quorum-read=${ETCD_QUORUM_READ}"
   fi
 
   local admission_controller_config_mount=""
@@ -1109,7 +1125,7 @@ function start-fluentd {
   echo "Start fluentd pod"
   if [[ "${ENABLE_NODE_LOGGING:-}" == "true" ]]; then
     if [[ "${LOGGING_DESTINATION:-}" == "gcp" ]]; then
-      cp "${KUBE_HOME}/kube-manifests/kubernetes/fluentd-gcp-gci.yaml" /etc/kubernetes/manifests/
+      cp "${KUBE_HOME}/kube-manifests/kubernetes/fluentd-gcp.yaml" /etc/kubernetes/manifests/
     elif [[ "${LOGGING_DESTINATION:-}" == "elasticsearch" && "${KUBERNETES_MASTER:-}" != "true" ]]; then
       # Running fluentd-es on the master is pointless, as it can't communicate
       # with elasticsearch from there in the default configuration.

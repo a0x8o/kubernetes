@@ -13,9 +13,10 @@ load(
 go_library(
     name = "go_default_library",
     srcs = [
-        "controller.go",
-        "controller_utils.go",
+        "certificate_controller.go",
+        "certificate_controller_utils.go",
         "doc.go",
+        "groupapprove.go",
     ],
     tags = ["automanaged"],
     deps = [
@@ -23,6 +24,7 @@ go_library(
         "//pkg/apis/certificates/v1alpha1:go_default_library",
         "//pkg/client/cache:go_default_library",
         "//pkg/client/clientset_generated/release_1_5:go_default_library",
+        "//pkg/client/clientset_generated/release_1_5/typed/certificates/v1alpha1:go_default_library",
         "//pkg/client/clientset_generated/release_1_5/typed/core/v1:go_default_library",
         "//pkg/client/record:go_default_library",
         "//pkg/controller:go_default_library",

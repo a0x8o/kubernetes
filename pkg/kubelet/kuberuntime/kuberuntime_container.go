@@ -29,8 +29,8 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/v1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/runtime"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/events"
@@ -419,7 +419,7 @@ func (m *kubeGenericRuntimeManager) generateContainerEvent(containerID kubeconta
 func (m *kubeGenericRuntimeManager) executePreStopHook(pod *v1.Pod, containerID kubecontainer.ContainerID, containerSpec *v1.Container, gracePeriod int64) int64 {
 	glog.V(3).Infof("Running preStop hook for container %q", containerID.String())
 
-	start := unversioned.Now()
+	start := metav1.Now()
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -437,7 +437,7 @@ func (m *kubeGenericRuntimeManager) executePreStopHook(pod *v1.Pod, containerID 
 		glog.V(3).Infof("preStop hook for container %q completed", containerID)
 	}
 
-	return int64(unversioned.Now().Sub(start.Time).Seconds())
+	return int64(metav1.Now().Sub(start.Time).Seconds())
 }
 
 // restoreSpecsFromContainerLabels restores all information needed for killing a container. In some
@@ -490,7 +490,7 @@ func (m *kubeGenericRuntimeManager) restoreSpecsFromContainerLabels(containerID 
 func (m *kubeGenericRuntimeManager) killContainer(pod *v1.Pod, containerID kubecontainer.ContainerID, containerName string, reason string, gracePeriodOverride *int64) error {
 	var containerSpec *v1.Container
 	if pod != nil {
-		containerSpec = getContainerSpec(pod, containerName)
+		containerSpec = kubecontainer.GetContainerSpec(pod, containerName)
 	} else {
 		// Restore necessary information if one of the specs is nil.
 		restoredPod, restoredContainer, err := m.restoreSpecsFromContainerLabels(containerID)
@@ -684,10 +684,11 @@ func (m *kubeGenericRuntimeManager) GetExec(id kubecontainer.ContainerID, cmd []
 }
 
 // GetAttach gets the endpoint the runtime will serve the attach request from.
-func (m *kubeGenericRuntimeManager) GetAttach(id kubecontainer.ContainerID, stdin, stdout, stderr bool) (*url.URL, error) {
+func (m *kubeGenericRuntimeManager) GetAttach(id kubecontainer.ContainerID, stdin, stdout, stderr, tty bool) (*url.URL, error) {
 	req := &runtimeapi.AttachRequest{
 		ContainerId: &id.ID,
 		Stdin:       &stdin,
+		Tty:         &tty,
 	}
 	resp, err := m.runtimeService.Attach(req)
 	if err != nil {

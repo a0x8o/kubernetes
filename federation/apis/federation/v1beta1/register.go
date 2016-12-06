@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	"k8s.io/kubernetes/pkg/api/v1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/runtime/schema"
 	versionedwatch "k8s.io/kubernetes/pkg/watch/versioned"
@@ -40,7 +41,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ClusterList{},
 		&v1.ListOptions{},
 		&v1.DeleteOptions{},
-		&v1.ExportOptions{},
+		&metav1.ExportOptions{},
 	)
 	versionedwatch.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

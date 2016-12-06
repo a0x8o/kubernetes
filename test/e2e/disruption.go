@@ -23,9 +23,9 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/unversioned"
 	"k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 	policy "k8s.io/client-go/pkg/apis/policy/v1beta1"
 	"k8s.io/client-go/pkg/util/intstr"
 	"k8s.io/kubernetes/pkg/util/wait"
@@ -36,6 +36,7 @@ import (
 // awhile to guarantee that we've been patient waiting for something ordinary
 // to happen: a pod to get scheduled and move into Ready
 const schedulingTimeout = 10 * time.Minute
+const bigClusterSize = 7
 
 var _ = framework.KubeDescribe("DisruptionController", func() {
 	f := framework.NewDefaultFramework("disruption")
@@ -71,12 +72,13 @@ var _ = framework.KubeDescribe("DisruptionController", func() {
 	})
 
 	evictionCases := []struct {
-		description    string
-		minAvailable   intstr.IntOrString
-		podCount       int
-		replicaSetSize int32
-		shouldDeny     bool
-		exclusive      bool
+		description        string
+		minAvailable       intstr.IntOrString
+		podCount           int
+		replicaSetSize     int32
+		shouldDeny         bool
+		exclusive          bool
+		skipForBigClusters bool
 	}{
 		{
 			description:  "no PDB",
@@ -105,6 +107,8 @@ var _ = framework.KubeDescribe("DisruptionController", func() {
 			replicaSetSize: 10,
 			exclusive:      true,
 			shouldDeny:     true,
+			// This tests assumes that there is less than replicaSetSize nodes in the cluster.
+			skipForBigClusters: true,
 		},
 	}
 	for i := range evictionCases {
@@ -114,6 +118,9 @@ var _ = framework.KubeDescribe("DisruptionController", func() {
 			expectation = "should not allow an eviction"
 		}
 		It(fmt.Sprintf("evictions: %s => %s", c.description, expectation), func() {
+			if c.skipForBigClusters {
+				framework.SkipUnlessNodeCountIsAtMost(bigClusterSize - 1)
+			}
 			createPodsOrDie(cs, ns, c.podCount)
 			if c.replicaSetSize > 0 {
 				createReplicaSetOrDie(cs, ns, c.replicaSetSize, c.exclusive)
@@ -186,7 +193,7 @@ func createPodDisruptionBudgetOrDie(cs *kubernetes.Clientset, ns string, minAvai
 			Namespace: ns,
 		},
 		Spec: policy.PodDisruptionBudgetSpec{
-			Selector:     &unversioned.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}},
+			Selector:     &metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}},
 			MinAvailable: minAvailable,
 		},
 	}
@@ -265,7 +272,7 @@ func createReplicaSetOrDie(cs *kubernetes.Clientset, ns string, size int32, excl
 		},
 		Spec: extensions.ReplicaSetSpec{
 			Replicas: &size,
-			Selector: &unversioned.LabelSelector{
+			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"foo": "bar"},
 			},
 			Template: v1.PodTemplateSpec{

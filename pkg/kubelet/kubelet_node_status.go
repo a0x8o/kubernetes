@@ -28,8 +28,8 @@ import (
 	"github.com/golang/glog"
 	apierrors "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/resource"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/v1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
@@ -176,9 +176,9 @@ func (kl *Kubelet) initialNode() (*v1.Node, error) {
 		ObjectMeta: v1.ObjectMeta{
 			Name: string(kl.nodeName),
 			Labels: map[string]string{
-				unversioned.LabelHostname: kl.hostname,
-				unversioned.LabelOS:       goruntime.GOOS,
-				unversioned.LabelArch:     goruntime.GOARCH,
+				metav1.LabelHostname: kl.hostname,
+				metav1.LabelOS:       goruntime.GOOS,
+				metav1.LabelArch:     goruntime.GOARCH,
 			},
 		},
 		Spec: v1.NodeSpec{
@@ -192,7 +192,7 @@ func (kl *Kubelet) initialNode() (*v1.Node, error) {
 			Status:             v1.ConditionTrue,
 			Reason:             "NoRouteCreated",
 			Message:            "Node created without a route",
-			LastTransitionTime: unversioned.NewTime(kl.clock.Now()),
+			LastTransitionTime: metav1.NewTime(kl.clock.Now()),
 		})
 	}
 
@@ -243,8 +243,8 @@ func (kl *Kubelet) initialNode() (*v1.Node, error) {
 			return nil, err
 		}
 		if instanceType != "" {
-			glog.Infof("Adding node label from cloud provider: %s=%s", unversioned.LabelInstanceType, instanceType)
-			node.ObjectMeta.Labels[unversioned.LabelInstanceType] = instanceType
+			glog.Infof("Adding node label from cloud provider: %s=%s", metav1.LabelInstanceType, instanceType)
+			node.ObjectMeta.Labels[metav1.LabelInstanceType] = instanceType
 		}
 		// If the cloud has zone information, label the node with the zone information
 		zones, ok := kl.cloud.Zones()
@@ -254,12 +254,12 @@ func (kl *Kubelet) initialNode() (*v1.Node, error) {
 				return nil, fmt.Errorf("failed to get zone from cloud provider: %v", err)
 			}
 			if zone.FailureDomain != "" {
-				glog.Infof("Adding node label from cloud provider: %s=%s", unversioned.LabelZoneFailureDomain, zone.FailureDomain)
-				node.ObjectMeta.Labels[unversioned.LabelZoneFailureDomain] = zone.FailureDomain
+				glog.Infof("Adding node label from cloud provider: %s=%s", metav1.LabelZoneFailureDomain, zone.FailureDomain)
+				node.ObjectMeta.Labels[metav1.LabelZoneFailureDomain] = zone.FailureDomain
 			}
 			if zone.Region != "" {
-				glog.Infof("Adding node label from cloud provider: %s=%s", unversioned.LabelZoneRegion, zone.Region)
-				node.ObjectMeta.Labels[unversioned.LabelZoneRegion] = zone.Region
+				glog.Infof("Adding node label from cloud provider: %s=%s", metav1.LabelZoneRegion, zone.Region)
+				node.ObjectMeta.Labels[metav1.LabelZoneRegion] = zone.Region
 			}
 		}
 	} else {
@@ -298,7 +298,7 @@ func (kl *Kubelet) syncNodeStatus() {
 // updateNodeStatus updates node status to master with retries.
 func (kl *Kubelet) updateNodeStatus() error {
 	for i := 0; i < nodeStatusUpdateRetry; i++ {
-		if err := kl.tryUpdateNodeStatus(); err != nil {
+		if err := kl.tryUpdateNodeStatus(i); err != nil {
 			glog.Errorf("Error updating node status, will retry: %v", err)
 		} else {
 			return nil
@@ -309,20 +309,23 @@ func (kl *Kubelet) updateNodeStatus() error {
 
 // tryUpdateNodeStatus tries to update node status to master. If ReconcileCBR0
 // is set, this function will also confirm that cbr0 is configured correctly.
-func (kl *Kubelet) tryUpdateNodeStatus() error {
+func (kl *Kubelet) tryUpdateNodeStatus(tryNumber int) error {
 	// In large clusters, GET and PUT operations on Node objects coming
 	// from here are the majority of load on apiserver and etcd.
 	// To reduce the load on etcd, we are serving GET operations from
 	// apiserver cache (the data might be slightly delayed but it doesn't
 	// seem to cause more confilict - the delays are pretty small).
+	// If it result in a conflict, all retries are served directly from etcd.
 	// TODO: Currently apiserver doesn't support serving GET operations
 	// from its cache. Thus we are hacking it by issuing LIST with
 	// field selector for the name of the node (field selectors with
 	// specified name are handled efficiently by apiserver). Once
 	// apiserver supports GET from cache, change it here.
 	opts := v1.ListOptions{
-		FieldSelector:   fields.Set{"metadata.name": string(kl.nodeName)}.AsSelector().String(),
-		ResourceVersion: "0",
+		FieldSelector: fields.Set{"metadata.name": string(kl.nodeName)}.AsSelector().String(),
+	}
+	if tryNumber == 0 {
+		opts.ResourceVersion = "0"
 	}
 	nodes, err := kl.kubeClient.Core().Nodes().List(opts)
 	if err != nil {
@@ -590,7 +593,7 @@ func (kl *Kubelet) setNodeReadyCondition(node *v1.Node) {
 	// NOTE(aaronlevy): NodeReady condition needs to be the last in the list of node conditions.
 	// This is due to an issue with version skewed kubelet and master components.
 	// ref: https://github.com/kubernetes/kubernetes/issues/16961
-	currentTime := unversioned.NewTime(kl.clock.Now())
+	currentTime := metav1.NewTime(kl.clock.Now())
 	var newNodeReadyCondition v1.NodeCondition
 	rs := append(kl.runtimeState.runtimeErrors(), kl.runtimeState.networkErrors()...)
 	if len(rs) == 0 {
@@ -655,7 +658,7 @@ func (kl *Kubelet) setNodeReadyCondition(node *v1.Node) {
 // setNodeMemoryPressureCondition for the node.
 // TODO: this needs to move somewhere centralized...
 func (kl *Kubelet) setNodeMemoryPressureCondition(node *v1.Node) {
-	currentTime := unversioned.NewTime(kl.clock.Now())
+	currentTime := metav1.NewTime(kl.clock.Now())
 	var condition *v1.NodeCondition
 
 	// Check if NodeMemoryPressure condition already exists and if it does, just pick it up for update.
@@ -713,7 +716,7 @@ func (kl *Kubelet) setNodeMemoryPressureCondition(node *v1.Node) {
 // setNodeDiskPressureCondition for the node.
 // TODO: this needs to move somewhere centralized...
 func (kl *Kubelet) setNodeDiskPressureCondition(node *v1.Node) {
-	currentTime := unversioned.NewTime(kl.clock.Now())
+	currentTime := metav1.NewTime(kl.clock.Now())
 	var condition *v1.NodeCondition
 
 	// Check if NodeDiskPressure condition already exists and if it does, just pick it up for update.
@@ -770,7 +773,7 @@ func (kl *Kubelet) setNodeDiskPressureCondition(node *v1.Node) {
 
 // Set OODcondition for the node.
 func (kl *Kubelet) setNodeOODCondition(node *v1.Node) {
-	currentTime := unversioned.NewTime(kl.clock.Now())
+	currentTime := metav1.NewTime(kl.clock.Now())
 	var nodeOODCondition *v1.NodeCondition
 
 	// Check if NodeOutOfDisk condition already exists and if it does, just pick it up for update.

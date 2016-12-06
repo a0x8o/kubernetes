@@ -27,10 +27,10 @@ import (
 
 	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/api/errors"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/client/cache"
 	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/release_1_5"
 	v1core "k8s.io/kubernetes/pkg/client/clientset_generated/release_1_5/typed/core/v1"
@@ -270,7 +270,7 @@ func isReplicaSetMatch(pod *v1.Pod, rs *extensions.ReplicaSet) bool {
 	if rs.Namespace != pod.Namespace {
 		return false
 	}
-	selector, err := unversioned.LabelSelectorAsSelector(rs.Spec.Selector)
+	selector, err := metav1.LabelSelectorAsSelector(rs.Spec.Selector)
 	if err != nil {
 		err = fmt.Errorf("invalid selector: %v", err)
 		return false
@@ -343,8 +343,19 @@ func (rsc *ReplicaSetController) updatePod(old, cur interface{}) {
 		}
 	}
 
+	changedToReady := !v1.IsPodReady(oldPod) && v1.IsPodReady(curPod)
 	if curRS := rsc.getPodReplicaSet(curPod); curRS != nil {
 		rsc.enqueueReplicaSet(curRS)
+		// TODO: MinReadySeconds in the Pod will generate an Available condition to be added in
+		// the Pod status which in turn will trigger a requeue of the owning replica set thus
+		// having its status updated with the newly available replica. For now, we can fake the
+		// update by resyncing the controller MinReadySeconds after the it is requeued because
+		// a Pod transitioned to Ready.
+		// Note that this still suffers from #29229, we are just moving the problem one level
+		// "closer" to kubelet (from the deployment to the replica set controller).
+		if changedToReady && curRS.Spec.MinReadySeconds > 0 {
+			rsc.enqueueReplicaSetAfter(curRS, time.Duration(curRS.Spec.MinReadySeconds)*time.Second)
+		}
 	}
 }
 
@@ -396,6 +407,23 @@ func (rsc *ReplicaSetController) enqueueReplicaSet(obj interface{}) {
 	// by querying the store for all replica sets that this replica set overlaps, as well as all
 	// replica sets that overlap this ReplicaSet, and sorting them.
 	rsc.queue.Add(key)
+}
+
+// obj could be an *extensions.ReplicaSet, or a DeletionFinalStateUnknown marker item.
+func (rsc *ReplicaSetController) enqueueReplicaSetAfter(obj interface{}, after time.Duration) {
+	key, err := controller.KeyFunc(obj)
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("Couldn't get key for object %+v: %v", obj, err))
+		return
+	}
+
+	// TODO: Handle overlapping replica sets better. Either disallow them at admission time or
+	// deterministically avoid syncing replica sets that fight over pods. Currently, we only
+	// ensure that the same replica set is synced for a given pod. When we periodically relist
+	// all replica sets there will still be some replica instability. One way to handle this is
+	// by querying the store for all replica sets that this replica set overlaps, as well as all
+	// replica sets that overlap this ReplicaSet, and sorting them.
+	rsc.queue.AddAfter(key, after)
 }
 
 // worker runs a worker thread that just dequeues items, processes them, and marks them done.
@@ -559,7 +587,7 @@ func (rsc *ReplicaSetController) syncReplicaSet(key string) error {
 		return nil
 	}
 	rsNeedsSync := rsc.expectations.SatisfiedExpectations(key)
-	selector, err := unversioned.LabelSelectorAsSelector(rs.Spec.Selector)
+	selector, err := metav1.LabelSelectorAsSelector(rs.Spec.Selector)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Error converting pod selector to selector: %v", err))
 		return nil

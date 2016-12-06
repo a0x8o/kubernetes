@@ -27,10 +27,10 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/annotations"
 	"k8s.io/kubernetes/pkg/api/errors"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/v1"
 	extensionsinternal "k8s.io/kubernetes/pkg/apis/extensions"
 	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/release_1_5"
 	extensionsclient "k8s.io/kubernetes/pkg/client/clientset_generated/release_1_5/typed/extensions/v1beta1"
@@ -97,6 +97,7 @@ var _ = framework.KubeDescribe("Deployment", func() {
 		testScaledRolloutDeployment(f)
 	})
 	It("overlapping deployment should not fight with each other", func() {
+		framework.SkipIfProviderIs("gke") // #32947
 		testOverlappingDeployment(f)
 	})
 	It("lack of progress should be reported in the deployment status", func() {
@@ -117,7 +118,7 @@ func newDeployment(deploymentName string, replicas int32, podLabels map[string]s
 		},
 		Spec: extensions.DeploymentSpec{
 			Replicas: func(i int32) *int32 { return &i }(replicas),
-			Selector: &unversioned.LabelSelector{MatchLabels: podLabels},
+			Selector: &metav1.LabelSelector{MatchLabels: podLabels},
 			Strategy: extensions.DeploymentStrategy{
 				Type: strategyType,
 			},
@@ -195,7 +196,7 @@ func stopDeploymentMaybeOverlap(c clientset.Interface, internalClient internalcl
 	Expect(err).To(HaveOccurred())
 	Expect(errors.IsNotFound(err)).To(BeTrue())
 	framework.Logf("Ensuring deployment %s's RSes were deleted", deploymentName)
-	selector, err := unversioned.LabelSelectorAsSelector(deployment.Spec.Selector)
+	selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector)
 	Expect(err).NotTo(HaveOccurred())
 	options := v1.ListOptions{LabelSelector: selector.String()}
 	rss, err := c.Extensions().ReplicaSets(ns).List(options)
@@ -557,25 +558,29 @@ func testRolloverDeployment(f *framework.Framework) {
 	deploymentReplicas := int32(4)
 	deploymentImage := "gcr.io/google_samples/gb-redisslave:nonexistent"
 	deploymentStrategyType := extensions.RollingUpdateDeploymentStrategyType
-	framework.Logf("Creating deployment %s", deploymentName)
+	framework.Logf("Creating deployment %q", deploymentName)
 	newDeployment := newDeployment(deploymentName, deploymentReplicas, deploymentPodLabels, deploymentImageName, deploymentImage, deploymentStrategyType, nil)
 	newDeployment.Spec.Strategy.RollingUpdate = &extensions.RollingUpdateDeployment{
 		MaxUnavailable: func(i int) *intstr.IntOrString { x := intstr.FromInt(i); return &x }(1),
 		MaxSurge:       func(i int) *intstr.IntOrString { x := intstr.FromInt(i); return &x }(1),
 	}
+	newDeployment.Spec.MinReadySeconds = int32(10)
 	_, err = c.Extensions().Deployments(ns).Create(newDeployment)
 	Expect(err).NotTo(HaveOccurred())
 
 	// Verify that the pods were scaled up and down as expected.
 	deployment, err := c.Extensions().Deployments(ns).Get(deploymentName)
 	Expect(err).NotTo(HaveOccurred())
+	framework.Logf("Make sure deployment %q performs scaling operations", deploymentName)
 	// Make sure the deployment starts to scale up and down replica sets by checking if its updated replicas >= 1
 	err = framework.WaitForDeploymentUpdatedReplicasLTE(c, ns, deploymentName, 1, deployment.Generation)
 	// Check if it's updated to revision 1 correctly
+	framework.Logf("Check revision of new replica set for deployment %q", deploymentName)
 	_, newRS := checkDeploymentRevision(c, ns, deploymentName, "1", deploymentImageName, deploymentImage)
 
 	// Before the deployment finishes, update the deployment to rollover the above 2 ReplicaSets and bring up redis pods.
 	Expect(*newRS.Spec.Replicas).Should(BeNumerically("<", deploymentReplicas))
+	framework.Logf("Make sure deployment %q with new image", deploymentName)
 	updatedDeploymentImageName, updatedDeploymentImage := redisImageName, redisImage
 	deployment, err = framework.UpdateDeploymentWithRetries(c, ns, newDeployment.Name, func(update *extensions.Deployment) {
 		update.Spec.Template.Spec.Containers[0].Name = updatedDeploymentImageName
@@ -584,13 +589,16 @@ func testRolloverDeployment(f *framework.Framework) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Use observedGeneration to determine if the controller noticed the pod template update.
+	framework.Logf("Wait deployment %q to be observed by the deployment controller", deploymentName)
 	err = framework.WaitForObservedDeployment(c, ns, deploymentName, deployment.Generation)
 	Expect(err).NotTo(HaveOccurred())
 
 	// Wait for it to be updated to revision 2
+	framework.Logf("Wait for revision update of deployment %q to 2", deploymentName)
 	err = framework.WaitForDeploymentRevisionAndImage(c, ns, deploymentName, "2", updatedDeploymentImage)
 	Expect(err).NotTo(HaveOccurred())
 
+	framework.Logf("Make sure deployment %q is complete", deploymentName)
 	err = framework.WaitForDeploymentStatus(c, deployment)
 	Expect(err).NotTo(HaveOccurred())
 }
@@ -629,7 +637,7 @@ func testPausedDeployment(f *framework.Framework) {
 	err = framework.WaitForObservedDeployment(c, ns, deploymentName, deployment.Generation)
 	Expect(err).NotTo(HaveOccurred())
 
-	selector, err := unversioned.LabelSelectorAsSelector(deployment.Spec.Selector)
+	selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector)
 	if err != nil {
 		Expect(err).NotTo(HaveOccurred())
 	}
@@ -975,7 +983,7 @@ func testDeploymentLabelAdopted(f *framework.Framework) {
 	err = framework.CheckRSHashLabel(newRS)
 	Expect(err).NotTo(HaveOccurred())
 	// All pods targeted by the deployment should contain pod-template-hash in their labels, and there should be only 3 pods
-	selector, err := unversioned.LabelSelectorAsSelector(deployment.Spec.Selector)
+	selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector)
 	Expect(err).NotTo(HaveOccurred())
 	options := v1.ListOptions{LabelSelector: selector.String()}
 	pods, err := c.Core().Pods(ns).List(options)
@@ -1424,7 +1432,7 @@ func testIterativeDeployments(f *framework.Framework) {
 		default:
 			// arbitrarily delete deployment pods
 			framework.Logf("%02d: arbitrarily deleting one or more deployment pods for deployment %q", i, deployment.Name)
-			selector, err := unversioned.LabelSelectorAsSelector(deployment.Spec.Selector)
+			selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector)
 			Expect(err).NotTo(HaveOccurred())
 			opts := v1.ListOptions{LabelSelector: selector.String()}
 			podList, err := c.Core().Pods(ns).List(opts)

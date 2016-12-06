@@ -22,7 +22,7 @@ import (
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
-	"k8s.io/kubernetes/pkg/api/unversioned"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/runtime/schema"
 )
@@ -81,7 +81,15 @@ func BeforeDelete(strategy RESTDeleteStrategy, ctx api.Context, obj runtime.Obje
 		// if we are already being deleted, we may only shorten the deletion grace period
 		// this means the object was gracefully deleted previously but deletionGracePeriodSeconds was not set,
 		// so we force deletion immediately
-		if objectMeta.DeletionGracePeriodSeconds == nil {
+		// IMPORTANT:
+		// The deletion operation happens in two phases.
+		// 1. Update to set DeletionGracePeriodSeconds and DeletionTimestamp
+		// 2. Delete the object from storage.
+		// If the update succeeds, but the delete fails (network error, internal storage error, etc.),
+		// a resource was previously left in a state that was non-recoverable.  We
+		// check if the existing stored resource has a grace period as 0 and if so
+		// attempt to delete immediately in order to recover from this scenario.
+		if objectMeta.DeletionGracePeriodSeconds == nil || *objectMeta.DeletionGracePeriodSeconds == 0 {
 			return false, false, nil
 		}
 		// only a shorter grace period may be provided by a user
@@ -90,7 +98,7 @@ func BeforeDelete(strategy RESTDeleteStrategy, ctx api.Context, obj runtime.Obje
 			if period >= *objectMeta.DeletionGracePeriodSeconds {
 				return false, true, nil
 			}
-			newDeletionTimestamp := unversioned.NewTime(
+			newDeletionTimestamp := metav1.NewTime(
 				objectMeta.DeletionTimestamp.Add(-time.Second * time.Duration(*objectMeta.DeletionGracePeriodSeconds)).
 					Add(time.Second * time.Duration(*options.GracePeriodSeconds)))
 			objectMeta.DeletionTimestamp = &newDeletionTimestamp
@@ -105,7 +113,7 @@ func BeforeDelete(strategy RESTDeleteStrategy, ctx api.Context, obj runtime.Obje
 	if !gracefulStrategy.CheckGracefulDelete(ctx, obj, options) {
 		return false, false, nil
 	}
-	now := unversioned.NewTime(unversioned.Now().Add(time.Second * time.Duration(*options.GracePeriodSeconds)))
+	now := metav1.NewTime(metav1.Now().Add(time.Second * time.Duration(*options.GracePeriodSeconds)))
 	objectMeta.DeletionTimestamp = &now
 	objectMeta.DeletionGracePeriodSeconds = options.GracePeriodSeconds
 	// If it's the first graceful deletion we are going to set the DeletionTimestamp to non-nil.

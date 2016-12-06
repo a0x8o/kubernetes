@@ -77,7 +77,10 @@ var (
 		kubectl get rc,services
 
 		# List one or more resources by their type and names.
-		kubectl get rc/web service/frontend pods/web-pod-13je7`)
+		kubectl get rc/web service/frontend pods/web-pod-13je7
+
+		# List all resources with different types.
+		kubectl get all`)
 )
 
 // NewCmdGet creates a command object for the generic "get" action, which
@@ -110,7 +113,7 @@ func NewCmdGet(f cmdutil.Factory, out io.Writer, errOut io.Writer) *cobra.Comman
 		ArgAliases: argAliases,
 	}
 	cmdutil.AddPrinterFlags(cmd)
-	cmd.Flags().StringP("selector", "l", "", "Selector (label query) to filter on")
+	cmd.Flags().StringP("selector", "l", "", "Selector (label query) to filter on, supports '=', '==', and '!='.")
 	cmd.Flags().BoolP("watch", "w", false, "After listing/getting the requested object, watch for changes.")
 	cmd.Flags().Bool("watch-only", false, "Watch for changes to the requested object(s), without listing/getting first.")
 	cmd.Flags().Bool("show-kind", false, "If present, list the resource type for the requested object(s).")

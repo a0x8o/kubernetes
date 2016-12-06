@@ -44,19 +44,20 @@ import (
 	"k8s.io/kubernetes/pkg/api/annotations"
 	apierrs "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/resource"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/v1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/release_1_5"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/registry/generic/registry"
+	genericregistry "k8s.io/kubernetes/pkg/registry/generic/registry"
 	uexec "k8s.io/kubernetes/pkg/util/exec"
 	utilnet "k8s.io/kubernetes/pkg/util/net"
 	"k8s.io/kubernetes/pkg/util/uuid"
 	"k8s.io/kubernetes/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/version"
 	"k8s.io/kubernetes/test/e2e/framework"
+	"k8s.io/kubernetes/test/e2e/generated"
 	testutils "k8s.io/kubernetes/test/utils"
 
 	. "github.com/onsi/ginkgo"
@@ -150,7 +151,7 @@ func cleanupKubectlInputs(fileContents string, ns string, selectors ...string) {
 }
 
 func readTestFileOrDie(file string) []byte {
-	return framework.ReadOrDie(path.Join(kubeCtlManifestPath, file))
+	return generated.ReadOrDie(path.Join(kubeCtlManifestPath, file))
 }
 
 func runKubectlRetryOrDie(args ...string) string {
@@ -158,7 +159,7 @@ func runKubectlRetryOrDie(args ...string) string {
 	var output string
 	for i := 0; i < 5; i++ {
 		output, err = framework.RunKubectl(args...)
-		if err == nil || (!strings.Contains(err.Error(), registry.OptimisticLockErrorMsg) && !strings.Contains(err.Error(), "Operation cannot be fulfilled")) {
+		if err == nil || (!strings.Contains(err.Error(), genericregistry.OptimisticLockErrorMsg) && !strings.Contains(err.Error(), "Operation cannot be fulfilled")) {
 			break
 		}
 		time.Sleep(time.Second)
@@ -298,8 +299,8 @@ var _ = framework.KubeDescribe("Kubectl client", func() {
 		var nautilus, kitten []byte
 		BeforeEach(func() {
 			updateDemoRoot := "test/fixtures/doc-yaml/user-guide/update-demo"
-			nautilus = framework.ReadOrDie(filepath.Join(updateDemoRoot, "nautilus-rc.yaml"))
-			kitten = framework.ReadOrDie(filepath.Join(updateDemoRoot, "kitten-rc.yaml"))
+			nautilus = generated.ReadOrDie(filepath.Join(updateDemoRoot, "nautilus-rc.yaml"))
+			kitten = generated.ReadOrDie(filepath.Join(updateDemoRoot, "kitten-rc.yaml"))
 		})
 		It("should create and stop a replication controller [Conformance]", func() {
 			defer cleanupKubectlInputs(string(nautilus), ns, updateDemoSelector)
@@ -344,7 +345,7 @@ var _ = framework.KubeDescribe("Kubectl client", func() {
 				"examples/guestbook/redis-slave-deployment.yaml",
 				"examples/guestbook/redis-slave-service.yaml",
 			} {
-				contents := framework.ReadOrDie(gbAppFile)
+				contents := generated.ReadOrDie(gbAppFile)
 				run(string(contents))
 			}
 		}
@@ -370,7 +371,7 @@ var _ = framework.KubeDescribe("Kubectl client", func() {
 		var podPath []byte
 
 		BeforeEach(func() {
-			podPath = framework.ReadOrDie(path.Join(kubeCtlManifestPath, "pod-with-readiness-probe.yaml"))
+			podPath = generated.ReadOrDie(path.Join(kubeCtlManifestPath, "pod-with-readiness-probe.yaml"))
 			By(fmt.Sprintf("creating the pod from %v", string(podPath)))
 			framework.RunKubectlOrDieInput(string(podPath[:]), "create", "-f", "-", fmt.Sprintf("--namespace=%v", ns))
 			Expect(framework.CheckPodsRunningReady(c, ns, []string{simplePodName}, framework.PodStartTimeout)).To(BeTrue())
@@ -1506,12 +1507,12 @@ func checkOutput(output string, required [][]string) {
 	}
 }
 
-func getAPIVersions(apiEndpoint string) (*unversioned.APIVersions, error) {
+func getAPIVersions(apiEndpoint string) (*metav1.APIVersions, error) {
 	body, err := curl(apiEndpoint)
 	if err != nil {
 		return nil, fmt.Errorf("Failed http.Get of %s: %v", apiEndpoint, err)
 	}
-	var apiVersions unversioned.APIVersions
+	var apiVersions metav1.APIVersions
 	if err := json.Unmarshal([]byte(body), &apiVersions); err != nil {
 		return nil, fmt.Errorf("Failed to parse /api output %s: %v", body, err)
 	}

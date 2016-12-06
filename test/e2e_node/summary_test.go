@@ -21,11 +21,12 @@ import (
 	"time"
 
 	"k8s.io/kubernetes/pkg/api/resource"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/v1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/stats"
 	"k8s.io/kubernetes/test/e2e/framework"
 
+	systemdutil "github.com/coreos/go-systemd/util"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gstruct"
@@ -83,6 +84,15 @@ var _ = framework.KubeDescribe("Summary API", func() {
 				"Logs":               BeNil(),
 				"UserDefinedMetrics": BeEmpty(),
 			})
+			systemContainers := gstruct.Elements{
+				"kubelet": sysContExpectations,
+				"runtime": sysContExpectations,
+			}
+			// The Kubelet only manages the 'misc' system container if the host is not running systemd.
+			if !systemdutil.IsRunningSystemd() {
+				framework.Logf("Host not running systemd; expecting 'misc' system container.")
+				systemContainers["misc"] = sysContExpectations
+			}
 			// Expectations for pods.
 			podExpectations := gstruct.MatchAllFields(gstruct.Fields{
 				"PodRef":    gstruct.Ignore(),
@@ -147,12 +157,9 @@ var _ = framework.KubeDescribe("Summary API", func() {
 			})
 			matchExpectations := ptrMatchAllFields(gstruct.Fields{
 				"Node": gstruct.MatchAllFields(gstruct.Fields{
-					"NodeName":  Equal(framework.TestContext.NodeName),
-					"StartTime": recent(maxStartAge),
-					"SystemContainers": gstruct.MatchElements(summaryObjectID, gstruct.IgnoreExtras, gstruct.Elements{
-						"kubelet": sysContExpectations,
-						"runtime": sysContExpectations,
-					}),
+					"NodeName":         Equal(framework.TestContext.NodeName),
+					"StartTime":        recent(maxStartAge),
+					"SystemContainers": gstruct.MatchAllElements(summaryObjectID, systemContainers),
 					"CPU": ptrMatchAllFields(gstruct.Fields{
 						"Time":                 recent(maxStatsAge),
 						"UsageNanoCores":       bounded(100E3, 2E9),
@@ -280,7 +287,7 @@ func bounded(lower, upper interface{}) types.GomegaMatcher {
 }
 
 func recent(d time.Duration) types.GomegaMatcher {
-	return WithTransform(func(t unversioned.Time) time.Time {
+	return WithTransform(func(t metav1.Time) time.Time {
 		return t.Time
 	}, And(
 		BeTemporally(">=", time.Now().Add(-d)),

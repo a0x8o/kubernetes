@@ -24,13 +24,13 @@ import (
 	"k8s.io/kubernetes/pkg/api/errors"
 	storeerr "k8s.io/kubernetes/pkg/api/errors/storage"
 	"k8s.io/kubernetes/pkg/api/rest"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	extvalidation "k8s.io/kubernetes/pkg/apis/extensions/validation"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/registry/cachesize"
 	"k8s.io/kubernetes/pkg/registry/extensions/deployment"
 	"k8s.io/kubernetes/pkg/registry/generic"
-	"k8s.io/kubernetes/pkg/registry/generic/registry"
+	genericregistry "k8s.io/kubernetes/pkg/registry/generic/registry"
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/storage"
 )
@@ -56,7 +56,7 @@ func NewStorage(opts generic.RESTOptions) DeploymentStorage {
 }
 
 type REST struct {
-	*registry.Store
+	*genericregistry.Store
 }
 
 // NewREST returns a RESTStorage object that will work against deployments.
@@ -71,22 +71,23 @@ func NewREST(opts generic.RESTOptions) (*REST, *StatusREST, *RollbackREST) {
 		prefix,
 		deployment.Strategy,
 		newListFunc,
+		deployment.GetAttrs,
 		storage.NoTriggerPublisher,
 	)
 
-	store := &registry.Store{
+	store := &genericregistry.Store{
 		NewFunc: func() runtime.Object { return &extensions.Deployment{} },
 		// NewListFunc returns an object capable of storing results of an etcd list.
 		NewListFunc: newListFunc,
 		// Produces a path that etcd understands, to the root of the resource
 		// by combining the namespace in the context with the given prefix.
 		KeyRootFunc: func(ctx api.Context) string {
-			return registry.NamespaceKeyRootFunc(ctx, prefix)
+			return genericregistry.NamespaceKeyRootFunc(ctx, prefix)
 		},
 		// Produces a path that etcd understands, to the resource by combining
 		// the namespace in the context with the given prefix.
 		KeyFunc: func(ctx api.Context, name string) (string, error) {
-			return registry.NamespaceKeyFunc(ctx, prefix, name)
+			return genericregistry.NamespaceKeyFunc(ctx, prefix, name)
 		},
 		// Retrieve the name field of a deployment.
 		ObjectNameFunc: func(obj runtime.Object) (string, error) {
@@ -115,7 +116,7 @@ func NewREST(opts generic.RESTOptions) (*REST, *StatusREST, *RollbackREST) {
 
 // StatusREST implements the REST endpoint for changing the status of a deployment
 type StatusREST struct {
-	store *registry.Store
+	store *genericregistry.Store
 }
 
 func (r *StatusREST) New() runtime.Object {
@@ -134,7 +135,7 @@ func (r *StatusREST) Update(ctx api.Context, name string, objInfo rest.UpdatedOb
 
 // RollbackREST implements the REST endpoint for initiating the rollback of a deployment
 type RollbackREST struct {
-	store *registry.Store
+	store *genericregistry.Store
 }
 
 // New creates a rollback
@@ -159,7 +160,7 @@ func (r *RollbackREST) Create(ctx api.Context, obj runtime.Object) (runtime.Obje
 	if err != nil {
 		return nil, err
 	}
-	return &unversioned.Status{
+	return &metav1.Status{
 		Message: fmt.Sprintf("rollback request for deployment %q succeeded", rollback.Name),
 		Code:    http.StatusOK,
 	}, nil

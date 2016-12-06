@@ -28,9 +28,9 @@ import (
 	_ "k8s.io/kubernetes/pkg/api/install"
 
 	"k8s.io/kubernetes/pkg/api/meta/metatypes"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/apimachinery/registered"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/client/typed/dynamic"
 	"k8s.io/kubernetes/pkg/controller/garbagecollector/metaonly"
@@ -49,7 +49,7 @@ func TestNewGarbageCollector(t *testing.T) {
 	metaOnlyClientPool := dynamic.NewClientPool(config, registered.RESTMapper(), dynamic.LegacyAPIPathResolverFunc)
 	config.ContentConfig.NegotiatedSerializer = nil
 	clientPool := dynamic.NewClientPool(config, registered.RESTMapper(), dynamic.LegacyAPIPathResolverFunc)
-	podResource := []schema.GroupVersionResource{{Version: "v1", Resource: "pods"}}
+	podResource := map[schema.GroupVersionResource]struct{}{schema.GroupVersionResource{Version: "v1", Resource: "pods"}: {}}
 	gc, err := NewGarbageCollector(metaOnlyClientPool, clientPool, registered.RESTMapper(), podResource)
 	if err != nil {
 		t.Fatal(err)
@@ -113,7 +113,7 @@ func setupGC(t *testing.T, config *restclient.Config) *GarbageCollector {
 	metaOnlyClientPool := dynamic.NewClientPool(config, registered.RESTMapper(), dynamic.LegacyAPIPathResolverFunc)
 	config.ContentConfig.NegotiatedSerializer = nil
 	clientPool := dynamic.NewClientPool(config, registered.RESTMapper(), dynamic.LegacyAPIPathResolverFunc)
-	podResource := []schema.GroupVersionResource{{Version: "v1", Resource: "pods"}}
+	podResource := map[schema.GroupVersionResource]struct{}{schema.GroupVersionResource{Version: "v1", Resource: "pods"}: {}}
 	gc, err := NewGarbageCollector(metaOnlyClientPool, clientPool, registered.RESTMapper(), podResource)
 	if err != nil {
 		t.Fatal(err)
@@ -123,7 +123,7 @@ func setupGC(t *testing.T, config *restclient.Config) *GarbageCollector {
 
 func getPod(podName string, ownerReferences []v1.OwnerReference) *v1.Pod {
 	return &v1.Pod{
-		TypeMeta: unversioned.TypeMeta{
+		TypeMeta: metav1.TypeMeta{
 			Kind:       "Pod",
 			APIVersion: "v1",
 		},

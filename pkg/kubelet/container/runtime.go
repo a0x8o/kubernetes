@@ -140,7 +140,7 @@ type DirectStreamingRuntime interface {
 // the runtime server.
 type IndirectStreamingRuntime interface {
 	GetExec(id ContainerID, cmd []string, stdin, stdout, stderr, tty bool) (*url.URL, error)
-	GetAttach(id ContainerID, stdin, stdout, stderr bool) (*url.URL, error)
+	GetAttach(id ContainerID, stdin, stdout, stderr, tty bool) (*url.URL, error)
 	GetPortForward(podName, podNamespace string, podUID types.UID) (*url.URL, error)
 }
 
@@ -347,13 +347,13 @@ func (podStatus *PodStatus) FindContainerStatusByName(containerName string) *Con
 
 // Get container status of all the running containers in a pod
 func (podStatus *PodStatus) GetRunningContainerStatuses() []*ContainerStatus {
-	runnningContainerStatues := []*ContainerStatus{}
+	runningContainerStatuses := []*ContainerStatus{}
 	for _, containerStatus := range podStatus.ContainerStatuses {
 		if containerStatus.State == ContainerStateRunning {
-			runnningContainerStatues = append(runnningContainerStatues, containerStatus)
+			runningContainerStatuses = append(runningContainerStatuses, containerStatus)
 		}
 	}
-	return runnningContainerStatues
+	return runningContainerStatuses
 }
 
 // Basic information about a container image.
