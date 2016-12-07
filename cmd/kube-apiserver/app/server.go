@@ -50,11 +50,13 @@ import (
 	generatedopenapi "k8s.io/kubernetes/pkg/generated/openapi"
 	"k8s.io/kubernetes/pkg/genericapiserver"
 	"k8s.io/kubernetes/pkg/genericapiserver/authorizer"
+	"k8s.io/kubernetes/pkg/genericapiserver/filters"
 	"k8s.io/kubernetes/pkg/master"
 	"k8s.io/kubernetes/pkg/registry/cachesize"
 	"k8s.io/kubernetes/pkg/runtime/schema"
 	utilerrors "k8s.io/kubernetes/pkg/util/errors"
 	utilnet "k8s.io/kubernetes/pkg/util/net"
+	"k8s.io/kubernetes/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/version"
 )
@@ -96,13 +98,15 @@ func Run(s *options.ServerRunOptions) error {
 
 	genericapiserver.DefaultAndValidateRunOptions(s.GenericServerRunOptions)
 
-	genericConfig, err := genericapiserver.NewConfig(). // create the new config
-								ApplyOptions(s.GenericServerRunOptions). // apply the options selected
-								ApplyInsecureServingOptions(s.InsecureServing).
-								ApplyAuthenticationOptions(s.Authentication).
-								ApplySecureServingOptions(s.SecureServing)
-	if err != nil {
+	genericConfig := genericapiserver.NewConfig(). // create the new config
+							ApplyOptions(s.GenericServerRunOptions). // apply the options selected
+							ApplyInsecureServingOptions(s.InsecureServing)
+
+	if _, err := genericConfig.ApplySecureServingOptions(s.SecureServing); err != nil {
 		return fmt.Errorf("failed to configure https: %s", err)
+	}
+	if _, err = genericConfig.ApplyAuthenticationOptions(s.Authentication); err != nil {
+		return fmt.Errorf("failed to configure authentication: %s", err)
 	}
 
 	capabilities.Initialize(capabilities.Capabilities{
@@ -219,7 +223,7 @@ func Run(s *options.ServerRunOptions) error {
 		}
 	}
 
-	authenticatorConfig := s.Authentication.ToAuthenticationConfig(s.SecureServing.ClientCA)
+	authenticatorConfig := s.Authentication.ToAuthenticationConfig()
 	if s.Authentication.ServiceAccounts.Lookup {
 		// If we need to look up service accounts and tokens,
 		// go directly to etcd to avoid recursive auth insanity
@@ -270,16 +274,20 @@ func Run(s *options.ServerRunOptions) error {
 	genericConfig.Authenticator = apiAuthenticator
 	genericConfig.Authorizer = apiAuthorizer
 	genericConfig.AdmissionControl = admissionController
-	genericConfig.APIResourceConfigSource = storageFactory.APIResourceConfigSource
 	genericConfig.OpenAPIConfig.Info.Title = "Kubernetes"
 	genericConfig.OpenAPIConfig.Definitions = generatedopenapi.OpenAPIDefinitions
 	genericConfig.EnableOpenAPISupport = true
 	genericConfig.EnableMetrics = true
 	genericConfig.OpenAPIConfig.SecurityDefinitions = securityDefinitions
+	genericConfig.LongRunningFunc = filters.BasicLongRunningRequestCheck(
+		sets.NewString("watch", "proxy"),
+		sets.NewString("attach", "exec", "proxy", "log", "portforward"),
+	)
 
 	config := &master.Config{
 		GenericConfig: genericConfig,
 
+		APIResourceConfigSource: storageFactory.APIResourceConfigSource,
 		StorageFactory:          storageFactory,
 		EnableWatchCache:        s.GenericServerRunOptions.EnableWatchCache,
 		EnableCoreControllers:   true,

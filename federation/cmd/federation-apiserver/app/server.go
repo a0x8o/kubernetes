@@ -38,12 +38,14 @@ import (
 	"k8s.io/kubernetes/pkg/generated/openapi"
 	"k8s.io/kubernetes/pkg/genericapiserver"
 	"k8s.io/kubernetes/pkg/genericapiserver/authorizer"
+	"k8s.io/kubernetes/pkg/genericapiserver/filters"
 	"k8s.io/kubernetes/pkg/registry/cachesize"
 	"k8s.io/kubernetes/pkg/registry/generic"
 	genericregistry "k8s.io/kubernetes/pkg/registry/generic/registry"
 	"k8s.io/kubernetes/pkg/routes"
 	"k8s.io/kubernetes/pkg/runtime/schema"
 	utilerrors "k8s.io/kubernetes/pkg/util/errors"
+	"k8s.io/kubernetes/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/version"
 )
@@ -78,13 +80,15 @@ func Run(s *options.ServerRunOptions) error {
 	}
 
 	genericapiserver.DefaultAndValidateRunOptions(s.GenericServerRunOptions)
-	genericConfig, err := genericapiserver.NewConfig(). // create the new config
-								ApplyOptions(s.GenericServerRunOptions). // apply the options selected
-								ApplyInsecureServingOptions(s.InsecureServing).
-								ApplyAuthenticationOptions(s.Authentication).
-								ApplySecureServingOptions(s.SecureServing)
-	if err != nil {
+	genericConfig := genericapiserver.NewConfig(). // create the new config
+							ApplyOptions(s.GenericServerRunOptions). // apply the options selected
+							ApplyInsecureServingOptions(s.InsecureServing)
+
+	if _, err := genericConfig.ApplySecureServingOptions(s.SecureServing); err != nil {
 		return fmt.Errorf("failed to configure https: %s", err)
+	}
+	if _, err := genericConfig.ApplyAuthenticationOptions(s.Authentication); err != nil {
+		return fmt.Errorf("failed to configure authentication: %s", err)
 	}
 
 	// TODO: register cluster federation resources here.
@@ -126,7 +130,7 @@ func Run(s *options.ServerRunOptions) error {
 		storageFactory.SetEtcdLocation(groupResource, servers)
 	}
 
-	apiAuthenticator, securityDefinitions, err := authenticator.New(s.Authentication.ToAuthenticationConfig(s.SecureServing.ClientCA))
+	apiAuthenticator, securityDefinitions, err := authenticator.New(s.Authentication.ToAuthenticationConfig())
 	if err != nil {
 		glog.Fatalf("Invalid Authentication Config: %v", err)
 	}
@@ -161,10 +165,13 @@ func Run(s *options.ServerRunOptions) error {
 	genericConfig.Authenticator = apiAuthenticator
 	genericConfig.Authorizer = apiAuthorizer
 	genericConfig.AdmissionControl = admissionController
-	genericConfig.APIResourceConfigSource = storageFactory.APIResourceConfigSource
 	genericConfig.OpenAPIConfig.Definitions = openapi.OpenAPIDefinitions
 	genericConfig.EnableOpenAPISupport = true
 	genericConfig.OpenAPIConfig.SecurityDefinitions = securityDefinitions
+	genericConfig.LongRunningFunc = filters.BasicLongRunningRequestCheck(
+		sets.NewString("watch", "proxy"),
+		sets.NewString("attach", "exec", "proxy", "log", "portforward"),
+	)
 
 	// TODO: Move this to generic api server (Need to move the command line flag).
 	if s.GenericServerRunOptions.EnableWatchCache {
