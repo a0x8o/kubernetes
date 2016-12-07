@@ -86,7 +86,7 @@ type Getter interface {
 	// Get finds a resource in the storage by name and returns it.
 	// Although it can return an arbitrary error value, IsNotFound(err) is true for the
 	// returned error value err when the specified resource is not found.
-	Get(ctx api.Context, name string) (runtime.Object, error)
+	Get(ctx api.Context, name string, options *metav1.GetOptions) (runtime.Object, error)
 }
 
 // GetterWithOptions is an object that retrieve a named RESTful resource and takes
@@ -98,6 +98,7 @@ type GetterWithOptions interface {
 	// returned error value err when the specified resource is not found.
 	// The options object passed to it is of the same type returned by the NewGetOptions
 	// method.
+	// TODO: Pass metav1.GetOptions.
 	Get(ctx api.Context, name string, options runtime.Object) (runtime.Object, error)
 
 	// NewGetOptions returns an empty options object that will be used to pass
@@ -290,6 +291,10 @@ type StorageMetadata interface {
 	// ProducesMIMETypes returns a list of the MIME types the specified HTTP verb (GET, POST, DELETE,
 	// PATCH) can respond with.
 	ProducesMIMETypes(verb string) []string
+
+	// ProducesObject returns an object the specified HTTP verb respond with. It will overwrite storage object if
+	// it is not nil. Only the type of the return object matters, the value will be ignored.
+	ProducesObject(verb string) interface{}
 }
 
 // ConnectRequest is an object passed to admission control for Connect operations
