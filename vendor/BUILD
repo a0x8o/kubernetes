@@ -4241,6 +4241,15 @@ go_binary(
 )
 
 go_library(
+    name = "github.com/juju/ratelimit",
+    srcs = [
+        "github.com/juju/ratelimit/ratelimit.go",
+        "github.com/juju/ratelimit/reader.go",
+    ],
+    tags = ["automanaged"],
+)
+
+go_library(
     name = "github.com/kardianos/osext",
     srcs = [
         "github.com/kardianos/osext/osext.go",
@@ -11754,6 +11763,21 @@ go_library(
     ],
     tags = ["automanaged"],
     deps = ["//vendor:github.com/gogo/protobuf/proto"],
+)
+
+go_library(
+    name = "github.com/rackspace/gophercloud/openstack/networking/v2/extensions/layer3/routers",
+    srcs = [
+        "github.com/rackspace/gophercloud/openstack/networking/v2/extensions/layer3/routers/requests.go",
+        "github.com/rackspace/gophercloud/openstack/networking/v2/extensions/layer3/routers/results.go",
+        "github.com/rackspace/gophercloud/openstack/networking/v2/extensions/layer3/routers/urls.go",
+    ],
+    tags = ["automanaged"],
+    deps = [
+        "//vendor:github.com/mitchellh/mapstructure",
+        "//vendor:github.com/rackspace/gophercloud",
+        "//vendor:github.com/rackspace/gophercloud/pagination",
+    ],
 )
 
 go_library(
