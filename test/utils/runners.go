@@ -37,6 +37,7 @@ import (
 	"k8s.io/kubernetes/pkg/runtime/schema"
 	"k8s.io/kubernetes/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/util/uuid"
+	"k8s.io/kubernetes/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/util/workqueue"
 
 	"github.com/golang/glog"
@@ -111,6 +112,9 @@ type RCConfig struct {
 	// kubelets are running those variables should be nil.
 	NodeDumpFunc      func(c clientset.Interface, nodeNames []string, logFunc func(fmt string, args ...interface{}))
 	ContainerDumpFunc func(c clientset.Interface, ns string, logFunc func(ftm string, args ...interface{}))
+
+	// Names of the secrets to mount
+	SecretNames []string
 }
 
 func (rc *RCConfig) RCConfigLog(fmt string, args ...interface{}) {
@@ -245,6 +249,10 @@ func (config *DeploymentConfig) create() error {
 		},
 	}
 
+	if len(config.SecretNames) > 0 {
+		attachSecrets(&deployment.Spec.Template, config.SecretNames)
+	}
+
 	config.applyTo(&deployment.Spec.Template)
 
 	_, err := config.Client.Extensions().Deployments(config.Namespace).Create(deployment)
@@ -303,6 +311,10 @@ func (config *ReplicaSetConfig) create() error {
 				},
 			},
 		},
+	}
+
+	if len(config.SecretNames) > 0 {
+		attachSecrets(&rs.Spec.Template, config.SecretNames)
 	}
 
 	config.applyTo(&rs.Spec.Template)
@@ -396,6 +408,10 @@ func (config *RCConfig) create() error {
 				},
 			},
 		},
+	}
+
+	if len(config.SecretNames) > 0 {
+		attachSecrets(rc.Spec.Template, config.SecretNames)
 	}
 
 	config.applyTo(rc.Spec.Template)
@@ -723,7 +739,7 @@ func (s *LabelNodePrepareStrategy) PreparePatch(*v1.Node) []byte {
 }
 
 func (s *LabelNodePrepareStrategy) CleanupNode(node *v1.Node) *v1.Node {
-	objCopy, err := api.Scheme.DeepCopy(*node)
+	objCopy, err := api.Scheme.Copy(node)
 	if err != nil {
 		return &v1.Node{}
 	}
@@ -757,7 +773,7 @@ func DoPrepareNode(client clientset.Interface, node *v1.Node, strategy PrepareNo
 
 func DoCleanupNode(client clientset.Interface, nodeName string, strategy PrepareNodeStrategy) error {
 	for attempt := 0; attempt < retries; attempt++ {
-		node, err := client.Core().Nodes().Get(nodeName)
+		node, err := client.Core().Nodes().Get(nodeName, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("Skipping cleanup of Node: failed to get Node %v: %v", nodeName, err)
 		}
@@ -925,4 +941,150 @@ func NewSimpleWithControllerCreatePodStrategy(controllerName string) TestPodCrea
 		}
 		return createPod(client, namespace, podCount, basePod)
 	}
+}
+
+type SecretConfig struct {
+	Content   map[string]string
+	Client    clientset.Interface
+	Name      string
+	Namespace string
+	// If set this function will be used to print log lines instead of glog.
+	LogFunc func(fmt string, args ...interface{})
+}
+
+func (config *SecretConfig) Run() error {
+	secret := &v1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Name: config.Name,
+		},
+		StringData: map[string]string{},
+	}
+	for k, v := range config.Content {
+		secret.StringData[k] = v
+	}
+
+	_, err := config.Client.Core().Secrets(config.Namespace).Create(secret)
+	if err != nil {
+		return fmt.Errorf("Error creating secret: %v", err)
+	}
+	config.LogFunc("Created secret %v/%v", config.Namespace, config.Name)
+	return nil
+}
+
+func (config *SecretConfig) Stop() error {
+	if err := config.Client.Core().Secrets(config.Namespace).Delete(config.Name, &v1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("Error deleting secret: %v", err)
+	}
+	config.LogFunc("Deleted secret %v/%v", config.Namespace, config.Name)
+	return nil
+}
+
+// TODO: attach secrets using different possibilities: env vars, image pull secrets.
+func attachSecrets(template *v1.PodTemplateSpec, secretNames []string) {
+	volumes := make([]v1.Volume, 0, len(secretNames))
+	mounts := make([]v1.VolumeMount, 0, len(secretNames))
+	for _, name := range secretNames {
+		volumes = append(volumes, v1.Volume{
+			Name: name,
+			VolumeSource: v1.VolumeSource{
+				Secret: &v1.SecretVolumeSource{
+					SecretName: name,
+				},
+			},
+		})
+		mounts = append(mounts, v1.VolumeMount{
+			Name:      name,
+			MountPath: fmt.Sprintf("/%v", name),
+		})
+	}
+
+	template.Spec.Volumes = volumes
+	template.Spec.Containers[0].VolumeMounts = mounts
+}
+
+type DaemonConfig struct {
+	Client    clientset.Interface
+	Name      string
+	Namespace string
+	Image     string
+	// If set this function will be used to print log lines instead of glog.
+	LogFunc func(fmt string, args ...interface{})
+	// How long we wait for DaemonSet to become running.
+	Timeout time.Duration
+}
+
+func (config *DaemonConfig) Run() error {
+	if config.Image == "" {
+		config.Image = "kubernetes/pause"
+	}
+	nameLabel := map[string]string{
+		"name": config.Name + "-daemon",
+	}
+	daemon := &extensions.DaemonSet{
+		ObjectMeta: v1.ObjectMeta{
+			Name: config.Name,
+		},
+		Spec: extensions.DaemonSetSpec{
+			Template: v1.PodTemplateSpec{
+				ObjectMeta: v1.ObjectMeta{
+					Labels: nameLabel,
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:  config.Name,
+							Image: config.Image,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := config.Client.Extensions().DaemonSets(config.Namespace).Create(daemon)
+	if err != nil {
+		return fmt.Errorf("Error creating DaemonSet %v: %v", config.Name, err)
+	}
+
+	var nodes *v1.NodeList
+	for i := 0; i < retries; i++ {
+		// Wait for all daemons to be running
+		nodes, err = config.Client.Core().Nodes().List(v1.ListOptions{ResourceVersion: "0"})
+		if err == nil {
+			break
+		} else if i+1 == retries {
+			return fmt.Errorf("Error listing Nodes while waiting for DaemonSet %v: %v", config.Name, err)
+		}
+	}
+
+	timeout := config.Timeout
+	if timeout <= 0 {
+		timeout = 5 * time.Minute
+	}
+
+	podStore := NewPodStore(config.Client, config.Namespace, labels.SelectorFromSet(nameLabel), fields.Everything())
+	defer podStore.Stop()
+
+	err = wait.Poll(time.Second, timeout, func() (bool, error) {
+		pods := podStore.List()
+
+		nodeHasDaemon := sets.NewString()
+		for _, pod := range pods {
+			podReady, _ := PodRunningReady(pod)
+			if pod.Spec.NodeName != "" && podReady {
+				nodeHasDaemon.Insert(pod.Spec.NodeName)
+			}
+		}
+
+		running := len(nodeHasDaemon)
+		config.LogFunc("Found %v/%v Daemons %v running", running, config.Name, len(nodes.Items))
+		return running == len(nodes.Items), nil
+	})
+	if err != nil {
+		config.LogFunc("Timed out while waiting for DaemonsSet %v/%v to be running.", config.Namespace, config.Name)
+	} else {
+		config.LogFunc("Created Daemon %v/%v", config.Namespace, config.Name)
+	}
+
+	return err
 }

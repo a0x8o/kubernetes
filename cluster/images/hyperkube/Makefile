@@ -19,7 +19,7 @@
 
 REGISTRY?=gcr.io/google_containers
 ARCH?=amd64
-TEMP_DIR:=$(shell mktemp -d)
+TEMP_DIR:=$(shell mktemp -d -t hyperkubeXXXXXX)
 CNI_RELEASE=07a8a28637e97b22eb8dfe710eeae1344f69d16e
 
 UNAME_S:=$(shell uname -s)
@@ -44,6 +44,10 @@ endif
 ifeq ($(ARCH),ppc64le)
 	BASEIMAGE?=ppc64le/debian:jessie
 	QEMUARCH=ppc64le
+endif
+ifeq ($(ARCH),s390x)
+	BASEIMAGE?=s390x/debian:jessie
+	QEMUARCH=s390x
 endif
 
 all: build

@@ -48,11 +48,11 @@ func updateReplicaSetStatus(c unversionedextensions.ReplicaSetInterface, rs exte
 
 	// deep copy to avoid mutation now.
 	// TODO this method need some work.  Retry on conflict probably, though I suspect this is stomping status to something it probably shouldn't
-	copyObj, err := api.Scheme.DeepCopy(rs)
+	copyObj, err := api.Scheme.DeepCopy(&rs)
 	if err != nil {
 		return err
 	}
-	rs = copyObj.(extensions.ReplicaSet)
+	rs = *copyObj.(*extensions.ReplicaSet)
 
 	// Save the generation number we acted on, otherwise we might wrongfully indicate
 	// that we've seen a spec update when we retry.
@@ -75,7 +75,7 @@ func updateReplicaSetStatus(c unversionedextensions.ReplicaSetInterface, rs exte
 			return updateErr
 		}
 		// Update the ReplicaSet with the latest resource version for the next poll
-		if rs, getErr = c.Get(rs.Name); getErr != nil {
+		if rs, getErr = c.Get(rs.Name, metav1.GetOptions{}); getErr != nil {
 			// If the GET fails we can't trust status.Replicas anymore. This error
 			// is bound to be more interesting than the update failure.
 			return getErr

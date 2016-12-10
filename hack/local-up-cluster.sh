@@ -148,6 +148,14 @@ function test_docker {
     fi
 }
 
+function test_cfssl_installed {
+    if ! command -v cfssl &>/dev/null || ! command -v cfssljson &>/dev/null; then
+      echo "Failed to successfully run 'cfssl', please verify that cfssl and cfssljson are in \$PATH."
+      echo "Hint: export PATH=\$PATH:\$GOPATH/bin; go get -u github.com/cloudflare/cfssl/cmd/..."
+      exit 1
+    fi
+}
+
 function test_rkt {
     if [[ -n "${RKT_PATH}" ]]; then
       ${RKT_PATH} list 2> /dev/null 1> /dev/null
@@ -362,11 +370,12 @@ function create_client_certkey {
         SEP=","
         shift 1
     done
-    echo "{\"CN\":\"${CN}\",\"names\":[${NAMES}],\"hosts\":[\"\"],\"key\":{\"algo\":\"rsa\",\"size\":2048}}" | docker run -i  --entrypoint /bin/bash -v "${CERT_DIR}:/certs" -w /certs cfssl/cfssl:latest -ec "cfssl gencert -ca=${CA}.crt -ca-key=${CA}.key -config=client-ca-config.json - | cfssljson -bare client-${ID}"
     ${CONTROLPLANE_SUDO} /bin/bash -e <<EOF
-    mv "${CERT_DIR}/client-${ID}-key.pem" "${CERT_DIR}/client-${ID}.key"
-    mv "${CERT_DIR}/client-${ID}.pem" "${CERT_DIR}/client-${ID}.crt"
-    rm -f "${CERT_DIR}/client-${ID}.csr"
+    cd ${CERT_DIR}
+    echo '{"CN":"${CN}","names":[${NAMES}],"hosts":[""],"key":{"algo":"rsa","size":2048}}' | cfssl gencert -ca=${CA}.crt -ca-key=${CA}.key -config=client-ca-config.json - | cfssljson -bare client-${ID}
+    mv "client-${ID}-key.pem" "client-${ID}.key"
+    mv "client-${ID}.pem" "client-${ID}.crt"
+    rm -f "client-${ID}.csr"
 EOF
 }
 
@@ -391,6 +400,14 @@ contexts:
       user: local-up-cluster
     name: local-up-cluster
 current-context: local-up-cluster
+EOF
+
+    # flatten the kubeconfig files to make them self contained
+    username=$(whoami)
+    ${CONTROLPLANE_SUDO} /bin/bash -e <<EOF
+    ${GO_OUT}/kubectl --kubeconfig="${CERT_DIR}/$1.kubeconfig" config view --minify --flatten > "/tmp/$1.kubeconfig"
+    mv -f "/tmp/$1.kubeconfig" "${CERT_DIR}/$1.kubeconfig"
+    chown ${username} "${CERT_DIR}/$1.kubeconfig"
 EOF
 }
 
@@ -517,12 +534,25 @@ function start_discovery {
     write_client_kubeconfig discovery-auth
 
     # grant permission to run delegated authentication and authorization checks
-    kubectl create clusterrolebinding discovery:system:auth-delegator --clusterrole=system:auth-delegator --user=system:discovery-auth
+    if [[ "${ENABLE_RBAC}" = true ]]; then
+        ${KUBECTL} ${AUTH_ARGS} create clusterrolebinding discovery:system:auth-delegator --clusterrole=system:auth-delegator --user=system:discovery-auth
+    fi
+
+    curl --silent -k -g $API_HOST:$DISCOVERY_SECURE_PORT
+    if [ ! $? -eq 0 ]; then
+        echo "Kubernetes Discovery secure port is free, proceeding..."
+    else
+        echo "ERROR starting Kubernetes Discovery, exiting. Some process on $API_HOST is serving already on $DISCOVERY_SECURE_PORT"
+        return
+    fi
+
+    ${CONTROLPLANE_SUDO} cp "${CERT_DIR}/admin.kubeconfig" "${CERT_DIR}/admin-discovery.kubeconfig"
+    ${CONTROLPLANE_SUDO} ${GO_OUT}/kubectl config set-cluster local-up-cluster --kubeconfig="${CERT_DIR}/admin-discovery.kubeconfig" --insecure-skip-tls-verify --server="https://${API_HOST}:${DISCOVERY_SECURE_PORT}"
 
     DISCOVERY_SERVER_LOG=/tmp/kubernetes-discovery.log
     ${CONTROLPLANE_SUDO} "${GO_OUT}/kubernetes-discovery" \
       --cert-dir="${CERT_DIR}" \
-      --client-ca-file="${CERT_DIR}/client-ca-bundle.crt" \
+      --client-ca-file="${CERT_DIR}/client-ca.crt" \
       --authentication-kubeconfig="${CERT_DIR}/discovery-auth.kubeconfig" \
       --authorization-kubeconfig="${CERT_DIR}/discovery-auth.kubeconfig" \
       --requestheader-username-headers=X-Remote-User \
@@ -539,6 +569,9 @@ function start_discovery {
     # Wait for kubernetes-discovery to come up before launching the rest of the components.
     echo "Waiting for kubernetes-discovery to come up"
     kube::util::wait_for_url "https://${API_HOST}:${DISCOVERY_SECURE_PORT}/version" "kubernetes-discovery: " 1 ${WAIT_FOR_URL_API_SERVER} || exit 1
+
+    # create the "normal" api services for the core API server
+    ${CONTROLPLANE_SUDO} ${GO_OUT}/kubectl create -f "${KUBE_ROOT}/cmd/kubernetes-discovery/artifacts/core-apiservices" --kubeconfig="${CERT_DIR}/admin-discovery.kubeconfig"
 }
 
 
@@ -705,7 +738,6 @@ function start_kubeproxy {
 }
 
 function start_kubedns {
-
     if [[ "${ENABLE_CLUSTER_DNS}" = true ]]; then
         echo "Creating kube-system namespace"
         sed -e "s/{{ pillar\['dns_replicas'\] }}/${DNS_REPLICAS}/g;s/{{ pillar\['dns_domain'\] }}/${DNS_DOMAIN}/g;" "${KUBE_ROOT}/cluster/addons/dns/skydns-rc.yaml.in" >| skydns-rc.yaml
@@ -723,18 +755,15 @@ function start_kubedns {
           sed -i -e "/{{ pillar\['federations_domain_map'\] }}/d" skydns-rc.yaml
         fi
         sed -e "s/{{ pillar\['dns_server'\] }}/${DNS_SERVER_IP}/g" "${KUBE_ROOT}/cluster/addons/dns/skydns-svc.yaml.in" >| skydns-svc.yaml
-        export KUBERNETES_PROVIDER=local
-        ${KUBECTL} config set-cluster local --server=https://${API_HOST}:${API_SECURE_PORT} --certificate-authority=${ROOT_CA_FILE}
-        ${KUBECTL} config set-credentials myself --username=admin --password=admin
-        ${KUBECTL} config set-context local --cluster=local --user=myself
-        ${KUBECTL} config use-context local
-
+        
+        # TODO update to dns role once we have one.
+        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" create clusterrolebinding system:kube-dns --clusterrole=cluster-admin --serviceaccount=kube-system:default
         # use kubectl to create skydns rc and service
-        ${KUBECTL} --namespace=kube-system create -f skydns-rc.yaml
-        ${KUBECTL} --namespace=kube-system create -f skydns-svc.yaml
+        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" --namespace=kube-system create -f skydns-rc.yaml
+        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" --namespace=kube-system create -f skydns-svc.yaml
         echo "Kube-dns rc and service successfully deployed."
+        rm  skydns-rc.yaml skydns-svc.yaml
     fi
-
 }
 
 function print_success {
@@ -747,6 +776,7 @@ Logs:
   ${CTLRMGR_LOG:-}
   ${PROXY_LOG:-}
   ${SCHEDULER_LOG:-}
+  ${DISCOVERY_SERVER_LOG:-}
 EOF
 fi
 
@@ -794,6 +824,7 @@ if [[ "${START_MODE}" != "kubeletonly" ]]; then
 fi
 
 test_openssl_installed
+test_cfssl_installed
 
 ### IF the user didn't supply an output/ for the build... Then we detect.
 if [ "$GO_OUT" == "" ]; then
@@ -811,7 +842,6 @@ if [[ "${START_MODE}" != "kubeletonly" ]]; then
   start_etcd
   set_service_accounts
   start_apiserver
-  start_discovery
   start_controller_manager
   start_kubeproxy
   start_kubedns
@@ -819,6 +849,11 @@ fi
 
 if [[ "${START_MODE}" != "nokubelet" ]]; then
   start_kubelet
+fi
+
+START_DISCOVERY=${START_DISCOVERY:-false}
+if [[ "${START_DISCOVERY}" = true ]]; then
+  start_discovery
 fi
 
 print_success

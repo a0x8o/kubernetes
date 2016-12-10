@@ -14,6 +14,8 @@ go_library(
     name = "go_default_library",
     srcs = [
         "doc.go",
+        "eviction.go",
+        "eviction_expansion.go",
         "generated_expansion.go",
         "poddisruptionbudget.go",
         "policy_client.go",
@@ -23,6 +25,7 @@ go_library(
         "//pkg/api:go_default_library",
         "//pkg/api/v1:go_default_library",
         "//pkg/apimachinery/registered:go_default_library",
+        "//pkg/apis/meta/v1:go_default_library",
         "//pkg/apis/policy/v1beta1:go_default_library",
         "//pkg/client/restclient:go_default_library",
         "//pkg/runtime/schema:go_default_library",

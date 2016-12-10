@@ -43,6 +43,7 @@ authorization-rbac-super-user
 authorization-webhook-cache-authorized-ttl
 authorization-webhook-cache-unauthorized-ttl
 authorization-webhook-config-file
+azure-container-registry-config
 babysit-daemons
 basic-auth-file
 bench-pods
@@ -174,6 +175,7 @@ etcd-config
 etcd-keyfile
 etcd-mutation-timeout
 etcd-prefix
+etcd-pv-capacity
 etcd-quorum-read
 etcd-server
 etcd-servers
@@ -272,10 +274,12 @@ image-gc-high-threshold
 image-gc-low-threshold
 image-project
 image-pull-policy
+image-pull-progress-deadline
 image-service-endpoint
 include-extended-apis
 include-extended-apis
 included-types-overrides
+initial-sync-timeout
 input-base
 input-dirs
 insecure-allow-any-token
