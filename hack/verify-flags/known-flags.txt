@@ -308,6 +308,7 @@ k8s-bin-dir
 k8s-build-output
 keep-gogoproto
 km-path
+kops-admin-access
 kops-cluster
 kops-kubernetes-version
 kops-nodes
@@ -432,6 +433,7 @@ node-name
 node-os-distro
 node-path-override
 node-port
+node-schedulable-timeout
 node-startup-grace-period
 node-status-update-frequency
 node-sync-period
