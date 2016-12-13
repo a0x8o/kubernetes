@@ -27,6 +27,7 @@ import (
 	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/v1"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/client/cache"
 	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/release_1_5"
 	v1core "k8s.io/kubernetes/pkg/client/clientset_generated/release_1_5/typed/core/v1"
@@ -411,6 +412,7 @@ func (rm *ReplicationManager) updatePod(old, cur interface{}) {
 		// Note that this still suffers from #29229, we are just moving the problem one level
 		// "closer" to kubelet (from the deployment to the replication controller manager).
 		if changedToReady && curRC.Spec.MinReadySeconds > 0 {
+			glog.V(2).Infof("ReplicationController %q will be enqueued after %ds for availability check", curRC.Name, curRC.Spec.MinReadySeconds)
 			rm.enqueueControllerAfter(curRC, time.Duration(curRC.Spec.MinReadySeconds)*time.Second)
 		}
 	}
@@ -544,7 +546,7 @@ func (rm *ReplicationManager) manageReplicas(filteredPods []*v1.Pod, rc *v1.Repl
 				var err error
 				if rm.garbageCollectorEnabled {
 					var trueVar = true
-					controllerRef := &v1.OwnerReference{
+					controllerRef := &metav1.OwnerReference{
 						APIVersion: getRCKind().GroupVersion().String(),
 						Kind:       getRCKind().Kind,
 						Name:       rc.Name,

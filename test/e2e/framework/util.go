@@ -40,8 +40,16 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/blang/semver"
 	"github.com/golang/glog"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/net/websocket"
 	"google.golang.org/api/googleapi"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	gomegatypes "github.com/onsi/gomega/types"
+
 	"k8s.io/kubernetes/federation/client/clientset_generated/federation_release_1_5"
 	"k8s.io/kubernetes/pkg/api"
 	apierrs "k8s.io/kubernetes/pkg/api/errors"
@@ -52,6 +60,7 @@ import (
 	extensionsinternal "k8s.io/kubernetes/pkg/apis/extensions"
 	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/pkg/apis/meta/v1/unstructured"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/release_1_5"
 	"k8s.io/kubernetes/pkg/client/conditions"
@@ -83,15 +92,6 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm/predicates"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/schedulercache"
 	testutils "k8s.io/kubernetes/test/utils"
-
-	"github.com/blang/semver"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/net/websocket"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	gomegatypes "github.com/onsi/gomega/types"
 )
 
 const (
@@ -1132,9 +1132,9 @@ func hasRemainingContent(c clientset.Interface, clientPool dynamic.ClientPool, n
 			}
 			return false, err
 		}
-		unstructuredList, ok := obj.(*runtime.UnstructuredList)
+		unstructuredList, ok := obj.(*unstructured.UnstructuredList)
 		if !ok {
-			return false, fmt.Errorf("namespace: %s, resource: %s, expected *runtime.UnstructuredList, got %#v", namespace, apiResource.Name, obj)
+			return false, fmt.Errorf("namespace: %s, resource: %s, expected *unstructured.UnstructuredList, got %#v", namespace, apiResource.Name, obj)
 		}
 		if len(unstructuredList.Items) > 0 {
 			Logf("namespace: %s, resource: %s, items remaining: %v", namespace, apiResource.Name, len(unstructuredList.Items))
@@ -3429,14 +3429,16 @@ func WaitForDeploymentOldRSsNum(c clientset.Interface, ns, deploymentName string
 }
 
 func logReplicaSetsOfDeployment(deployment *extensions.Deployment, allOldRSs []*extensions.ReplicaSet, newRS *extensions.ReplicaSet) {
-	Logf("Deployment: %+v. Selector = %+v", *deployment, deployment.Spec.Selector)
-	for i := range allOldRSs {
-		Logf("All old ReplicaSets (%d/%d) of deployment %s: %+v. Selector = %+v", i+1, len(allOldRSs), deployment.Name, *allOldRSs[i], allOldRSs[i].Spec.Selector)
-	}
 	if newRS != nil {
-		Logf("New ReplicaSet of deployment %s: %+v. Selector = %+v", deployment.Name, *newRS, newRS.Spec.Selector)
+		Logf("New ReplicaSet of Deployment %s:\n%+v", deployment.Name, *newRS)
 	} else {
-		Logf("New ReplicaSet of deployment %s is nil.", deployment.Name)
+		Logf("New ReplicaSet of Deployment %s is nil.", deployment.Name)
+	}
+	if len(allOldRSs) > 0 {
+		Logf("All old ReplicaSets of Deployment %s:", deployment.Name)
+	}
+	for i := range allOldRSs {
+		Logf("%+v", *allOldRSs[i])
 	}
 }
 
@@ -3470,17 +3472,15 @@ func logPodsOfDeployment(c clientset.Interface, deployment *extensions.Deploymen
 			return c.Core().Pods(namespace).List(options)
 		})
 	if err != nil {
-		Logf("Failed to list pods of deployment %s: %v", deployment.Name, err)
+		Logf("Failed to list Pods of Deployment %s: %v", deployment.Name, err)
 		return
 	}
-	if err == nil {
-		for _, pod := range podList.Items {
-			availability := "not available"
-			if deploymentutil.IsPodAvailable(&pod, minReadySeconds, time.Now()) {
-				availability = "available"
-			}
-			Logf("Pod %s is %s: %+v", pod.Name, availability, pod)
+	for _, pod := range podList.Items {
+		availability := "not available"
+		if deploymentutil.IsPodAvailable(&pod, minReadySeconds, time.Now()) {
+			availability = "available"
 		}
+		Logf("Pod %s is %s:\n%+v", pod.Name, availability, pod)
 	}
 }
 
