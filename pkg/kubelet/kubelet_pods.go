@@ -592,11 +592,6 @@ func (kl *Kubelet) makePodDataDirs(pod *v1.Pod) error {
 	return nil
 }
 
-// returns whether the pod uses the host network namespace.
-func podUsesHostNetwork(pod *v1.Pod) bool {
-	return pod.Spec.HostNetwork
-}
-
 // getPullSecretsForPod inspects the Pod and retrieves the referenced pull
 // secrets.
 // TODO: duplicate secrets are being retrieved multiple times and there
@@ -1066,7 +1061,7 @@ func (kl *Kubelet) generateAPIPodStatus(pod *v1.Pod, podStatus *kubecontainer.Po
 			glog.V(4).Infof("Cannot get host IP: %v", err)
 		} else {
 			s.HostIP = hostIP.String()
-			if podUsesHostNetwork(pod) && s.PodIP == "" {
+			if kubecontainer.IsHostNetworkPod(pod) && s.PodIP == "" {
 				s.PodIP = hostIP.String()
 			}
 		}
@@ -1441,21 +1436,9 @@ func (kl *Kubelet) cleanupOrphanedPodCgroups(
 // or it will not have the correct capabilities in the namespace.  This means that host user namespace
 // is enabled per pod, not per container.
 func (kl *Kubelet) enableHostUserNamespace(pod *v1.Pod) bool {
-	if hasPrivilegedContainer(pod) || hasHostNamespace(pod) ||
+	if kubecontainer.HasPrivilegedContainer(pod) || hasHostNamespace(pod) ||
 		hasHostVolume(pod) || hasNonNamespacedCapability(pod) || kl.hasHostMountPVC(pod) {
 		return true
-	}
-	return false
-}
-
-// hasPrivilegedContainer returns true if any of the containers in the pod are privileged.
-func hasPrivilegedContainer(pod *v1.Pod) bool {
-	for _, c := range pod.Spec.Containers {
-		if c.SecurityContext != nil &&
-			c.SecurityContext.Privileged != nil &&
-			*c.SecurityContext.Privileged {
-			return true
-		}
 	}
 	return false
 }
