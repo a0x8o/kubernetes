@@ -68,18 +68,23 @@ cluster's shared state through which all other components interact.`,
 
 // Run runs the specified APIServer.  This should never exit.
 func Run(s *options.ServerRunOptions) error {
-	if errs := s.Etcd.Validate(); len(errs) > 0 {
-		utilerrors.NewAggregate(errs)
-	}
-	if err := s.GenericServerRunOptions.DefaultExternalAddress(s.SecureServing, s.InsecureServing); err != nil {
+	// set defaults
+	if err := s.GenericServerRunOptions.DefaultAdvertiseAddress(s.SecureServing, s.InsecureServing); err != nil {
 		return err
 	}
-
 	if err := s.SecureServing.MaybeDefaultWithSelfSignedCerts(s.GenericServerRunOptions.AdvertiseAddress.String()); err != nil {
 		return fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
+	if err := s.GenericServerRunOptions.DefaultExternalHost(); err != nil {
+		return fmt.Errorf("error setting the external host value: %v", err)
+	}
 
-	genericapiserver.DefaultAndValidateRunOptions(s.GenericServerRunOptions)
+	// validate options
+	if errs := s.Validate(); len(errs) != 0 {
+		return utilerrors.NewAggregate(errs)
+	}
+
+	// create config from options
 	genericConfig := genericapiserver.NewConfig(). // create the new config
 							ApplyOptions(s.GenericServerRunOptions). // apply the options selected
 							ApplyInsecureServingOptions(s.InsecureServing)
@@ -165,9 +170,9 @@ func Run(s *options.ServerRunOptions) error {
 	genericConfig.Authenticator = apiAuthenticator
 	genericConfig.Authorizer = apiAuthorizer
 	genericConfig.AdmissionControl = admissionController
-	genericConfig.OpenAPIConfig.Definitions = openapi.OpenAPIDefinitions
-	genericConfig.EnableOpenAPISupport = true
+	genericConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(openapi.OpenAPIDefinitions)
 	genericConfig.OpenAPIConfig.SecurityDefinitions = securityDefinitions
+	genericConfig.SwaggerConfig = genericapiserver.DefaultSwaggerConfig()
 	genericConfig.LongRunningFunc = filters.BasicLongRunningRequestCheck(
 		sets.NewString("watch", "proxy"),
 		sets.NewString("attach", "exec", "proxy", "log", "portforward"),

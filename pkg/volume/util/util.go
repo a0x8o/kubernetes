@@ -25,7 +25,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1"
 	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	storage "k8s.io/kubernetes/pkg/apis/storage/v1beta1"
-	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/release_1_5"
+	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/util/mount"
 )
 
@@ -98,7 +98,7 @@ func UnmountPath(mountPath string, mounter mount.Interface) error {
 		glog.V(4).Infof("%q is unmounted, deleting the directory", mountPath)
 		return os.Remove(mountPath)
 	}
-	return nil
+	return fmt.Errorf("Failed to unmount path %v", mountPath)
 }
 
 // PathExists returns true if the specified path exists.

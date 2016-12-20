@@ -26,14 +26,14 @@ import (
 	"github.com/golang/glog"
 	v1beta1 "k8s.io/kubernetes/federation/apis/federation/v1beta1"
 	federationcache "k8s.io/kubernetes/federation/client/cache"
-	fedclientset "k8s.io/kubernetes/federation/client/clientset_generated/federation_release_1_5"
+	fedclientset "k8s.io/kubernetes/federation/client/clientset_generated/federation_clientset"
 	"k8s.io/kubernetes/federation/pkg/dnsprovider"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
 	v1 "k8s.io/kubernetes/pkg/api/v1"
 	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	cache "k8s.io/kubernetes/pkg/client/cache"
-	kubeclientset "k8s.io/kubernetes/pkg/client/clientset_generated/release_1_5"
+	kubeclientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/record"
 	"k8s.io/kubernetes/pkg/controller"
 	pkgruntime "k8s.io/kubernetes/pkg/runtime"
@@ -633,7 +633,7 @@ func getClusterConditionPredicate() federationcache.ClusterConditionPredicate {
 			//We consider the cluster for load balancing only when its ClusterReady condition status
 			//is ConditionTrue
 			if cond.Type == v1beta1.ClusterReady && cond.Status != v1.ConditionTrue {
-				glog.V(4).Infof("Ignoring cluser %v with %v condition status %v", cluster.Name, cond.Type, cond.Status)
+				glog.V(4).Infof("Ignoring cluster %v with %v condition status %v", cluster.Name, cond.Type, cond.Status)
 				return false
 			}
 		}

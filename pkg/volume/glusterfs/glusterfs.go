@@ -34,7 +34,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1"
 	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	storageutil "k8s.io/kubernetes/pkg/apis/storage/v1beta1/util"
-	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/release_1_5"
+	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/types"
 	"k8s.io/kubernetes/pkg/util/exec"
@@ -257,8 +257,7 @@ func (b *glusterfsMounter) SetUpAt(dir string, fsGroup *int64) error {
 	}
 
 	// Cleanup upon failure.
-	c := &glusterfsUnmounter{b.glusterfs}
-	c.cleanup(dir)
+	volutil.UnmountPath(dir, b.mounter)
 	return err
 }
 
@@ -278,32 +277,7 @@ func (c *glusterfsUnmounter) TearDown() error {
 }
 
 func (c *glusterfsUnmounter) TearDownAt(dir string) error {
-	return c.cleanup(dir)
-}
-
-func (c *glusterfsUnmounter) cleanup(dir string) error {
-	notMnt, err := c.mounter.IsLikelyNotMountPoint(dir)
-	if err != nil {
-		return fmt.Errorf("glusterfs: Error checking IsLikelyNotMountPoint: %v", err)
-	}
-	if notMnt {
-		return os.RemoveAll(dir)
-	}
-
-	if err := c.mounter.Unmount(dir); err != nil {
-		return fmt.Errorf("glusterfs: Unmounting failed: %v", err)
-	}
-	notMnt, mntErr := c.mounter.IsLikelyNotMountPoint(dir)
-	if mntErr != nil {
-		return fmt.Errorf("glusterfs: IsLikelyNotMountPoint check failed: %v", mntErr)
-	}
-	if notMnt {
-		if err := os.RemoveAll(dir); err != nil {
-			return fmt.Errorf("glusterfs: RemoveAll failed: %v", err)
-		}
-	}
-
-	return nil
+	return volutil.UnmountPath(dir, c.mounter)
 }
 
 func (b *glusterfsMounter) setUpAtInternal(dir string) error {
