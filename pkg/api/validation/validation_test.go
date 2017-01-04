@@ -2719,6 +2719,65 @@ func TestValidateEnv(t *testing.T) {
 	}
 }
 
+func TestValidateEnvFrom(t *testing.T) {
+	successCase := []api.EnvFromSource{
+		{
+			ConfigMapRef: &api.ConfigMapEnvSource{
+				LocalObjectReference: api.LocalObjectReference{Name: "abc"},
+			},
+		},
+		{
+			Prefix: "pre_",
+			ConfigMapRef: &api.ConfigMapEnvSource{
+				LocalObjectReference: api.LocalObjectReference{Name: "abc"},
+			},
+		},
+	}
+	if errs := validateEnvFrom(successCase, field.NewPath("field")); len(errs) != 0 {
+		t.Errorf("expected success: %v", errs)
+	}
+
+	errorCases := []struct {
+		name          string
+		envs          []api.EnvFromSource
+		expectedError string
+	}{
+		{
+			name: "zero-length name",
+			envs: []api.EnvFromSource{
+				{
+					ConfigMapRef: &api.ConfigMapEnvSource{
+						LocalObjectReference: api.LocalObjectReference{Name: ""}},
+				},
+			},
+			expectedError: "field[0].configMapRef.name: Required value",
+		},
+		{
+			name: "invalid prefix",
+			envs: []api.EnvFromSource{
+				{
+					Prefix: "a.b",
+					ConfigMapRef: &api.ConfigMapEnvSource{
+						LocalObjectReference: api.LocalObjectReference{Name: "abc"}},
+				},
+			},
+			expectedError: `field[0].prefix: Invalid value: "a.b": ` + idErrMsg,
+		},
+	}
+	for _, tc := range errorCases {
+		if errs := validateEnvFrom(tc.envs, field.NewPath("field")); len(errs) == 0 {
+			t.Errorf("expected failure for %s", tc.name)
+		} else {
+			for i := range errs {
+				str := errs[i].Error()
+				if str != "" && !strings.Contains(str, tc.expectedError) {
+					t.Errorf("%s: expected error detail either empty or %q, got %q", tc.name, tc.expectedError, str)
+				}
+			}
+		}
+	}
+}
+
 func TestValidateVolumeMounts(t *testing.T) {
 	volumes := sets.NewString("abc", "123", "abc-123")
 
@@ -5506,6 +5565,15 @@ func TestValidateService(t *testing.T) {
 			},
 			numErrs: 1,
 		},
+		{
+			name: "invalid node port with clusterIP None",
+			tweakSvc: func(s *api.Service) {
+				s.Spec.Type = api.ServiceTypeNodePort
+				s.Spec.Ports = append(s.Spec.Ports, api.ServicePort{Name: "q", Port: 1, Protocol: "TCP", NodePort: 1, TargetPort: intstr.FromInt(1)})
+				s.Spec.ClusterIP = "None"
+			},
+			numErrs: 1,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -7100,6 +7168,20 @@ func TestValidateServiceUpdate(t *testing.T) {
 				newSvc.Spec.ClusterIP = "1.2.3.5"
 			},
 			numErrs: 0,
+		},
+		{
+			name: "invalid node port with clusterIP None",
+			tweakSvc: func(oldSvc, newSvc *api.Service) {
+				oldSvc.Spec.Type = api.ServiceTypeNodePort
+				newSvc.Spec.Type = api.ServiceTypeNodePort
+
+				oldSvc.Spec.Ports = append(oldSvc.Spec.Ports, api.ServicePort{Name: "q", Port: 1, Protocol: "TCP", NodePort: 1, TargetPort: intstr.FromInt(1)})
+				newSvc.Spec.Ports = append(newSvc.Spec.Ports, api.ServicePort{Name: "q", Port: 1, Protocol: "TCP", NodePort: 1, TargetPort: intstr.FromInt(1)})
+
+				oldSvc.Spec.ClusterIP = ""
+				newSvc.Spec.ClusterIP = "None"
+			},
+			numErrs: 1,
 		},
 	}
 

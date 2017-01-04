@@ -28,7 +28,6 @@ import (
 
 	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/endpoints"
 	utilpod "k8s.io/kubernetes/pkg/api/pod"
 	"k8s.io/kubernetes/pkg/api/resource"
 	apiservice "k8s.io/kubernetes/pkg/api/service"
@@ -183,13 +182,6 @@ func ValidatePodSpecificAnnotationUpdates(newPod, oldPod *api.Pod, fldPath *fiel
 
 func ValidateEndpointsSpecificAnnotations(annotations map[string]string, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-	// TODO: remove this after we EOL the annotation.
-	hostnamesMap, exists := annotations[endpoints.PodHostnamesAnnotation]
-	if exists && !isValidHostnamesMap(hostnamesMap) {
-		allErrs = append(allErrs, field.Invalid(fldPath, endpoints.PodHostnamesAnnotation,
-			`must be a valid json representation of map[string(IP)][HostRecord] e.g. "{"10.245.1.6":{"HostName":"my-webserver"}}"`))
-	}
-
 	return allErrs
 }
 
@@ -1435,6 +1427,30 @@ func validateContainerResourceFieldSelector(fs *api.ResourceFieldSelector, expre
 	return allErrs
 }
 
+func validateEnvFrom(vars []api.EnvFromSource, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	for i, ev := range vars {
+		idxPath := fldPath.Index(i)
+		if len(ev.Prefix) > 0 {
+			for _, msg := range validation.IsCIdentifier(ev.Prefix) {
+				allErrs = append(allErrs, field.Invalid(idxPath.Child("prefix"), ev.Prefix, msg))
+			}
+		}
+		if ev.ConfigMapRef != nil {
+			allErrs = append(allErrs, validateConfigMapEnvSource(ev.ConfigMapRef, idxPath.Child("configMapRef"))...)
+		}
+	}
+	return allErrs
+}
+
+func validateConfigMapEnvSource(configMapSource *api.ConfigMapEnvSource, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	if len(configMapSource.Name) == 0 {
+		allErrs = append(allErrs, field.Required(fldPath.Child("name"), ""))
+	}
+	return allErrs
+}
+
 var validContainerResourceDivisorForCPU = sets.NewString("1m", "1")
 var validContainerResourceDivisorForMemory = sets.NewString("1", "1k", "1M", "1G", "1T", "1P", "1E", "1Ki", "1Mi", "1Gi", "1Ti", "1Pi", "1Ei")
 
@@ -2462,6 +2478,10 @@ func validateServiceFields(service *api.Service) field.ErrorList {
 		}
 		if service.Spec.ClusterIP == "None" {
 			allErrs = append(allErrs, field.Invalid(specPath.Child("clusterIP"), service.Spec.ClusterIP, "may not be set to 'None' for LoadBalancer services"))
+		}
+	case api.ServiceTypeNodePort:
+		if service.Spec.ClusterIP == "None" {
+			allErrs = append(allErrs, field.Invalid(specPath.Child("clusterIP"), service.Spec.ClusterIP, "may not be set to 'None' for NodePort services"))
 		}
 	case api.ServiceTypeExternalName:
 		if service.Spec.ClusterIP != "" {
@@ -3723,28 +3743,6 @@ func ValidateLoadBalancerStatus(status *api.LoadBalancerStatus, fldPath *field.P
 		}
 	}
 	return allErrs
-}
-
-// TODO: remove this after we EOL the annotation that carries it.
-func isValidHostnamesMap(serializedPodHostNames string) bool {
-	if len(serializedPodHostNames) == 0 {
-		return false
-	}
-	podHostNames := map[string]endpoints.HostRecord{}
-	err := json.Unmarshal([]byte(serializedPodHostNames), &podHostNames)
-	if err != nil {
-		return false
-	}
-
-	for ip, hostRecord := range podHostNames {
-		if len(validation.IsDNS1123Label(hostRecord.HostName)) != 0 {
-			return false
-		}
-		if net.ParseIP(ip) == nil {
-			return false
-		}
-	}
-	return true
 }
 
 func sysctlIntersection(a []api.Sysctl, b []api.Sysctl) []string {
