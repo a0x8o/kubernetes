@@ -55,8 +55,8 @@ func startEndpointController(ctx ControllerContext) (bool, error) {
 func startReplicationController(ctx ControllerContext) (bool, error) {
 	go replicationcontroller.NewReplicationManager(
 		ctx.InformerFactory.Pods().Informer(),
+		ctx.InformerFactory.ReplicationControllers().Informer(),
 		ctx.ClientBuilder.ClientOrDie("replication-controller"),
-		ResyncPeriod(&ctx.Options),
 		replicationcontroller.BurstReplicas,
 		int(ctx.Options.LookupCacheSizeForRC),
 		ctx.Options.EnableGarbageCollector,
@@ -115,7 +115,7 @@ func startNamespaceController(ctx ControllerContext) (bool, error) {
 		return true, fmt.Errorf("failed to parse preferred server resources: %v", err)
 	}
 	discoverResourcesFn := namespaceKubeClient.Discovery().ServerPreferredNamespacedResources
-	if _, found := gvrs[extensions.SchemeGroupVersion.WithResource("thirdpartyresource")]; found {
+	if _, found := gvrs[extensions.SchemeGroupVersion.WithResource("thirdpartyresource")]; !found {
 		// make discovery static
 		snapshot, err := discoverResourcesFn()
 		if err != nil {

@@ -21,9 +21,9 @@ import (
 	"fmt"
 
 	"github.com/golang/glog"
+	"k8s.io/apiserver/pkg/authentication/user"
 	apierrors "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/apis/rbac"
-	"k8s.io/kubernetes/pkg/auth/user"
 	genericapirequest "k8s.io/kubernetes/pkg/genericapiserver/api/request"
 	"k8s.io/kubernetes/pkg/serviceaccount"
 	utilerrors "k8s.io/kubernetes/pkg/util/errors"
@@ -168,7 +168,7 @@ func appliesTo(user user.Info, bindingSubjects []rbac.Subject, namespace string)
 func appliesToUser(user user.Info, subject rbac.Subject, namespace string) bool {
 	switch subject.Kind {
 	case rbac.UserKind:
-		return subject.Name == rbac.UserAll || user.GetName() == subject.Name
+		return user.GetName() == subject.Name
 
 	case rbac.GroupKind:
 		return has(user.GetGroups(), subject.Name)
