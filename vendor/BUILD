@@ -10,6 +10,19 @@ load(
     "go_test",
 )
 
+filegroup(
+    name = "package-srcs",
+    srcs = glob(["**"]),
+    tags = ["automanaged"],
+    visibility = ["//visibility:private"],
+)
+
+filegroup(
+    name = "all-srcs",
+    srcs = [":package-srcs"],
+    tags = ["automanaged"],
+)
+
 go_library(
     name = "bitbucket.org/bertimus9/systemstat",
     srcs = [
@@ -12255,4 +12268,50 @@ go_library(
         "k8s.io/apiserver/pkg/authentication/user/user.go",
     ],
     tags = ["automanaged"],
+)
+
+go_test(
+    name = "k8s.io/apiserver/pkg/healthz_test",
+    srcs = ["k8s.io/apiserver/pkg/healthz/healthz_test.go"],
+    library = ":k8s.io/apiserver/pkg/healthz",
+    tags = ["automanaged"],
+)
+
+go_library(
+    name = "k8s.io/apiserver/pkg/healthz",
+    srcs = [
+        "k8s.io/apiserver/pkg/healthz/doc.go",
+        "k8s.io/apiserver/pkg/healthz/healthz.go",
+    ],
+    tags = ["automanaged"],
+)
+
+go_test(
+    name = "k8s.io/apiserver/pkg/util/flushwriter_test",
+    srcs = ["k8s.io/apiserver/pkg/util/flushwriter/writer_test.go"],
+    library = ":k8s.io/apiserver/pkg/util/flushwriter",
+    tags = ["automanaged"],
+)
+
+go_library(
+    name = "k8s.io/apiserver/pkg/util/flushwriter",
+    srcs = [
+        "k8s.io/apiserver/pkg/util/flushwriter/doc.go",
+        "k8s.io/apiserver/pkg/util/flushwriter/writer.go",
+    ],
+    tags = ["automanaged"],
+)
+
+go_library(
+    name = "k8s.io/apiserver/pkg/authentication/authenticator",
+    srcs = ["k8s.io/apiserver/pkg/authentication/authenticator/interfaces.go"],
+    tags = ["automanaged"],
+    deps = ["//vendor:k8s.io/apiserver/pkg/authentication/user"],
+)
+
+go_library(
+    name = "k8s.io/apiserver/pkg/authorization/authorizer",
+    srcs = ["k8s.io/apiserver/pkg/authorization/authorizer/interfaces.go"],
+    tags = ["automanaged"],
+    deps = ["//vendor:k8s.io/apiserver/pkg/authentication/user"],
 )

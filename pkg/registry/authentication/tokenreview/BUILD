@@ -14,8 +14,21 @@ go_library(
     deps = [
         "//pkg/api/errors:go_default_library",
         "//pkg/apis/authentication:go_default_library",
-        "//pkg/auth/authenticator:go_default_library",
         "//pkg/genericapiserver/api/request:go_default_library",
         "//pkg/runtime:go_default_library",
+        "//vendor:k8s.io/apiserver/pkg/authentication/authenticator",
     ],
+)
+
+filegroup(
+    name = "package-srcs",
+    srcs = glob(["**"]),
+    tags = ["automanaged"],
+    visibility = ["//visibility:private"],
+)
+
+filegroup(
+    name = "all-srcs",
+    srcs = [":package-srcs"],
+    tags = ["automanaged"],
 )

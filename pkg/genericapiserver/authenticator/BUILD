@@ -16,7 +16,6 @@ go_library(
     ],
     tags = ["automanaged"],
     deps = [
-        "//pkg/auth/authenticator:go_default_library",
         "//pkg/auth/authenticator/bearertoken:go_default_library",
         "//pkg/auth/group:go_default_library",
         "//pkg/client/clientset_generated/clientset/typed/authentication/v1beta1:go_default_library",
@@ -28,6 +27,20 @@ go_library(
         "//plugin/pkg/auth/authenticator/token/tokenfile:go_default_library",
         "//plugin/pkg/auth/authenticator/token/webhook:go_default_library",
         "//vendor:github.com/go-openapi/spec",
+        "//vendor:k8s.io/apiserver/pkg/authentication/authenticator",
         "//vendor:k8s.io/apiserver/pkg/authentication/user",
     ],
+)
+
+filegroup(
+    name = "package-srcs",
+    srcs = glob(["**"]),
+    tags = ["automanaged"],
+    visibility = ["//visibility:private"],
+)
+
+filegroup(
+    name = "all-srcs",
+    srcs = [":package-srcs"],
+    tags = ["automanaged"],
 )

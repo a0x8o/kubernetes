@@ -25,10 +25,10 @@ import (
 
 	"github.com/golang/glog"
 
+	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
-	"k8s.io/kubernetes/pkg/auth/authenticator"
-	utilerrors "k8s.io/kubernetes/pkg/util/errors"
-	"k8s.io/kubernetes/pkg/util/sets"
+	utilerrors "k8s.io/client-go/pkg/util/errors"
+	"k8s.io/client-go/pkg/util/sets"
 )
 
 // UserConversion defines an interface for extracting user info from a client certificate chain
