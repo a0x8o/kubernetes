@@ -23,14 +23,15 @@ import (
 	"net/http"
 	"os"
 
+	"k8s.io/apimachinery/pkg/apimachinery/registered"
+	"k8s.io/apimachinery/pkg/runtime"
+	fedclient "k8s.io/kubernetes/federation/client/clientset_generated/federation_clientset"
 	"k8s.io/kubernetes/federation/pkg/kubefed/util"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/apimachinery/registered"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
 	clientcmdapi "k8s.io/kubernetes/pkg/client/unversioned/clientcmd/api"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/runtime"
 )
 
 type fakeAdminConfig struct {
@@ -51,6 +52,18 @@ func NewFakeAdminConfig(f cmdutil.Factory, kubeconfigGlobal string) (util.AdminC
 
 func (f *fakeAdminConfig) PathOptions() *clientcmd.PathOptions {
 	return f.pathOptions
+}
+
+func (f *fakeAdminConfig) FederationClientset(context, kubeconfigPath string) (*fedclient.Clientset, error) {
+	fakeRestClient, err := f.hostFactory.RESTClient()
+	if err != nil {
+		return nil, err
+	}
+
+	// we ignore the function params and use the client from
+	// the same fakefactory to create a federation clientset
+	// our fake factory exposes only the healthz api for this client
+	return fedclient.New(fakeRestClient), nil
 }
 
 func (f *fakeAdminConfig) HostFactory(host, kubeconfigPath string) cmdutil.Factory {

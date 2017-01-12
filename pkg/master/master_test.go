@@ -26,10 +26,15 @@ import (
 	"reflect"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/apimachinery/registered"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	apiv1 "k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/apimachinery/registered"
 	"k8s.io/kubernetes/pkg/apis/apps"
 	appsapiv1beta1 "k8s.io/kubernetes/pkg/apis/apps/v1beta1"
 	"k8s.io/kubernetes/pkg/apis/autoscaling"
@@ -40,25 +45,15 @@ import (
 	"k8s.io/kubernetes/pkg/apis/certificates"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	extensionsapiv1beta1 "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/apis/rbac"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset/fake"
 	"k8s.io/kubernetes/pkg/client/restclient"
-	openapigen "k8s.io/kubernetes/pkg/generated/openapi"
 	"k8s.io/kubernetes/pkg/genericapiserver"
 	genericapirequest "k8s.io/kubernetes/pkg/genericapiserver/api/request"
 	kubeletclient "k8s.io/kubernetes/pkg/kubelet/client"
-	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/runtime/schema"
 	etcdtesting "k8s.io/kubernetes/pkg/storage/etcd/testing"
-	utilnet "k8s.io/kubernetes/pkg/util/net"
-	"k8s.io/kubernetes/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/version"
 
-	"github.com/go-openapi/loads"
-	"github.com/go-openapi/spec"
-	"github.com/go-openapi/strfmt"
-	"github.com/go-openapi/validate"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -307,62 +302,4 @@ func TestAPIVersionOfDiscoveryEndpoints(t *testing.T) {
 	assert.NoError(decodeResponse(resp, &resourceList))
 	assert.Equal(resourceList.APIVersion, "v1")
 
-}
-
-// TestValidOpenAPISpec verifies that the open api is added
-// at the proper endpoint and the spec is valid.
-func TestValidOpenAPISpec(t *testing.T) {
-	_, etcdserver, config, assert := setUp(t)
-	defer etcdserver.Terminate(t)
-
-	config.GenericConfig.EnableIndex = true
-	config.GenericConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(openapigen.OpenAPIDefinitions)
-	config.GenericConfig.OpenAPIConfig.Info = &spec.Info{
-		InfoProps: spec.InfoProps{
-			Title:   "Kubernetes",
-			Version: "unversioned",
-		},
-	}
-	config.GenericConfig.SwaggerConfig = genericapiserver.DefaultSwaggerConfig()
-
-	master, err := config.Complete().New()
-	if err != nil {
-		t.Fatalf("Error in bringing up the master: %v", err)
-	}
-
-	// make sure swagger.json is not registered before calling PrepareRun.
-	server := httptest.NewServer(master.GenericAPIServer.HandlerContainer.ServeMux)
-	defer server.Close()
-	resp, err := http.Get(server.URL + "/swagger.json")
-	if !assert.NoError(err) {
-		t.Errorf("unexpected error: %v", err)
-	}
-	assert.Equal(http.StatusNotFound, resp.StatusCode)
-
-	master.GenericAPIServer.PrepareRun()
-
-	resp, err = http.Get(server.URL + "/swagger.json")
-	if !assert.NoError(err) {
-		t.Errorf("unexpected error: %v", err)
-	}
-	assert.Equal(http.StatusOK, resp.StatusCode)
-
-	// as json schema
-	var sch spec.Schema
-	if assert.NoError(decodeResponse(resp, &sch)) {
-		validator := validate.NewSchemaValidator(spec.MustLoadSwagger20Schema(), nil, "", strfmt.Default)
-		res := validator.Validate(&sch)
-		assert.NoError(res.AsError())
-	}
-
-	// Validate OpenApi spec
-	doc, err := loads.Spec(server.URL + "/swagger.json")
-	if assert.NoError(err) {
-		validator := validate.NewSpecValidator(doc.Schema(), strfmt.Default)
-		res, warns := validator.Validate(doc)
-		assert.NoError(res.AsError())
-		if !warns.IsValid() {
-			t.Logf("Open API spec on root has some warnings : %v", warns)
-		}
-	}
 }

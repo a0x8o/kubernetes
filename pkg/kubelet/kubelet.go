@@ -30,14 +30,22 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+
+	clientgoclientset "k8s.io/client-go/kubernetes"
+
 	cadvisorapi "github.com/google/cadvisor/info/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/resource"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/apis/componentconfig"
 	componentconfigv1alpha1 "k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1"
 	"k8s.io/kubernetes/pkg/client/cache"
-	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/record"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/fields"
@@ -72,9 +80,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/util/queue"
 	"k8s.io/kubernetes/pkg/kubelet/util/sliceutils"
 	"k8s.io/kubernetes/pkg/kubelet/volumemanager"
-	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/security/apparmor"
-	"k8s.io/kubernetes/pkg/types"
 	"k8s.io/kubernetes/pkg/util/bandwidth"
 	"k8s.io/kubernetes/pkg/util/clock"
 	utilconfig "k8s.io/kubernetes/pkg/util/config"
@@ -88,9 +94,6 @@ import (
 	nodeutil "k8s.io/kubernetes/pkg/util/node"
 	"k8s.io/kubernetes/pkg/util/oom"
 	"k8s.io/kubernetes/pkg/util/procfs"
-	utilruntime "k8s.io/kubernetes/pkg/util/runtime"
-	"k8s.io/kubernetes/pkg/util/sets"
-	"k8s.io/kubernetes/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm/predicates"
 )
@@ -205,22 +208,23 @@ type KubeletDeps struct {
 	Options                 []Option
 
 	// Injected Dependencies
-	Auth              server.AuthInterface
-	CAdvisorInterface cadvisor.Interface
-	Cloud             cloudprovider.Interface
-	ContainerManager  cm.ContainerManager
-	DockerClient      dockertools.DockerInterface
-	EventClient       *clientset.Clientset
-	KubeClient        *clientset.Clientset
-	Mounter           mount.Interface
-	NetworkPlugins    []network.NetworkPlugin
-	OOMAdjuster       *oom.OOMAdjuster
-	OSInterface       kubecontainer.OSInterface
-	PodConfig         *config.PodConfig
-	Recorder          record.EventRecorder
-	Writer            kubeio.Writer
-	VolumePlugins     []volume.VolumePlugin
-	TLSOptions        *server.TLSOptions
+	Auth               server.AuthInterface
+	CAdvisorInterface  cadvisor.Interface
+	Cloud              cloudprovider.Interface
+	ContainerManager   cm.ContainerManager
+	DockerClient       dockertools.DockerInterface
+	EventClient        *clientset.Clientset
+	KubeClient         *clientset.Clientset
+	ExternalKubeClient clientgoclientset.Interface
+	Mounter            mount.Interface
+	NetworkPlugins     []network.NetworkPlugin
+	OOMAdjuster        *oom.OOMAdjuster
+	OSInterface        kubecontainer.OSInterface
+	PodConfig          *config.PodConfig
+	Recorder           record.EventRecorder
+	Writer             kubeio.Writer
+	VolumePlugins      []volume.VolumePlugin
+	TLSOptions         *server.TLSOptions
 }
 
 // makePodSourceConfig creates a config.PodConfig from the given

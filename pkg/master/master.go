@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"time"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/healthz"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app/options"
 	"k8s.io/kubernetes/pkg/api"
@@ -43,11 +45,10 @@ import (
 	"k8s.io/kubernetes/pkg/genericapiserver"
 	kubeletclient "k8s.io/kubernetes/pkg/kubelet/client"
 	"k8s.io/kubernetes/pkg/master/thirdparty"
+	"k8s.io/kubernetes/pkg/master/tunneler"
 	"k8s.io/kubernetes/pkg/registry/generic"
 	genericregistry "k8s.io/kubernetes/pkg/registry/generic/registry"
 	"k8s.io/kubernetes/pkg/routes"
-	"k8s.io/kubernetes/pkg/runtime/schema"
-	utilnet "k8s.io/kubernetes/pkg/util/net"
 	nodeutil "k8s.io/kubernetes/pkg/util/node"
 
 	"github.com/golang/glog"
@@ -86,7 +87,7 @@ type Config struct {
 	KubeletClientConfig      kubeletclient.KubeletClientConfig
 
 	// Used to start and monitor tunneling
-	Tunneler          genericapiserver.Tunneler
+	Tunneler          tunneler.Tunneler
 	EnableUISupport   bool
 	EnableLogsSupport bool
 	ProxyTransport    http.RoundTripper
@@ -252,7 +253,7 @@ func (c completedConfig) New() (*Master, error) {
 		certificatesrest.RESTStorageProvider{},
 		extensionsrest.RESTStorageProvider{ResourceInterface: thirdparty.NewThirdPartyResourceServer(s, c.StorageFactory)},
 		policyrest.RESTStorageProvider{},
-		rbacrest.RESTStorageProvider{},
+		rbacrest.RESTStorageProvider{Authorizer: c.GenericConfig.Authorizer},
 		storagerest.RESTStorageProvider{},
 	}
 	m.InstallAPIs(c.Config.APIResourceConfigSource, restOptionsFactory, restStorageProviders...)
@@ -283,13 +284,13 @@ func (m *Master) InstallLegacyAPI(c *Config, restOptionsGetter generic.RESTOptio
 	}
 }
 
-func (m *Master) installTunneler(tunneler genericapiserver.Tunneler, nodeClient corev1client.NodeInterface) {
-	tunneler.Run(nodeAddressProvider{nodeClient}.externalAddresses)
-	m.GenericAPIServer.AddHealthzChecks(healthz.NamedCheck("SSH Tunnel Check", genericapiserver.TunnelSyncHealthChecker(tunneler)))
+func (m *Master) installTunneler(nodeTunneler tunneler.Tunneler, nodeClient corev1client.NodeInterface) {
+	nodeTunneler.Run(nodeAddressProvider{nodeClient}.externalAddresses)
+	m.GenericAPIServer.AddHealthzChecks(healthz.NamedCheck("SSH Tunnel Check", tunneler.TunnelSyncHealthChecker(nodeTunneler)))
 	prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "apiserver_proxy_tunnel_sync_latency_secs",
 		Help: "The time since the last successful synchronization of the SSH tunnels for proxy requests.",
-	}, func() float64 { return float64(tunneler.SecondsSinceSync()) })
+	}, func() float64 { return float64(nodeTunneler.SecondsSinceSync()) })
 }
 
 // RESTStorageProvider is a factory type for REST storage.
@@ -407,6 +408,7 @@ func DefaultAPIResourceConfigSource() *genericapiserver.ResourceConfig {
 		extensionsapiv1beta1.SchemeGroupVersion.WithResource("networkpolicies"),
 		extensionsapiv1beta1.SchemeGroupVersion.WithResource("replicasets"),
 		extensionsapiv1beta1.SchemeGroupVersion.WithResource("thirdpartyresources"),
+		extensionsapiv1beta1.SchemeGroupVersion.WithResource("podsecuritypolicies"),
 	)
 
 	return ret

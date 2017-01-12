@@ -28,22 +28,22 @@ import (
 
 	"github.com/golang/glog"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/kubernetes/pkg/api"
 	utilpod "k8s.io/kubernetes/pkg/api/pod"
 	"k8s.io/kubernetes/pkg/api/resource"
 	apiservice "k8s.io/kubernetes/pkg/api/service"
 	"k8s.io/kubernetes/pkg/api/validation/genericvalidation"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	unversionedvalidation "k8s.io/kubernetes/pkg/apis/meta/v1/validation"
 	storageutil "k8s.io/kubernetes/pkg/apis/storage/util"
 	"k8s.io/kubernetes/pkg/capabilities"
-	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/security/apparmor"
 	utilconfig "k8s.io/kubernetes/pkg/util/config"
 	"k8s.io/kubernetes/pkg/util/intstr"
-	"k8s.io/kubernetes/pkg/util/sets"
-	"k8s.io/kubernetes/pkg/util/validation"
-	"k8s.io/kubernetes/pkg/util/validation/field"
 )
 
 // TODO: delete this global variable when we enable the validation of common
@@ -2571,6 +2571,19 @@ func ValidateReplicationControllerStatusUpdate(controller, oldController *api.Re
 	allErrs = append(allErrs, ValidateNonnegativeField(int64(controller.Status.ReadyReplicas), statusPath.Child("readyReplicas"))...)
 	allErrs = append(allErrs, ValidateNonnegativeField(int64(controller.Status.AvailableReplicas), statusPath.Child("availableReplicas"))...)
 	allErrs = append(allErrs, ValidateNonnegativeField(int64(controller.Status.ObservedGeneration), statusPath.Child("observedGeneration"))...)
+	msg := "cannot be greater than status.replicas"
+	if controller.Status.FullyLabeledReplicas > controller.Status.Replicas {
+		allErrs = append(allErrs, field.Invalid(statusPath.Child("fullyLabeledReplicas"), controller.Status.FullyLabeledReplicas, msg))
+	}
+	if controller.Status.ReadyReplicas > controller.Status.Replicas {
+		allErrs = append(allErrs, field.Invalid(statusPath.Child("readyReplicas"), controller.Status.ReadyReplicas, msg))
+	}
+	if controller.Status.AvailableReplicas > controller.Status.Replicas {
+		allErrs = append(allErrs, field.Invalid(statusPath.Child("availableReplicas"), controller.Status.AvailableReplicas, msg))
+	}
+	if controller.Status.ReadyReplicas > controller.Status.AvailableReplicas {
+		allErrs = append(allErrs, field.Invalid(statusPath.Child("readyReplicas"), controller.Status.ReadyReplicas, "cannot be greater than availableReplicas"))
+	}
 	return allErrs
 }
 
@@ -3504,7 +3517,7 @@ func ValidateSecurityContext(sc *api.SecurityContext, fldPath *field.Path) field
 
 	if sc.Privileged != nil {
 		if *sc.Privileged && !capabilities.Get().AllowPrivileged {
-			allErrs = append(allErrs, field.Forbidden(fldPath.Child("privileged"), "disallowed by policy"))
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("privileged"), "disallowed by cluster policy"))
 		}
 	}
 

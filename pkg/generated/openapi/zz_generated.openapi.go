@@ -22,9 +22,8 @@ package openapi
 
 import (
 	spec "github.com/go-openapi/spec"
+	common "k8s.io/apimachinery/pkg/genericapiserver/openapi/common"
 	resource "k8s.io/kubernetes/pkg/api/resource"
-	v1 "k8s.io/kubernetes/pkg/apis/meta/v1"
-	common "k8s.io/kubernetes/pkg/genericapiserver/openapi/common"
 	intstr "k8s.io/kubernetes/pkg/util/intstr"
 )
 
@@ -2971,6 +2970,30 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 			},
 		},
 		Dependencies: []string{},
+	},
+	"v1.InternalEvent": {
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "InternalEvent makes watch.Event versioned",
+				Properties: map[string]spec.Schema{
+					"Type": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"Object": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Object is:\n * If Type is Added or Modified: the new state of the object.\n * If Type is Deleted: the state of the object immediately before deletion.\n * If Type is Error: *api.Status is recommended; other types may make sense\n   depending on context.",
+							Ref:         spec.MustCreateRef("#/definitions/runtime.Object"),
+						},
+					},
+				},
+				Required: []string{"Type", "Object"},
+			},
+		},
+		Dependencies: []string{
+			"runtime.Object"},
 	},
 	"v1.Job": {
 		Schema: spec.Schema{
@@ -8257,7 +8280,24 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 		},
 		Dependencies: []string{},
 	},
-	"v1.Time": v1.Time{}.OpenAPIDefinition(), "v1.Timestamp": {
+	"v1.Time": {
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Time is a wrapper around time.Time which supports correct marshaling to YAML and JSON.  Wrappers are provided for many of the factory methods that the time package offers.",
+				Properties: map[string]spec.Schema{
+					"Time": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "date-time",
+						},
+					},
+				},
+				Required: []string{"Time"},
+			},
+		},
+		Dependencies: []string{},
+	},
+	"v1.Timestamp": {
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Description: "Timestamp is a struct that is equivalent to Time, but intended for protobuf marshalling/unmarshalling. It is generated into a serialization that matches Time. Do not use in Go structs.",
@@ -8714,6 +8754,30 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 		},
 		Dependencies: []string{},
 	},
+	"v1.WatchEvent": {
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Event represents a single event to a watched resource.",
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"object": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Object is:\n * If Type is Added or Modified: the new state of the object.\n * If Type is Deleted: the state of the object immediately before deletion.\n * If Type is Error: *Status is recommended; other types may make sense\n   depending on context.",
+							Ref:         spec.MustCreateRef("#/definitions/runtime.RawExtension"),
+						},
+					},
+				},
+				Required: []string{"type", "object"},
+			},
+		},
+		Dependencies: []string{
+			"runtime.RawExtension"},
+	},
 	"v1.WeightedPodAffinityTerm": {
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -8880,6 +8944,20 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 							Description: "Base64-encoded PKCS#10 CSR data",
 							Type:        []string{"string"},
 							Format:      "byte",
+						},
+					},
+					"usages": {
+						SchemaProps: spec.SchemaProps{
+							Description: "allowedUsages specifies a set of usage contexts the key will be valid for. See: https://tools.ietf.org/html/rfc5280#section-4.2.1.3\n     https://tools.ietf.org/html/rfc5280#section-4.2.1.12",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
 						},
 					},
 					"username": {
@@ -15064,29 +15142,5 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 			},
 		},
 		Dependencies: []string{},
-	},
-	"versioned.Event": {
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "Event represents a single event to a watched resource.",
-				Properties: map[string]spec.Schema{
-					"type": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-					"object": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Object is:\n * If Type is Added or Modified: the new state of the object.\n * If Type is Deleted: the state of the object immediately before deletion.\n * If Type is Error: *api.Status is recommended; other types may make sense\n   depending on context.",
-							Ref:         spec.MustCreateRef("#/definitions/runtime.RawExtension"),
-						},
-					},
-				},
-				Required: []string{"type", "object"},
-			},
-		},
-		Dependencies: []string{
-			"runtime.RawExtension"},
 	},
 }

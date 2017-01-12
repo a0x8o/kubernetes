@@ -19,9 +19,9 @@ package scheduler
 import (
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/client/record"
-	"k8s.io/kubernetes/pkg/util/wait"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/metrics"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/schedulercache"
@@ -98,9 +98,10 @@ func (s *Scheduler) scheduleOne() {
 		s.config.Error(pod, err)
 		s.config.Recorder.Eventf(pod, v1.EventTypeWarning, "FailedScheduling", "%v", err)
 		s.config.PodConditionUpdater.Update(pod, &v1.PodCondition{
-			Type:   v1.PodScheduled,
-			Status: v1.ConditionFalse,
-			Reason: v1.PodReasonUnschedulable,
+			Type:    v1.PodScheduled,
+			Status:  v1.ConditionFalse,
+			Reason:  v1.PodReasonUnschedulable,
+			Message: err.Error(),
 		})
 		return
 	}

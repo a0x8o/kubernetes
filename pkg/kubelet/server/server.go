@@ -35,28 +35,28 @@ import (
 	cadvisorapiv2 "github.com/google/cadvisor/info/v2"
 	"github.com/prometheus/client_golang/prometheus"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/healthz"
+	"k8s.io/apiserver/pkg/httplog"
 	"k8s.io/apiserver/pkg/util/flushwriter"
 	"k8s.io/kubernetes/pkg/api"
 	apierrs "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/api/v1/validation"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/httplog"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/server/portforward"
 	"k8s.io/kubernetes/pkg/kubelet/server/remotecommand"
 	"k8s.io/kubernetes/pkg/kubelet/server/stats"
 	"k8s.io/kubernetes/pkg/kubelet/server/streaming"
-	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/runtime/schema"
-	"k8s.io/kubernetes/pkg/types"
 	"k8s.io/kubernetes/pkg/util/configz"
 	"k8s.io/kubernetes/pkg/util/limitwriter"
-	utilruntime "k8s.io/kubernetes/pkg/util/runtime"
 	"k8s.io/kubernetes/pkg/util/term"
 	"k8s.io/kubernetes/pkg/volume"
 )
@@ -606,7 +606,7 @@ func (s *Server) getAttach(request *restful.Request, response *restful.Response)
 	podFullName := kubecontainer.GetPodFullName(pod)
 	redirect, err := s.host.GetAttach(podFullName, params.podUID, params.containerName, *streamOpts)
 	if err != nil {
-		response.WriteError(streaming.HTTPStatus(err), err)
+		streaming.WriteError(err, response.ResponseWriter)
 		return
 	}
 	if redirect != nil {
@@ -644,7 +644,7 @@ func (s *Server) getExec(request *restful.Request, response *restful.Response) {
 	podFullName := kubecontainer.GetPodFullName(pod)
 	redirect, err := s.host.GetExec(podFullName, params.podUID, params.containerName, params.cmd, *streamOpts)
 	if err != nil {
-		response.WriteError(streaming.HTTPStatus(err), err)
+		streaming.WriteError(err, response.ResponseWriter)
 		return
 	}
 	if redirect != nil {
@@ -714,7 +714,7 @@ func (s *Server) getPortForward(request *restful.Request, response *restful.Resp
 
 	redirect, err := s.host.GetPortForward(pod.Name, pod.Namespace, pod.UID)
 	if err != nil {
-		response.WriteError(streaming.HTTPStatus(err), err)
+		streaming.WriteError(err, response.ResponseWriter)
 		return
 	}
 	if redirect != nil {

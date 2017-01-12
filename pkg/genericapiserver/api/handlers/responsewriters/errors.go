@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
-	"k8s.io/kubernetes/pkg/util/runtime"
 )
 
 // BadGatewayError renders a simple bad gateway error.
@@ -55,6 +55,9 @@ func forbiddenMessage(attributes authorizer.Attributes) string {
 	resource := attributes.GetResource()
 	if group := attributes.GetAPIGroup(); len(group) > 0 {
 		resource = resource + "." + group
+	}
+	if subresource := attributes.GetSubresource(); len(subresource) > 0 {
+		resource = resource + "/" + subresource
 	}
 
 	if ns := attributes.GetNamespace(); len(ns) > 0 {

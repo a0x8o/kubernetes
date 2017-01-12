@@ -19,12 +19,12 @@ package e2e
 import (
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/api/resource"
 	"k8s.io/kubernetes/pkg/api/v1"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	storage "k8s.io/kubernetes/pkg/apis/storage/v1beta1"
 	storageutil "k8s.io/kubernetes/pkg/apis/storage/v1beta1/util"
-	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/test/e2e/framework"
 
 	. "github.com/onsi/ginkgo"
@@ -115,7 +115,7 @@ var _ = framework.KubeDescribe("Dynamic provisioning", func() {
 	})
 
 	framework.KubeDescribe("DynamicProvisioner", func() {
-		It("should create and delete persistent volumes [Slow]", func() {
+		It("should create and delete persistent volumes [Slow] [Volume]", func() {
 			framework.SkipUnlessProviderIs("openstack", "gce", "aws", "gke")
 
 			By("creating a StorageClass")
@@ -137,7 +137,7 @@ var _ = framework.KubeDescribe("Dynamic provisioning", func() {
 	})
 
 	framework.KubeDescribe("DynamicProvisioner Alpha", func() {
-		It("should create and delete alpha persistent volumes [Slow]", func() {
+		It("should create and delete alpha persistent volumes [Slow] [Volume]", func() {
 			framework.SkipUnlessProviderIs("openstack", "gce", "aws", "gke")
 
 			By("creating a claim with an alpha dynamic provisioning annotation")

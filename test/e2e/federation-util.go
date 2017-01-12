@@ -22,17 +22,17 @@ import (
 
 	"k8s.io/kubernetes/pkg/util/intstr"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	federationapi "k8s.io/kubernetes/federation/apis/federation/v1beta1"
 	fedclientset "k8s.io/kubernetes/federation/client/clientset_generated/federation_clientset"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/v1"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	kubeclientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
 	clientcmdapi "k8s.io/kubernetes/pkg/client/unversioned/clientcmd/api"
-	"k8s.io/kubernetes/pkg/util/wait"
 	"k8s.io/kubernetes/test/e2e/framework"
 
 	. "github.com/onsi/ginkgo"
@@ -283,12 +283,23 @@ func createServiceOrFail(clientset *fedclientset.Clientset, namespace, name stri
 	return service
 }
 
-func deleteServiceOrFail(clientset *fedclientset.Clientset, namespace string, serviceName string) {
+func deleteServiceOrFail(clientset *fedclientset.Clientset, namespace string, serviceName string, orphanDependents *bool) {
 	if clientset == nil || len(namespace) == 0 || len(serviceName) == 0 {
 		Fail(fmt.Sprintf("Internal error: invalid parameters passed to deleteServiceOrFail: clientset: %v, namespace: %v, service: %v", clientset, namespace, serviceName))
 	}
-	err := clientset.Services(namespace).Delete(serviceName, v1.NewDeleteOptions(0))
+	err := clientset.Services(namespace).Delete(serviceName, &v1.DeleteOptions{OrphanDependents: orphanDependents})
 	framework.ExpectNoError(err, "Error deleting service %q from namespace %q", serviceName, namespace)
+	// Wait for the service to be deleted.
+	err = wait.Poll(5*time.Second, 3*wait.ForeverTestTimeout, func() (bool, error) {
+		_, err := clientset.Core().Services(namespace).Get(serviceName, metav1.GetOptions{})
+		if err != nil && errors.IsNotFound(err) {
+			return true, nil
+		}
+		return false, err
+	})
+	if err != nil {
+		framework.Failf("Error in deleting service %s: %v", serviceName, err)
+	}
 }
 
 func cleanupServiceShardsAndProviderResources(namespace string, service *v1.Service, clusters map[string]*cluster) {

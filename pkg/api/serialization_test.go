@@ -32,22 +32,21 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/ugorji/go/codec"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/conversion"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer/streaming"
+	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	apitesting "k8s.io/kubernetes/pkg/api/testing"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/conversion"
-	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/runtime/schema"
-	"k8s.io/kubernetes/pkg/runtime/serializer/streaming"
-	"k8s.io/kubernetes/pkg/util/diff"
-	"k8s.io/kubernetes/pkg/util/sets"
-	"k8s.io/kubernetes/pkg/watch"
-	"k8s.io/kubernetes/pkg/watch/versioned"
 )
 
 var fuzzIters = flag.Int("fuzz-iters", 20, "How many fuzzing iterations to do.")
@@ -445,7 +444,7 @@ func TestObjectWatchFraming(t *testing.T) {
 		if err := embedded.Encode(v1secret, obj); err != nil {
 			t.Fatal(err)
 		}
-		event := &versioned.Event{Type: string(watch.Added)}
+		event := &metav1.WatchEvent{Type: string(watch.Added)}
 		event.Object.Raw = obj.Bytes()
 		obj = &bytes.Buffer{}
 		if err := s.Encode(event, obj); err != nil {
@@ -457,7 +456,7 @@ func TestObjectWatchFraming(t *testing.T) {
 			t.Fatal(err)
 		}
 		sr = streaming.NewDecoder(framer.NewFrameReader(ioutil.NopCloser(out)), s)
-		outEvent := &versioned.Event{}
+		outEvent := &metav1.WatchEvent{}
 		res, _, err = sr.Decode(nil, outEvent)
 		if err != nil || outEvent.Type != string(watch.Added) {
 			t.Fatalf("%v: %#v", err, outEvent)

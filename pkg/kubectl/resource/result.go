@@ -20,16 +20,16 @@ import (
 	"fmt"
 	"reflect"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apimachinery/registered"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/meta"
-	"k8s.io/kubernetes/pkg/apimachinery/registered"
 	"k8s.io/kubernetes/pkg/apis/extensions"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/runtime/schema"
-	utilerrors "k8s.io/kubernetes/pkg/util/errors"
-	"k8s.io/kubernetes/pkg/util/sets"
-	"k8s.io/kubernetes/pkg/watch"
 )
 
 // ErrMatchFunc can be used to filter errors that may not be true failures.
@@ -40,8 +40,8 @@ type Result struct {
 	err     error
 	visitor Visitor
 
-	sources  []Visitor
-	singular bool
+	sources           []Visitor
+	singleItemImplied bool
 
 	ignoreErrors []utilerrors.Matcher
 
@@ -82,10 +82,10 @@ func (r *Result) Visit(fn VisitorFunc) error {
 	return utilerrors.FilterOut(err, r.ignoreErrors...)
 }
 
-// IntoSingular sets the provided boolean pointer to true if the Builder input
-// reflected a single item, or multiple.
-func (r *Result) IntoSingular(b *bool) *Result {
-	*b = r.singular
+// IntoSingleItemImplied sets the provided boolean pointer to true if the Builder input
+// implies a single item, or multiple.
+func (r *Result) IntoSingleItemImplied(b *bool) *Result {
+	*b = r.singleItemImplied
 	return r
 }
 
@@ -136,7 +136,7 @@ func (r *Result) Object() (runtime.Object, error) {
 	}
 
 	if len(objects) == 1 {
-		if r.singular {
+		if r.singleItemImplied {
 			return objects[0], nil
 		}
 		// if the item is a list already, don't create another list

@@ -36,6 +36,7 @@ go_library(
         "//pkg/runtime/schema:go_default_library",
         "//pkg/util/errors:go_default_library",
         "//vendor:github.com/gogo/protobuf/proto",
+        "//vendor:k8s.io/apimachinery/pkg/conversion",
     ],
 )
 
@@ -52,18 +53,11 @@ go_test(
         "conversion_test.go",
         "embedded_test.go",
         "extension_test.go",
-        "helper_test.go",
         "scheme_test.go",
-        "unversioned_test.go",
     ],
     tags = ["automanaged"],
     deps = [
-        "//pkg/api:go_default_library",
         "//pkg/api/meta:go_default_library",
-        "//pkg/api/testapi:go_default_library",
-        "//pkg/apimachinery/registered:go_default_library",
-        "//pkg/apis/extensions:go_default_library",
-        "//pkg/apis/meta/v1:go_default_library",
         "//pkg/conversion:go_default_library",
         "//pkg/runtime:go_default_library",
         "//pkg/runtime/schema:go_default_library",

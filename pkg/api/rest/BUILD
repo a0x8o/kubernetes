@@ -5,6 +5,7 @@ licenses(["notice"])
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
+    "go_test",
 )
 
 go_library(
@@ -14,6 +15,7 @@ go_library(
         "delete.go",
         "doc.go",
         "export.go",
+        "meta.go",
         "rest.go",
         "types.go",
         "update.go",
@@ -22,15 +24,16 @@ go_library(
     deps = [
         "//pkg/api:go_default_library",
         "//pkg/api/errors:go_default_library",
-        "//pkg/api/meta:go_default_library",
         "//pkg/api/validation/genericvalidation:go_default_library",
         "//pkg/api/validation/path:go_default_library",
-        "//pkg/apis/meta/v1:go_default_library",
         "//pkg/genericapiserver/api/request:go_default_library",
-        "//pkg/runtime:go_default_library",
-        "//pkg/runtime/schema:go_default_library",
-        "//pkg/util/validation/field:go_default_library",
-        "//pkg/watch:go_default_library",
+        "//pkg/util/uuid:go_default_library",
+        "//vendor:k8s.io/apimachinery/pkg/api/meta",
+        "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
+        "//vendor:k8s.io/apimachinery/pkg/runtime",
+        "//vendor:k8s.io/apimachinery/pkg/runtime/schema",
+        "//vendor:k8s.io/apimachinery/pkg/util/validation/field",
+        "//vendor:k8s.io/apimachinery/pkg/watch",
     ],
 )
 
@@ -48,4 +51,16 @@ filegroup(
         "//pkg/api/rest/resttest:all-srcs",
     ],
     tags = ["automanaged"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["meta_test.go"],
+    library = ":go_default_library",
+    tags = ["automanaged"],
+    deps = [
+        "//pkg/api:go_default_library",
+        "//pkg/genericapiserver/api/request:go_default_library",
+        "//pkg/util/uuid:go_default_library",
+    ],
 )

@@ -23,18 +23,18 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/golang/glog"
-	"k8s.io/kubernetes/pkg/api/meta"
-	"k8s.io/kubernetes/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/kubernetes/pkg/kubectl"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
-	"k8s.io/kubernetes/pkg/runtime"
-	utilerrors "k8s.io/kubernetes/pkg/util/errors"
 	"k8s.io/kubernetes/pkg/util/i18n"
 	"k8s.io/kubernetes/pkg/util/interrupt"
-	"k8s.io/kubernetes/pkg/util/sets"
-	"k8s.io/kubernetes/pkg/watch"
 )
 
 // GetOptions is the start of the data required to perform the operation.  As new fields are added, add them here instead of
@@ -307,10 +307,10 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 		// 2. if there is a single item and that item is a list, leave it as its specific list
 		// 3. if there is a single item and it is not a a list, leave it as a single item
 		var errs []error
-		singular := false
-		infos, err := r.IntoSingular(&singular).Infos()
+		singleItemImplied := false
+		infos, err := r.IntoSingleItemImplied(&singleItemImplied).Infos()
 		if err != nil {
-			if singular {
+			if singleItemImplied {
 				return err
 			}
 			errs = append(errs, err)
@@ -325,9 +325,7 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 		}
 
 		var obj runtime.Object
-		if singular {
-			obj = infos[0].Object
-		} else {
+		if !singleItemImplied || len(infos) > 1 {
 			// we have more than one item, so coerce all items into a list
 			list := &unstructured.UnstructuredList{
 				Object: map[string]interface{}{
@@ -340,6 +338,8 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 				list.Items = append(list.Items, info.Object.(*unstructured.Unstructured))
 			}
 			obj = list
+		} else {
+			obj = infos[0].Object
 		}
 
 		isList := meta.IsListType(obj)

@@ -20,18 +20,18 @@ import (
 	"fmt"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/apimachinery/registered"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubernetes/pkg/api/resource"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	"k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/apimachinery/registered"
 	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset/fake"
 	"k8s.io/kubernetes/pkg/client/testing/core"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/informers"
-	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/securitycontext"
 )
 
@@ -254,6 +254,23 @@ func allocatableResources(memory, cpu string) v1.ResourceList {
 // DaemonSets should not place onto nodes with insufficient free resource
 func TestInsufficentCapacityNodeDaemonDoesNotLaunchPod(t *testing.T) {
 	podSpec := resourcePodSpec("too-much-mem", "75M", "75m")
+	manager, podControl, _ := newTestController()
+	node := newNode("too-much-mem", nil)
+	node.Status.Allocatable = allocatableResources("100M", "200m")
+	manager.nodeStore.Add(node)
+	manager.podStore.Indexer.Add(&v1.Pod{
+		Spec: podSpec,
+	})
+	ds := newDaemonSet("foo")
+	ds.Spec.Template.Spec = podSpec
+	manager.dsStore.Add(ds)
+	syncAndValidateDaemonSets(t, manager, ds, podControl, 0, 0)
+}
+
+// DaemonSets should not unschedule a daemonset pod from a node with insufficient free resource
+func TestInsufficentCapacityNodeDaemonDoesNotUnscheduleRunningPod(t *testing.T) {
+	podSpec := resourcePodSpec("too-much-mem", "75M", "75m")
+	podSpec.NodeName = "too-much-mem"
 	manager, podControl, _ := newTestController()
 	node := newNode("too-much-mem", nil)
 	node.Status.Allocatable = allocatableResources("100M", "200m")
@@ -632,5 +649,121 @@ func TestObservedGeneration(t *testing.T) {
 	syncAndValidateDaemonSets(t, manager, daemon, podControl, 0, 0)
 	if updated.Status.ObservedGeneration != daemon.Generation {
 		t.Errorf("Wrong ObservedGeneration for daemon %s in status. Expected %d, got %d", updated.Name, daemon.Generation, updated.Status.ObservedGeneration)
+	}
+}
+
+func TestNodeShouldRunDaemonPod(t *testing.T) {
+	cases := []struct {
+		podsOnNode                                       []*v1.Pod
+		ds                                               *extensions.DaemonSet
+		wantToRun, shouldSchedule, shouldContinueRunning bool
+		err                                              error
+	}{
+		{
+			ds: &extensions.DaemonSet{
+				Spec: extensions.DaemonSetSpec{
+					Selector: &metav1.LabelSelector{MatchLabels: simpleDaemonSetLabel},
+					Template: v1.PodTemplateSpec{
+						ObjectMeta: v1.ObjectMeta{
+							Labels: simpleDaemonSetLabel,
+						},
+						Spec: resourcePodSpec("", "50M", "0.5"),
+					},
+				},
+			},
+			wantToRun:             true,
+			shouldSchedule:        true,
+			shouldContinueRunning: true,
+		},
+		{
+			ds: &extensions.DaemonSet{
+				Spec: extensions.DaemonSetSpec{
+					Selector: &metav1.LabelSelector{MatchLabels: simpleDaemonSetLabel},
+					Template: v1.PodTemplateSpec{
+						ObjectMeta: v1.ObjectMeta{
+							Labels: simpleDaemonSetLabel,
+						},
+						Spec: resourcePodSpec("", "200M", "0.5"),
+					},
+				},
+			},
+			wantToRun:             true,
+			shouldSchedule:        false,
+			shouldContinueRunning: true,
+		},
+		{
+			ds: &extensions.DaemonSet{
+				Spec: extensions.DaemonSetSpec{
+					Selector: &metav1.LabelSelector{MatchLabels: simpleDaemonSetLabel},
+					Template: v1.PodTemplateSpec{
+						ObjectMeta: v1.ObjectMeta{
+							Labels: simpleDaemonSetLabel,
+						},
+						Spec: resourcePodSpec("other-node", "50M", "0.5"),
+					},
+				},
+			},
+			wantToRun:             false,
+			shouldSchedule:        false,
+			shouldContinueRunning: false,
+		},
+		{
+			podsOnNode: []*v1.Pod{
+				{
+					Spec: v1.PodSpec{
+						Containers: []v1.Container{{
+							Ports: []v1.ContainerPort{{
+								HostPort: 666,
+							}},
+						}},
+					},
+				},
+			},
+			ds: &extensions.DaemonSet{
+				Spec: extensions.DaemonSetSpec{
+					Selector: &metav1.LabelSelector{MatchLabels: simpleDaemonSetLabel},
+					Template: v1.PodTemplateSpec{
+						ObjectMeta: v1.ObjectMeta{
+							Labels: simpleDaemonSetLabel,
+						},
+						Spec: v1.PodSpec{
+							Containers: []v1.Container{{
+								Ports: []v1.ContainerPort{{
+									HostPort: 666,
+								}},
+							}},
+						},
+					},
+				},
+			},
+			wantToRun:             false,
+			shouldSchedule:        false,
+			shouldContinueRunning: false,
+		},
+	}
+
+	for i, c := range cases {
+		node := newNode("test-node", nil)
+		node.Status.Allocatable = allocatableResources("100M", "1")
+		manager, _, _ := newTestController()
+		manager.nodeStore.Store.Add(node)
+		for _, p := range c.podsOnNode {
+			manager.podStore.Indexer.Add(p)
+			p.Spec.NodeName = "test-node"
+		}
+		wantToRun, shouldSchedule, shouldContinueRunning, err := manager.nodeShouldRunDaemonPod(node, c.ds)
+
+		if wantToRun != c.wantToRun {
+			t.Errorf("[%v] expected wantToRun: %v, got: %v", i, c.wantToRun, wantToRun)
+		}
+		if shouldSchedule != c.shouldSchedule {
+			t.Errorf("[%v] expected shouldSchedule: %v, got: %v", i, c.shouldSchedule, shouldSchedule)
+		}
+		if shouldContinueRunning != c.shouldContinueRunning {
+			t.Errorf("[%v] expected shouldContinueRunning: %v, got: %v", i, c.shouldContinueRunning, shouldContinueRunning)
+		}
+		if err != c.err {
+			t.Errorf("[%v] expected err: %v, got: %v", i, c.err, err)
+		}
 	}
 }

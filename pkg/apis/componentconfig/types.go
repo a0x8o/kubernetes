@@ -17,8 +17,8 @@ limitations under the License.
 package componentconfig
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/api"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	utilconfig "k8s.io/kubernetes/pkg/util/config"
 )
 
@@ -601,6 +601,13 @@ type LeaderElectionConfiguration struct {
 type KubeControllerManagerConfiguration struct {
 	metav1.TypeMeta
 
+	// Controllers is the list of controllers to enable or disable
+	// '*' means "all enabled by default controllers"
+	// 'foo' means "enable 'foo'"
+	// '-foo' means "disable 'foo'"
+	// first item for a particular name wins
+	Controllers []string
+
 	// port is the port that the controller-manager's http service runs on.
 	Port int32
 	// address is the IP address to serve on (set to 0.0.0.0 for all interfaces).
@@ -772,6 +779,13 @@ type KubeControllerManagerConfiguration struct {
 	// Zone is treated as unhealthy in nodeEvictionRate and secondaryNodeEvictionRate when at least
 	// unhealthyZoneThreshold (no less than 3) of Nodes in the zone are NotReady
 	UnhealthyZoneThreshold float32
+	// Reconciler runs a periodic loop to reconcile the desired state of the with
+	// the actual state of the world by triggering attach detach operations.
+	// This flag enables or disables reconcile.  Is false by default, and thus enabled.
+	DisableAttachDetachReconcilerSync bool
+	// ReconcilerSyncLoopPeriod is the amount of time the reconciler sync states loop
+	// wait between successive executions. Is set to 5 sec by default.
+	ReconcilerSyncLoopPeriod metav1.Duration
 }
 
 // VolumeConfiguration contains *all* enumerated flags meant to configure all volume

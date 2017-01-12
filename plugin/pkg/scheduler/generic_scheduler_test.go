@@ -21,14 +21,15 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/api/resource"
 	"k8s.io/kubernetes/pkg/api/v1"
 	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
-	"k8s.io/kubernetes/pkg/util/sets"
-	"k8s.io/kubernetes/pkg/util/wait"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm"
 	algorithmpredicates "k8s.io/kubernetes/plugin/pkg/scheduler/algorithm/predicates"
 	algorithmpriorities "k8s.io/kubernetes/plugin/pkg/scheduler/algorithm/priorities"
@@ -395,6 +396,23 @@ func makeNode(node string, milliCPU, memory int64) *v1.Node {
 			},
 		},
 	}
+}
+
+func TestHumanReadableFitError(t *testing.T) {
+	error := &FitError{
+		Pod: &v1.Pod{ObjectMeta: v1.ObjectMeta{Name: "2"}},
+		FailedPredicates: FailedPredicateMap{
+			"1": []algorithm.PredicateFailureReason{algorithmpredicates.ErrNodeUnderMemoryPressure},
+			"2": []algorithm.PredicateFailureReason{algorithmpredicates.ErrNodeUnderDiskPressure},
+			"3": []algorithm.PredicateFailureReason{algorithmpredicates.ErrNodeUnderDiskPressure},
+		},
+	}
+	if strings.Contains(error.Error(), "No nodes are available that match all of the following predicates") {
+		if strings.Contains(error.Error(), "NodeUnderDiskPressure (2)") && strings.Contains(error.Error(), "NodeUnderMemoryPressure (1)") {
+			return
+		}
+	}
+	t.Errorf("Error message doesn't have all the information content: [" + error.Error() + "]")
 }
 
 // The point of this test is to show that you:

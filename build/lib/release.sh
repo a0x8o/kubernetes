@@ -85,10 +85,13 @@ function kube::release::package_tarballs() {
   mkdir -p "${RELEASE_DIR}"
   kube::release::package_src_tarball &
   kube::release::package_client_tarballs &
-  kube::release::package_node_tarballs &
-  kube::release::package_server_tarballs &
   kube::release::package_salt_tarball &
   kube::release::package_kube_manifests_tarball &
+  kube::util::wait-for-jobs || { kube::log::error "previous tarball phase failed"; return 1; }
+
+  # _node and _server tarballs depend on _src tarball
+  kube::release::package_node_tarballs &
+  kube::release::package_server_tarballs &
   kube::util::wait-for-jobs || { kube::log::error "previous tarball phase failed"; return 1; }
 
   kube::release::package_final_tarball & # _final depends on some of the previous phases
@@ -295,7 +298,7 @@ function kube::release::create_docker_images_for_server() {
           local docker_image_tag=gcr.io/google_containers/${binary_name}-${arch}:${md5_sum}
         fi
 
-        "${DOCKER[@]}" build -q -t "${docker_image_tag}" ${docker_build_path} >/dev/null
+        "${DOCKER[@]}" build --pull -q -t "${docker_image_tag}" ${docker_build_path} >/dev/null
         "${DOCKER[@]}" save ${docker_image_tag} > ${binary_dir}/${binary_name}.tar
         echo $md5_sum > ${binary_dir}/${binary_name}.docker_tag
 

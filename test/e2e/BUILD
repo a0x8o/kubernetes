@@ -5,6 +5,7 @@ licenses(["notice"])
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
+    "go_test",
 )
 
 go_library(
@@ -48,7 +49,6 @@ go_library(
         "federation-event.go",
         "federation-replicaset.go",
         "federation-util.go",
-        "federation-util-14.go",
         "firewall.go",
         "garbage_collector.go",
         "generated_clientset.go",
@@ -119,7 +119,6 @@ go_library(
         "//pkg/api/v1:go_default_library",
         "//pkg/api/v1/pod:go_default_library",
         "//pkg/api/v1/service:go_default_library",
-        "//pkg/apimachinery/registered:go_default_library",
         "//pkg/apis/apps/v1beta1:go_default_library",
         "//pkg/apis/autoscaling/v1:go_default_library",
         "//pkg/apis/batch:go_default_library",
@@ -127,7 +126,6 @@ go_library(
         "//pkg/apis/batch/v2alpha1:go_default_library",
         "//pkg/apis/extensions:go_default_library",
         "//pkg/apis/extensions/v1beta1:go_default_library",
-        "//pkg/apis/meta/v1:go_default_library",
         "//pkg/apis/rbac/v1alpha1:go_default_library",
         "//pkg/apis/storage/util:go_default_library",
         "//pkg/apis/storage/v1beta1:go_default_library",
@@ -156,33 +154,22 @@ go_library(
         "//pkg/kubectl/cmd/util:go_default_library",
         "//pkg/kubelet/api/v1alpha1/stats:go_default_library",
         "//pkg/kubelet/pod:go_default_library",
-        "//pkg/labels:go_default_library",
         "//pkg/master/ports:go_default_library",
         "//pkg/metrics:go_default_library",
         "//pkg/quota/evaluator/core:go_default_library",
         "//pkg/registry/generic/registry:go_default_library",
-        "//pkg/runtime:go_default_library",
-        "//pkg/runtime/schema:go_default_library",
         "//pkg/security/apparmor:go_default_library",
         "//pkg/serviceaccount:go_default_library",
-        "//pkg/types:go_default_library",
         "//pkg/util:go_default_library",
         "//pkg/util/exec:go_default_library",
         "//pkg/util/flowcontrol:go_default_library",
         "//pkg/util/intstr:go_default_library",
-        "//pkg/util/json:go_default_library",
         "//pkg/util/logs:go_default_library",
-        "//pkg/util/net:go_default_library",
-        "//pkg/util/runtime:go_default_library",
-        "//pkg/util/sets:go_default_library",
         "//pkg/util/system:go_default_library",
         "//pkg/util/uuid:go_default_library",
         "//pkg/util/version:go_default_library",
-        "//pkg/util/wait:go_default_library",
         "//pkg/util/workqueue:go_default_library",
-        "//pkg/util/yaml:go_default_library",
         "//pkg/volume/util/volumehelper:go_default_library",
-        "//pkg/watch:go_default_library",
         "//plugin/pkg/admission/serviceaccount:go_default_library",
         "//test/e2e/chaosmonkey:go_default_library",
         "//test/e2e/common:go_default_library",
@@ -209,6 +196,19 @@ go_library(
         "//vendor:google.golang.org/api/compute/v1",
         "//vendor:google.golang.org/api/googleapi",
         "//vendor:gopkg.in/inf.v0",
+        "//vendor:k8s.io/apimachinery/pkg/apimachinery/registered",
+        "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
+        "//vendor:k8s.io/apimachinery/pkg/labels",
+        "//vendor:k8s.io/apimachinery/pkg/runtime",
+        "//vendor:k8s.io/apimachinery/pkg/runtime/schema",
+        "//vendor:k8s.io/apimachinery/pkg/types",
+        "//vendor:k8s.io/apimachinery/pkg/util/json",
+        "//vendor:k8s.io/apimachinery/pkg/util/net",
+        "//vendor:k8s.io/apimachinery/pkg/util/runtime",
+        "//vendor:k8s.io/apimachinery/pkg/util/sets",
+        "//vendor:k8s.io/apimachinery/pkg/util/wait",
+        "//vendor:k8s.io/apimachinery/pkg/util/yaml",
+        "//vendor:k8s.io/apimachinery/pkg/watch",
         "//vendor:k8s.io/client-go/kubernetes",
         "//vendor:k8s.io/client-go/pkg/api/v1",
         "//vendor:k8s.io/client-go/pkg/apis/extensions/v1beta1",
@@ -218,18 +218,17 @@ go_library(
     ],
 )
 
-# this is a private library until we can support building the
-# test binary
-# TODO(mikedanese): fix @io_bazelbuild/rules_go
-go_library(
+go_test(
     name = "go_default_test",
     srcs = [
         "e2e_test.go",
         "metrics_grabber_test.go",
     ],
     library = ":go_default_library",
-    tags = ["automanaged"],
-    visibility = ["//visibility:private"],
+    tags = [
+        "automanaged",
+        "integration",
+    ],
     deps = [
         "//pkg/api/v1:go_default_library",
         "//pkg/client/clientset_generated/clientset:go_default_library",
@@ -238,6 +237,15 @@ go_library(
         "//vendor:github.com/onsi/ginkgo",
         "//vendor:github.com/onsi/gomega",
     ],
+)
+
+genrule(
+    name = "gen_e2e.test",
+    testonly = 1,
+    srcs = [":go_default_test"],
+    outs = ["e2e.test"],
+    cmd = "srcs=($(SRCS)); cp $$(dirname $${srcs[0]})/go_default_test $@;",
+    output_to_bindir = 1,
 )
 
 filegroup(

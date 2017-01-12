@@ -25,7 +25,7 @@ go_test(
     tags = ["automanaged"],
     deps = [
         "//pkg/api:go_default_library",
-        "//pkg/util/sets:go_default_library",
+        "//vendor:k8s.io/apimachinery/pkg/util/sets",
     ],
 )
 
@@ -41,7 +41,7 @@ filegroup(
     srcs = [
         ":package-srcs",
         "//pkg/registry/core/service/ipallocator/controller:all-srcs",
-        "//pkg/registry/core/service/ipallocator/etcd:all-srcs",
+        "//pkg/registry/core/service/ipallocator/storage:all-srcs",
     ],
     tags = ["automanaged"],
 )

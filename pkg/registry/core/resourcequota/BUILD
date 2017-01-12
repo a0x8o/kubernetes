@@ -20,11 +20,11 @@ go_library(
         "//pkg/api/validation:go_default_library",
         "//pkg/fields:go_default_library",
         "//pkg/genericapiserver/api/request:go_default_library",
-        "//pkg/labels:go_default_library",
         "//pkg/registry/generic:go_default_library",
-        "//pkg/runtime:go_default_library",
         "//pkg/storage:go_default_library",
-        "//pkg/util/validation/field:go_default_library",
+        "//vendor:k8s.io/apimachinery/pkg/labels",
+        "//vendor:k8s.io/apimachinery/pkg/runtime",
+        "//vendor:k8s.io/apimachinery/pkg/util/validation/field",
     ],
 )
 
@@ -37,8 +37,8 @@ go_test(
         "//pkg/api:go_default_library",
         "//pkg/api/resource:go_default_library",
         "//pkg/api/testing:go_default_library",
-        "//pkg/apimachinery/registered:go_default_library",
         "//pkg/genericapiserver/api/request:go_default_library",
+        "//vendor:k8s.io/apimachinery/pkg/apimachinery/registered",
     ],
 )
 
@@ -53,7 +53,7 @@ filegroup(
     name = "all-srcs",
     srcs = [
         ":package-srcs",
-        "//pkg/registry/core/resourcequota/etcd:all-srcs",
+        "//pkg/registry/core/resourcequota/storage:all-srcs",
     ],
     tags = ["automanaged"],
 )

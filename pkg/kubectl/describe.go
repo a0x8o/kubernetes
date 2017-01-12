@@ -28,6 +28,11 @@ import (
 	"strings"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/kubernetes/federation/apis/federation"
 	fedclientset "k8s.io/kubernetes/federation/client/clientset_generated/federation_internalclientset"
 	"k8s.io/kubernetes/pkg/api"
@@ -40,7 +45,6 @@ import (
 	"k8s.io/kubernetes/pkg/apis/certificates"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	versionedextension "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/apis/policy"
 	"k8s.io/kubernetes/pkg/apis/storage"
 	storageutil "k8s.io/kubernetes/pkg/apis/storage/util"
@@ -51,13 +55,8 @@ import (
 	deploymentutil "k8s.io/kubernetes/pkg/controller/deployment/util"
 	"k8s.io/kubernetes/pkg/fieldpath"
 	"k8s.io/kubernetes/pkg/fields"
-	"k8s.io/kubernetes/pkg/kubelet/qos"
-	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/runtime/schema"
-	"k8s.io/kubernetes/pkg/types"
 	certutil "k8s.io/kubernetes/pkg/util/cert"
 	"k8s.io/kubernetes/pkg/util/intstr"
-	"k8s.io/kubernetes/pkg/util/sets"
 
 	"github.com/golang/glog"
 )
@@ -411,13 +410,13 @@ func (d *ResourceQuotaDescriber) Describe(namespace, name string, describerSetti
 func helpTextForResourceQuotaScope(scope api.ResourceQuotaScope) string {
 	switch scope {
 	case api.ResourceQuotaScopeTerminating:
-		return "Matches all pods that have an active deadline."
+		return "Matches all pods that have an active deadline. These pods have a limited lifespan on a node before being actively terminated by the system."
 	case api.ResourceQuotaScopeNotTerminating:
-		return "Matches all pods that do not have an active deadline."
+		return "Matches all pods that do not have an active deadline. These pods usually include long running pods whose container command is not expected to terminate."
 	case api.ResourceQuotaScopeBestEffort:
-		return "Matches all pods that have best effort quality of service."
+		return "Matches all pods that do not have resource requirements set. These pods have a best effort quality of service."
 	case api.ResourceQuotaScopeNotBestEffort:
-		return "Matches all pods that do not have best effort quality of service."
+		return "Matches all pods that have at least one resource requirement set. These pods have a burstable or guaranteed quality of service."
 	default:
 		return ""
 	}
@@ -538,7 +537,7 @@ func describePod(pod *api.Pod, events *api.EventList) (string, error) {
 			}
 		}
 		describeVolumes(pod.Spec.Volumes, w, "")
-		w.Write(LEVEL_0, "QoS Class:\t%s\n", qos.InternalGetPodQOS(pod))
+		w.Write(LEVEL_0, "QoS Class:\t%s\n", pod.Status.QOSClass)
 		printLabelsMultiline(w, "Node-Selectors", pod.Spec.NodeSelector)
 		printTolerationsInAnnotationMultiline(w, "Tolerations", pod.Annotations)
 		if events != nil {
@@ -2267,7 +2266,7 @@ func (dd *DeploymentDescriber) Describe(namespace, name string, describerSetting
 		w.Write(LEVEL_0, "CreationTimestamp:\t%s\n", d.CreationTimestamp.Time.Format(time.RFC1123Z))
 		printLabelsMultiline(w, "Labels", d.Labels)
 		w.Write(LEVEL_0, "Selector:\t%s\n", selector)
-		w.Write(LEVEL_0, "Replicas:\t%d updated | %d total | %d available | %d unavailable\n", d.Status.UpdatedReplicas, d.Spec.Replicas, d.Status.AvailableReplicas, d.Status.UnavailableReplicas)
+		w.Write(LEVEL_0, "Replicas:\t%d updated | %d total | %d available | %d unavailable\n", d.Status.UpdatedReplicas, *d.Spec.Replicas, d.Status.AvailableReplicas, d.Status.UnavailableReplicas)
 		w.Write(LEVEL_0, "StrategyType:\t%s\n", d.Spec.Strategy.Type)
 		w.Write(LEVEL_0, "MinReadySeconds:\t%d\n", d.Spec.MinReadySeconds)
 		if d.Spec.Strategy.RollingUpdate != nil {
@@ -2350,7 +2349,7 @@ func printReplicaSetsByLabels(matchingRSs []*versionedextension.ReplicaSet) stri
 	// Format the matching ReplicaSets into strings.
 	rsStrings := make([]string, 0, len(matchingRSs))
 	for _, rs := range matchingRSs {
-		rsStrings = append(rsStrings, fmt.Sprintf("%s (%d/%d replicas created)", rs.Name, rs.Status.Replicas, rs.Spec.Replicas))
+		rsStrings = append(rsStrings, fmt.Sprintf("%s (%d/%d replicas created)", rs.Name, rs.Status.Replicas, *rs.Spec.Replicas))
 	}
 
 	list := strings.Join(rsStrings, ", ")

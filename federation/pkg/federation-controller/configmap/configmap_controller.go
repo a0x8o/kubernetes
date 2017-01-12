@@ -19,6 +19,9 @@ package configmap
 import (
 	"time"
 
+	pkgruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/watch"
 	federationapi "k8s.io/kubernetes/federation/apis/federation/v1beta1"
 	federationclientset "k8s.io/kubernetes/federation/client/clientset_generated/federation_clientset"
 	"k8s.io/kubernetes/federation/pkg/federation-controller/util"
@@ -29,10 +32,7 @@ import (
 	kubeclientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/record"
 	"k8s.io/kubernetes/pkg/controller"
-	pkgruntime "k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/types"
 	"k8s.io/kubernetes/pkg/util/flowcontrol"
-	"k8s.io/kubernetes/pkg/watch"
 
 	"github.com/golang/glog"
 )
@@ -125,7 +125,7 @@ func NewConfigMapController(client federationclientset.Interface) *ConfigMapCont
 				&apiv1.ConfigMap{},
 				controller.NoResyncPeriodFunc(),
 				// Trigger reconciliation whenever something in federated cluster is changed. In most cases it
-				// would be just confirmation that some configmap opration succeeded.
+				// would be just confirmation that some configmap operation succeeded.
 				util.NewTriggerOnAllChanges(
 					func(obj pkgruntime.Object) {
 						configmapcontroller.deliverConfigMapObj(obj, configmapcontroller.configmapReviewDelay, false)

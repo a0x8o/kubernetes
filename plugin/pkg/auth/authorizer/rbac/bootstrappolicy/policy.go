@@ -219,6 +219,8 @@ func ClusterRoles() []rbac.ClusterRole {
 				// Used to build serviceLister
 				rbac.NewRule("list", "watch").Groups(legacyGroup).Resources("services", "endpoints").RuleOrDie(),
 				rbac.NewRule("get").Groups(legacyGroup).Resources("nodes").RuleOrDie(),
+
+				eventsRule(),
 			},
 		},
 		{
@@ -232,7 +234,7 @@ func ClusterRoles() []rbac.ClusterRole {
 		},
 		{
 			// a role to use for the API registry, summarization, and proxy handling
-			ObjectMeta: api.ObjectMeta{Name: "system:kubernetes-discovery"},
+			ObjectMeta: api.ObjectMeta{Name: "system:kube-aggregator"},
 			Rules: []rbac.PolicyRule{
 				// it needs to see all services so that it knows whether the ones it points to exist or not
 				rbac.NewRule(Read...).Groups(legacyGroup).Resources("services", "endpoints").RuleOrDie(),

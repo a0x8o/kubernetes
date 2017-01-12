@@ -24,13 +24,13 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/kubectl"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
-	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/util/i18n"
 	"k8s.io/kubernetes/pkg/util/strategicpatch"
 )
@@ -197,14 +197,14 @@ func (o AnnotateOptions) RunAnnotate(f cmdutil.Factory, cmd *cobra.Command) erro
 		return err
 	}
 
-	var singularResource bool
-	r.IntoSingular(&singularResource)
+	var singleItemImpliedResource bool
+	r.IntoSingleItemImplied(&singleItemImpliedResource)
 
 	// only apply resource version locking on a single resource.
 	// we must perform this check after o.builder.Do() as
 	// []o.resources can not not accurately return the proper number
 	// of resources when they are not passed in "resource/name" format.
-	if !singularResource && len(o.resourceVersion) > 0 {
+	if !singleItemImpliedResource && len(o.resourceVersion) > 0 {
 		return fmt.Errorf("--resource-version may only be used with a single resource")
 	}
 

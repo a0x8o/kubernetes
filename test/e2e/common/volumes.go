@@ -47,10 +47,10 @@ import (
 	"strings"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apierrs "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/v1"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
-	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/test/e2e/framework"
 
 	"github.com/golang/glog"
@@ -364,7 +364,7 @@ var _ = framework.KubeDescribe("GCP Volumes", func() {
 	////////////////////////////////////////////////////////////////////////
 
 	framework.KubeDescribe("NFSv4", func() {
-		It("should be mountable for NFSv4", func() {
+		It("should be mountable for NFSv4 [Volume]", func() {
 			config := VolumeTestConfig{
 				namespace:   namespace.Name,
 				prefix:      "nfs",
@@ -398,7 +398,7 @@ var _ = framework.KubeDescribe("GCP Volumes", func() {
 	////////////////////////////////////////////////////////////////////////
 
 	framework.KubeDescribe("GlusterFS", func() {
-		It("should be mountable", func() {
+		It("should be mountable [Volume]", func() {
 			config := VolumeTestConfig{
 				namespace:   namespace.Name,
 				prefix:      "gluster",

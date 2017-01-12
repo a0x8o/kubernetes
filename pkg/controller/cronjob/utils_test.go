@@ -17,17 +17,14 @@ limitations under the License.
 package cronjob
 
 import (
-	//"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/api/v1"
 	batch "k8s.io/kubernetes/pkg/apis/batch/v2alpha1"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/types"
-	//"k8s.io/kubernetes/pkg/controller"
-	// "k8s.io/kubernetes/pkg/util/rand"
 )
 
 func TestGetJobFromTemplate(t *testing.T) {

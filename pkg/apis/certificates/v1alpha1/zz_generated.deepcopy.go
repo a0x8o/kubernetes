@@ -21,9 +21,9 @@ limitations under the License.
 package v1alpha1
 
 import (
+	conversion "k8s.io/apimachinery/pkg/conversion"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 	v1 "k8s.io/kubernetes/pkg/api/v1"
-	conversion "k8s.io/kubernetes/pkg/conversion"
-	runtime "k8s.io/kubernetes/pkg/runtime"
 	reflect "reflect"
 )
 
@@ -98,6 +98,13 @@ func DeepCopy_v1alpha1_CertificateSigningRequestSpec(in interface{}, out interfa
 			in, out := &in.Request, &out.Request
 			*out = make([]byte, len(*in))
 			copy(*out, *in)
+		}
+		if in.Usages != nil {
+			in, out := &in.Usages, &out.Usages
+			*out = make([]KeyUsage, len(*in))
+			for i := range *in {
+				(*out)[i] = (*in)[i]
+			}
 		}
 		if in.Groups != nil {
 			in, out := &in.Groups, &out.Groups

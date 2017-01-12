@@ -30,28 +30,28 @@ import (
 	"text/template"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/kubernetes/federation/apis/federation"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/events"
-	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/apis/apps"
 	"k8s.io/kubernetes/pkg/apis/autoscaling"
 	"k8s.io/kubernetes/pkg/apis/batch"
 	"k8s.io/kubernetes/pkg/apis/certificates"
 	"k8s.io/kubernetes/pkg/apis/extensions"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/apis/meta/v1/unstructured"
 	"k8s.io/kubernetes/pkg/apis/policy"
 	"k8s.io/kubernetes/pkg/apis/rbac"
 	"k8s.io/kubernetes/pkg/apis/storage"
 	storageutil "k8s.io/kubernetes/pkg/apis/storage/util"
-	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/runtime/schema"
-	utilerrors "k8s.io/kubernetes/pkg/util/errors"
 	"k8s.io/kubernetes/pkg/util/jsonpath"
 	"k8s.io/kubernetes/pkg/util/node"
-	"k8s.io/kubernetes/pkg/util/sets"
 
 	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
@@ -71,7 +71,7 @@ const (
 // is agnostic to schema versions, so you must send arguments to PrintObj in the
 // version you wish them to be shown using a VersionedPrinter (typically when
 // generic is true).
-func GetPrinter(format, formatArgument string, noHeaders bool) (ResourcePrinter, bool, error) {
+func GetPrinter(format, formatArgument string, noHeaders, allowMissingTemplateKeys bool) (ResourcePrinter, bool, error) {
 	var printer ResourcePrinter
 	switch format {
 	case "json":
@@ -88,11 +88,12 @@ func GetPrinter(format, formatArgument string, noHeaders bool) (ResourcePrinter,
 		if len(formatArgument) == 0 {
 			return nil, false, fmt.Errorf("template format specified but no template given")
 		}
-		var err error
-		printer, err = NewTemplatePrinter([]byte(formatArgument))
+		templatePrinter, err := NewTemplatePrinter([]byte(formatArgument))
 		if err != nil {
 			return nil, false, fmt.Errorf("error parsing template %s, %v\n", formatArgument, err)
 		}
+		templatePrinter.AllowMissingKeys(allowMissingTemplateKeys)
+		printer = templatePrinter
 	case "templatefile", "go-template-file":
 		if len(formatArgument) == 0 {
 			return nil, false, fmt.Errorf("templatefile format specified but no template file given")
@@ -101,19 +102,22 @@ func GetPrinter(format, formatArgument string, noHeaders bool) (ResourcePrinter,
 		if err != nil {
 			return nil, false, fmt.Errorf("error reading template %s, %v\n", formatArgument, err)
 		}
-		printer, err = NewTemplatePrinter(data)
+		templatePrinter, err := NewTemplatePrinter(data)
 		if err != nil {
 			return nil, false, fmt.Errorf("error parsing template %s, %v\n", string(data), err)
 		}
+		templatePrinter.AllowMissingKeys(allowMissingTemplateKeys)
+		printer = templatePrinter
 	case "jsonpath":
 		if len(formatArgument) == 0 {
 			return nil, false, fmt.Errorf("jsonpath template format specified but no template given")
 		}
-		var err error
-		printer, err = NewJSONPathPrinter(formatArgument)
+		jsonpathPrinter, err := NewJSONPathPrinter(formatArgument)
 		if err != nil {
 			return nil, false, fmt.Errorf("error parsing jsonpath %s, %v\n", formatArgument, err)
 		}
+		jsonpathPrinter.AllowMissingKeys(allowMissingTemplateKeys)
+		printer = jsonpathPrinter
 	case "jsonpath-file":
 		if len(formatArgument) == 0 {
 			return nil, false, fmt.Errorf("jsonpath file format specified but no template file file given")
@@ -122,10 +126,12 @@ func GetPrinter(format, formatArgument string, noHeaders bool) (ResourcePrinter,
 		if err != nil {
 			return nil, false, fmt.Errorf("error reading template %s, %v\n", formatArgument, err)
 		}
-		printer, err = NewJSONPathPrinter(string(data))
+		jsonpathPrinter, err := NewJSONPathPrinter(string(data))
 		if err != nil {
 			return nil, false, fmt.Errorf("error parsing template %s, %v\n", string(data), err)
 		}
+		jsonpathPrinter.AllowMissingKeys(allowMissingTemplateKeys)
+		printer = jsonpathPrinter
 	case "custom-columns":
 		var err error
 		if printer, err = NewCustomColumnsPrinterFromSpec(formatArgument, api.Codecs.UniversalDecoder(), noHeaders); err != nil {
@@ -494,7 +500,7 @@ var (
 	statefulSetColumns               = []string{"NAME", "DESIRED", "CURRENT", "AGE"}
 	endpointColumns                  = []string{"NAME", "ENDPOINTS", "AGE"}
 	nodeColumns                      = []string{"NAME", "STATUS", "AGE", "VERSION"}
-	nodeWideColumns                  = []string{"EXTERNAL-IP"}
+	nodeWideColumns                  = []string{"EXTERNAL-IP", "OS-IMAGE", "KERNEL-VERSION"}
 	daemonSetColumns                 = []string{"NAME", "DESIRED", "CURRENT", "READY", "NODE-SELECTOR", "AGE"}
 	daemonSetWideColumns             = []string{"CONTAINER(S)", "IMAGE(S)", "SELECTOR"}
 	eventColumns                     = []string{"LASTSEEN", "FIRSTSEEN", "COUNT", "NAME", "KIND", "SUBOBJECT", "TYPE", "REASON", "SOURCE", "MESSAGE"}
@@ -503,8 +509,8 @@ var (
 	namespaceColumns                 = []string{"NAME", "STATUS", "AGE"}
 	secretColumns                    = []string{"NAME", "TYPE", "DATA", "AGE"}
 	serviceAccountColumns            = []string{"NAME", "SECRETS", "AGE"}
-	persistentVolumeColumns          = []string{"NAME", "CAPACITY", "ACCESSMODES", "RECLAIMPOLICY", "STATUS", "CLAIM", "REASON", "AGE"}
-	persistentVolumeClaimColumns     = []string{"NAME", "STATUS", "VOLUME", "CAPACITY", "ACCESSMODES", "AGE"}
+	persistentVolumeColumns          = []string{"NAME", "CAPACITY", "ACCESSMODES", "RECLAIMPOLICY", "STATUS", "CLAIM", "STORAGECLASS", "REASON", "AGE"}
+	persistentVolumeClaimColumns     = []string{"NAME", "STATUS", "VOLUME", "CAPACITY", "ACCESSMODES", "STORAGECLASS", "AGE"}
 	componentStatusColumns           = []string{"NAME", "STATUS", "MESSAGE", "ERROR"}
 	thirdPartyResourceColumns        = []string{"NAME", "DESCRIPTION", "VERSION(S)"}
 	roleColumns                      = []string{"NAME", "AGE"}
@@ -1550,7 +1556,14 @@ func printNode(node *api.Node, w io.Writer, options PrintOptions) error {
 	}
 
 	if options.Wide {
-		if _, err := fmt.Fprintf(w, "\t%s", getNodeExternalIP(node)); err != nil {
+		osImage, kernelVersion := node.Status.NodeInfo.OSImage, node.Status.NodeInfo.KernelVersion
+		if osImage == "" {
+			osImage = "<unknown>"
+		}
+		if kernelVersion == "" {
+			kernelVersion = "<unknown>"
+		}
+		if _, err := fmt.Fprintf(w, "\t%s\t%s\t%s", getNodeExternalIP(node), osImage, kernelVersion); err != nil {
 			return err
 		}
 	}
@@ -1618,11 +1631,12 @@ func printPersistentVolume(pv *api.PersistentVolume, w io.Writer, options PrintO
 	aQty := pv.Spec.Capacity[api.ResourceStorage]
 	aSize := aQty.String()
 
-	if _, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s",
+	if _, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s",
 		name,
 		aSize, modesStr, reclaimPolicyStr,
 		pv.Status.Phase,
 		claimRefUID,
+		storageutil.GetStorageClassAnnotation(pv.ObjectMeta),
 		pv.Status.Reason,
 		translateTimestamp(pv.CreationTimestamp),
 	); err != nil {
@@ -1665,7 +1679,7 @@ func printPersistentVolumeClaim(pvc *api.PersistentVolumeClaim, w io.Writer, opt
 		capacity = storage.String()
 	}
 
-	if _, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s", name, phase, pvc.Spec.VolumeName, capacity, accessModes, translateTimestamp(pvc.CreationTimestamp)); err != nil {
+	if _, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s", name, phase, pvc.Spec.VolumeName, capacity, accessModes, storageutil.GetStorageClassAnnotation(pvc.ObjectMeta), translateTimestamp(pvc.CreationTimestamp)); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprint(w, AppendLabels(pvc.Labels, options.ColumnLabels)); err != nil {
@@ -2503,6 +2517,15 @@ func NewTemplatePrinter(tmpl []byte) (*TemplatePrinter, error) {
 		rawTemplate: string(tmpl),
 		template:    t,
 	}, nil
+}
+
+// AllowMissingKeys tells the template engine if missing keys are allowed.
+func (p *TemplatePrinter) AllowMissingKeys(allow bool) {
+	if allow {
+		p.template.Option("missingkey=default")
+	} else {
+		p.template.Option("missingkey=error")
+	}
 }
 
 func (p *TemplatePrinter) AfterPrint(w io.Writer, res string) error {

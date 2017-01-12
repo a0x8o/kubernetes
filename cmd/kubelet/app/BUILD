@@ -8,11 +8,28 @@ load(
     "go_test",
 )
 
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "bootstrap_test.go",
+        "server_test.go",
+    ],
+    library = ":go_default_library",
+    tags = ["automanaged"],
+    deps = [
+        "//pkg/client/restclient:go_default_library",
+        "//pkg/kubelet:go_default_library",
+        "//pkg/util/config:go_default_library",
+        "//vendor:k8s.io/apimachinery/pkg/util/diff",
+    ],
+)
+
 go_library(
     name = "go_default_library",
     srcs = [
         "auth.go",
         "bootstrap.go",
+        "clientgo.go",
         "plugins.go",
         "server.go",
         "server_linux.go",
@@ -24,12 +41,9 @@ go_library(
         "//pkg/api/v1:go_default_library",
         "//pkg/apis/componentconfig:go_default_library",
         "//pkg/apis/componentconfig/v1alpha1:go_default_library",
-        "//pkg/apis/meta/v1:go_default_library",
         "//pkg/capabilities:go_default_library",
         "//pkg/client/chaosclient:go_default_library",
         "//pkg/client/clientset_generated/clientset:go_default_library",
-        "//pkg/client/clientset_generated/clientset/typed/authentication/v1beta1:go_default_library",
-        "//pkg/client/clientset_generated/clientset/typed/authorization/v1beta1:go_default_library",
         "//pkg/client/clientset_generated/clientset/typed/certificates/v1alpha1:go_default_library",
         "//pkg/client/clientset_generated/clientset/typed/core/v1:go_default_library",
         "//pkg/client/record:go_default_library",
@@ -57,8 +71,6 @@ go_library(
         "//pkg/kubelet/server:go_default_library",
         "//pkg/kubelet/types:go_default_library",
         "//pkg/kubelet/util/csr:go_default_library",
-        "//pkg/runtime:go_default_library",
-        "//pkg/types:go_default_library",
         "//pkg/util/cert:go_default_library",
         "//pkg/util/config:go_default_library",
         "//pkg/util/configz:go_default_library",
@@ -68,8 +80,6 @@ go_library(
         "//pkg/util/node:go_default_library",
         "//pkg/util/oom:go_default_library",
         "//pkg/util/rlimit:go_default_library",
-        "//pkg/util/runtime:go_default_library",
-        "//pkg/util/wait:go_default_library",
         "//pkg/version:go_default_library",
         "//pkg/volume:go_default_library",
         "//pkg/volume/aws_ebs:go_default_library",
@@ -98,25 +108,21 @@ go_library(
         "//vendor:github.com/spf13/cobra",
         "//vendor:github.com/spf13/pflag",
         "//vendor:golang.org/x/exp/inotify",
+        "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
+        "//vendor:k8s.io/apimachinery/pkg/runtime",
+        "//vendor:k8s.io/apimachinery/pkg/types",
+        "//vendor:k8s.io/apimachinery/pkg/util/runtime",
+        "//vendor:k8s.io/apimachinery/pkg/util/wait",
         "//vendor:k8s.io/apiserver/pkg/authentication/authenticator",
         "//vendor:k8s.io/apiserver/pkg/authorization/authorizer",
         "//vendor:k8s.io/apiserver/pkg/healthz",
-    ],
-)
-
-go_test(
-    name = "go_default_test",
-    srcs = [
-        "bootstrap_test.go",
-        "server_test.go",
-    ],
-    library = ":go_default_library",
-    tags = ["automanaged"],
-    deps = [
-        "//pkg/client/restclient:go_default_library",
-        "//pkg/kubelet:go_default_library",
-        "//pkg/util/config:go_default_library",
-        "//pkg/util/diff:go_default_library",
+        "//vendor:k8s.io/client-go/kubernetes",
+        "//vendor:k8s.io/client-go/kubernetes/typed/authentication/v1beta1",
+        "//vendor:k8s.io/client-go/kubernetes/typed/authorization/v1beta1",
+        "//vendor:k8s.io/client-go/rest",
+        "//vendor:k8s.io/client-go/tools/auth",
+        "//vendor:k8s.io/client-go/tools/clientcmd",
+        "//vendor:k8s.io/client-go/tools/clientcmd/api",
     ],
 )
 

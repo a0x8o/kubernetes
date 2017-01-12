@@ -21,9 +21,9 @@ import (
 	"os"
 	"path"
 
+	"k8s.io/apimachinery/pkg/apimachinery/registered"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/apimachinery/registered"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 
 	. "github.com/onsi/ginkgo"
@@ -39,7 +39,7 @@ var _ = framework.KubeDescribe("HostPath", func() {
 		_ = os.Remove("/tmp/test-file")
 	})
 
-	It("should give a volume the correct mode [Conformance]", func() {
+	It("should give a volume the correct mode [Conformance] [Volume]", func() {
 		volumePath := "/test-volume"
 		source := &v1.HostPathVolumeSource{
 			Path: "/tmp",
@@ -56,7 +56,7 @@ var _ = framework.KubeDescribe("HostPath", func() {
 	})
 
 	// This test requires mounting a folder into a container with write privileges.
-	It("should support r/w", func() {
+	It("should support r/w [Volume]", func() {
 		volumePath := "/test-volume"
 		filePath := path.Join(volumePath, "test-file")
 		retryDuration := 180
@@ -81,7 +81,7 @@ var _ = framework.KubeDescribe("HostPath", func() {
 		})
 	})
 
-	It("should support subPath", func() {
+	It("should support subPath [Volume]", func() {
 		volumePath := "/test-volume"
 		subPath := "sub-path"
 		fileName := "test-file"

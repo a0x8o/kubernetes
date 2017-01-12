@@ -21,10 +21,10 @@ import (
 	"reflect"
 	"strings"
 
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	certificates "k8s.io/kubernetes/pkg/apis/certificates/v1alpha1"
 	clientcertificates "k8s.io/kubernetes/pkg/client/clientset_generated/clientset/typed/certificates/v1alpha1"
 	certutil "k8s.io/kubernetes/pkg/util/cert"
-	utilruntime "k8s.io/kubernetes/pkg/util/runtime"
 )
 
 // groupApprover implements AutoApprover for signing Kubelet certificates.
@@ -76,6 +76,9 @@ func (cc *groupApprover) AutoApprove(csr *certificates.CertificateSigningRequest
 	if len(x509cr.DNSNames)+len(x509cr.EmailAddresses)+len(x509cr.IPAddresses) != 0 {
 		return csr, nil
 	}
+	if !hasExactUsages(csr, kubeletClientUsages) {
+		return csr, nil
+	}
 
 	csr.Status.Conditions = append(csr.Status.Conditions, certificates.CertificateSigningRequestCondition{
 		Type:    certificates.CertificateApproved,
@@ -83,4 +86,29 @@ func (cc *groupApprover) AutoApprove(csr *certificates.CertificateSigningRequest
 		Message: "Auto approving of all kubelet CSRs is enabled on the controller manager",
 	})
 	return cc.client.UpdateApproval(csr)
+}
+
+var kubeletClientUsages = []certificates.KeyUsage{
+	certificates.UsageKeyEncipherment,
+	certificates.UsageDigitalSignature,
+	certificates.UsageClientAuth,
+}
+
+func hasExactUsages(csr *certificates.CertificateSigningRequest, usages []certificates.KeyUsage) bool {
+	if len(usages) != len(csr.Spec.Usages) {
+		return false
+	}
+
+	usageMap := map[certificates.KeyUsage]struct{}{}
+	for _, u := range usages {
+		usageMap[u] = struct{}{}
+	}
+
+	for _, u := range csr.Spec.Usages {
+		if _, ok := usageMap[u]; !ok {
+			return false
+		}
+	}
+
+	return true
 }

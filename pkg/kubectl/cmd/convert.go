@@ -21,15 +21,15 @@ import (
 	"io"
 	"os"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apimachinery/registered"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/meta"
-	"k8s.io/kubernetes/pkg/apimachinery/registered"
 	"k8s.io/kubernetes/pkg/kubectl"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
-	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/runtime/schema"
 
 	"github.com/spf13/cobra"
 )
@@ -146,7 +146,7 @@ func (o *ConvertOptions) Complete(f cmdutil.Factory, out io.Writer, cmd *cobra.C
 		}
 	}
 	o.encoder = f.JSONEncoder()
-	o.printer, _, err = kubectl.GetPrinter(outputFormat, templateFile, false)
+	o.printer, _, err = kubectl.GetPrinter(outputFormat, templateFile, false, cmdutil.GetFlagBool(cmd, "allow-missing-template-keys"))
 	if err != nil {
 		return err
 	}
@@ -162,8 +162,8 @@ func (o *ConvertOptions) RunConvert() error {
 		return err
 	}
 
-	singular := false
-	infos, err := r.IntoSingular(&singular).Infos()
+	singleItemImplied := false
+	infos, err := r.IntoSingleItemImplied(&singleItemImplied).Infos()
 	if err != nil {
 		return err
 	}
@@ -172,7 +172,7 @@ func (o *ConvertOptions) RunConvert() error {
 		return fmt.Errorf("no objects passed to convert")
 	}
 
-	objects, err := resource.AsVersionedObject(infos, !singular, o.outputVersion, o.encoder)
+	objects, err := resource.AsVersionedObject(infos, !singleItemImplied, o.outputVersion, o.encoder)
 	if err != nil {
 		return err
 	}
