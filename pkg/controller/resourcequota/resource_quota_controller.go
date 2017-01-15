@@ -46,7 +46,7 @@ type ResourceQuotaControllerOptions struct {
 	Registry quota.Registry
 	// Knows how to build controllers that notify replenishment events
 	ControllerFactory ReplenishmentControllerFactory
-	// Controls full resync of objects monitored for replenihsment.
+	// Controls full resync of objects monitored for replenishment.
 	ReplenishmentResyncPeriod controller.ResyncPeriodFunc
 	// List of GroupKind objects that should be monitored for replenishment at
 	// a faster frequency than the quota controller recalculation interval
@@ -60,10 +60,10 @@ type ResourceQuotaController struct {
 	// An index of resource quota objects by namespace
 	rqIndexer cache.Indexer
 	// Watches changes to all resource quota
-	rqController *cache.Controller
+	rqController cache.Controller
 	// ResourceQuota objects that need to be synchronized
 	queue workqueue.RateLimitingInterface
-	// missingUsageQueue holds objects that are missing the initial usage informatino
+	// missingUsageQueue holds objects that are missing the initial usage information
 	missingUsageQueue workqueue.RateLimitingInterface
 	// To allow injection of syncUsage for testing.
 	syncHandler func(key string) error
@@ -72,7 +72,7 @@ type ResourceQuotaController struct {
 	// knows how to calculate usage
 	registry quota.Registry
 	// controllers monitoring to notify for replenishment
-	replenishmentControllers []cache.ControllerInterface
+	replenishmentControllers []cache.Controller
 }
 
 func NewResourceQuotaController(options *ResourceQuotaControllerOptions) *ResourceQuotaController {
@@ -83,7 +83,7 @@ func NewResourceQuotaController(options *ResourceQuotaControllerOptions) *Resour
 		missingUsageQueue:        workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "resourcequota_priority"),
 		resyncPeriod:             options.ResyncPeriod,
 		registry:                 options.Registry,
-		replenishmentControllers: []cache.ControllerInterface{},
+		replenishmentControllers: []cache.Controller{},
 	}
 	if options.KubeClient != nil && options.KubeClient.Core().RESTClient().GetRateLimiter() != nil {
 		metrics.RegisterMetricAndTrackRateLimiterUsage("resource_quota_controller", options.KubeClient.Core().RESTClient().GetRateLimiter())

@@ -31,7 +31,6 @@ import (
 	"github.com/golang/glog"
 
 	"k8s.io/apimachinery/pkg/apimachinery"
-	"k8s.io/apimachinery/pkg/apimachinery/registered"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	openapicommon "k8s.io/apimachinery/pkg/genericapiserver/openapi/common"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -132,7 +131,7 @@ type GenericAPIServer struct {
 	openAPIConfig *openapicommon.Config
 
 	// PostStartHooks are each called after the server has started listening, in a separate go func for each
-	// with no guaranteee of ordering between them.  The map key is a name used for error reporting.
+	// with no guarantee of ordering between them.  The map key is a name used for error reporting.
 	// It may kill the process with a panic if it wishes to by returning an error
 	postStartHookLock    sync.Mutex
 	postStartHooks       map[string]postStartHookEntry
@@ -373,12 +372,12 @@ func (s *GenericAPIServer) DynamicApisDiscovery() *restful.WebService {
 // NewDefaultAPIGroupInfo returns an APIGroupInfo stubbed with "normal" values
 // exposed for easier composition from other packages
 func NewDefaultAPIGroupInfo(group string) APIGroupInfo {
-	groupMeta := registered.GroupOrDie(group)
+	groupMeta := api.Registry.GroupOrDie(group)
 
 	return APIGroupInfo{
 		GroupMeta:                    *groupMeta,
 		VersionedResourcesStorageMap: map[string]map[string]rest.Storage{},
-		OptionsExternalVersion:       &registered.GroupOrDie(api.GroupName).GroupVersion,
+		OptionsExternalVersion:       &api.Registry.GroupOrDie(api.GroupName).GroupVersion,
 		Scheme:                       api.Scheme,
 		ParameterCodec:               api.ParameterCodec,
 		NegotiatedSerializer:         api.Codecs,
