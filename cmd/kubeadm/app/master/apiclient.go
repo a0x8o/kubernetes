@@ -25,17 +25,18 @@ import (
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/kubernetes/cmd/kubeadm/app/images"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/v1"
 	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
-	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
-	clientcmdapi "k8s.io/kubernetes/pkg/client/unversioned/clientcmd/api"
 )
 
 const apiCallRetryInterval = 500 * time.Millisecond
 
+// TODO: This method shouldn't exist as a standalone function but be integrated into CreateClientFromFile
 func createAPIClient(adminKubeconfig *clientcmdapi.Config) (*clientset.Clientset, error) {
 	adminClientConfig, err := clientcmd.NewDefaultClientConfig(
 		*adminKubeconfig,
@@ -65,34 +66,12 @@ func CreateClientAndWaitForAPI(file string) (*clientset.Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	fmt.Println("[apiclient] Created API client, waiting for the control plane to become ready")
-
-	start := time.Now()
-	wait.PollInfinite(apiCallRetryInterval, func() (bool, error) {
-		cs, err := client.ComponentStatuses().List(v1.ListOptions{})
-		if err != nil {
-			return false, nil
-		}
-		// TODO(phase2) must revisit this when we implement HA
-		if len(cs.Items) < 3 {
-			fmt.Println("[apiclient] Not all control plane components are ready yet")
-			return false, nil
-		}
-		for _, item := range cs.Items {
-			for _, condition := range item.Conditions {
-				if condition.Type != v1.ComponentHealthy {
-					fmt.Printf("[apiclient] Control plane component %q is still unhealthy: %#v\n", item.ObjectMeta.Name, item.Conditions)
-					return false, nil
-				}
-			}
-		}
-
-		fmt.Printf("[apiclient] All control plane components are healthy after %f seconds\n", time.Since(start).Seconds())
-		return true, nil
-	})
+	WaitForAPI(client)
 
 	fmt.Println("[apiclient] Waiting for at least one node to register and become ready")
-	start = time.Now()
+	start := time.Now()
 	wait.PollInfinite(apiCallRetryInterval, func() (bool, error) {
 		nodeList, err := client.Nodes().List(v1.ListOptions{})
 		if err != nil {
@@ -122,6 +101,36 @@ func standardLabels(n string) map[string]string {
 		"component": n, "name": n, "k8s-app": n,
 		"kubernetes.io/cluster-service": "true", "tier": "node",
 	}
+}
+
+func WaitForAPI(client *clientset.Clientset) {
+	start := time.Now()
+	wait.PollInfinite(apiCallRetryInterval, func() (bool, error) {
+		// TODO: use /healthz API instead of this
+		cs, err := client.ComponentStatuses().List(v1.ListOptions{})
+		if err != nil {
+			if apierrs.IsForbidden(err) {
+				fmt.Println("[apiclient] Waiting for API server authorization")
+			}
+			return false, nil
+		}
+
+		// TODO(phase2) must revisit this when we implement HA
+		if len(cs.Items) < 3 {
+			return false, nil
+		}
+		for _, item := range cs.Items {
+			for _, condition := range item.Conditions {
+				if condition.Type != v1.ComponentHealthy {
+					fmt.Printf("[apiclient] Control plane component %q is still unhealthy: %#v\n", item.ObjectMeta.Name, item.Conditions)
+					return false, nil
+				}
+			}
+		}
+
+		fmt.Printf("[apiclient] All control plane components are healthy after %f seconds\n", time.Since(start).Seconds())
+		return true, nil
+	})
 }
 
 func NewDaemonSet(daemonName string, podSpec v1.PodSpec) *extensions.DaemonSet {

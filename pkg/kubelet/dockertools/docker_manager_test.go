@@ -17,6 +17,7 @@ limitations under the License.
 package dockertools
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -40,6 +41,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	kubetypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/pkg/util/clock"
+	"k8s.io/client-go/pkg/util/flowcontrol"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	"k8s.io/kubernetes/pkg/api/v1"
@@ -53,11 +56,24 @@ import (
 	nettest "k8s.io/kubernetes/pkg/kubelet/network/testing"
 	proberesults "k8s.io/kubernetes/pkg/kubelet/prober/results"
 	"k8s.io/kubernetes/pkg/kubelet/types"
-	"k8s.io/kubernetes/pkg/util/clock"
 	uexec "k8s.io/kubernetes/pkg/util/exec"
-	"k8s.io/kubernetes/pkg/util/flowcontrol"
 	"k8s.io/kubernetes/pkg/util/intstr"
 )
+
+var testTempDir string
+
+func TestMain(m *testing.M) {
+	dir, err := ioutil.TempDir("", "dockertools")
+	if err != nil {
+		panic(err)
+	}
+	testTempDir = dir
+
+	flag.Parse()
+	status := m.Run()
+	os.RemoveAll(testTempDir)
+	os.Exit(status)
+}
 
 type fakeHTTP struct {
 	url string
@@ -81,7 +97,7 @@ func (f *fakeRuntimeHelper) GenerateRunContainerOptions(pod *v1.Pod, container *
 	var opts kubecontainer.RunContainerOptions
 	var err error
 	if len(container.TerminationMessagePath) != 0 {
-		testPodContainerDir, err = ioutil.TempDir("", "fooPodContainerDir")
+		testPodContainerDir, err = ioutil.TempDir(testTempDir, "fooPodContainerDir")
 		if err != nil {
 			return nil, err
 		}

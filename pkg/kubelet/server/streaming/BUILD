@@ -20,12 +20,12 @@ go_library(
         "//pkg/kubelet/api/v1alpha1/runtime:go_default_library",
         "//pkg/kubelet/server/portforward:go_default_library",
         "//pkg/kubelet/server/remotecommand:go_default_library",
-        "//pkg/util/clock:go_default_library",
         "//pkg/util/term:go_default_library",
         "//vendor:github.com/emicklei/go-restful",
         "//vendor:google.golang.org/grpc",
         "//vendor:google.golang.org/grpc/codes",
         "//vendor:k8s.io/apimachinery/pkg/types",
+        "//vendor:k8s.io/client-go/pkg/util/clock",
     ],
 )
 
@@ -38,7 +38,6 @@ go_test(
     library = ":go_default_library",
     tags = ["automanaged"],
     deps = [
-        "//pkg/client/restclient:go_default_library",
         "//pkg/client/unversioned/remotecommand:go_default_library",
         "//pkg/kubelet/api/v1alpha1/runtime:go_default_library",
         "//pkg/kubelet/server/portforward:go_default_library",
@@ -48,6 +47,7 @@ go_test(
         "//vendor:github.com/stretchr/testify/require",
         "//vendor:k8s.io/client-go/pkg/api",
         "//vendor:k8s.io/client-go/pkg/util/clock",
+        "//vendor:k8s.io/client-go/rest",
     ],
 )
 

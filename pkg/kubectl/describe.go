@@ -30,6 +30,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,6 +40,7 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/events"
 	"k8s.io/kubernetes/pkg/api/resource"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/apis/apps"
 	"k8s.io/kubernetes/pkg/apis/autoscaling"
 	"k8s.io/kubernetes/pkg/apis/batch"
@@ -54,7 +56,6 @@ import (
 	extensionsclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/extensions/internalversion"
 	deploymentutil "k8s.io/kubernetes/pkg/controller/deployment/util"
 	"k8s.io/kubernetes/pkg/fieldpath"
-	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/util/intstr"
 
 	"github.com/golang/glog"
@@ -1051,10 +1052,19 @@ func describeContainerEnvFrom(container api.Container, resolverFn EnvVarResolver
 	w.Write(LEVEL_2, "Environment Variables from:%s\n", none)
 
 	for _, e := range container.EnvFrom {
+		from := ""
+		name := ""
+		if e.ConfigMapRef != nil {
+			from = "ConfigMap"
+			name = e.ConfigMapRef.Name
+		} else if e.SecretRef != nil {
+			from = "Secret"
+			name = e.SecretRef.Name
+		}
 		if len(e.Prefix) == 0 {
-			w.Write(LEVEL_3, "%s\tConfigMap\n", e.ConfigMapRef.Name)
+			w.Write(LEVEL_3, "%s\t%s\n", name, from)
 		} else {
-			w.Write(LEVEL_3, "%s\tConfigMap with prefix '%s'\n", e.ConfigMapRef.Name, e.Prefix)
+			w.Write(LEVEL_3, "%s\t%s with prefix '%s'\n", name, from, e.Prefix)
 		}
 	}
 }
@@ -2748,9 +2758,15 @@ func printLabelsMultilineWithIndent(w *PrefixWriter, initialIndent, title, inner
 
 // printTaintsMultiline prints multiple taints with a proper alignment.
 func printTaintsInAnnotationMultiline(w *PrefixWriter, title string, annotations map[string]string) {
-	taints, err := api.GetTaintsFromNodeAnnotations(annotations)
+	v1Taints, err := v1.GetTaintsFromNodeAnnotations(annotations)
 	if err != nil {
-		taints = []api.Taint{}
+		v1Taints = []v1.Taint{}
+	}
+	taints := make([]api.Taint, len(v1Taints))
+	for i := range v1Taints {
+		if err := v1.Convert_v1_Taint_To_api_Taint(&v1Taints[i], &taints[i], nil); err != nil {
+			panic(err)
+		}
 	}
 	printTaintsMultilineWithIndent(w, "", title, "\t", taints)
 }
@@ -2787,9 +2803,15 @@ func printTaintsMultilineWithIndent(w *PrefixWriter, initialIndent, title, inner
 
 // printTolerationsMultiline prints multiple tolerations with a proper alignment.
 func printTolerationsInAnnotationMultiline(w *PrefixWriter, title string, annotations map[string]string) {
-	tolerations, err := api.GetTolerationsFromPodAnnotations(annotations)
+	v1Tolerations, err := v1.GetTolerationsFromPodAnnotations(annotations)
 	if err != nil {
-		tolerations = []api.Toleration{}
+		v1Tolerations = []v1.Toleration{}
+	}
+	tolerations := make([]api.Toleration, len(v1Tolerations))
+	for i := range v1Tolerations {
+		if err := v1.Convert_v1_Toleration_To_api_Toleration(&v1Tolerations[i], &tolerations[i], nil); err != nil {
+			panic(err)
+		}
 	}
 	printTolerationsMultilineWithIndent(w, "", title, "\t", tolerations)
 }

@@ -33,13 +33,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utiltesting "k8s.io/client-go/pkg/util/testing"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/api/validation"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/securitycontext"
-	utiltesting "k8s.io/kubernetes/pkg/util/testing"
 )
 
 func TestExtractFromNonExistentFile(t *testing.T) {
@@ -188,6 +188,7 @@ func getTestCases(hostname types.NodeName) []*testCase {
 				Spec: v1.PodSpec{
 					Containers:      []v1.Container{{Name: "image", Image: "test/image", SecurityContext: securitycontext.ValidSecurityContextWithContainerDefaults()}},
 					SecurityContext: &v1.PodSecurityContext{},
+					SchedulerName:   api.DefaultSchedulerName,
 				},
 				Status: v1.PodStatus{
 					Phase: v1.PodPending,
@@ -213,6 +214,7 @@ func getTestCases(hostname types.NodeName) []*testCase {
 						ImagePullPolicy:        "Always",
 						SecurityContext:        securitycontext.ValidSecurityContextWithContainerDefaults()}},
 					SecurityContext: &v1.PodSecurityContext{},
+					SchedulerName:   api.DefaultSchedulerName,
 				},
 				Status: v1.PodStatus{
 					Phase: v1.PodPending,

@@ -31,8 +31,8 @@ import (
 	"github.com/hawkular/hawkular-client-go/metrics"
 	"k8s.io/kubernetes/pkg/api"
 
-	"k8s.io/kubernetes/pkg/client/restclient"
-	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
+	restclient "k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type hawkularSource struct {

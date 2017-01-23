@@ -22,7 +22,6 @@ go_library(
         "//pkg/client/cache:go_default_library",
         "//pkg/client/typed/dynamic:go_default_library",
         "//pkg/controller/garbagecollector/metaonly:go_default_library",
-        "//pkg/util/clock:go_default_library",
         "//pkg/util/metrics:go_default_library",
         "//pkg/util/workqueue:go_default_library",
         "//vendor:github.com/golang/glog",
@@ -40,6 +39,7 @@ go_library(
         "//vendor:k8s.io/apimachinery/pkg/util/sets",
         "//vendor:k8s.io/apimachinery/pkg/util/wait",
         "//vendor:k8s.io/apimachinery/pkg/watch",
+        "//vendor:k8s.io/client-go/pkg/util/clock",
     ],
 )
 
@@ -52,10 +52,8 @@ go_test(
         "//pkg/api:go_default_library",
         "//pkg/api/install:go_default_library",
         "//pkg/api/v1:go_default_library",
-        "//pkg/client/restclient:go_default_library",
         "//pkg/client/typed/dynamic:go_default_library",
         "//pkg/controller/garbagecollector/metaonly:go_default_library",
-        "//pkg/util/clock:go_default_library",
         "//pkg/util/workqueue:go_default_library",
         "//vendor:github.com/stretchr/testify/assert",
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
@@ -64,6 +62,8 @@ go_test(
         "//vendor:k8s.io/apimachinery/pkg/types",
         "//vendor:k8s.io/apimachinery/pkg/util/json",
         "//vendor:k8s.io/apimachinery/pkg/util/sets",
+        "//vendor:k8s.io/client-go/pkg/util/clock",
+        "//vendor:k8s.io/client-go/rest",
     ],
 )
 

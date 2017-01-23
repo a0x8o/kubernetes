@@ -26,7 +26,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
-	"k8s.io/apiserver/pkg/healthz"
+	"k8s.io/apiserver/pkg/server/healthz"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app/options"
 	"k8s.io/kubernetes/pkg/api"
 	apiv1 "k8s.io/kubernetes/pkg/api/v1"
@@ -35,7 +35,7 @@ import (
 	authorizationapiv1beta1 "k8s.io/kubernetes/pkg/apis/authorization/v1beta1"
 	autoscalingapiv1 "k8s.io/kubernetes/pkg/apis/autoscaling/v1"
 	batchapiv1 "k8s.io/kubernetes/pkg/apis/batch/v1"
-	certificatesapiv1alpha1 "k8s.io/kubernetes/pkg/apis/certificates/v1alpha1"
+	certificatesapiv1beta1 "k8s.io/kubernetes/pkg/apis/certificates/v1beta1"
 	extensionsapiv1beta1 "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	policyapiv1beta1 "k8s.io/kubernetes/pkg/apis/policy/v1beta1"
 	rbacapi "k8s.io/kubernetes/pkg/apis/rbac/v1alpha1"
@@ -43,12 +43,12 @@ import (
 	storageapiv1beta1 "k8s.io/kubernetes/pkg/apis/storage/v1beta1"
 	corev1client "k8s.io/kubernetes/pkg/client/clientset_generated/clientset/typed/core/v1"
 	coreclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
-	"k8s.io/kubernetes/pkg/genericapiserver"
+	"k8s.io/kubernetes/pkg/genericapiserver/registry/generic"
+	genericregistry "k8s.io/kubernetes/pkg/genericapiserver/registry/generic/registry"
+	genericapiserver "k8s.io/kubernetes/pkg/genericapiserver/server"
 	kubeletclient "k8s.io/kubernetes/pkg/kubelet/client"
 	"k8s.io/kubernetes/pkg/master/thirdparty"
 	"k8s.io/kubernetes/pkg/master/tunneler"
-	"k8s.io/kubernetes/pkg/registry/generic"
-	genericregistry "k8s.io/kubernetes/pkg/registry/generic/registry"
 	"k8s.io/kubernetes/pkg/routes"
 	nodeutil "k8s.io/kubernetes/pkg/util/node"
 
@@ -397,7 +397,7 @@ func DefaultAPIResourceConfigSource() *genericapiserver.ResourceConfig {
 		rbacv1beta1.SchemeGroupVersion,
 		rbacapi.SchemeGroupVersion,
 		storageapiv1beta1.SchemeGroupVersion,
-		certificatesapiv1alpha1.SchemeGroupVersion,
+		certificatesapiv1beta1.SchemeGroupVersion,
 		authorizationapiv1beta1.SchemeGroupVersion,
 	)
 

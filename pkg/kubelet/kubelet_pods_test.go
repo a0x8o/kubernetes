@@ -114,6 +114,7 @@ func TestMakeMounts(t *testing.T) {
 
 func TestRunInContainerNoSuchPod(t *testing.T) {
 	testKubelet := newTestKubelet(t, false /* controllerAttachDetachEnabled */)
+	defer testKubelet.Cleanup()
 	kubelet := testKubelet.kubelet
 	fakeRuntime := testKubelet.fakeRuntime
 	fakeRuntime.PodList = []*containertest.FakePod{}
@@ -133,6 +134,7 @@ func TestRunInContainerNoSuchPod(t *testing.T) {
 func TestRunInContainer(t *testing.T) {
 	for _, testError := range []error{nil, errors.New("bar")} {
 		testKubelet := newTestKubelet(t, false /* controllerAttachDetachEnabled */)
+		defer testKubelet.Cleanup()
 		kubelet := testKubelet.kubelet
 		fakeRuntime := testKubelet.fakeRuntime
 		fakeCommandRunner := containertest.FakeContainerCommandRunner{
@@ -166,6 +168,7 @@ func TestRunInContainer(t *testing.T) {
 
 func TestGenerateRunContainerOptions_DNSConfigurationParams(t *testing.T) {
 	testKubelet := newTestKubelet(t, false /* controllerAttachDetachEnabled */)
+	defer testKubelet.Cleanup()
 	kubelet := testKubelet.kubelet
 
 	clusterNS := "203.0.113.1"
@@ -211,7 +214,11 @@ func TestGenerateRunContainerOptions_DNSConfigurationParams(t *testing.T) {
 	} else if options[0].DNS[0] != clusterNS {
 		t.Errorf("expected nameserver %s, got %v", clusterNS, options[0].DNS[0])
 	}
-	if len(options[0].DNSSearch) != len(options[1].DNSSearch)+3 {
+	expLength := len(options[1].DNSSearch) + 3
+	if expLength > 6 {
+		expLength = 6
+	}
+	if len(options[0].DNSSearch) != expLength {
 		t.Errorf("expected prepend of cluster domain, got %+v", options[0].DNSSearch)
 	} else if options[0].DNSSearch[0] != ".svc."+kubelet.clusterDomain {
 		t.Errorf("expected domain %s, got %s", ".svc."+kubelet.clusterDomain, options[0].DNSSearch)
@@ -270,6 +277,7 @@ func TestMakeEnvironmentVariables(t *testing.T) {
 		masterServiceNs string                 // the namespace to read master service info from
 		nilLister       bool                   // whether the lister should be nil
 		configMap       *v1.ConfigMap          // an optional ConfigMap to pull from
+		secret          *v1.Secret             // an optional Secret to pull from
 		expectedEnvs    []kubecontainer.EnvVar // a set of expected environment vars
 		expectedError   bool                   // does the test fail
 	}{
@@ -762,10 +770,165 @@ func TestMakeEnvironmentVariables(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "secret",
+			ns:   "test1",
+			container: &v1.Container{
+				EnvFrom: []v1.EnvFromSource{
+					{
+						SecretRef: &v1.SecretEnvSource{LocalObjectReference: v1.LocalObjectReference{Name: "test-secret"}},
+					},
+					{
+						Prefix:    "p_",
+						SecretRef: &v1.SecretEnvSource{LocalObjectReference: v1.LocalObjectReference{Name: "test-secret"}},
+					},
+				},
+				Env: []v1.EnvVar{
+					{
+						Name:  "TEST_LITERAL",
+						Value: "test-test-test",
+					},
+					{
+						Name:  "EXPANSION_TEST",
+						Value: "$(REPLACE_ME)",
+					},
+					{
+						Name:  "DUPE_TEST",
+						Value: "ENV_VAR",
+					},
+				},
+			},
+			masterServiceNs: "nothing",
+			nilLister:       false,
+			secret: &v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test1",
+					Name:      "test-secret",
+				},
+				Data: map[string][]byte{
+					"REPLACE_ME": []byte("FROM_SECRET"),
+					"DUPE_TEST":  []byte("SECRET"),
+				},
+			},
+			expectedEnvs: []kubecontainer.EnvVar{
+				{
+					Name:  "TEST_LITERAL",
+					Value: "test-test-test",
+				},
+				{
+					Name:  "TEST_SERVICE_HOST",
+					Value: "1.2.3.3",
+				},
+				{
+					Name:  "TEST_SERVICE_PORT",
+					Value: "8083",
+				},
+				{
+					Name:  "TEST_PORT",
+					Value: "tcp://1.2.3.3:8083",
+				},
+				{
+					Name:  "TEST_PORT_8083_TCP",
+					Value: "tcp://1.2.3.3:8083",
+				},
+				{
+					Name:  "TEST_PORT_8083_TCP_PROTO",
+					Value: "tcp",
+				},
+				{
+					Name:  "TEST_PORT_8083_TCP_PORT",
+					Value: "8083",
+				},
+				{
+					Name:  "TEST_PORT_8083_TCP_ADDR",
+					Value: "1.2.3.3",
+				},
+				{
+					Name:  "REPLACE_ME",
+					Value: "FROM_SECRET",
+				},
+				{
+					Name:  "EXPANSION_TEST",
+					Value: "FROM_SECRET",
+				},
+				{
+					Name:  "DUPE_TEST",
+					Value: "ENV_VAR",
+				},
+				{
+					Name:  "p_REPLACE_ME",
+					Value: "FROM_SECRET",
+				},
+				{
+					Name:  "p_DUPE_TEST",
+					Value: "SECRET",
+				},
+			},
+		},
+		{
+			name: "secret_missing",
+			ns:   "test1",
+			container: &v1.Container{
+				EnvFrom: []v1.EnvFromSource{
+					{SecretRef: &v1.SecretEnvSource{LocalObjectReference: v1.LocalObjectReference{Name: "test-secret"}}},
+				},
+			},
+			masterServiceNs: "nothing",
+			expectedError:   true,
+		},
+		{
+			name: "secret_invalid_keys",
+			ns:   "test1",
+			container: &v1.Container{
+				EnvFrom: []v1.EnvFromSource{
+					{SecretRef: &v1.SecretEnvSource{LocalObjectReference: v1.LocalObjectReference{Name: "test-secret"}}},
+				},
+			},
+			masterServiceNs: "nothing",
+			secret: &v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test1",
+					Name:      "test-secret",
+				},
+				Data: map[string][]byte{
+					"1234": []byte("abc"),
+				},
+			},
+			expectedError: true,
+		},
+		{
+			name: "secret_invalid_keys_valid",
+			ns:   "test",
+			container: &v1.Container{
+				EnvFrom: []v1.EnvFromSource{
+					{
+						Prefix:    "p_",
+						SecretRef: &v1.SecretEnvSource{LocalObjectReference: v1.LocalObjectReference{Name: "test-secret"}},
+					},
+				},
+			},
+			masterServiceNs: "",
+			secret: &v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test1",
+					Name:      "test-secret",
+				},
+				Data: map[string][]byte{
+					"1234": []byte("abc"),
+				},
+			},
+			expectedEnvs: []kubecontainer.EnvVar{
+				{
+					Name:  "p_1234",
+					Value: "abc",
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		testKubelet := newTestKubelet(t, false /* controllerAttachDetachEnabled */)
+		defer testKubelet.Cleanup()
 		kl := testKubelet.kubelet
 		kl.masterServiceNamespace = tc.masterServiceNs
 		if tc.nilLister {
@@ -780,6 +943,14 @@ func TestMakeEnvironmentVariables(t *testing.T) {
 				err = errors.New("no configmap defined")
 			}
 			return true, tc.configMap, err
+		})
+
+		testKubelet.fakeKubeClient.AddReactor("get", "secrets", func(action core.Action) (bool, runtime.Object, error) {
+			var err error
+			if tc.secret == nil {
+				err = errors.New("no secret defined")
+			}
+			return true, tc.secret, err
 		})
 
 		testPod := &v1.Pod{
@@ -1231,6 +1402,7 @@ func TestExec(t *testing.T) {
 
 	for _, tc := range testcases {
 		testKubelet := newTestKubelet(t, false /* controllerAttachDetachEnabled */)
+		defer testKubelet.Cleanup()
 		kubelet := testKubelet.kubelet
 		testKubelet.fakeRuntime.PodList = []*containertest.FakePod{
 			{Pod: &kubecontainer.Pod{
@@ -1321,6 +1493,7 @@ func TestPortForward(t *testing.T) {
 
 	for _, tc := range testcases {
 		testKubelet := newTestKubelet(t, false /* controllerAttachDetachEnabled */)
+		defer testKubelet.Cleanup()
 		kubelet := testKubelet.kubelet
 		testKubelet.fakeRuntime.PodList = []*containertest.FakePod{
 			{Pod: &kubecontainer.Pod{
@@ -1468,6 +1641,7 @@ func TestHasHostMountPVC(t *testing.T) {
 
 	for k, v := range tests {
 		testKubelet := newTestKubelet(t, false)
+		defer testKubelet.Cleanup()
 		pod := &v1.Pod{
 			Spec: v1.PodSpec{},
 		}

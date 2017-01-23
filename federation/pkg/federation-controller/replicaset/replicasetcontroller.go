@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/pkg/util/flowcontrol"
 	fed "k8s.io/kubernetes/federation/apis/federation"
 	fedv1 "k8s.io/kubernetes/federation/apis/federation/v1beta1"
 	fedclientset "k8s.io/kubernetes/federation/client/clientset_generated/federation_clientset"
@@ -42,9 +43,9 @@ import (
 	extensionsv1 "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	"k8s.io/kubernetes/pkg/client/cache"
 	kubeclientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	"k8s.io/kubernetes/pkg/client/legacylisters"
 	"k8s.io/kubernetes/pkg/client/record"
 	"k8s.io/kubernetes/pkg/controller"
-	"k8s.io/kubernetes/pkg/util/flowcontrol"
 	"k8s.io/kubernetes/pkg/util/workqueue"
 )
 
@@ -81,7 +82,7 @@ type ReplicaSetController struct {
 	fedClient fedclientset.Interface
 
 	replicaSetController cache.Controller
-	replicaSetStore      cache.StoreToReplicaSetLister
+	replicaSetStore      listers.StoreToReplicaSetLister
 
 	fedReplicaSetInformer fedutil.FederatedInformer
 	fedPodInformer        fedutil.FederatedInformer

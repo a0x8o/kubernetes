@@ -39,6 +39,7 @@ import (
 	utilpod "k8s.io/kubernetes/pkg/api/pod"
 	"k8s.io/kubernetes/pkg/api/resource"
 	apiservice "k8s.io/kubernetes/pkg/api/service"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/api/validation/genericvalidation"
 	storageutil "k8s.io/kubernetes/pkg/apis/storage/util"
 	"k8s.io/kubernetes/pkg/capabilities"
@@ -1259,8 +1260,21 @@ func validateEnvFrom(vars []api.EnvFromSource, fldPath *field.Path) field.ErrorL
 				allErrs = append(allErrs, field.Invalid(idxPath.Child("prefix"), ev.Prefix, msg))
 			}
 		}
+
+		numSources := 0
 		if ev.ConfigMapRef != nil {
+			numSources++
 			allErrs = append(allErrs, validateConfigMapEnvSource(ev.ConfigMapRef, idxPath.Child("configMapRef"))...)
+		}
+		if ev.SecretRef != nil {
+			numSources++
+			allErrs = append(allErrs, validateSecretEnvSource(ev.SecretRef, idxPath.Child("secretRef"))...)
+		}
+
+		if numSources == 0 {
+			allErrs = append(allErrs, field.Invalid(fldPath, "", "must specify one of: `configMapRef` or `secretRef`"))
+		} else if numSources > 1 {
+			allErrs = append(allErrs, field.Invalid(fldPath, "", "may not have more than one field specified at a time"))
 		}
 	}
 	return allErrs
@@ -1269,6 +1283,14 @@ func validateEnvFrom(vars []api.EnvFromSource, fldPath *field.Path) field.ErrorL
 func validateConfigMapEnvSource(configMapSource *api.ConfigMapEnvSource, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if len(configMapSource.Name) == 0 {
+		allErrs = append(allErrs, field.Required(fldPath.Child("name"), ""))
+	}
+	return allErrs
+}
+
+func validateSecretEnvSource(secretSource *api.SecretEnvSource, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	if len(secretSource.Name) == 0 {
 		allErrs = append(allErrs, field.Required(fldPath.Child("name"), ""))
 	}
 	return allErrs
@@ -1846,8 +1868,13 @@ func ValidateNodeSelector(nodeSelector *api.NodeSelector, fldPath *field.Path) f
 func ValidateAvoidPodsInNodeAnnotations(annotations map[string]string, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	avoids, err := api.GetAvoidPodsFromNodeAnnotations(annotations)
+	v1Avoids, err := v1.GetAvoidPodsFromNodeAnnotations(annotations)
 	if err != nil {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("AvoidPods"), api.PreferAvoidPodsAnnotationKey, err.Error()))
+		return allErrs
+	}
+	var avoids api.AvoidPods
+	if err := v1.Convert_v1_AvoidPods_To_api_AvoidPods(&v1Avoids, &avoids, nil); err != nil {
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("AvoidPods"), api.PreferAvoidPodsAnnotationKey, err.Error()))
 		return allErrs
 	}
@@ -1976,10 +2003,17 @@ func validatePodAffinity(podAffinity *api.PodAffinity, fldPath *field.Path) fiel
 func ValidateTolerationsInPodAnnotations(annotations map[string]string, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	tolerations, err := api.GetTolerationsFromPodAnnotations(annotations)
+	v1Tolerations, err := v1.GetTolerationsFromPodAnnotations(annotations)
 	if err != nil {
 		allErrs = append(allErrs, field.Invalid(fldPath, api.TolerationsAnnotationKey, err.Error()))
 		return allErrs
+	}
+	tolerations := make([]api.Toleration, len(v1Tolerations))
+	for i := range v1Tolerations {
+		if err := v1.Convert_v1_Toleration_To_api_Toleration(&v1Tolerations[i], &tolerations[i], nil); err != nil {
+			allErrs = append(allErrs, field.Invalid(fldPath, api.TolerationsAnnotationKey, err.Error()))
+			return allErrs
+		}
 	}
 	if len(tolerations) > 0 {
 		allErrs = append(allErrs, validateTolerations(tolerations, fldPath.Child(api.TolerationsAnnotationKey))...)
@@ -2676,10 +2710,17 @@ func validateTaints(taints []api.Taint, fldPath *field.Path) field.ErrorList {
 func ValidateTaintsInNodeAnnotations(annotations map[string]string, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	taints, err := api.GetTaintsFromNodeAnnotations(annotations)
+	v1Taints, err := v1.GetTaintsFromNodeAnnotations(annotations)
 	if err != nil {
 		allErrs = append(allErrs, field.Invalid(fldPath, api.TaintsAnnotationKey, err.Error()))
 		return allErrs
+	}
+	taints := make([]api.Taint, len(v1Taints))
+	for i := range v1Taints {
+		if err := v1.Convert_v1_Taint_To_api_Taint(&v1Taints[i], &taints[i], nil); err != nil {
+			allErrs = append(allErrs, field.Invalid(fldPath, api.TaintsAnnotationKey, err.Error()))
+			return allErrs
+		}
 	}
 	if len(taints) > 0 {
 		allErrs = append(allErrs, validateTaints(taints, fldPath.Child(api.TaintsAnnotationKey))...)

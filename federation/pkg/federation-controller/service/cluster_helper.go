@@ -22,11 +22,12 @@ import (
 	pkgruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
+	restclient "k8s.io/client-go/rest"
 	v1beta1 "k8s.io/kubernetes/federation/apis/federation/v1beta1"
 	v1 "k8s.io/kubernetes/pkg/api/v1"
 	cache "k8s.io/kubernetes/pkg/client/cache"
 	kubeclientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
-	"k8s.io/kubernetes/pkg/client/restclient"
+	"k8s.io/kubernetes/pkg/client/legacylisters"
 	"k8s.io/kubernetes/pkg/util/workqueue"
 
 	"reflect"
@@ -39,11 +40,11 @@ type clusterCache struct {
 	clientset *kubeclientset.Clientset
 	cluster   *v1beta1.Cluster
 	// A store of services, populated by the serviceController
-	serviceStore cache.StoreToServiceLister
+	serviceStore listers.StoreToServiceLister
 	// Watches changes to all services
 	serviceController cache.Controller
 	// A store of endpoint, populated by the serviceController
-	endpointStore cache.StoreToEndpointsLister
+	endpointStore listers.StoreToEndpointsLister
 	// Watches changes to all endpoints
 	endpointController cache.Controller
 	// services that need to be synced

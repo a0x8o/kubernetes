@@ -29,7 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/client/cache"
+	"k8s.io/kubernetes/pkg/client/legacylisters"
 	"k8s.io/kubernetes/pkg/kubelet/qos"
 	"k8s.io/kubernetes/pkg/util/workqueue"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm"
@@ -64,7 +64,7 @@ type PersistentVolumeClaimInfo interface {
 
 // CachedPersistentVolumeClaimInfo implements PersistentVolumeClaimInfo
 type CachedPersistentVolumeClaimInfo struct {
-	*cache.StoreToPersistentVolumeClaimLister
+	*listers.StoreToPersistentVolumeClaimLister
 }
 
 // GetPersistentVolumeClaimInfo fetches the claim in specified namespace with specified name
@@ -73,7 +73,7 @@ func (c *CachedPersistentVolumeClaimInfo) GetPersistentVolumeClaimInfo(namespace
 }
 
 type CachedNodeInfo struct {
-	*cache.StoreToNodeLister
+	*listers.StoreToNodeLister
 }
 
 // GetNodeInfo returns cached data for the node 'id'.
@@ -463,11 +463,7 @@ func GetResourceRequest(pod *v1.Pod) *schedulercache.Resource {
 				result.NvidiaGPU += rQuantity.Value()
 			default:
 				if v1.IsOpaqueIntResourceName(rName) {
-					// Lazily allocate this map only if required.
-					if result.OpaqueIntResources == nil {
-						result.OpaqueIntResources = map[v1.ResourceName]int64{}
-					}
-					result.OpaqueIntResources[rName] += rQuantity.Value()
+					result.AddOpaque(rName, rQuantity.Value())
 				}
 			}
 		}
@@ -490,11 +486,9 @@ func GetResourceRequest(pod *v1.Pod) *schedulercache.Resource {
 				}
 			default:
 				if v1.IsOpaqueIntResourceName(rName) {
-					// Lazily allocate this map only if required.
-					if result.OpaqueIntResources == nil {
-						result.OpaqueIntResources = map[v1.ResourceName]int64{}
-					}
 					value := rQuantity.Value()
+					// Ensure the opaque resource map is initialized in the result.
+					result.AddOpaque(rName, int64(0))
 					if value > result.OpaqueIntResources[rName] {
 						result.OpaqueIntResources[rName] = value
 					}

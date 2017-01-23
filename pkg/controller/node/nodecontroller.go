@@ -25,20 +25,21 @@ import (
 
 	"github.com/golang/glog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/pkg/util/flowcontrol"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	v1core "k8s.io/kubernetes/pkg/client/clientset_generated/clientset/typed/core/v1"
+	"k8s.io/kubernetes/pkg/client/legacylisters"
 	"k8s.io/kubernetes/pkg/client/record"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller/informers"
-	"k8s.io/kubernetes/pkg/fields"
-	"k8s.io/kubernetes/pkg/util/flowcontrol"
 	"k8s.io/kubernetes/pkg/util/metrics"
 	utilnode "k8s.io/kubernetes/pkg/util/node"
 	"k8s.io/kubernetes/pkg/util/system"
@@ -135,9 +136,9 @@ type NodeController struct {
 	nodeInformer       informers.NodeInformer
 	daemonSetInformer  informers.DaemonSetInformer
 
-	podStore       cache.StoreToPodLister
-	nodeStore      cache.StoreToNodeLister
-	daemonSetStore cache.StoreToDaemonSetLister
+	podStore       listers.StoreToPodLister
+	nodeStore      listers.StoreToNodeLister
+	daemonSetStore listers.StoreToDaemonSetLister
 	// allocate/recycle CIDRs for node if allocateNodeCIDRs == true
 	cidrAllocator CIDRAllocator
 

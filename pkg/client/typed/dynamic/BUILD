@@ -19,8 +19,6 @@ go_library(
     deps = [
         "//pkg/api:go_default_library",
         "//pkg/api/v1:go_default_library",
-        "//pkg/client/restclient:go_default_library",
-        "//pkg/util/flowcontrol:go_default_library",
         "//vendor:k8s.io/apimachinery/pkg/api/meta",
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1/unstructured",
@@ -30,6 +28,8 @@ go_library(
         "//vendor:k8s.io/apimachinery/pkg/runtime/serializer",
         "//vendor:k8s.io/apimachinery/pkg/types",
         "//vendor:k8s.io/apimachinery/pkg/watch",
+        "//vendor:k8s.io/client-go/pkg/util/flowcontrol",
+        "//vendor:k8s.io/client-go/rest",
     ],
 )
 
@@ -43,8 +43,6 @@ go_test(
     tags = ["automanaged"],
     deps = [
         "//pkg/api/v1:go_default_library",
-        "//pkg/client/restclient:go_default_library",
-        "//pkg/client/restclient/watch:go_default_library",
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1/unstructured",
         "//vendor:k8s.io/apimachinery/pkg/runtime",
@@ -52,6 +50,8 @@ go_test(
         "//vendor:k8s.io/apimachinery/pkg/runtime/serializer/streaming",
         "//vendor:k8s.io/apimachinery/pkg/types",
         "//vendor:k8s.io/apimachinery/pkg/watch",
+        "//vendor:k8s.io/client-go/rest",
+        "//vendor:k8s.io/client-go/rest/watch",
     ],
 )
 

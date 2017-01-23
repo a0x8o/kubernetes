@@ -25,6 +25,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	federationapi "k8s.io/kubernetes/federation/apis/federation/v1beta1"
 	kubefedtesting "k8s.io/kubernetes/federation/pkg/kubefed/testing"
 	"k8s.io/kubernetes/federation/pkg/kubefed/util"
@@ -33,8 +35,6 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/client/restclient/fake"
 	"k8s.io/kubernetes/pkg/client/typed/dynamic"
-	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
-	clientcmdapi "k8s.io/kubernetes/pkg/client/unversioned/clientcmd/api"
 	cmdtesting "k8s.io/kubernetes/pkg/kubectl/cmd/testing"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 )

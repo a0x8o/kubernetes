@@ -39,13 +39,13 @@ import (
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/controller/informers"
 	"k8s.io/kubernetes/pkg/generated/openapi"
-	"k8s.io/kubernetes/pkg/genericapiserver"
-	"k8s.io/kubernetes/pkg/genericapiserver/filters"
+	"k8s.io/kubernetes/pkg/genericapiserver/registry/generic"
+	genericregistry "k8s.io/kubernetes/pkg/genericapiserver/registry/generic/registry"
+	genericapiserver "k8s.io/kubernetes/pkg/genericapiserver/server"
+	"k8s.io/kubernetes/pkg/genericapiserver/server/filters"
 	"k8s.io/kubernetes/pkg/kubeapiserver"
 	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 	"k8s.io/kubernetes/pkg/registry/cachesize"
-	"k8s.io/kubernetes/pkg/registry/generic"
-	genericregistry "k8s.io/kubernetes/pkg/registry/generic/registry"
 	"k8s.io/kubernetes/pkg/routes"
 	"k8s.io/kubernetes/pkg/version"
 )
@@ -213,6 +213,7 @@ func Run(s *options.ServerRunOptions) error {
 	installCoreAPIs(s, m, restOptionsFactory)
 	installExtensionsAPIs(m, restOptionsFactory)
 	installBatchAPIs(m, restOptionsFactory)
+	installAutoscalingAPIs(m, restOptionsFactory)
 
 	sharedInformers.Start(wait.NeverStop)
 	m.PrepareRun().Run(wait.NeverStop)
