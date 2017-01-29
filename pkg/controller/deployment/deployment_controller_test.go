@@ -24,17 +24,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/uuid"
+	core "k8s.io/client-go/testing"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/v1"
 	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset/fake"
 	"k8s.io/kubernetes/pkg/client/record"
-	"k8s.io/kubernetes/pkg/client/testing/core"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/deployment/util"
 	"k8s.io/kubernetes/pkg/controller/informers"
 	"k8s.io/kubernetes/pkg/util/intstr"
-	"k8s.io/kubernetes/pkg/util/uuid"
 )
 
 var (
@@ -47,7 +47,7 @@ func rs(name string, replicas int, selector map[string]string, timestamp metav1.
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              name,
 			CreationTimestamp: timestamp,
-			Namespace:         v1.NamespaceDefault,
+			Namespace:         metav1.NamespaceDefault,
 		},
 		Spec: extensions.ReplicaSetSpec{
 			Replicas: func() *int32 { i := int32(replicas); return &i }(),
@@ -71,7 +71,7 @@ func newDeployment(name string, replicas int, revisionHistoryLimit *int32, maxSu
 		ObjectMeta: metav1.ObjectMeta{
 			UID:         uuid.NewUUID(),
 			Name:        name,
-			Namespace:   v1.NamespaceDefault,
+			Namespace:   metav1.NamespaceDefault,
 			Annotations: make(map[string]string),
 		},
 		Spec: extensions.DeploymentSpec{
@@ -112,7 +112,7 @@ func newReplicaSet(d *extensions.Deployment, name string, replicas int) *extensi
 	return &extensions.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: v1.NamespaceDefault,
+			Namespace: metav1.NamespaceDefault,
 			Labels:    d.Spec.Selector.MatchLabels,
 		},
 		Spec: extensions.ReplicaSetSpec{

@@ -25,6 +25,8 @@ import (
 
 	kubeerr "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/validation/path"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -36,7 +38,6 @@ import (
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/kubernetes/pkg/api"
 	storeerr "k8s.io/kubernetes/pkg/api/errors/storage"
-	"k8s.io/kubernetes/pkg/api/validation/path"
 	"k8s.io/kubernetes/pkg/genericapiserver/registry/generic"
 	"k8s.io/kubernetes/pkg/genericapiserver/registry/rest"
 	"k8s.io/kubernetes/pkg/registry/cachesize"
@@ -66,6 +67,9 @@ type ObjectFunc func(obj runtime.Object) error
 //
 // TODO: make the default exposed methods exactly match a generic RESTStorage
 type Store struct {
+	// Copier is used to make some storage caching decorators work
+	Copier runtime.ObjectCopier
+
 	// NewFunc returns a new instance of the type this registry returns for a
 	// GET of a single object, e.g.:
 	//
@@ -221,7 +225,7 @@ func (e *Store) NewList() runtime.Object {
 
 // List returns a list of items matching labels and field according to the
 // store's PredicateFunc.
-func (e *Store) List(ctx genericapirequest.Context, options *api.ListOptions) (runtime.Object, error) {
+func (e *Store) List(ctx genericapirequest.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
 	label := labels.Everything()
 	if options != nil && options.LabelSelector != nil {
 		label = options.LabelSelector
@@ -244,10 +248,10 @@ func (e *Store) List(ctx genericapirequest.Context, options *api.ListOptions) (r
 
 // ListPredicate returns a list of all the items matching the given
 // SelectionPredicate.
-func (e *Store) ListPredicate(ctx genericapirequest.Context, p storage.SelectionPredicate, options *api.ListOptions) (runtime.Object, error) {
+func (e *Store) ListPredicate(ctx genericapirequest.Context, p storage.SelectionPredicate, options *metainternalversion.ListOptions) (runtime.Object, error) {
 	if options == nil {
 		// By default we should serve the request from etcd.
-		options = &api.ListOptions{ResourceVersion: ""}
+		options = &metainternalversion.ListOptions{ResourceVersion: ""}
 	}
 	list := e.NewListFunc()
 	if name, ok := p.MatchesSingle(); ok {
@@ -530,7 +534,7 @@ var (
 // - options.OrphanDependents,
 // - existing finalizers of the object
 // - e.DeleteStrategy.DefaultGarbageCollectionPolicy
-func shouldUpdateFinalizers(e *Store, accessor metav1.Object, options *api.DeleteOptions) (shouldUpdate bool, newFinalizers []string) {
+func shouldUpdateFinalizers(e *Store, accessor metav1.Object, options *metav1.DeleteOptions) (shouldUpdate bool, newFinalizers []string) {
 	shouldOrphan := false
 	// Get default orphan policy from this REST object type
 	if gcStrategy, ok := e.DeleteStrategy.(rest.GarbageCollectionDeleteStrategy); ok {
@@ -607,7 +611,7 @@ func markAsDeleting(obj runtime.Object) (err error) {
 //    should be deleted immediately
 // 4. a new output object with the state that was updated
 // 5. a copy of the last existing state of the object
-func (e *Store) updateForGracefulDeletion(ctx genericapirequest.Context, name, key string, options *api.DeleteOptions, preconditions storage.Preconditions, in runtime.Object) (err error, ignoreNotFound, deleteImmediately bool, out, lastExisting runtime.Object) {
+func (e *Store) updateForGracefulDeletion(ctx genericapirequest.Context, name, key string, options *metav1.DeleteOptions, preconditions storage.Preconditions, in runtime.Object) (err error, ignoreNotFound, deleteImmediately bool, out, lastExisting runtime.Object) {
 	lastGraceful := int64(0)
 	out = e.NewFunc()
 	err = e.Storage.GuaranteedUpdate(
@@ -669,7 +673,7 @@ func (e *Store) updateForGracefulDeletion(ctx genericapirequest.Context, name, k
 //    should be deleted immediately
 // 4. a new output object with the state that was updated
 // 5. a copy of the last existing state of the object
-func (e *Store) updateForGracefulDeletionAndFinalizers(ctx genericapirequest.Context, name, key string, options *api.DeleteOptions, preconditions storage.Preconditions, in runtime.Object) (err error, ignoreNotFound, deleteImmediately bool, out, lastExisting runtime.Object) {
+func (e *Store) updateForGracefulDeletionAndFinalizers(ctx genericapirequest.Context, name, key string, options *metav1.DeleteOptions, preconditions storage.Preconditions, in runtime.Object) (err error, ignoreNotFound, deleteImmediately bool, out, lastExisting runtime.Object) {
 	lastGraceful := int64(0)
 	var pendingFinalizers bool
 	out = e.NewFunc()
@@ -749,7 +753,7 @@ func (e *Store) updateForGracefulDeletionAndFinalizers(ctx genericapirequest.Con
 }
 
 // Delete removes the item from storage.
-func (e *Store) Delete(ctx genericapirequest.Context, name string, options *api.DeleteOptions) (runtime.Object, error) {
+func (e *Store) Delete(ctx genericapirequest.Context, name string, options *metav1.DeleteOptions) (runtime.Object, error) {
 	key, err := e.KeyFunc(ctx, name)
 	if err != nil {
 		return nil, err
@@ -761,7 +765,7 @@ func (e *Store) Delete(ctx genericapirequest.Context, name string, options *api.
 	}
 	// support older consumers of delete by treating "nil" as delete immediately
 	if options == nil {
-		options = api.NewDeleteOptions(0)
+		options = metav1.NewDeleteOptions(0)
 	}
 	var preconditions storage.Preconditions
 	if options.Preconditions != nil {
@@ -830,7 +834,7 @@ func (e *Store) Delete(ctx genericapirequest.Context, name string, options *api.
 // are removing all objects of a given type) with the current API (it's technically
 // possibly with storage API, but watch is not delivered correctly then).
 // It will be possible to fix it with v3 etcd API.
-func (e *Store) DeleteCollection(ctx genericapirequest.Context, options *api.DeleteOptions, listOptions *api.ListOptions) (runtime.Object, error) {
+func (e *Store) DeleteCollection(ctx genericapirequest.Context, options *metav1.DeleteOptions, listOptions *metainternalversion.ListOptions) (runtime.Object, error) {
 	listObj, err := e.List(ctx, listOptions)
 	if err != nil {
 		return nil, err
@@ -921,7 +925,7 @@ func (e *Store) finalizeDelete(obj runtime.Object, runHooks bool) (runtime.Objec
 // WatchPredicate. If possible, you should customize PredicateFunc to produce
 // a matcher that matches by key. SelectionPredicate does this for you
 // automatically.
-func (e *Store) Watch(ctx genericapirequest.Context, options *api.ListOptions) (watch.Interface, error) {
+func (e *Store) Watch(ctx genericapirequest.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
 	label := labels.Everything()
 	if options != nil && options.LabelSelector != nil {
 		label = options.LabelSelector
@@ -1115,6 +1119,7 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 
 	if e.Storage == nil {
 		e.Storage, e.DestroyFunc = opts.Decorator(
+			e.Copier,
 			opts.StorageConfig,
 			cachesize.GetWatchCacheSizeByResource(cachesize.Resource(e.QualifiedResource.Resource)),
 			e.NewFunc(),

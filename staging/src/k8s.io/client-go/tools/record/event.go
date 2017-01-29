@@ -27,8 +27,8 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/pkg/api/v1"
-	"k8s.io/client-go/pkg/util/clock"
 	restclient "k8s.io/client-go/rest"
+	"k8s.io/client-go/util/clock"
 
 	"net/http"
 
@@ -298,7 +298,7 @@ func (recorder *recorderImpl) makeEvent(ref *v1.ObjectReference, eventtype, reas
 	t := metav1.Time{Time: recorder.clock.Now()}
 	namespace := ref.Namespace
 	if namespace == "" {
-		namespace = v1.NamespaceDefault
+		namespace = metav1.NamespaceDefault
 	}
 	return &v1.Event{
 		ObjectMeta: metav1.ObjectMeta{

@@ -18,7 +18,6 @@ go_library(
         "//pkg/apis/apps/v1beta1:go_default_library",
         "//pkg/apis/extensions/v1beta1:go_default_library",
         "//pkg/apis/policy/v1beta1:go_default_library",
-        "//pkg/client/cache:go_default_library",
         "//pkg/client/clientset_generated/clientset:go_default_library",
         "//pkg/client/clientset_generated/clientset/typed/core/v1:go_default_library",
         "//pkg/client/clientset_generated/clientset/typed/policy/v1beta1:go_default_library",
@@ -34,6 +33,7 @@ go_library(
         "//vendor:k8s.io/apimachinery/pkg/util/runtime",
         "//vendor:k8s.io/apimachinery/pkg/util/wait",
         "//vendor:k8s.io/apimachinery/pkg/watch",
+        "//vendor:k8s.io/client-go/tools/cache",
     ],
 )
 
@@ -48,14 +48,14 @@ go_test(
         "//pkg/apis/apps/v1beta1:go_default_library",
         "//pkg/apis/extensions/v1beta1:go_default_library",
         "//pkg/apis/policy/v1beta1:go_default_library",
-        "//pkg/client/cache:go_default_library",
         "//pkg/client/legacylisters:go_default_library",
         "//pkg/client/record:go_default_library",
         "//pkg/controller:go_default_library",
         "//pkg/util/intstr:go_default_library",
-        "//pkg/util/uuid:go_default_library",
         "//pkg/util/workqueue:go_default_library",
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
+        "//vendor:k8s.io/apimachinery/pkg/util/uuid",
+        "//vendor:k8s.io/client-go/tools/cache",
     ],
 )
 

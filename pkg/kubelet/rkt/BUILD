@@ -42,7 +42,6 @@ go_library(
         "//pkg/util/selinux:go_default_library",
         "//pkg/util/strings:go_default_library",
         "//pkg/util/term:go_default_library",
-        "//pkg/util/uuid:go_default_library",
         "//pkg/util/version:go_default_library",
         "//vendor:github.com/appc/spec/schema",
         "//vendor:github.com/appc/spec/schema/types",
@@ -56,8 +55,9 @@ go_library(
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
         "//vendor:k8s.io/apimachinery/pkg/types",
         "//vendor:k8s.io/apimachinery/pkg/util/errors",
+        "//vendor:k8s.io/apimachinery/pkg/util/uuid",
         "//vendor:k8s.io/apimachinery/pkg/util/wait",
-        "//vendor:k8s.io/client-go/pkg/util/flowcontrol",
+        "//vendor:k8s.io/client-go/util/flowcontrol",
     ],
 )
 
@@ -91,7 +91,7 @@ go_test(
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
         "//vendor:k8s.io/apimachinery/pkg/types",
         "//vendor:k8s.io/apimachinery/pkg/util/errors",
-        "//vendor:k8s.io/client-go/pkg/util/testing",
+        "//vendor:k8s.io/client-go/util/testing",
     ],
 )
 

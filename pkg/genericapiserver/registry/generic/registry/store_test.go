@@ -28,6 +28,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -53,7 +54,7 @@ type testGracefulStrategy struct {
 	testRESTStrategy
 }
 
-func (t testGracefulStrategy) CheckGracefulDelete(ctx genericapirequest.Context, obj runtime.Object, options *api.DeleteOptions) bool {
+func (t testGracefulStrategy) CheckGracefulDelete(ctx genericapirequest.Context, obj runtime.Object, options *metav1.DeleteOptions) bool {
 	return true
 }
 
@@ -239,7 +240,7 @@ func TestStoreListResourceVersion(t *testing.T) {
 
 	waitListCh := make(chan runtime.Object, 1)
 	go func(listRev uint64) {
-		option := &api.ListOptions{ResourceVersion: strconv.FormatUint(listRev, 10)}
+		option := &metainternalversion.ListOptions{ResourceVersion: strconv.FormatUint(listRev, 10)}
 		// It will wait until we create the second pod.
 		l, err := registry.List(ctx, option)
 		if err != nil {
@@ -321,7 +322,7 @@ func TestStoreCreate(t *testing.T) {
 	}
 
 	// now delete pod with graceful period set
-	delOpts := &api.DeleteOptions{GracePeriodSeconds: &gracefulPeriod}
+	delOpts := &metav1.DeleteOptions{GracePeriodSeconds: &gracefulPeriod}
 	_, err = registry.Delete(testContext, podA.Name, delOpts)
 	if err != nil {
 		t.Fatalf("Failed to delete pod gracefully. Unexpected error: %v", err)
@@ -417,7 +418,7 @@ func TestNoOpUpdates(t *testing.T) {
 	newPod := func() *api.Pod {
 		return &api.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: api.NamespaceDefault,
+				Namespace: metav1.NamespaceDefault,
 				Name:      "foo",
 				Labels:    map[string]string{"prepare_create": "true"},
 			},
@@ -645,7 +646,7 @@ func TestGracefulStoreCanDeleteIfExistingGracePeriodZero(t *testing.T) {
 	registry.DeleteStrategy = testGracefulStrategy{defaultDeleteStrategy}
 	defer destroyFunc()
 
-	graceful, gracefulPending, err := rest.BeforeDelete(registry.DeleteStrategy, testContext, pod, api.NewDeleteOptions(0))
+	graceful, gracefulPending, err := rest.BeforeDelete(registry.DeleteStrategy, testContext, pod, metav1.NewDeleteOptions(0))
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -677,7 +678,7 @@ func TestGracefulStoreHandleFinalizers(t *testing.T) {
 	}
 
 	// delete the pod with grace period=0, the pod should still exist because it has a finalizer
-	_, err = registry.Delete(testContext, podWithFinalizer.Name, api.NewDeleteOptions(0))
+	_, err = registry.Delete(testContext, podWithFinalizer.Name, metav1.NewDeleteOptions(0))
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -819,9 +820,9 @@ func TestStoreDeleteWithOrphanDependents(t *testing.T) {
 		}
 	}
 	trueVar, falseVar := true, false
-	orphanOptions := &api.DeleteOptions{OrphanDependents: &trueVar}
-	nonOrphanOptions := &api.DeleteOptions{OrphanDependents: &falseVar}
-	nilOrphanOptions := &api.DeleteOptions{}
+	orphanOptions := &metav1.DeleteOptions{OrphanDependents: &trueVar}
+	nonOrphanOptions := &metav1.DeleteOptions{OrphanDependents: &falseVar}
+	nilOrphanOptions := &metav1.DeleteOptions{}
 
 	// defaultDeleteStrategy doesn't implement rest.GarbageCollectionDeleteStrategy.
 	defaultDeleteStrategy := &testRESTStrategy{api.Scheme, names.SimpleNameGenerator, true, false, true}
@@ -831,7 +832,7 @@ func TestStoreDeleteWithOrphanDependents(t *testing.T) {
 
 	testcases := []struct {
 		pod               *api.Pod
-		options           *api.DeleteOptions
+		options           *metav1.DeleteOptions
 		strategy          rest.RESTDeleteStrategy
 		expectNotFound    bool
 		updatedFinalizers []string
@@ -1078,7 +1079,7 @@ func TestStoreDeleteCollection(t *testing.T) {
 	}
 
 	// Delete all pods.
-	deleted, err := registry.DeleteCollection(testContext, nil, &api.ListOptions{})
+	deleted, err := registry.DeleteCollection(testContext, nil, &metainternalversion.ListOptions{})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -1119,7 +1120,7 @@ func TestStoreDeleteCollectionNotFound(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				_, err := registry.DeleteCollection(testContext, nil, &api.ListOptions{})
+				_, err := registry.DeleteCollection(testContext, nil, &metainternalversion.ListOptions{})
 				if err != nil {
 					t.Fatalf("Unexpected error: %v", err)
 				}
@@ -1157,7 +1158,7 @@ func TestStoreDeleteCollectionWithWatch(t *testing.T) {
 	}
 	defer watcher.Stop()
 
-	if _, err := registry.DeleteCollection(testContext, nil, &api.ListOptions{}); err != nil {
+	if _, err := registry.DeleteCollection(testContext, nil, &metainternalversion.ListOptions{}); err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
@@ -1250,6 +1251,7 @@ func newTestGenericStoreRegistry(t *testing.T, hasCacheEnabled bool) (factory.De
 			CacheCapacity:  10,
 			Storage:        s,
 			Versioner:      etcdstorage.APIObjectVersioner{},
+			Copier:         api.Scheme,
 			Type:           &api.Pod{},
 			ResourcePrefix: podPrefix,
 			KeyFunc:        func(obj runtime.Object) (string, error) { return storage.NoNamespaceKeyFunc(podPrefix, obj) },
@@ -1267,6 +1269,7 @@ func newTestGenericStoreRegistry(t *testing.T, hasCacheEnabled bool) (factory.De
 	}
 
 	return destroyFunc, &Store{
+		Copier:            api.Scheme,
 		NewFunc:           func() runtime.Object { return &api.Pod{} },
 		NewListFunc:       func() runtime.Object { return &api.PodList{} },
 		QualifiedResource: api.Resource("pods"),

@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/kubernetes/pkg/api"
 	utilpod "k8s.io/kubernetes/pkg/api/pod"
 	"k8s.io/kubernetes/pkg/api/resource"
@@ -43,8 +44,8 @@ import (
 	"k8s.io/kubernetes/pkg/api/validation/genericvalidation"
 	storageutil "k8s.io/kubernetes/pkg/apis/storage/util"
 	"k8s.io/kubernetes/pkg/capabilities"
+	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/security/apparmor"
-	utilconfig "k8s.io/kubernetes/pkg/util/config"
 	"k8s.io/kubernetes/pkg/util/intstr"
 )
 
@@ -1597,6 +1598,14 @@ func validateContainers(containers []api.Container, volumes sets.String, fldPath
 			allErrs = append(allErrs, field.Invalid(idxPath.Child("livenessProbe", "successThreshold"), ctr.LivenessProbe.SuccessThreshold, "must be 1"))
 		}
 
+		switch ctr.TerminationMessagePolicy {
+		case api.TerminationMessageReadFile, api.TerminationMessageFallbackToLogsOnError:
+		case "":
+			allErrs = append(allErrs, field.Required(idxPath.Child("terminationMessagePolicy"), "must be 'File' or 'FallbackToLogsOnError'"))
+		default:
+			allErrs = append(allErrs, field.Invalid(idxPath.Child("terminationMessagePolicy"), ctr.TerminationMessagePolicy, "must be 'File' or 'FallbackToLogsOnError'"))
+		}
+
 		allErrs = append(allErrs, validateProbe(ctr.ReadinessProbe, idxPath.Child("readinessProbe"))...)
 		allErrs = append(allErrs, validateContainerPorts(ctr.Ports, idxPath.Child("ports"))...)
 		allErrs = append(allErrs, validateEnv(ctr.Env, idxPath.Child("env"))...)
@@ -1709,16 +1718,16 @@ func validateTaintEffect(effect *api.TaintEffect, allowEmpty bool, fldPath *fiel
 
 	allErrors := field.ErrorList{}
 	switch *effect {
-	// TODO: Replace next line with subsequent commented-out line when implement TaintEffectNoScheduleNoAdmit, TaintEffectNoScheduleNoAdmitNoExecute.
-	case api.TaintEffectNoSchedule, api.TaintEffectPreferNoSchedule:
-		// case api.TaintEffectNoSchedule, api.TaintEffectPreferNoSchedule, api.TaintEffectNoScheduleNoAdmit, api.TaintEffectNoScheduleNoAdmitNoExecute:
+	// TODO: Replace next line with subsequent commented-out line when implement TaintEffectNoScheduleNoAdmit.
+	case api.TaintEffectNoSchedule, api.TaintEffectPreferNoSchedule, api.TaintEffectNoExecute:
+		// case api.TaintEffectNoSchedule, api.TaintEffectPreferNoSchedule, api.TaintEffectNoScheduleNoAdmit, api.TaintEffectNoExecute:
 	default:
 		validValues := []string{
 			string(api.TaintEffectNoSchedule),
 			string(api.TaintEffectPreferNoSchedule),
-			// TODO: Uncomment this block when implement TaintEffectNoScheduleNoAdmit, TaintEffectNoScheduleNoAdmitNoExecute.
+			string(api.TaintEffectNoExecute),
+			// TODO: Uncomment this block when implement TaintEffectNoScheduleNoAdmit.
 			// string(api.TaintEffectNoScheduleNoAdmit),
-			// string(api.TaintEffectNoScheduleNoAdmitNoExecute),
 		}
 		allErrors = append(allErrors, field.NotSupported(fldPath, effect, validValues))
 	}
@@ -1731,10 +1740,24 @@ func validateTolerations(tolerations []api.Toleration, fldPath *field.Path) fiel
 	for i, toleration := range tolerations {
 		idxPath := fldPath.Index(i)
 		// validate the toleration key
-		allErrors = append(allErrors, unversionedvalidation.ValidateLabelName(toleration.Key, idxPath.Child("key"))...)
+		if len(toleration.Key) > 0 {
+			allErrors = append(allErrors, unversionedvalidation.ValidateLabelName(toleration.Key, idxPath.Child("key"))...)
+		}
+
+		// empty toleration key with Exists operator and empty value means match all taints
+		if len(toleration.Key) == 0 && toleration.Operator != api.TolerationOpExists {
+			allErrors = append(allErrors, field.Invalid(idxPath.Child("operator"), toleration.Operator,
+				"operator must be Exists when `key` is empty, which means \"match all values and all keys\""))
+		}
+
+		if toleration.TolerationSeconds != nil && toleration.Effect != api.TaintEffectNoExecute {
+			allErrors = append(allErrors, field.Invalid(idxPath.Child("effect"), toleration.Effect,
+				"effect must be 'NoExecute' when `tolerationSeconds` is set"))
+		}
 
 		// validate toleration operator and value
 		switch toleration.Operator {
+		// empty operator means Equal
 		case api.TolerationOpEqual, "":
 			if errs := validation.IsValidLabelValue(toleration.Value); len(errs) != 0 {
 				allErrors = append(allErrors, field.Invalid(idxPath.Child("operator"), toleration.Value, strings.Join(errs, ";")))
@@ -1748,7 +1771,7 @@ func validateTolerations(tolerations []api.Toleration, fldPath *field.Path) fiel
 			allErrors = append(allErrors, field.NotSupported(idxPath.Child("operator"), toleration.Operator, validValues))
 		}
 
-		// validate toleration effect
+		// validate toleration effect, empty toleration effect means match all taint effects
 		if len(toleration.Effect) > 0 {
 			allErrors = append(allErrors, validateTaintEffect(&toleration.Effect, true, idxPath.Child("effect"))...)
 		}
@@ -2055,7 +2078,8 @@ func ValidateAppArmorPodAnnotations(annotations map[string]string, spec *api.Pod
 		if !strings.HasPrefix(k, apparmor.ContainerAnnotationKeyPrefix) {
 			continue
 		}
-		if !utilconfig.DefaultFeatureGate.AppArmor() {
+		// TODO: this belongs to admission, not general pod validation:
+		if !utilfeature.DefaultFeatureGate.Enabled(features.AppArmor) {
 			allErrs = append(allErrs, field.Forbidden(fldPath.Key(k), "AppArmor is disabled by feature-gate"))
 			continue
 		}

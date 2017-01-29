@@ -26,7 +26,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	certutil "k8s.io/client-go/pkg/util/cert"
+	certutil "k8s.io/client-go/util/cert"
 	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 	kubeadmapiext "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha1"
 	"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/validation"
@@ -146,7 +146,7 @@ func (j *Join) Run(out io.Writer) error {
 
 	// Write the ca certificate to disk so kubelet can use it for authentication
 	cluster := cfg.Contexts[cfg.CurrentContext].Cluster
-	caCertFile := filepath.Join(kubeadmapi.GlobalEnvParams.KubernetesDir, kubeadmconstants.CACertName)
+	caCertFile := filepath.Join(kubeadmapi.GlobalEnvParams.HostPKIPath, kubeadmconstants.CACertName)
 	err = certutil.WriteCert(caCertFile, cfg.Clusters[cluster].CertificateAuthorityData)
 	if err != nil {
 		return fmt.Errorf("couldn't save the CA certificate to disk: %v", err)

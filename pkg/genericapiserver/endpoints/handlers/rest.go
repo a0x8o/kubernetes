@@ -29,20 +29,20 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/endpoints/handlers/negotiation"
 	"k8s.io/apiserver/pkg/endpoints/request"
-	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/genericapiserver/endpoints/handlers/responsewriters"
 	"k8s.io/kubernetes/pkg/genericapiserver/registry/rest"
 	"k8s.io/kubernetes/pkg/util"
-	"k8s.io/kubernetes/pkg/util/strategicpatch"
 
 	"github.com/emicklei/go-restful"
 	"github.com/golang/glog"
@@ -87,6 +87,8 @@ type RequestScope struct {
 	Resource    schema.GroupVersionResource
 	Kind        schema.GroupVersionKind
 	Subresource string
+
+	MetaGroupVersion schema.GroupVersion
 }
 
 func (scope *RequestScope) err(err error, w http.ResponseWriter, req *http.Request) {
@@ -138,7 +140,7 @@ func GetResource(r rest.Getter, e rest.Exporter, scope RequestScope) restful.Rou
 			options := metav1.GetOptions{}
 			if values := req.Request.URL.Query(); len(values) > 0 {
 				exports := metav1.ExportOptions{}
-				if err := scope.ParameterCodec.DecodeParameters(values, schema.GroupVersion{Version: "v1"}, &exports); err != nil {
+				if err := metainternalversion.ParameterCodec.DecodeParameters(values, scope.MetaGroupVersion, &exports); err != nil {
 					return nil, err
 				}
 				if exports.Export {
@@ -147,7 +149,7 @@ func GetResource(r rest.Getter, e rest.Exporter, scope RequestScope) restful.Rou
 					}
 					return e.Export(ctx, name, exports)
 				}
-				if err := scope.ParameterCodec.DecodeParameters(values, schema.GroupVersion{Version: "v1"}, &options); err != nil {
+				if err := metainternalversion.ParameterCodec.DecodeParameters(values, scope.MetaGroupVersion, &options); err != nil {
 					return nil, err
 				}
 			}
@@ -264,8 +266,8 @@ func ListResource(r rest.Lister, rw rest.Watcher, scope RequestScope, forceWatch
 		ctx := scope.ContextFunc(req)
 		ctx = request.WithNamespace(ctx, namespace)
 
-		opts := api.ListOptions{}
-		if err := scope.ParameterCodec.DecodeParameters(req.Request.URL.Query(), scope.Kind.GroupVersion(), &opts); err != nil {
+		opts := metainternalversion.ListOptions{}
+		if err := metainternalversion.ParameterCodec.DecodeParameters(req.Request.URL.Query(), scope.MetaGroupVersion, &opts); err != nil {
 			scope.err(err, res.ResponseWriter, req.Request)
 			return
 		}
@@ -808,7 +810,7 @@ func DeleteResource(r rest.GracefulDeleter, allowsOptions bool, scope RequestSco
 		ctx := scope.ContextFunc(req)
 		ctx = request.WithNamespace(ctx, namespace)
 
-		options := &api.DeleteOptions{}
+		options := &metav1.DeleteOptions{}
 		if allowsOptions {
 			body, err := readBody(req.Request)
 			if err != nil {
@@ -816,13 +818,15 @@ func DeleteResource(r rest.GracefulDeleter, allowsOptions bool, scope RequestSco
 				return
 			}
 			if len(body) > 0 {
-				s, err := negotiation.NegotiateInputSerializer(req.Request, scope.Serializer)
+				s, err := negotiation.NegotiateInputSerializer(req.Request, metainternalversion.Codecs)
 				if err != nil {
 					scope.err(err, res.ResponseWriter, req.Request)
 					return
 				}
-				defaultGVK := scope.Kind.GroupVersion().WithKind("DeleteOptions")
-				obj, _, err := scope.Serializer.DecoderToVersion(s.Serializer, defaultGVK.GroupVersion()).Decode(body, &defaultGVK, options)
+				// For backwards compatibility, we need to allow existing clients to submit per group DeleteOptions
+				// It is also allowed to pass a body with meta.k8s.io/v1.DeleteOptions
+				defaultGVK := scope.MetaGroupVersion.WithKind("DeleteOptions")
+				obj, _, err := metainternalversion.Codecs.DecoderToVersion(s.Serializer, defaultGVK.GroupVersion()).Decode(body, &defaultGVK, options)
 				if err != nil {
 					scope.err(err, res.ResponseWriter, req.Request)
 					return
@@ -833,7 +837,7 @@ func DeleteResource(r rest.GracefulDeleter, allowsOptions bool, scope RequestSco
 				}
 			} else {
 				if values := req.Request.URL.Query(); len(values) > 0 {
-					if err := scope.ParameterCodec.DecodeParameters(values, scope.Kind.GroupVersion(), options); err != nil {
+					if err := metainternalversion.ParameterCodec.DecodeParameters(values, scope.MetaGroupVersion, options); err != nil {
 						scope.err(err, res.ResponseWriter, req.Request)
 						return
 					}
@@ -912,8 +916,8 @@ func DeleteCollection(r rest.CollectionDeleter, checkBody bool, scope RequestSco
 			}
 		}
 
-		listOptions := api.ListOptions{}
-		if err := scope.ParameterCodec.DecodeParameters(req.Request.URL.Query(), scope.Kind.GroupVersion(), &listOptions); err != nil {
+		listOptions := metainternalversion.ListOptions{}
+		if err := metainternalversion.ParameterCodec.DecodeParameters(req.Request.URL.Query(), scope.MetaGroupVersion, &listOptions); err != nil {
 			scope.err(err, res.ResponseWriter, req.Request)
 			return
 		}
@@ -932,7 +936,7 @@ func DeleteCollection(r rest.CollectionDeleter, checkBody bool, scope RequestSco
 			}
 		}
 
-		options := &api.DeleteOptions{}
+		options := &metav1.DeleteOptions{}
 		if checkBody {
 			body, err := readBody(req.Request)
 			if err != nil {

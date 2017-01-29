@@ -23,9 +23,9 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/pkg/api/v1"
 	apps "k8s.io/kubernetes/pkg/apis/apps/v1beta1"
-	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	v1core "k8s.io/kubernetes/pkg/client/clientset_generated/clientset/typed/core/v1"
 	"k8s.io/kubernetes/pkg/client/legacylisters"
@@ -113,11 +113,11 @@ func NewStatefulSetController(podInformer cache.SharedIndexInformer, kubeClient 
 
 	psc.psStore.Store, psc.psController = cache.NewInformer(
 		&cache.ListWatch{
-			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
-				return psc.kubeClient.Apps().StatefulSets(v1.NamespaceAll).List(options)
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return psc.kubeClient.Apps().StatefulSets(metav1.NamespaceAll).List(options)
 			},
-			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
-				return psc.kubeClient.Apps().StatefulSets(v1.NamespaceAll).Watch(options)
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return psc.kubeClient.Apps().StatefulSets(metav1.NamespaceAll).Watch(options)
 			},
 		},
 		&apps.StatefulSet{},

@@ -19,11 +19,11 @@ limitations under the License.
 package v1alpha1
 
 import (
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
-	v1 "k8s.io/kubernetes/pkg/api/v1"
+	cache "k8s.io/client-go/tools/cache"
 	rbac_v1alpha1 "k8s.io/kubernetes/pkg/apis/rbac/v1alpha1"
-	cache "k8s.io/kubernetes/pkg/client/cache"
 	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	internalinterfaces "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalinterfaces"
 	v1alpha1 "k8s.io/kubernetes/pkg/client/listers/rbac/v1alpha1"

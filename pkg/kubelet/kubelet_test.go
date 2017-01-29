@@ -33,8 +33,8 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/pkg/util/clock"
-	"k8s.io/client-go/pkg/util/flowcontrol"
+	"k8s.io/client-go/util/clock"
+	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/kubernetes/pkg/api/resource"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/apis/componentconfig"
@@ -159,7 +159,7 @@ func newTestKubeletWithImageList(
 		t.Fatalf("can't mkdir(%q): %v", kubelet.rootDirectory, err)
 	}
 	kubelet.sourcesReady = config.NewSourcesReady(func(_ sets.String) bool { return true })
-	kubelet.masterServiceNamespace = v1.NamespaceDefault
+	kubelet.masterServiceNamespace = metav1.NamespaceDefault
 	kubelet.serviceLister = testServiceLister{}
 	kubelet.nodeLister = testNodeLister{}
 	kubelet.nodeInfo = testNodeInfo{}
@@ -173,8 +173,12 @@ func newTestKubeletWithImageList(
 	kubelet.cadvisor = mockCadvisor
 
 	fakeMirrorClient := podtest.NewFakeMirrorClient()
-	fakeSecretManager := secret.NewFakeManager()
-	kubelet.podManager = kubepod.NewBasicPodManager(fakeMirrorClient, fakeSecretManager)
+	secretManager, err := secret.NewSimpleSecretManager(kubelet.kubeClient)
+	if err != nil {
+		t.Fatalf("can't create a secret manager: %v", err)
+	}
+	kubelet.secretManager = secretManager
+	kubelet.podManager = kubepod.NewBasicPodManager(fakeMirrorClient, kubelet.secretManager)
 	kubelet.statusManager = status.NewManager(fakeKubeClient, kubelet.podManager)
 	kubelet.containerRefManager = kubecontainer.NewRefManager()
 	diskSpaceManager, err := newDiskSpaceManager(mockCadvisor, DiskSpacePolicy{})
@@ -249,7 +253,7 @@ func newTestKubeletWithImageList(
 
 	plug := &volumetest.FakeVolumePlugin{PluginName: "fake", Host: nil}
 	kubelet.volumePluginMgr, err =
-		NewInitializedVolumePluginMgr(kubelet, []volume.VolumePlugin{plug})
+		NewInitializedVolumePluginMgr(kubelet, kubelet.secretManager, []volume.VolumePlugin{plug})
 	require.NoError(t, err, "Failed to initialize VolumePluginMgr")
 
 	kubelet.mounter = &mount.FakeMounter{}

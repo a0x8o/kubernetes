@@ -21,7 +21,6 @@ go_library(
         "//pkg/api/v1:go_default_library",
         "//pkg/apis/autoscaling/v1:go_default_library",
         "//pkg/apis/extensions/v1beta1:go_default_library",
-        "//pkg/client/cache:go_default_library",
         "//pkg/client/clientset_generated/clientset/typed/autoscaling/v1:go_default_library",
         "//pkg/client/clientset_generated/clientset/typed/core/v1:go_default_library",
         "//pkg/client/clientset_generated/clientset/typed/extensions/v1beta1:go_default_library",
@@ -34,6 +33,7 @@ go_library(
         "//vendor:k8s.io/apimachinery/pkg/util/runtime",
         "//vendor:k8s.io/apimachinery/pkg/util/sets",
         "//vendor:k8s.io/apimachinery/pkg/watch",
+        "//vendor:k8s.io/client-go/tools/cache",
     ],
 )
 
@@ -54,7 +54,6 @@ go_test(
         "//pkg/client/clientset_generated/clientset/fake:go_default_library",
         "//pkg/client/clientset_generated/clientset/typed/core/v1:go_default_library",
         "//pkg/client/record:go_default_library",
-        "//pkg/client/testing/core:go_default_library",
         "//pkg/controller/podautoscaler/metrics:go_default_library",
         "//vendor:github.com/stretchr/testify/assert",
         "//vendor:github.com/stretchr/testify/require",
@@ -62,6 +61,7 @@ go_test(
         "//vendor:k8s.io/apimachinery/pkg/runtime",
         "//vendor:k8s.io/apimachinery/pkg/watch",
         "//vendor:k8s.io/client-go/rest",
+        "//vendor:k8s.io/client-go/testing",
         "//vendor:k8s.io/heapster/metrics/api/v1/types",
         "//vendor:k8s.io/heapster/metrics/apis/metrics/v1alpha1",
     ],

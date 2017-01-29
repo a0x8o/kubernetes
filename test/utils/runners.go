@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/resource"
@@ -40,7 +41,6 @@ import (
 	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
-	"k8s.io/kubernetes/pkg/util/uuid"
 	"k8s.io/kubernetes/pkg/util/workqueue"
 
 	"github.com/golang/glog"
@@ -689,8 +689,8 @@ func (config *RCConfig) start() error {
 
 	if oldRunning != config.Replicas {
 		// List only pods from a given replication controller.
-		options := v1.ListOptions{LabelSelector: label.String()}
-		if pods, err := config.Client.Core().Pods(v1.NamespaceAll).List(options); err == nil {
+		options := metav1.ListOptions{LabelSelector: label.String()}
+		if pods, err := config.Client.Core().Pods(metav1.NamespaceAll).List(options); err == nil {
 
 			for _, pod := range pods.Items {
 				config.RCConfigLog("Pod %s\t%s\t%s\t%s", pod.Name, pod.Spec.NodeName, pod.Status.Phase, pod.DeletionTimestamp)
@@ -1039,7 +1039,7 @@ func (config *SecretConfig) Run() error {
 }
 
 func (config *SecretConfig) Stop() error {
-	if err := config.Client.Core().Secrets(config.Namespace).Delete(config.Name, &v1.DeleteOptions{}); err != nil {
+	if err := config.Client.Core().Secrets(config.Namespace).Delete(config.Name, &metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("Error deleting secret: %v", err)
 	}
 	config.LogFunc("Deleted secret %v/%v", config.Namespace, config.Name)
@@ -1116,7 +1116,7 @@ func (config *DaemonConfig) Run() error {
 	var nodes *v1.NodeList
 	for i := 0; i < retries; i++ {
 		// Wait for all daemons to be running
-		nodes, err = config.Client.Core().Nodes().List(v1.ListOptions{ResourceVersion: "0"})
+		nodes, err = config.Client.Core().Nodes().List(metav1.ListOptions{ResourceVersion: "0"})
 		if err == nil {
 			break
 		} else if i+1 == retries {

@@ -322,8 +322,8 @@ func getAPIServerCommand(cfg *kubeadmapi.MasterConfiguration, selfHosted bool) [
 		"--client-ca-file="+getCertFilePath(kubeadmconstants.CACertName),
 		"--tls-cert-file="+getCertFilePath(kubeadmconstants.APIServerCertName),
 		"--tls-private-key-file="+getCertFilePath(kubeadmconstants.APIServerKeyName),
-		"--kubelet-client-certificate="+getCertFilePath(kubeadmconstants.APIServerCertName),
-		"--kubelet-client-key="+getCertFilePath(kubeadmconstants.APIServerKeyName),
+		"--kubelet-client-certificate="+getCertFilePath(kubeadmconstants.APIServerKubeletClientCertName),
+		"--kubelet-client-key="+getCertFilePath(kubeadmconstants.APIServerKubeletClientKeyName),
 		"--token-auth-file="+kubeadmapi.GlobalEnvParams.HostPKIPath+"/tokens.csv",
 		fmt.Sprintf("--secure-port=%d", cfg.API.Port),
 		"--allow-privileged",
@@ -360,7 +360,7 @@ func getAPIServerCommand(cfg *kubeadmapi.MasterConfiguration, selfHosted bool) [
 			command = append(command, "--kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname")
 		}
 
-		// This is a critical "bugfix". Any version above this is vulnarable unless a RBAC/ABAC-authorizer is provided (which kubeadm doesn't for the time being)
+		// This is a critical "bugfix". Any version above this is vulnerable unless a RBAC/ABAC-authorizer is provided (which kubeadm doesn't for the time being)
 		if err == nil && k8sVersion.GTE(anonAuthDisableAPIServerMinVersion) {
 			command = append(command, "--anonymous-auth=false")
 		}

@@ -22,7 +22,6 @@ go_library(
         "//pkg/api/v1:go_default_library",
         "//pkg/apis/storage/v1beta1:go_default_library",
         "//pkg/apis/storage/v1beta1/util:go_default_library",
-        "//pkg/client/cache:go_default_library",
         "//pkg/client/clientset_generated/clientset:go_default_library",
         "//pkg/client/clientset_generated/clientset/typed/core/v1:go_default_library",
         "//pkg/client/record:go_default_library",
@@ -42,6 +41,7 @@ go_library(
         "//vendor:k8s.io/apimachinery/pkg/types",
         "//vendor:k8s.io/apimachinery/pkg/util/wait",
         "//vendor:k8s.io/apimachinery/pkg/watch",
+        "//vendor:k8s.io/client-go/tools/cache",
     ],
 )
 
@@ -65,12 +65,10 @@ go_test(
         "//pkg/api/v1:go_default_library",
         "//pkg/apis/storage/v1beta1:go_default_library",
         "//pkg/apis/storage/v1beta1/util:go_default_library",
-        "//pkg/client/cache:go_default_library",
         "//pkg/client/clientset_generated/clientset:go_default_library",
         "//pkg/client/clientset_generated/clientset/fake:go_default_library",
         "//pkg/client/record:go_default_library",
-        "//pkg/client/testing/cache:go_default_library",
-        "//pkg/client/testing/core:go_default_library",
+        "//pkg/controller/volume/persistentvolume/testing:go_default_library",
         "//pkg/volume:go_default_library",
         "//vendor:github.com/golang/glog",
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
@@ -78,6 +76,8 @@ go_test(
         "//vendor:k8s.io/apimachinery/pkg/types",
         "//vendor:k8s.io/apimachinery/pkg/util/diff",
         "//vendor:k8s.io/apimachinery/pkg/util/wait",
+        "//vendor:k8s.io/client-go/testing",
+        "//vendor:k8s.io/client-go/tools/cache",
     ],
 )
 
@@ -93,6 +93,7 @@ filegroup(
     srcs = [
         ":package-srcs",
         "//pkg/controller/volume/persistentvolume/options:all-srcs",
+        "//pkg/controller/volume/persistentvolume/testing:all-srcs",
     ],
     tags = ["automanaged"],
 )

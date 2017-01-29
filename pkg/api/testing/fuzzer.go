@@ -286,6 +286,10 @@ func FuzzerFor(t *testing.T, version schema.GroupVersion, src rand.Source) *fuzz
 		func(s *api.SecretVolumeSource, c fuzz.Continue) {
 			c.FuzzNoCustom(s) // fuzz self without calling this function again
 
+			if c.RandBool() {
+				opt := c.RandBool()
+				s.Optional = &opt
+			}
 			// DefaultMode should always be set, it has a default
 			// value and it is expected to be between 0 and 0777
 			var mode int32
@@ -296,6 +300,10 @@ func FuzzerFor(t *testing.T, version schema.GroupVersion, src rand.Source) *fuzz
 		func(cm *api.ConfigMapVolumeSource, c fuzz.Continue) {
 			c.FuzzNoCustom(cm) // fuzz self without calling this function again
 
+			if c.RandBool() {
+				opt := c.RandBool()
+				cm.Optional = &opt
+			}
 			// DefaultMode should always be set, it has a default
 			// value and it is expected to be between 0 and 0777
 			var mode int32
@@ -358,6 +366,7 @@ func FuzzerFor(t *testing.T, version schema.GroupVersion, src rand.Source) *fuzz
 		func(ct *api.Container, c fuzz.Continue) {
 			c.FuzzNoCustom(ct)                                          // fuzz self without calling this function again
 			ct.TerminationMessagePath = "/" + ct.TerminationMessagePath // Must be non-empty
+			ct.TerminationMessagePolicy = "File"
 		},
 		func(p *api.Probe, c fuzz.Continue) {
 			c.FuzzNoCustom(p)
@@ -400,6 +409,10 @@ func FuzzerFor(t *testing.T, version schema.GroupVersion, src rand.Source) *fuzz
 		},
 		func(cm *api.ConfigMapEnvSource, c fuzz.Continue) {
 			c.FuzzNoCustom(cm) // fuzz self without calling this function again
+			if c.RandBool() {
+				opt := c.RandBool()
+				cm.Optional = &opt
+			}
 		},
 		func(s *api.SecretEnvSource, c fuzz.Continue) {
 			c.FuzzNoCustom(s) // fuzz self without calling this function again

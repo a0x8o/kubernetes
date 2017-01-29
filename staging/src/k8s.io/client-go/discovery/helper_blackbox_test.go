@@ -33,9 +33,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/pkg/api"
-	"k8s.io/client-go/pkg/api/testapi"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
+
+	_ "k8s.io/client-go/pkg/api/install"
 )
 
 func objBody(object interface{}) io.ReadCloser {
@@ -125,7 +126,8 @@ func TestNegotiateVersion(t *testing.T) {
 
 	for _, test := range tests {
 		fakeClient := &fake.RESTClient{
-			NegotiatedSerializer: testapi.Default.NegotiatedSerializer(),
+			APIRegistry:          api.Registry,
+			NegotiatedSerializer: api.Codecs,
 			Resp: &http.Response{
 				StatusCode: test.statusCode,
 				Body:       objBody(&uapi.APIVersions{Versions: test.serverVersions}),

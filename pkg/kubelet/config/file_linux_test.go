@@ -33,7 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	utiltesting "k8s.io/client-go/pkg/util/testing"
+	utiltesting "k8s.io/client-go/util/testing"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	"k8s.io/kubernetes/pkg/api/v1"
@@ -210,9 +210,11 @@ func getTestCases(hostname types.NodeName) []*testCase {
 					Containers: []v1.Container{{
 						Name:  "image",
 						Image: "test/image",
-						TerminationMessagePath: "/dev/termination-log",
-						ImagePullPolicy:        "Always",
-						SecurityContext:        securitycontext.ValidSecurityContextWithContainerDefaults()}},
+						TerminationMessagePath:   "/dev/termination-log",
+						ImagePullPolicy:          "Always",
+						SecurityContext:          securitycontext.ValidSecurityContextWithContainerDefaults(),
+						TerminationMessagePolicy: v1.TerminationMessageReadFile,
+					}},
 					SecurityContext: &v1.PodSecurityContext{},
 					SchedulerName:   api.DefaultSchedulerName,
 				},

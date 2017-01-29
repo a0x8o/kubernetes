@@ -21,12 +21,13 @@ import (
 	"sync"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/legacylisters"
 	"k8s.io/kubernetes/pkg/controller"
@@ -66,7 +67,7 @@ func NewPodGC(kubeClient clientset.Interface, podInformer cache.SharedIndexInfor
 		terminatedPodThreshold: terminatedPodThreshold,
 		deletePod: func(namespace, name string) error {
 			glog.Infof("PodGC is force deleting Pod: %v:%v", namespace, name)
-			return kubeClient.Core().Pods(namespace).Delete(name, v1.NewDeleteOptions(0))
+			return kubeClient.Core().Pods(namespace).Delete(name, metav1.NewDeleteOptions(0))
 		},
 	}
 
@@ -156,7 +157,7 @@ func (gcc *PodGCController) gcTerminated(pods []*v1.Pod) {
 func (gcc *PodGCController) gcOrphaned(pods []*v1.Pod) {
 	glog.V(4).Infof("GC'ing orphaned")
 	// We want to get list of Nodes from the etcd, to make sure that it's as fresh as possible.
-	nodes, err := gcc.kubeClient.Core().Nodes().List(v1.ListOptions{})
+	nodes, err := gcc.kubeClient.Core().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		return
 	}

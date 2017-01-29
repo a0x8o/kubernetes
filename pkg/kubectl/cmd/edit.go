@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/kubernetes/pkg/api"
@@ -42,7 +43,6 @@ import (
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util/editor"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
 	"k8s.io/kubernetes/pkg/util/crlf"
-	"k8s.io/kubernetes/pkg/util/strategicpatch"
 
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
@@ -101,20 +101,12 @@ func NewCmdEdit(f cmdutil.Factory, out, errOut io.Writer) *cobra.Command {
 		Long:    editLong,
 		Example: fmt.Sprintf(editExample),
 		Run: func(cmd *cobra.Command, args []string) {
-			args = append([]string{"configmap"}, args...)
 			err := RunEdit(f, out, errOut, cmd, args, options)
 			cmdutil.CheckErr(err)
 		},
 		ValidArgs:  validArgs,
 		ArgAliases: argAliases,
 	}
-	addEditFlags(cmd, options)
-
-	cmd.AddCommand(NewCmdEditConfigMap(f, out, errOut))
-	return cmd
-}
-
-func addEditFlags(cmd *cobra.Command, options *resource.FilenameOptions) {
 	usage := "to use to edit the resource"
 	cmdutil.AddFilenameOptionFlags(cmd, options, usage)
 	cmdutil.AddValidateFlags(cmd)
@@ -124,6 +116,7 @@ func addEditFlags(cmd *cobra.Command, options *resource.FilenameOptions) {
 	cmdutil.AddApplyAnnotationFlags(cmd)
 	cmdutil.AddRecordFlag(cmd)
 	cmdutil.AddInclude3rdPartyFlags(cmd)
+	return cmd
 }
 
 func RunEdit(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args []string, options *resource.FilenameOptions) error {

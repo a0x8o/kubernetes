@@ -115,7 +115,6 @@ go_library(
         "//pkg/apis/storage/util:go_default_library",
         "//pkg/apis/storage/v1beta1:go_default_library",
         "//pkg/apis/storage/v1beta1/util:go_default_library",
-        "//pkg/client/cache:go_default_library",
         "//pkg/client/clientset_generated/clientset:go_default_library",
         "//pkg/client/clientset_generated/clientset/typed/core/v1:go_default_library",
         "//pkg/client/clientset_generated/clientset/typed/extensions/v1beta1:go_default_library",
@@ -144,7 +143,6 @@ go_library(
         "//pkg/util/intstr:go_default_library",
         "//pkg/util/logs:go_default_library",
         "//pkg/util/system:go_default_library",
-        "//pkg/util/uuid:go_default_library",
         "//pkg/util/version:go_default_library",
         "//pkg/util/workqueue:go_default_library",
         "//pkg/volume/util/volumehelper:go_default_library",
@@ -153,6 +151,7 @@ go_library(
         "//test/e2e/common:go_default_library",
         "//test/e2e/framework:go_default_library",
         "//test/e2e/generated:go_default_library",
+        "//test/e2e/upgrades:go_default_library",
         "//test/e2e_federation:go_default_library",
         "//test/images/net/nat:go_default_library",
         "//test/utils:go_default_library",
@@ -186,6 +185,7 @@ go_library(
         "//vendor:k8s.io/apimachinery/pkg/util/net",
         "//vendor:k8s.io/apimachinery/pkg/util/runtime",
         "//vendor:k8s.io/apimachinery/pkg/util/sets",
+        "//vendor:k8s.io/apimachinery/pkg/util/uuid",
         "//vendor:k8s.io/apimachinery/pkg/util/wait",
         "//vendor:k8s.io/apimachinery/pkg/util/yaml",
         "//vendor:k8s.io/apimachinery/pkg/watch",
@@ -194,10 +194,11 @@ go_library(
         "//vendor:k8s.io/client-go/pkg/api/v1",
         "//vendor:k8s.io/client-go/pkg/apis/extensions/v1beta1",
         "//vendor:k8s.io/client-go/pkg/apis/policy/v1beta1",
-        "//vendor:k8s.io/client-go/pkg/util/flowcontrol",
         "//vendor:k8s.io/client-go/pkg/util/intstr",
         "//vendor:k8s.io/client-go/rest",
+        "//vendor:k8s.io/client-go/tools/cache",
         "//vendor:k8s.io/client-go/transport",
+        "//vendor:k8s.io/client-go/util/flowcontrol",
     ],
 )
 
@@ -213,12 +214,12 @@ go_test(
         "integration",
     ],
     deps = [
-        "//pkg/api/v1:go_default_library",
         "//pkg/client/clientset_generated/clientset:go_default_library",
         "//pkg/metrics:go_default_library",
         "//test/e2e/framework:go_default_library",
         "//vendor:github.com/onsi/ginkgo",
         "//vendor:github.com/onsi/gomega",
+        "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
     ],
 )
 
@@ -248,6 +249,7 @@ filegroup(
         "//test/e2e/generated:all-srcs",
         "//test/e2e/perftype:all-srcs",
         "//test/e2e/testing-manifests:all-srcs",
+        "//test/e2e/upgrades:all-srcs",
     ],
     tags = ["automanaged"],
 )

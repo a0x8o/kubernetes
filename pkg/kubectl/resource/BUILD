@@ -64,7 +64,6 @@ go_test(
         "//pkg/api/testapi:go_default_library",
         "//pkg/api/testing:go_default_library",
         "//pkg/api/v1:go_default_library",
-        "//pkg/client/restclient/fake:go_default_library",
         "//vendor:github.com/ghodss/yaml",
         "//vendor:github.com/stretchr/testify/assert",
         "//vendor:k8s.io/apimachinery/pkg/api/meta",
@@ -74,8 +73,9 @@ go_test(
         "//vendor:k8s.io/apimachinery/pkg/runtime/serializer/streaming",
         "//vendor:k8s.io/apimachinery/pkg/util/errors",
         "//vendor:k8s.io/apimachinery/pkg/watch",
-        "//vendor:k8s.io/client-go/pkg/util/testing",
+        "//vendor:k8s.io/client-go/rest/fake",
         "//vendor:k8s.io/client-go/rest/watch",
+        "//vendor:k8s.io/client-go/util/testing",
     ],
 )
 

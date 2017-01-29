@@ -41,8 +41,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	kubetypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/pkg/util/clock"
-	"k8s.io/client-go/pkg/util/flowcontrol"
+	"k8s.io/client-go/util/clock"
+	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	"k8s.io/kubernetes/pkg/api/v1"
@@ -585,7 +585,7 @@ func generatePodInfraContainerHash(pod *v1.Pod) uint64 {
 		Ports:           ports,
 		ImagePullPolicy: podInfraContainerImagePullPolicy,
 	}
-	return kubecontainer.HashContainer(container)
+	return kubecontainer.HashContainerLegacy(container)
 }
 
 // runSyncPod is a helper function to retrieve the running pods from the fake
@@ -855,7 +855,7 @@ func TestSyncPodsDoesNothing(t *testing.T) {
 	fakeDocker.SetFakeRunningContainers([]*FakeContainer{
 		{
 			ID:   "1234",
-			Name: "/k8s_bar." + strconv.FormatUint(kubecontainer.HashContainer(&container), 16) + "_foo_new_12345678_0",
+			Name: "/k8s_bar." + strconv.FormatUint(kubecontainer.HashContainerLegacy(&container), 16) + "_foo_new_12345678_0",
 		},
 		{
 			ID:   "9876",
@@ -885,14 +885,14 @@ func TestSyncPodWithRestartPolicy(t *testing.T) {
 		},
 		{
 			ID:         "1234",
-			Name:       "/k8s_succeeded." + strconv.FormatUint(kubecontainer.HashContainer(&containers[0]), 16) + "_foo_new_12345678_0",
+			Name:       "/k8s_succeeded." + strconv.FormatUint(kubecontainer.HashContainerLegacy(&containers[0]), 16) + "_foo_new_12345678_0",
 			ExitCode:   0,
 			StartedAt:  time.Now(),
 			FinishedAt: time.Now(),
 		},
 		{
 			ID:         "5678",
-			Name:       "/k8s_failed." + strconv.FormatUint(kubecontainer.HashContainer(&containers[1]), 16) + "_foo_new_12345678_0",
+			Name:       "/k8s_failed." + strconv.FormatUint(kubecontainer.HashContainerLegacy(&containers[1]), 16) + "_foo_new_12345678_0",
 			ExitCode:   42,
 			StartedAt:  time.Now(),
 			FinishedAt: time.Now(),
@@ -964,7 +964,7 @@ func TestSyncPodBackoff(t *testing.T) {
 		Containers: containers,
 	})
 
-	stableId := "k8s_bad." + strconv.FormatUint(kubecontainer.HashContainer(&containers[1]), 16) + "_podfoo_new_12345678"
+	stableId := "k8s_bad." + strconv.FormatUint(kubecontainer.HashContainerLegacy(&containers[1]), 16) + "_podfoo_new_12345678"
 	dockerContainers := []*FakeContainer{
 		{
 			ID:        "9876",
@@ -974,13 +974,13 @@ func TestSyncPodBackoff(t *testing.T) {
 		},
 		{
 			ID:        "1234",
-			Name:      "/k8s_good." + strconv.FormatUint(kubecontainer.HashContainer(&containers[0]), 16) + "_podfoo_new_12345678_0",
+			Name:      "/k8s_good." + strconv.FormatUint(kubecontainer.HashContainerLegacy(&containers[0]), 16) + "_podfoo_new_12345678_0",
 			StartedAt: startTime,
 			Running:   true,
 		},
 		{
 			ID:         "5678",
-			Name:       "/k8s_bad." + strconv.FormatUint(kubecontainer.HashContainer(&containers[1]), 16) + "_podfoo_new_12345678_0",
+			Name:       "/k8s_bad." + strconv.FormatUint(kubecontainer.HashContainerLegacy(&containers[1]), 16) + "_podfoo_new_12345678_0",
 			ExitCode:   42,
 			StartedAt:  startTime,
 			FinishedAt: fakeClock.Now(),
@@ -1820,7 +1820,7 @@ func TestGetPodStatusNoSuchContainer(t *testing.T) {
 			Running:    false,
 		},
 	})
-	fakeDocker.InjectErrors(map[string]error{"inspect_container": containerNotFoundError{}})
+	fakeDocker.InjectErrors(map[string]error{"inspect_container": fmt.Errorf("Error: No such container: %s", noSuchContainerID)})
 	runSyncPod(t, dm, fakeDocker, pod, nil, false)
 
 	// Verify that we will try to start new contrainers even if the inspections
