@@ -100,7 +100,6 @@ go_library(
         "//federation/apis/federation/v1beta1:go_default_library",
         "//pkg/api:go_default_library",
         "//pkg/api/annotations:go_default_library",
-        "//pkg/api/resource:go_default_library",
         "//pkg/api/v1:go_default_library",
         "//pkg/api/v1/pod:go_default_library",
         "//pkg/api/v1/service:go_default_library",
@@ -144,7 +143,6 @@ go_library(
         "//pkg/util/logs:go_default_library",
         "//pkg/util/system:go_default_library",
         "//pkg/util/version:go_default_library",
-        "//pkg/util/workqueue:go_default_library",
         "//pkg/volume/util/volumehelper:go_default_library",
         "//plugin/pkg/admission/serviceaccount:go_default_library",
         "//test/e2e/chaosmonkey:go_default_library",
@@ -175,6 +173,7 @@ go_library(
         "//vendor:google.golang.org/api/googleapi",
         "//vendor:gopkg.in/inf.v0",
         "//vendor:k8s.io/apimachinery/pkg/api/errors",
+        "//vendor:k8s.io/apimachinery/pkg/api/resource",
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
         "//vendor:k8s.io/apimachinery/pkg/fields",
         "//vendor:k8s.io/apimachinery/pkg/labels",
@@ -199,6 +198,7 @@ go_library(
         "//vendor:k8s.io/client-go/tools/cache",
         "//vendor:k8s.io/client-go/transport",
         "//vendor:k8s.io/client-go/util/flowcontrol",
+        "//vendor:k8s.io/client-go/util/workqueue",
     ],
 )
 

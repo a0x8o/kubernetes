@@ -27,7 +27,6 @@ go_library(
         "//pkg/controller:go_default_library",
         "//pkg/controller/informers:go_default_library",
         "//pkg/util/metrics:go_default_library",
-        "//pkg/util/workqueue:go_default_library",
         "//plugin/pkg/scheduler/algorithm/predicates:go_default_library",
         "//plugin/pkg/scheduler/schedulercache:go_default_library",
         "//vendor:github.com/golang/glog",
@@ -37,6 +36,7 @@ go_library(
         "//vendor:k8s.io/apimachinery/pkg/util/runtime",
         "//vendor:k8s.io/apimachinery/pkg/util/wait",
         "//vendor:k8s.io/client-go/tools/cache",
+        "//vendor:k8s.io/client-go/util/workqueue",
     ],
 )
 
@@ -47,7 +47,6 @@ go_test(
     tags = ["automanaged"],
     deps = [
         "//pkg/api:go_default_library",
-        "//pkg/api/resource:go_default_library",
         "//pkg/api/testapi:go_default_library",
         "//pkg/api/v1:go_default_library",
         "//pkg/apis/extensions/v1beta1:go_default_library",
@@ -55,6 +54,7 @@ go_test(
         "//pkg/controller:go_default_library",
         "//pkg/controller/informers:go_default_library",
         "//pkg/securitycontext:go_default_library",
+        "//vendor:k8s.io/apimachinery/pkg/api/resource",
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
         "//vendor:k8s.io/apimachinery/pkg/runtime",
         "//vendor:k8s.io/apiserver/pkg/storage/names",
