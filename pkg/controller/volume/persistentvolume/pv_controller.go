@@ -251,6 +251,7 @@ func (ctrl *PersistentVolumeController) syncUnboundClaim(claim *v1.PersistentVol
 			}
 			// Mark the claim as Pending and try to find a match in the next
 			// periodic syncClaim
+			ctrl.eventRecorder.Event(claim, v1.EventTypeNormal, "FailedBinding", "no persistent volumes available for this claim and no storage class is set")
 			if _, err = ctrl.updateClaimStatus(claim, v1.ClaimPending, nil); err != nil {
 				return err
 			}
@@ -1429,7 +1430,7 @@ func (ctrl *PersistentVolumeController) scheduleOperation(operationName string, 
 		if goroutinemap.IsAlreadyExists(err) {
 			glog.V(4).Infof("operation %q is already running, skipping", operationName)
 		} else {
-			glog.Errorf("error scheduling operaion %q: %v", operationName, err)
+			glog.Errorf("error scheduling operation %q: %v", operationName, err)
 		}
 	}
 }

@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/client-go/1.5/kubernetes"
-	"k8s.io/client-go/1.5/pkg/api"
-	"k8s.io/client-go/1.5/tools/clientcmd"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 var (
@@ -43,7 +43,7 @@ func main() {
 		panic(err.Error())
 	}
 	for {
-		pods, err := clientset.Core().Pods("").List(api.ListOptions{})
+		pods, err := clientset.CoreV1().Pods("").List(metav1.ListOptions{})
 		if err != nil {
 			panic(err.Error())
 		}
