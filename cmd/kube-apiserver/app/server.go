@@ -106,15 +106,19 @@ func Run(s *options.ServerRunOptions) error {
 
 	// create config from options
 	genericConfig := genericapiserver.NewConfig().
-		WithSerializer(api.Codecs).
-		ApplyOptions(s.GenericServerRunOptions).
-		ApplyInsecureServingOptions(s.InsecureServing)
+		WithSerializer(api.Codecs)
 
-	if _, err := genericConfig.ApplySecureServingOptions(s.SecureServing); err != nil {
-		return fmt.Errorf("failed to configure https: %s", err)
+	if err := s.GenericServerRunOptions.ApplyTo(genericConfig); err != nil {
+		return err
 	}
-	if err = s.Authentication.Apply(genericConfig); err != nil {
-		return fmt.Errorf("failed to configure authentication: %s", err)
+	if err := s.InsecureServing.ApplyTo(genericConfig); err != nil {
+		return err
+	}
+	if err := s.SecureServing.ApplyTo(genericConfig); err != nil {
+		return err
+	}
+	if err := s.Authentication.ApplyTo(genericConfig); err != nil {
+		return err
 	}
 
 	capabilities.Initialize(capabilities.Capabilities{
@@ -275,7 +279,7 @@ func Run(s *options.ServerRunOptions) error {
 
 	admissionControlPluginNames := strings.Split(s.GenericServerRunOptions.AdmissionControl, ",")
 	pluginInitializer := kubeadmission.NewPluginInitializer(client, sharedInformers, apiAuthorizer)
-	admissionConfigProvider, err := kubeadmission.ReadAdmissionConfiguration(admissionControlPluginNames, s.GenericServerRunOptions.AdmissionControlConfigFile)
+	admissionConfigProvider, err := admission.ReadAdmissionConfiguration(admissionControlPluginNames, s.GenericServerRunOptions.AdmissionControlConfigFile)
 	if err != nil {
 		return fmt.Errorf("failed to read plugin config: %v", err)
 	}

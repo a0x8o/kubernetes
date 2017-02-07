@@ -54,6 +54,7 @@ federation/cmd/federation-apiserver
 federation/cmd/federation-controller-manager
 federation/cmd/genfeddocs
 federation/cmd/kubefed
+hack
 hack/boilerplate/test
 hack/cmd/teststale
 pkg/api
@@ -121,6 +122,7 @@ pkg/client/listers/apps/v1beta1
 pkg/client/listers/authentication/internalversion
 pkg/client/listers/authentication/v1beta1
 pkg/client/listers/authorization/internalversion
+pkg/client/listers/authorization/v1
 pkg/client/listers/authorization/v1beta1
 pkg/client/listers/autoscaling/internalversion
 pkg/client/listers/autoscaling/v1
@@ -269,6 +271,7 @@ staging/src/k8s.io/apimachinery/pkg/util/json
 staging/src/k8s.io/apimachinery/pkg/util/validation/field
 staging/src/k8s.io/apimachinery/pkg/version
 staging/src/k8s.io/apimachinery/pkg/watch
+staging/src/k8s.io/apiserver/pkg/apis/apiserver/install
 staging/src/k8s.io/apiserver/pkg/apis/example/install
 staging/src/k8s.io/apiserver/pkg/authentication/authenticator
 staging/src/k8s.io/apiserver/pkg/authentication/request/union
@@ -317,9 +320,9 @@ test/images/port-forward-tester
 test/images/porter
 test/images/resource-consumer/consume-cpu
 test/images/serve_hostname
-test/integration/discoverysummarizer
 test/integration/examples
 test/integration/federation
+test/integration/kubeaggregator
 test/integration/metrics
 test/integration/objectmeta
 test/integration/openshift
