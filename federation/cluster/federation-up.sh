@@ -37,16 +37,46 @@ FEDERATION_KUBE_CONTEXT="${FEDERATION_KUBE_CONTEXT:-e2e-federation}"
 DNS_ZONE_NAME="${FEDERATION_DNS_ZONE_NAME:-}"
 HOST_CLUSTER_CONTEXT="${FEDERATION_HOST_CLUSTER_CONTEXT:-${1}}"
 
+# get_version returns the version in KUBERNETES_RELEASE or defaults to the
+# value in the federation `versions` file.
+# TODO(madhusudancs): This is a duplicate of the function in
+# federation/develop/develop.sh with a minor difference. This
+# function tries to default to the version information in
+# _output/federation/versions file where as the one in develop.sh
+# tries to default to the version in the kubernetes versions file.
+# These functions should be consolidated to read the version from
+# kubernetes version defs file.
+function get_version() {
+  local -r versions_file="${KUBE_ROOT}/_output/federation/versions"
+
+  if [[ -n "${KUBERNETES_RELEASE:-}" ]]; then
+    echo "${KUBERNETES_RELEASE//+/_}"
+    return
+  fi
+
+  if [[ ! -f "${versions_file}" ]]; then
+    echo "Couldn't determine the release version: neither the " \
+     "KUBERNETES_RELEASE environment variable is set, nor does " \
+     "the versions file exist at ${versions_file}"
+    exit 1
+  fi
+
+  # Read the version back from the versions file if no version is given.
+  local -r kube_version="$(cat "${versions_file}" | python -c '\
+import json, sys;\
+print json.load(sys.stdin)["KUBE_VERSION"]')"
+
+  echo "${kube_version//+/_}"
+}
+
 # Initializes the control plane.
 # TODO(madhusudancs): Move this to federation/develop.sh.
 function init() {
-  : "${KUBERNETES_RELEASE?KUBERNETES_RELEASE environment variable must be set}"
-
   kube::log::status "Deploying federation control plane for ${FEDERATION_NAME} in cluster ${HOST_CLUSTER_CONTEXT}"
 
   local -r project="${KUBE_PROJECT:-${PROJECT:-}}"
   local -r kube_registry="${KUBE_REGISTRY:-gcr.io/${project}}"
-  local -r kube_version="${KUBERNETES_RELEASE//+/_}"
+  local -r kube_version="$(get_version)"
 
   "${KUBE_ROOT}/federation/develop/kubefed.sh" init \
       "${FEDERATION_NAME}" \
@@ -55,39 +85,36 @@ function init() {
       --image="${kube_registry}/hyperkube-amd64:${kube_version}"
 }
 
-# create_cluster_secrets creates the secrets containing the kubeconfigs
-# of the participating clusters in the host cluster. The kubeconfigs itself
-# are created while deploying clusters, i.e. when kube-up is run.
-function create_cluster_secrets() {
-  local -r kubeconfig_dir="$(dirname ${DEFAULT_KUBECONFIG})"
-  local -r base_dir="${kubeconfig_dir}/federation/kubernetes-apiserver"
+# join_cluster_to_federation joins the clusters in the local kubeconfig to federation. The clusters
+# and their kubeconfig entries in the local kubeconfig are created while deploying clusters, i.e. when kube-up is run.
+function join_cluster_to_federation() {
+  for cluster in $("${KUBE_ROOT}/cluster/kubectl.sh" config get-clusters |sed -n '1!p'); do
+    # Skip federation context
+    if [[ "${cluster}" == "${FEDERATION_NAME}" ]]; then
+      continue
+    fi
+    # Skip contexts not beginning with "federation"
+    if [[ "${cluster}" != federation* ]]; then
+      continue
+    fi
 
-  # Create secrets with all the kubernetes-apiserver's kubeconfigs.
-  for dir in $(ls "${base_dir}"); do
-    # We create a secret with the same name as the directory name (which is
-    # same as cluster name in kubeconfig).
-    # Massage the name so that it is valid (should not contain "_" and max 253
-    # chars)
-    name=$(echo "${dir}" | sed -e "s/_/-/g")  # Replace "_" by "-"
-    name=${name:0:252}
-    kube::log::status "Creating secret with name: ${name} in namespace ${FEDERATION_NAMESPACE}"
-    "${KUBE_ROOT}/cluster/kubectl.sh" create secret generic ${name} --from-file="${base_dir}/${dir}/kubeconfig" --namespace="${FEDERATION_NAMESPACE}"
+  kube::log::status "Joining cluster with name '${cluster}' to federation with name '${FEDERATION_NAME}'"
+
+  "${KUBE_ROOT}/federation/develop/kubefed.sh" join \
+      "${cluster}" \
+      --host-cluster-context="${HOST_CLUSTER_CONTEXT}" \
+      --context="${FEDERATION_NAME}" \
+      --secret-name="${cluster//_/-}"    # Replace "_" by "-"
   done
 }
 
 USE_KUBEFED="${USE_KUBEFED:-}"
+
 if [[ "${USE_KUBEFED}" == "true" ]]; then
   init
-  # TODO(madhusudancs): Call to create_cluster_secrets and the function
-  # itself must be removed after implementing cluster join with kubefed
-  # here. This call is now required for the cluster joins in the
-  # BeforeEach blocks of each e2e test to work.
-  create_cluster_secrets
+
+  join_cluster_to_federation
 else
-  # Read the version back from the versions file if no version is given.
-  readonly kube_version="$(cat ${KUBE_ROOT}/_output/federation/versions | python -c '\
-import json, sys;\
-print json.load(sys.stdin)["KUBE_VERSION"]')"
-  export FEDERATION_IMAGE_TAG="$(echo ${KUBERNETES_RELEASE:-${kube_version}} | tr + _)"
+  export FEDERATION_IMAGE_TAG="$(get_version)"
   create-federation-api-objects
 fi

@@ -14089,10 +14089,13 @@ go_library(
 go_library(
     name = "k8s.io/apiserver/pkg/server/options",
     srcs = [
+        "k8s.io/apiserver/pkg/server/options/audit.go",
         "k8s.io/apiserver/pkg/server/options/authentication.go",
         "k8s.io/apiserver/pkg/server/options/authorization.go",
         "k8s.io/apiserver/pkg/server/options/doc.go",
         "k8s.io/apiserver/pkg/server/options/etcd.go",
+        "k8s.io/apiserver/pkg/server/options/feature.go",
+        "k8s.io/apiserver/pkg/server/options/recommended.go",
         "k8s.io/apiserver/pkg/server/options/server_run_options.go",
         "k8s.io/apiserver/pkg/server/options/serving.go",
     ],
@@ -14930,6 +14933,7 @@ go_test(
         "//vendor:k8s.io/apimachinery/pkg/runtime",
         "//vendor:k8s.io/apimachinery/pkg/runtime/schema",
         "//vendor:k8s.io/apimachinery/pkg/runtime/serializer",
+        "//vendor:k8s.io/apimachinery/pkg/util/diff",
         "//vendor:k8s.io/apimachinery/pkg/watch",
         "//vendor:k8s.io/apiserver/pkg/apis/example",
         "//vendor:k8s.io/apiserver/pkg/apis/example/v1",
@@ -15048,11 +15052,13 @@ go_test(
         "//vendor:k8s.io/apimachinery/pkg/runtime",
         "//vendor:k8s.io/apimachinery/pkg/runtime/schema",
         "//vendor:k8s.io/apimachinery/pkg/runtime/serializer",
+        "//vendor:k8s.io/apimachinery/pkg/util/diff",
         "//vendor:k8s.io/apimachinery/pkg/util/wait",
         "//vendor:k8s.io/apimachinery/pkg/watch",
         "//vendor:k8s.io/apiserver/pkg/apis/example",
         "//vendor:k8s.io/apiserver/pkg/apis/example/v1",
         "//vendor:k8s.io/apiserver/pkg/storage",
+        "//vendor:k8s.io/apiserver/pkg/storage/tests",
     ],
 )
 
@@ -15075,6 +15081,7 @@ go_library(
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
         "//vendor:k8s.io/apimachinery/pkg/conversion",
         "//vendor:k8s.io/apimachinery/pkg/runtime",
+        "//vendor:k8s.io/apimachinery/pkg/util/runtime",
         "//vendor:k8s.io/apimachinery/pkg/watch",
         "//vendor:k8s.io/apiserver/pkg/storage",
         "//vendor:k8s.io/apiserver/pkg/storage/etcd",

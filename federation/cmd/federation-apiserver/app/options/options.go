@@ -36,10 +36,13 @@ type ServerRunOptions struct {
 	Etcd                    *genericoptions.EtcdOptions
 	SecureServing           *genericoptions.SecureServingOptions
 	InsecureServing         *genericoptions.ServingOptions
+	Audit                   *genericoptions.AuditLogOptions
+	Features                *genericoptions.FeatureOptions
 	Authentication          *kubeoptions.BuiltInAuthenticationOptions
 	Authorization           *kubeoptions.BuiltInAuthorizationOptions
 	CloudProvider           *kubeoptions.CloudProviderOptions
 	StorageSerialization    *kubeoptions.StorageSerializationOptions
+	APIEnablement           *kubeoptions.APIEnablementOptions
 
 	EventTTL time.Duration
 }
@@ -51,15 +54,18 @@ func NewServerRunOptions() *ServerRunOptions {
 		Etcd:                 genericoptions.NewEtcdOptions(api.Scheme),
 		SecureServing:        genericoptions.NewSecureServingOptions(),
 		InsecureServing:      genericoptions.NewInsecureServingOptions(),
+		Audit:                genericoptions.NewAuditLogOptions(),
+		Features:             genericoptions.NewFeatureOptions(),
 		Authentication:       kubeoptions.NewBuiltInAuthenticationOptions().WithAll(),
 		Authorization:        kubeoptions.NewBuiltInAuthorizationOptions(),
 		CloudProvider:        kubeoptions.NewCloudProviderOptions(),
 		StorageSerialization: kubeoptions.NewStorageSerializationOptions(),
+		APIEnablement:        kubeoptions.NewAPIEnablementOptions(),
 
 		EventTTL: 1 * time.Hour,
 	}
 	// Overwrite the default for storage data format.
-	s.GenericServerRunOptions.DefaultStorageMediaType = "application/vnd.kubernetes.protobuf"
+	s.Etcd.DefaultStorageMediaType = "application/vnd.kubernetes.protobuf"
 	return &s
 }
 
@@ -70,10 +76,13 @@ func (s *ServerRunOptions) AddFlags(fs *pflag.FlagSet) {
 	s.Etcd.AddFlags(fs)
 	s.SecureServing.AddFlags(fs)
 	s.InsecureServing.AddFlags(fs)
+	s.Audit.AddFlags(fs)
+	s.Features.AddFlags(fs)
 	s.Authentication.AddFlags(fs)
 	s.Authorization.AddFlags(fs)
 	s.CloudProvider.AddFlags(fs)
 	s.StorageSerialization.AddFlags(fs)
+	s.APIEnablement.AddFlags(fs)
 
 	fs.DurationVar(&s.EventTTL, "event-ttl", s.EventTTL,
 		"Amount of time to retain events. Default is 1h.")

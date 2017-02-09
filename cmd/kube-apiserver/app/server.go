@@ -120,6 +120,12 @@ func Run(s *options.ServerRunOptions) error {
 	if err := s.Authentication.ApplyTo(genericConfig); err != nil {
 		return err
 	}
+	if err := s.Audit.ApplyTo(genericConfig); err != nil {
+		return err
+	}
+	if err := s.Features.ApplyTo(genericConfig); err != nil {
+		return err
+	}
 
 	capabilities.Initialize(capabilities.Capabilities{
 		AllowPrivileged: s.AllowPrivileged,
@@ -199,11 +205,11 @@ func Run(s *options.ServerRunOptions) error {
 		return fmt.Errorf("error generating storage version map: %s", err)
 	}
 	storageFactory, err := kubeapiserver.BuildDefaultStorageFactory(
-		s.Etcd.StorageConfig, s.GenericServerRunOptions.DefaultStorageMediaType, api.Codecs,
+		s.Etcd.StorageConfig, s.Etcd.DefaultStorageMediaType, api.Codecs,
 		genericapiserver.NewDefaultResourceEncodingConfig(api.Registry), storageGroupsToEncodingVersion,
 		// FIXME: this GroupVersionResource override should be configurable
 		[]schema.GroupVersionResource{batch.Resource("cronjobs").WithVersion("v2alpha1")},
-		master.DefaultAPIResourceConfigSource(), s.GenericServerRunOptions.RuntimeConfig)
+		master.DefaultAPIResourceConfigSource(), s.APIEnablement.RuntimeConfig)
 	if err != nil {
 		return fmt.Errorf("error in initializing storage factory: %s", err)
 	}
