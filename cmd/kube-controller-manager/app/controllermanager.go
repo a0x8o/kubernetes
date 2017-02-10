@@ -93,6 +93,9 @@ controller, and serviceaccounts controller.`,
 	return cmd
 }
 
+// ResyncPeriod returns a function which generates a duration each time it is
+// invoked; this is so that multiple controllers don't get into lock-step and all
+// hammer the apiserver with list requests simultaneously.
 func ResyncPeriod(s *options.CMServer) func() time.Duration {
 	return func() time.Duration {
 		factor := rand.Float64() + 1
@@ -287,6 +290,7 @@ func newControllerInitializers() map[string]InitFunc {
 	controllers["statefuleset"] = startStatefulSetController
 	controllers["cronjob"] = startCronJobController
 	controllers["certificatesigningrequests"] = startCSRController
+	controllers["ttl"] = startTTLController
 
 	return controllers
 }
@@ -433,6 +437,7 @@ func StartControllers(controllers map[string]InitFunc, s *options.CMServer, root
 		serviceCIDR,
 		int(s.NodeCIDRMaskSize),
 		s.AllocateNodeCIDRs,
+		s.EnableTaintManager,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize nodecontroller: %v", err)

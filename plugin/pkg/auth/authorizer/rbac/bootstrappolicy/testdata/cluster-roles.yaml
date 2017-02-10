@@ -454,6 +454,7 @@ items:
     - replicationcontrollers
     - secrets
     - serviceaccounts
+    - services
     verbs:
     - list
     - watch
@@ -471,6 +472,27 @@ items:
     resources:
     - cronjobs
     - jobs
+    verbs:
+    - list
+    - watch
+  - apiGroups:
+    - apps
+    resources:
+    - statefulsets
+    verbs:
+    - list
+    - watch
+  - apiGroups:
+    - policy
+    resources:
+    - poddisruptionbudgets
+    verbs:
+    - list
+    - watch
+  - apiGroups:
+    - autoscaling
+    resources:
+    - horizontalpodautoscalers
     verbs:
     - list
     - watch

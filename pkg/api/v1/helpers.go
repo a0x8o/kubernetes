@@ -271,6 +271,11 @@ const (
 	// is at-your-own-risk. Pods that attempt to set an unsafe sysctl that is not enabled for a kubelet
 	// will fail to launch.
 	UnsafeSysctlsPodAnnotationKey string = "security.alpha.kubernetes.io/unsafe-sysctls"
+
+	// ObjectTTLAnnotations represents a suggestion for kubelet for how long it can cache
+	// an object (e.g. secret, config map) before fetching it again from apiserver.
+	// This annotation can be attached to node.
+	ObjectTTLAnnotationKey string = "node.alpha.kubernetes.io/ttl"
 )
 
 // GetTolerationsFromPodAnnotations gets the json serialized tolerations data from Pod.Annotations
@@ -394,6 +399,28 @@ func DeleteTaint(taints []Taint, taintToDelete *Taint) ([]Taint, bool) {
 		newTaints = append(newTaints, taints[i])
 	}
 	return newTaints, deleted
+}
+
+// Returns true and list of Tolerations matching all Taints if all are tolerated, or false otherwise.
+func GetMatchingTolerations(taints []Taint, tolerations []Toleration) (bool, []Toleration) {
+	if len(tolerations) == 0 && len(taints) > 0 {
+		return false, []Toleration{}
+	}
+	result := []Toleration{}
+	for i := range taints {
+		tolerated := false
+		for j := range tolerations {
+			if tolerations[j].ToleratesTaint(&taints[i]) {
+				result = append(result, tolerations[j])
+				tolerated = true
+				break
+			}
+		}
+		if !tolerated {
+			return false, []Toleration{}
+		}
+	}
+	return true, result
 }
 
 // MatchTaint checks if the taint matches taintToMatch. Taints are unique by key:effect,

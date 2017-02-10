@@ -13837,17 +13837,26 @@ go_library(
     srcs = [
         "k8s.io/apimachinery/pkg/api/testing/codec.go",
         "k8s.io/apimachinery/pkg/api/testing/fuzzer.go",
+        "k8s.io/apimachinery/pkg/api/testing/roundtrip.go",
     ],
     tags = ["automanaged"],
     deps = [
+        "//vendor:github.com/davecgh/go-spew/spew",
+        "//vendor:github.com/golang/protobuf/proto",
         "//vendor:github.com/google/gofuzz",
+        "//vendor:github.com/spf13/pflag",
+        "//vendor:k8s.io/apimachinery/pkg/api/equality",
+        "//vendor:k8s.io/apimachinery/pkg/api/meta",
         "//vendor:k8s.io/apimachinery/pkg/api/resource",
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
         "//vendor:k8s.io/apimachinery/pkg/runtime",
         "//vendor:k8s.io/apimachinery/pkg/runtime/schema",
         "//vendor:k8s.io/apimachinery/pkg/runtime/serializer",
+        "//vendor:k8s.io/apimachinery/pkg/runtime/serializer/protobuf",
         "//vendor:k8s.io/apimachinery/pkg/runtime/serializer/recognizer",
         "//vendor:k8s.io/apimachinery/pkg/types",
+        "//vendor:k8s.io/apimachinery/pkg/util/diff",
+        "//vendor:k8s.io/apimachinery/pkg/util/sets",
     ],
 )
 
@@ -15403,5 +15412,31 @@ go_library(
         "//vendor:k8s.io/apiserver/pkg/storage",
         "//vendor:k8s.io/apiserver/pkg/storage/names",
         "//vendor:k8s.io/sample-apiserver/pkg/apis/wardle",
+    ],
+)
+
+go_test(
+    name = "k8s.io/apimachinery/pkg/conversion/unstructured_test",
+    srcs = ["k8s.io/apimachinery/pkg/conversion/unstructured/converter_test.go"],
+    library = ":k8s.io/apimachinery/pkg/conversion/unstructured",
+    tags = ["automanaged"],
+    deps = [
+        "//vendor:k8s.io/apimachinery/pkg/runtime",
+        "//vendor:k8s.io/apimachinery/pkg/runtime/schema",
+        "//vendor:k8s.io/apimachinery/pkg/util/diff",
+        "//vendor:k8s.io/apimachinery/pkg/util/json",
+    ],
+)
+
+go_library(
+    name = "k8s.io/apimachinery/pkg/conversion/unstructured",
+    srcs = [
+        "k8s.io/apimachinery/pkg/conversion/unstructured/converter.go",
+        "k8s.io/apimachinery/pkg/conversion/unstructured/doc.go",
+    ],
+    tags = ["automanaged"],
+    deps = [
+        "//vendor:k8s.io/apimachinery/pkg/runtime",
+        "//vendor:k8s.io/apimachinery/pkg/util/json",
     ],
 )

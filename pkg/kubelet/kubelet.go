@@ -406,11 +406,6 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	}
 	containerRefManager := kubecontainer.NewRefManager()
 
-	secretManager, err := secret.NewCachingSecretManager(kubeDeps.KubeClient)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize secret manager: %v", err)
-	}
-
 	oomWatcher := NewOOMWatcher(kubeDeps.CAdvisorInterface, kubeDeps.Recorder)
 
 	klet := &Kubelet{
@@ -436,7 +431,6 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		recorder:                       kubeDeps.Recorder,
 		cadvisor:                       kubeDeps.CAdvisorInterface,
 		diskSpaceManager:               diskSpaceManager,
-		secretManager:                  secretManager,
 		cloud:                          kubeDeps.Cloud,
 		autoDetectCloudProvider:   (componentconfigv1alpha1.AutoDetectCloudProvider == kubeCfg.CloudProvider),
 		nodeRef:                   nodeRef,
@@ -470,6 +464,13 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		iptablesDropBit:                         int(kubeCfg.IPTablesDropBit),
 		experimentalHostUserNamespaceDefaulting: utilfeature.DefaultFeatureGate.Enabled(features.ExperimentalHostUserNamespaceDefaultingGate),
 	}
+
+	secretManager, err := secret.NewCachingSecretManager(
+		kubeDeps.KubeClient, secret.GetObjectTTLFromNodeFunc(klet.GetNode))
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize secret manager: %v", err)
+	}
+	klet.secretManager = secretManager
 
 	if klet.experimentalHostUserNamespaceDefaulting {
 		glog.Infof("Experimental host user namespace defaulting is enabled.")
@@ -1788,7 +1789,6 @@ func (kl *Kubelet) syncLoopIteration(configCh <-chan kubetypes.PodUpdate, handle
 		// takes place only after kubelet calls the update handler to process
 		// the update to ensure the internal pod cache is up-to-date.
 		kl.sourcesReady.AddSource(u.Source)
-
 	case e := <-plegCh:
 		if isSyncPodWorthy(e) {
 			// PLEG event for a pod; sync it.

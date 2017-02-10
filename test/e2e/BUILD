@@ -134,7 +134,6 @@ go_library(
         "//pkg/controller/job:go_default_library",
         "//pkg/controller/replicaset:go_default_library",
         "//pkg/controller/replication:go_default_library",
-        "//pkg/controller/statefulset:go_default_library",
         "//pkg/kubectl:go_default_library",
         "//pkg/kubectl/cmd/util:go_default_library",
         "//pkg/kubelet/api/v1alpha1/stats:go_default_library",
@@ -177,7 +176,6 @@ go_library(
         "//vendor:golang.org/x/net/websocket",
         "//vendor:google.golang.org/api/compute/v1",
         "//vendor:google.golang.org/api/googleapi",
-        "//vendor:gopkg.in/inf.v0",
         "//vendor:k8s.io/apimachinery/pkg/api/errors",
         "//vendor:k8s.io/apimachinery/pkg/api/resource",
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
@@ -214,6 +212,7 @@ go_test(
     srcs = [
         "e2e_test.go",
         "metrics_grabber_test.go",
+        "taints_test.go",
     ],
     library = ":go_default_library",
     tags = [
@@ -221,12 +220,19 @@ go_test(
         "integration",
     ],
     deps = [
+        "//pkg/api/v1:go_default_library",
         "//pkg/client/clientset_generated/clientset:go_default_library",
         "//pkg/metrics:go_default_library",
         "//test/e2e/framework:go_default_library",
+        "//test/utils:go_default_library",
         "//vendor:github.com/onsi/ginkgo",
         "//vendor:github.com/onsi/gomega",
+        "//vendor:github.com/stretchr/testify/assert",
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
+        "//vendor:k8s.io/apimachinery/pkg/fields",
+        "//vendor:k8s.io/apimachinery/pkg/runtime",
+        "//vendor:k8s.io/apimachinery/pkg/watch",
+        "//vendor:k8s.io/client-go/tools/cache",
     ],
 )
 

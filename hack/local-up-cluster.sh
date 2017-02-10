@@ -41,6 +41,11 @@ CGROUP_ROOT=${CGROUP_ROOT:-""}
 # name of the cgroup driver, i.e. cgroupfs or systemd
 CGROUP_DRIVER=${CGROUP_DRIVER:-""}
 
+# enables testing eviction scenarios locally.
+EVICTION_HARD=${EVICTION_HARD:-"memory.available<100Mi"}
+EVICTION_SOFT=${EVICTION_SOFT:-""}
+EVICTION_PRESSURE_TRANSITION_PERIOD=${EVICTION_PRESSURE_TRANSITION_PERIOD:-"1m"}
+
 # We disable cluster DNS by default because this script uses docker0 (or whatever
 # container bridge docker is currently using) and we don't know the IP of the
 # DNS pod to pass in as --cluster-dns. To set this up by hand, set this flag
@@ -399,7 +404,7 @@ function start_apiserver {
     # NOTE: system:masters will be removed in the future
     kube::util::create_client_certkey "${CONTROLPLANE_SUDO}" "${CERT_DIR}" 'client-ca' kubelet system:node:${HOSTNAME_OVERRIDE} system:nodes
     kube::util::create_client_certkey "${CONTROLPLANE_SUDO}" "${CERT_DIR}" 'client-ca' kube-proxy system:kube-proxy system:nodes
-    kube::util::create_client_certkey "${CONTROLPLANE_SUDO}" "${CERT_DIR}" 'client-ca' controller system:controller system:masters
+    kube::util::create_client_certkey "${CONTROLPLANE_SUDO}" "${CERT_DIR}" 'client-ca' controller system:kube-controller-manager
     kube::util::create_client_certkey "${CONTROLPLANE_SUDO}" "${CERT_DIR}" 'client-ca' scheduler system:scheduler system:masters
     kube::util::create_client_certkey "${CONTROLPLANE_SUDO}" "${CERT_DIR}" 'client-ca' admin system:admin system:masters
 
@@ -483,6 +488,7 @@ function start_controller_manager {
       --cloud-provider="${CLOUD_PROVIDER}" \
       --cloud-config="${CLOUD_CONFIG}" \
       --kubeconfig "$CERT_DIR"/controller.kubeconfig \
+      --use-service-account-credentials \
       --master="https://${API_HOST}:${API_SECURE_PORT}" >"${CTLRMGR_LOG}" 2>&1 &
     CTLRMGR_PID=$!
 }
@@ -558,6 +564,9 @@ function start_kubelet {
         --cgroup-driver=${CGROUP_DRIVER} \
         --cgroup-root=${CGROUP_ROOT} \
         --keep-terminated-pod-volumes=true \
+        --eviction-hard=${EVICTION_HARD} \
+        --eviction-soft=${EVICTION_SOFT} \
+        --eviction-pressure-transition-period=${EVICTION_PRESSURE_TRANSITION_PERIOD} \
         ${auth_args} \
         ${dns_args} \
         ${net_plugin_dir_args} \

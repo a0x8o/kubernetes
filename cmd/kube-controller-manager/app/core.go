@@ -40,12 +40,14 @@ import (
 	replicationcontroller "k8s.io/kubernetes/pkg/controller/replication"
 	resourcequotacontroller "k8s.io/kubernetes/pkg/controller/resourcequota"
 	serviceaccountcontroller "k8s.io/kubernetes/pkg/controller/serviceaccount"
+	ttlcontroller "k8s.io/kubernetes/pkg/controller/ttl"
 	quotainstall "k8s.io/kubernetes/pkg/quota/install"
 )
 
 func startEndpointController(ctx ControllerContext) (bool, error) {
 	go endpointcontroller.NewEndpointController(
-		ctx.InformerFactory.Pods().Informer(),
+		ctx.NewInformerFactory.Core().V1().Pods(),
+		ctx.NewInformerFactory.Core().V1().Services(),
 		ctx.ClientBuilder.ClientOrDie("endpoint-controller"),
 	).Run(int(ctx.Options.ConcurrentEndpointSyncs), ctx.Stop)
 	return true, nil
@@ -138,6 +140,14 @@ func startServiceAccountController(ctx ControllerContext) (bool, error) {
 		ctx.ClientBuilder.ClientOrDie("service-account-controller"),
 		serviceaccountcontroller.DefaultServiceAccountsControllerOptions(),
 	).Run(1, ctx.Stop)
+	return true, nil
+}
+
+func startTTLController(ctx ControllerContext) (bool, error) {
+	go ttlcontroller.NewTTLController(
+		ctx.NewInformerFactory.Core().V1().Nodes(),
+		ctx.ClientBuilder.ClientOrDie("ttl-controller"),
+	).Run(5, ctx.Stop)
 	return true, nil
 }
 
