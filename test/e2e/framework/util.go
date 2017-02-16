@@ -234,10 +234,10 @@ func GetPauseImageNameForHostArch() string {
 // TODO(ihmccreery): remove once we don't care about v1.0 anymore, (tentatively
 // in v1.3).
 var SubResourcePodProxyVersion = utilversion.MustParseSemantic("v1.1.0")
-var subResourceServiceAndNodeProxyVersion = utilversion.MustParseSemantic("v1.2.0")
+var SubResourceServiceAndNodeProxyVersion = utilversion.MustParseSemantic("v1.2.0")
 
 func GetServicesProxyRequest(c clientset.Interface, request *restclient.Request) (*restclient.Request, error) {
-	subResourceProxyAvailable, err := ServerVersionGTE(subResourceServiceAndNodeProxyVersion, c.Discovery())
+	subResourceProxyAvailable, err := ServerVersionGTE(SubResourceServiceAndNodeProxyVersion, c.Discovery())
 	if err != nil {
 		return nil, err
 	}
@@ -3450,7 +3450,7 @@ func WaitForPodsReady(c clientset.Interface, ns, name string, minReadySeconds in
 			return false, nil
 		}
 		for _, pod := range pods.Items {
-			if !deploymentutil.IsPodAvailable(&pod, int32(minReadySeconds), time.Now()) {
+			if !v1.IsPodAvailable(&pod, int32(minReadySeconds), metav1.Now()) {
 				return false, nil
 			}
 		}
@@ -3537,7 +3537,7 @@ func logPodsOfDeployment(c clientset.Interface, deployment *extensions.Deploymen
 	}
 	for _, pod := range podList.Items {
 		availability := "not available"
-		if deploymentutil.IsPodAvailable(&pod, minReadySeconds, time.Now()) {
+		if v1.IsPodAvailable(&pod, minReadySeconds, metav1.Now()) {
 			availability = "available"
 		}
 		Logf("Pod %s is %s:\n%+v", pod.Name, availability, pod)
@@ -4809,7 +4809,7 @@ const proxyTimeout = 2 * time.Minute
 func NodeProxyRequest(c clientset.Interface, node, endpoint string) (restclient.Result, error) {
 	// proxy tends to hang in some cases when Node is not ready. Add an artificial timeout for this call.
 	// This will leak a goroutine if proxy hangs. #22165
-	subResourceProxyAvailable, err := ServerVersionGTE(subResourceServiceAndNodeProxyVersion, c.Discovery())
+	subResourceProxyAvailable, err := ServerVersionGTE(SubResourceServiceAndNodeProxyVersion, c.Discovery())
 	if err != nil {
 		return restclient.Result{}, err
 	}

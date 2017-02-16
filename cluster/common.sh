@@ -663,6 +663,7 @@ MULTIZONE: $(yaml-quote ${MULTIZONE:-})
 NON_MASQUERADE_CIDR: $(yaml-quote ${NON_MASQUERADE_CIDR:-})
 KUBE_UID: $(yaml-quote ${KUBE_UID:-})
 ENABLE_DEFAULT_STORAGE_CLASS: $(yaml-quote ${ENABLE_DEFAULT_STORAGE_CLASS:-})
+ENABLE_APISERVER_BASIC_AUDIT: $(yaml-quote ${ENABLE_APISERVER_BASIC_AUDIT:-})
 EOF
   if [ -n "${KUBELET_PORT:-}" ]; then
     cat >>$file <<EOF
@@ -787,6 +788,11 @@ EOF
     if [ -n "${INITIAL_ETCD_CLUSTER:-}" ]; then
       cat >>$file <<EOF
 INITIAL_ETCD_CLUSTER: $(yaml-quote ${INITIAL_ETCD_CLUSTER})
+EOF
+    fi
+    if [ -n "${INITIAL_ETCD_CLUSTER_STATE:-}" ]; then
+      cat >>$file <<EOF
+INITIAL_ETCD_CLUSTER_STATE: $(yaml-quote ${INITIAL_ETCD_CLUSTER_STATE})
 EOF
     fi
     if [ -n "${ETCD_QUORUM_READ:-}" ]; then
@@ -1042,6 +1048,9 @@ function parse-master-env() {
   KUBELET_TOKEN=$(get-env-val "${master_env}" "KUBELET_TOKEN")
   KUBE_PROXY_TOKEN=$(get-env-val "${master_env}" "KUBE_PROXY_TOKEN")
   CA_CERT_BASE64=$(get-env-val "${master_env}" "CA_CERT")
+  CA_KEY_BASE64=$(get-env-val "${master_env}" "CA_KEY")
+  KUBEAPISERVER_CERT_BASE64=$(get-env-val "${master_env}" "KUBEAPISERVER_CERT")
+  KUBEAPISERVER_KEY_BASE64=$(get-env-val "${master_env}" "KUBEAPISERVER_KEY")
   EXTRA_DOCKER_OPTS=$(get-env-val "${master_env}" "EXTRA_DOCKER_OPTS")
   KUBELET_CERT_BASE64=$(get-env-val "${master_env}" "KUBELET_CERT")
   KUBELET_KEY_BASE64=$(get-env-val "${master_env}" "KUBELET_KEY")

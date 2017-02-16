@@ -26,7 +26,6 @@ import (
 
 	"github.com/go-openapi/spec"
 	"github.com/golang/glog"
-	"github.com/pborman/uuid"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -38,6 +37,7 @@ import (
 	"k8s.io/apiserver/pkg/admission"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/filters"
+	serverstorage "k8s.io/apiserver/pkg/server/storage"
 	"k8s.io/kubernetes/federation/cmd/federation-apiserver/app/options"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
@@ -109,7 +109,7 @@ func Run(s *options.ServerRunOptions) error {
 	}
 
 	// TODO: register cluster federation resources here.
-	resourceConfig := genericapiserver.NewResourceConfig()
+	resourceConfig := serverstorage.NewResourceConfig()
 
 	if s.Etcd.StorageConfig.DeserializationCacheSize == 0 {
 		// When size of cache is not explicitly set, set it to 50000
@@ -119,9 +119,9 @@ func Run(s *options.ServerRunOptions) error {
 	if err != nil {
 		return fmt.Errorf("error generating storage version map: %s", err)
 	}
-	storageFactory, err := kubeapiserver.BuildDefaultStorageFactory(
+	storageFactory, err := kubeapiserver.NewStorageFactory(
 		s.Etcd.StorageConfig, s.Etcd.DefaultStorageMediaType, api.Codecs,
-		genericapiserver.NewDefaultResourceEncodingConfig(api.Registry), storageGroupsToEncodingVersion,
+		serverstorage.NewDefaultResourceEncodingConfig(api.Registry), storageGroupsToEncodingVersion,
 		[]schema.GroupVersionResource{}, resourceConfig, s.APIEnablement.RuntimeConfig)
 	if err != nil {
 		return fmt.Errorf("error in initializing storage factory: %s", err)
@@ -146,18 +146,16 @@ func Run(s *options.ServerRunOptions) error {
 		servers := strings.Split(tokens[1], ";")
 		storageFactory.SetEtcdLocation(groupResource, servers)
 	}
+	if err := s.Etcd.ApplyWithStorageFactoryTo(storageFactory, genericConfig); err != nil {
+		return err
+	}
 
 	apiAuthenticator, securityDefinitions, err := s.Authentication.ToAuthenticationConfig().New()
 	if err != nil {
 		return fmt.Errorf("invalid Authentication Config: %v", err)
 	}
 
-	privilegedLoopbackToken := uuid.NewRandom().String()
-	selfClientConfig, err := genericapiserver.NewSelfClientConfig(genericConfig.SecureServingInfo, genericConfig.InsecureServingInfo, privilegedLoopbackToken)
-	if err != nil {
-		return fmt.Errorf("failed to create clientset: %v", err)
-	}
-	client, err := internalclientset.NewForConfig(selfClientConfig)
+	client, err := internalclientset.NewForConfig(genericConfig.LoopbackClientConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create clientset: %v", err)
 	}
@@ -182,7 +180,6 @@ func Run(s *options.ServerRunOptions) error {
 
 	kubeVersion := version.Get()
 	genericConfig.Version = &kubeVersion
-	genericConfig.LoopbackClientConfig = selfClientConfig
 	genericConfig.Authenticator = apiAuthenticator
 	genericConfig.Authorizer = apiAuthorizer
 	genericConfig.AdmissionControl = admissionController
@@ -194,12 +191,6 @@ func Run(s *options.ServerRunOptions) error {
 		sets.NewString("watch", "proxy"),
 		sets.NewString("attach", "exec", "proxy", "log", "portforward"),
 	)
-	genericConfig.RESTOptionsGetter = &kubeapiserver.RESTOptionsFactory{
-		StorageFactory:          storageFactory,
-		EnableWatchCache:        s.Etcd.EnableWatchCache,
-		EnableGarbageCollection: s.Etcd.EnableGarbageCollection,
-		DeleteCollectionWorkers: s.Etcd.DeleteCollectionWorkers,
-	}
 
 	// TODO: Move this to generic api server (Need to move the command line flag).
 	if s.Etcd.EnableWatchCache {

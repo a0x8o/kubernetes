@@ -52,6 +52,8 @@ if [ -z "${DATA_DIRECTORY:-}" ]; then
   exit 1
 fi
 
+echo "$(date +'%Y-%m-%d %H:%M:%S') Detecting if migration is needed"
+
 if [ "${TARGET_STORAGE}" != "etcd2" -a "${TARGET_STORAGE}" != "etcd3" ]; then
   echo "Not supported version of storage: ${TARGET_STORAGE}"
   exit 1
@@ -187,7 +189,7 @@ for step in ${SUPPORTED_VERSIONS}; do
     CURRENT_VERSION=${step}
     echo "${CURRENT_VERSION}/${CURRENT_STORAGE}" > "${DATA_DIRECTORY}/${VERSION_FILE}"
   fi
-  if [ "$(echo ${CURRENT_VERSION} | cut -c1-2)" = "3." -a "${CURRENT_STORAGE}" = "etcd2" -a "${TARGET_STORAGE}" = "etcd3" ]; then
+  if [ "$(echo ${CURRENT_VERSION} | cut -c1-2)" = "3." -a "${CURRENT_VERSION}" = "${step}" -a "${CURRENT_STORAGE}" = "etcd2" -a "${TARGET_STORAGE}" = "etcd3" ]; then
     # If it is the first 3.x release in the list and we are migrating
     # also from 'etcd2' to 'etcd3', do the migration now.
     echo "Performing etcd2 -> etcd3 migration"
@@ -220,10 +222,10 @@ done
 
 # Do the rollback of needed.
 # NOTE: Rollback is only supported from "3.0.x" version in 'etcd3' mode to
-# "2.3.7" version in 'etcd2' mode.
+# "2.2.1" version in 'etcd2' mode.
 if [ "${CURRENT_STORAGE}" = "etcd3" -a "${TARGET_STORAGE}" = "etcd2" ]; then
-  if [ "$(echo ${CURRENT_VERSION} | cut -c1-4)" != "3.0." -o "${TARGET_VERSION}" != "2.3.7" ]; then
-    echo "etcd3 -> etcd2 downgrade is supported only between 3.0.x and 2.3.7"
+  if [ "$(echo ${CURRENT_VERSION} | cut -c1-4)" != "3.0." -o "${TARGET_VERSION}" != "2.2.1" ]; then
+    echo "etcd3 -> etcd2 downgrade is supported only between 3.0.x and 2.2.1"
     return 0
   fi
   echo "Backup and remove all existing v2 data"
@@ -238,6 +240,8 @@ if [ "${CURRENT_STORAGE}" = "etcd3" -a "${TARGET_STORAGE}" = "etcd2" ]; then
     exit 1
   fi
   CURRENT_STORAGE="etcd2"
-  CURRENT_VERSION="2.3.7"
+  CURRENT_VERSION="2.2.1"
   echo "${CURRENT_VERSION}/${CURRENT_STORAGE}" > "${DATA_DIRECTORY}/${VERSION_FILE}"
 fi
+
+echo "$(date +'%Y-%m-%d %H:%M:%S') Migration finished"

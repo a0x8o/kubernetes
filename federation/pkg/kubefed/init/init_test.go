@@ -114,8 +114,8 @@ func TestInitFederation(t *testing.T) {
 		},
 		{
 			federation:           "union",
-			kubeconfigGlobal:     fakeKubeFiles[0],
-			kubeconfigExplicit:   "",
+			kubeconfigGlobal:     fakeKubeFiles[1],
+			kubeconfigExplicit:   fakeKubeFiles[2],
 			dnsZoneName:          "example.test.",
 			lbIP:                 lbIP,
 			apiserverServiceType: v1.ServiceTypeLoadBalancer,
@@ -718,10 +718,10 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 		},
 		Subjects: []rbacv1beta1.Subject{
 			{
-				Kind:       "ServiceAccount",
-				APIVersion: "",
-				Name:       "federation-controller-manager",
-				Namespace:  "federation-system",
+				Kind:      "ServiceAccount",
+				APIGroup:  "",
+				Name:      "federation-controller-manager",
+				Namespace: "federation-system",
 			},
 		},
 		RoleRef: rbacv1beta1.RoleRef{

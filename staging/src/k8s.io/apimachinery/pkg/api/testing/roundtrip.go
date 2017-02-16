@@ -31,6 +31,8 @@ import (
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apimachinery/announced"
+	"k8s.io/apimachinery/pkg/apimachinery/registered"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
@@ -38,9 +40,47 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
+type InstallFunc func(groupFactoryRegistry announced.APIGroupFactoryRegistry, registry *registered.APIRegistrationManager, scheme *runtime.Scheme)
+
+// RoundTripTestForAPIGroup is convenient to call from your install package to make sure that a "bare" install of your group provides
+// enough information to round trip
+func RoundTripTestForAPIGroup(t *testing.T, installFn InstallFunc, fuzzingFuncs []interface{}) {
+	groupFactoryRegistry := make(announced.APIGroupFactoryRegistry)
+	registry := registered.NewOrDie("")
+	scheme := runtime.NewScheme()
+	installFn(groupFactoryRegistry, registry, scheme)
+
+	RoundTripTestForScheme(t, scheme, fuzzingFuncs)
+}
+
+// RoundTripTestForScheme is convenient to call if you already have a scheme and want to make sure that its well-formed
+func RoundTripTestForScheme(t *testing.T, scheme *runtime.Scheme, fuzzingFuncs []interface{}) {
+	codecFactory := runtimeserializer.NewCodecFactory(scheme)
+	fuzzer := DefaultFuzzers(t, codecFactory, fuzzingFuncs)
+	RoundTripTypesWithoutProtobuf(t, scheme, codecFactory, fuzzer, nil)
+}
+
+// RoundTripProtobufTestForAPIGroup is convenient to call from your install package to make sure that a "bare" install of your group provides
+// enough information to round trip
+func RoundTripProtobufTestForAPIGroup(t *testing.T, installFn InstallFunc, fuzzingFuncs []interface{}) {
+	groupFactoryRegistry := make(announced.APIGroupFactoryRegistry)
+	registry := registered.NewOrDie("")
+	scheme := runtime.NewScheme()
+	installFn(groupFactoryRegistry, registry, scheme)
+
+	RoundTripProtobufTestForScheme(t, scheme, fuzzingFuncs)
+}
+
+// RoundTripProtobufTestForScheme is convenient to call if you already have a scheme and want to make sure that its well-formed
+func RoundTripProtobufTestForScheme(t *testing.T, scheme *runtime.Scheme, fuzzingFuncs []interface{}) {
+	codecFactory := runtimeserializer.NewCodecFactory(scheme)
+	fuzzer := DefaultFuzzers(t, codecFactory, fuzzingFuncs)
+	RoundTripTypes(t, scheme, codecFactory, fuzzer, nil)
+}
+
 var FuzzIters = flag.Int("fuzz-iters", 20, "How many fuzzing iterations to do.")
 
-// nonRoundTrippableTypes are kinds that are effectively reserved across all GroupVersions
+// globalNonRoundTrippableTypes are kinds that are effectively reserved across all GroupVersions
 // They don't roundtrip
 var globalNonRoundTrippableTypes = sets.NewString(
 	"ExportOptions",
@@ -56,7 +96,7 @@ var globalNonRoundTrippableTypes = sets.NewString(
 	"DeleteOptions",
 )
 
-// RoundTripTypes applies the round-trip test to all round-trippable Kinds
+// RoundTripTypesWithoutProtobuf applies the round-trip test to all round-trippable Kinds
 // in the scheme.  It will skip all the GroupVersionKinds in the skip list.
 func RoundTripTypesWithoutProtobuf(t *testing.T, scheme *runtime.Scheme, codecFactory runtimeserializer.CodecFactory, fuzzer *fuzz.Fuzzer, nonRoundTrippableTypes map[schema.GroupVersionKind]bool) {
 	roundTripTypes(t, scheme, codecFactory, fuzzer, nonRoundTrippableTypes, true)
@@ -214,7 +254,7 @@ func roundTrip(t *testing.T, scheme *runtime.Scheme, codec runtime.Codec, object
 	// ensure that the object produced from decoding the encoded data is equal
 	// to the original object
 	if !apiequality.Semantic.DeepEqual(original, obj2) {
-		t.Errorf("\n1: %v: diff: %v\nCodec: %#v\nSource:\n\n%#v\n\nEncoded:\n\n%s\n\nFinal:\n\n%#v", name, diff.ObjectReflectDiff(object, obj2), codec, printer.Sprintf("%#v", object), dataAsString(data), printer.Sprintf("%#v", obj2))
+		t.Errorf("1: %v: diff: %v\nCodec: %#v\nSource:\n\n%#v\n\nEncoded:\n\n%s\n\nFinal:\n\n%#v", name, diff.ObjectReflectDiff(object, obj2), codec, printer.Sprintf("%#v", object), dataAsString(data), printer.Sprintf("%#v", obj2))
 		return
 	}
 

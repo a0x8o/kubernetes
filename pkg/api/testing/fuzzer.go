@@ -590,19 +590,22 @@ func rbacFuncs(t apitesting.TestingCommon) []interface{} {
 				r.APIGroup = rbac.GroupName
 			}
 		},
-	}
-}
-
-func kubeAdmFuncs(t apitesting.TestingCommon) []interface{} {
-	return []interface{}{
-		func(obj *kubeadm.MasterConfiguration, c fuzz.Continue) {
-			c.FuzzNoCustom(obj)
-			obj.KubernetesVersion = "v10"
-			obj.API.Port = 20
-			obj.Networking.ServiceSubnet = "foo"
-			obj.Networking.DNSDomain = "foo"
-			obj.AuthorizationMode = "foo"
-			obj.Discovery.Token = &kubeadm.TokenDiscovery{}
+		func(r *rbac.Subject, c fuzz.Continue) {
+			switch c.Int31n(3) {
+			case 0:
+				r.Kind = rbac.ServiceAccountKind
+				r.APIGroup = ""
+				c.FuzzNoCustom(&r.Name)
+				c.FuzzNoCustom(&r.Namespace)
+			case 1:
+				r.Kind = rbac.UserKind
+				r.APIGroup = rbac.GroupName
+				c.FuzzNoCustom(&r.Name)
+			case 2:
+				r.Kind = rbac.GroupKind
+				r.APIGroup = rbac.GroupName
+				c.FuzzNoCustom(&r.Name)
+			}
 		},
 	}
 }
@@ -634,7 +637,7 @@ func FuzzerFuncs(t apitesting.TestingCommon, codecs runtimeserializer.CodecFacto
 		batchFuncs(t),
 		autoscalingFuncs(t),
 		rbacFuncs(t),
-		kubeAdmFuncs(t),
+		kubeadm.KubeadmFuzzerFuncs(t),
 		policyFuncs(t),
 		certificateFuncs(t),
 	)

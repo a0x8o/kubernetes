@@ -57,6 +57,7 @@ pods="pods"
 podtemplates="podtemplates"
 replicasets="replicasets"
 replicationcontrollers="replicationcontrollers"
+roles="roles"
 secrets="secrets"
 serviceaccounts="serviceaccounts"
 services="services"
@@ -2817,6 +2818,22 @@ runTests() {
     kube::test::get_object_assert rolebinding/sarole "{{range.subjects}}{{.namespace}}:{{end}}" 'otherns:'
     kube::test::get_object_assert rolebinding/sarole "{{range.subjects}}{{.name}}:{{end}}" 'sa-name:'
   fi
+  
+  if kube::test::if_supports_resource "${roles}" ; then
+    kubectl create "${kube_flags[@]}" role pod-admin --verb=* --resource=pods
+    kube::test::get_object_assert role/pod-admin "{{range.rules}}{{range.verbs}}{{.}}:{{end}}{{end}}" '\*:'
+    kube::test::get_object_assert role/pod-admin "{{range.rules}}{{range.resources}}{{.}}:{{end}}{{end}}" 'pods:'
+    kube::test::get_object_assert role/pod-admin "{{range.rules}}{{range.apiGroups}}{{.}}:{{end}}{{end}}" ':'
+    kubectl create "${kube_flags[@]}" role resource-reader --verb=get,list --resource=pods,deployments.extensions
+    kube::test::get_object_assert role/resource-reader "{{range.rules}}{{range.verbs}}{{.}}:{{end}}{{end}}" 'get:list:get:list:'
+    kube::test::get_object_assert role/resource-reader "{{range.rules}}{{range.resources}}{{.}}:{{end}}{{end}}" 'pods:deployments:'
+    kube::test::get_object_assert role/resource-reader "{{range.rules}}{{range.apiGroups}}{{.}}:{{end}}{{end}}" ':extensions:'
+  	kubectl create "${kube_flags[@]}" role resourcename-reader --verb=get,list --resource=pods --resource-name=foo
+    kube::test::get_object_assert role/resourcename-reader "{{range.rules}}{{range.verbs}}{{.}}:{{end}}{{end}}" 'get:list:'
+    kube::test::get_object_assert role/resourcename-reader "{{range.rules}}{{range.resources}}{{.}}:{{end}}{{end}}" 'pods:'
+    kube::test::get_object_assert role/resourcename-reader "{{range.rules}}{{range.apiGroups}}{{.}}:{{end}}{{end}}" ':'
+    kube::test::get_object_assert role/resourcename-reader "{{range.rules}}{{range.resourceNames}}{{.}}:{{end}}{{end}}" 'foo:'
+  fi
 
   #########################
   # Assert short name     #
@@ -3208,6 +3225,7 @@ runTests() {
 }
 __EOF__
     kube::test::get_object_assert storageclass "{{range.items}}{{$id_field}}:{{end}}" 'storage-class-name:'
+    kube::test::get_object_assert sc "{{range.items}}{{$id_field}}:{{end}}" 'storage-class-name:'
     kubectl delete storageclass storage-class-name "${kube_flags[@]}"
     # Post-condition: no storage classes
     kube::test::get_object_assert storageclass "{{range.items}}{{$id_field}}:{{end}}" ''

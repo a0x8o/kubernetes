@@ -3017,6 +3017,20 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 								Format:      "",
 							},
 						},
+						"portals": {
+							SchemaProps: spec.SchemaProps{
+								Description: "iSCSI target portal List. The portal is either an IP or ip_addr:port if the port is other than default (typically TCP ports 860 and 3260).",
+								Type:        []string{"array"},
+								Items: &spec.SchemaOrArray{
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Type:   []string{"string"},
+											Format: "",
+										},
+									},
+								},
+							},
+						},
 					},
 					Required: []string{"targetPortal", "iqn", "lun"},
 				},
@@ -10696,9 +10710,16 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 						},
 						"clusterDNS": {
 							SchemaProps: spec.SchemaProps{
-								Description: "clusterDNS is the IP address for a cluster DNS server.  If set, kubelet will configure all containers to use this for DNS resolution in addition to the host's DNS servers",
-								Type:        []string{"string"},
-								Format:      "",
+								Description: "clusterDNS is a list of IP address for the cluster DNS server.  If set, kubelet will configure all containers to use this for DNS resolution instead of the host's DNS servers",
+								Type:        []string{"array"},
+								Items: &spec.SchemaOrArray{
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Type:   []string{"string"},
+											Format: "",
+										},
+									},
+								},
 							},
 						},
 						"streamingConnectionIdleTimeout": {
@@ -11683,7 +11704,7 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 						},
 						"apiVersion": {
 							SchemaProps: spec.SchemaProps{
-								Description: "APIVersion holds the API group and version of the referenced object.",
+								Description: "APIVersion holds the API group and version of the referenced subject. Defaults to \"v1\" for ServiceAccount subjects. Defaults to \"rbac.authorization.k8s.io/v1alpha1\" for User and Group subjects.",
 								Type:        []string{"string"},
 								Format:      "",
 							},
@@ -15300,9 +15321,9 @@ func GetOpenAPIDefinitions(ref openapi.ReferenceCallback) map[string]openapi.Ope
 								Format:      "",
 							},
 						},
-						"apiVersion": {
+						"apiGroup": {
 							SchemaProps: spec.SchemaProps{
-								Description: "APIVersion holds the API group and version of the referenced object.",
+								Description: "APIGroup holds the API group of the referenced subject. Defaults to \"\" for ServiceAccount subjects. Defaults to \"rbac.authorization.k8s.io\" for User and Group subjects.",
 								Type:        []string{"string"},
 								Format:      "",
 							},
