@@ -683,6 +683,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 
 	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
 	klet.runtimeState = newRuntimeState(maxWaitForContainerRuntime)
+	klet.runtimeState.addHealthCheck("PLEG", klet.pleg.Healthy)
 	klet.updatePodCIDR(kubeCfg.PodCIDR)
 
 	// setup containerGC
@@ -700,7 +701,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	}
 	klet.imageManager = imageManager
 
-	klet.statusManager = status.NewManager(klet.kubeClient, klet.podManager)
+	klet.statusManager = status.NewManager(klet.kubeClient, klet.podManager, klet)
 
 	klet.probeManager = prober.NewManager(
 		klet.statusManager,
@@ -725,6 +726,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		kubeCfg.EnableControllerAttachDetach,
 		nodeName,
 		klet.podManager,
+		klet.statusManager,
 		klet.kubeClient,
 		klet.volumePluginMgr,
 		klet.containerRuntime,
@@ -1463,8 +1465,9 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 		// exists or the pod is running for the first time
 		podKilled := false
 		if !pcm.Exists(pod) && !firstSync {
-			kl.killPod(pod, nil, podStatus, nil)
-			podKilled = true
+			if err := kl.killPod(pod, nil, podStatus, nil); err == nil {
+				podKilled = true
+			}
 		}
 		// Create and Update pod's Cgroups
 		// Don't create cgroups for run once pod if it was killed above

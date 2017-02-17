@@ -13851,6 +13851,7 @@ go_library(
         "k8s.io/apimachinery/pkg/api/testing/codec.go",
         "k8s.io/apimachinery/pkg/api/testing/fuzzer.go",
         "k8s.io/apimachinery/pkg/api/testing/roundtrip.go",
+        "k8s.io/apimachinery/pkg/api/testing/valuefuzz.go",
     ],
     tags = ["automanaged"],
     deps = [
@@ -16453,6 +16454,7 @@ go_library(
         "//vendor:k8s.io/apimachinery/pkg/runtime",
         "//vendor:k8s.io/apimachinery/pkg/util/httpstream/spdy",
         "//vendor:k8s.io/apimachinery/pkg/util/runtime",
+        "//vendor:k8s.io/apimachinery/pkg/util/sets",
         "//vendor:k8s.io/apimachinery/pkg/util/wait",
         "//vendor:k8s.io/apiserver/pkg/endpoints/filters",
         "//vendor:k8s.io/apiserver/pkg/endpoints/handlers/responsewriters",
@@ -16896,4 +16898,23 @@ go_test(
     library = ":k8s.io/sample-apiserver/pkg/apiserver",
     tags = ["automanaged"],
     deps = ["//vendor:k8s.io/apimachinery/pkg/api/testing"],
+)
+
+go_test(
+    name = "k8s.io/apimachinery/pkg/api/testing_test",
+    srcs = ["k8s.io/apimachinery/pkg/api/testing/valuefuzz_test.go"],
+    library = ":k8s.io/apimachinery/pkg/api/testing",
+    tags = ["automanaged"],
+)
+
+go_library(
+    name = "google.golang.org/api/logging/v2beta1",
+    srcs = ["google.golang.org/api/logging/v2beta1/logging-gen.go"],
+    tags = ["automanaged"],
+    deps = [
+        "//vendor:golang.org/x/net/context",
+        "//vendor:golang.org/x/net/context/ctxhttp",
+        "//vendor:google.golang.org/api/gensupport",
+        "//vendor:google.golang.org/api/googleapi",
+    ],
 )
