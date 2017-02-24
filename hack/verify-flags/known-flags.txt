@@ -141,6 +141,7 @@ deserialization-cache-size
 dest-file
 disable-filter
 disable-kubenet
+disable-log-dump
 discovery-port
 dns-bind-address
 dns-port
@@ -161,6 +162,8 @@ dump-logs-on-failure
 duration-sec
 e2e-output-dir
 e2e-verify-service-account
+etcd-metrics-scrape-uri
+etcd-version-scrape-uri
 enable-controller-attach-detach
 enable-cri
 enable-custom-metrics
@@ -202,6 +205,7 @@ executor-suicide-timeout
 exit-on-lock-contention
 experimental-allowed-unsafe-sysctls
 experimental-bootstrap-kubeconfig
+experimental-bootstrap-token-auth
 experimental-keystone-url
 experimental-keystone-ca-file
 experimental-mounter-path
@@ -369,6 +373,7 @@ leader-elect-retry-period
 lease-duration
 leave-stdin-open
 limit-bytes
+listen-address
 listers-package
 load-balancer-ip
 lock-file
@@ -408,6 +413,7 @@ mesos-launch-grace-period
 mesos-master
 mesos-sandbox-overlay
 mesos-user
+metrics-path
 min-available
 min-pr-number
 min-request-timeout
@@ -546,6 +552,7 @@ scheduler-config
 scheduler-name
 schema-cache-dir
 scopes
+scrape-timeout
 seccomp-profile-root
 secondary-node-eviction-rate
 secret-name

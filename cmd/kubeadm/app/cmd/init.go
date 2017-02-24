@@ -30,7 +30,6 @@ import (
 	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 	kubeadmapiext "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha1"
 	"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/validation"
-	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/flags"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/cmd/kubeadm/app/discovery"
 	kubemaster "k8s.io/kubernetes/cmd/kubeadm/app/master"
@@ -47,6 +46,9 @@ import (
 var (
 	initDoneMsgf = dedent.Dedent(`
 		Your Kubernetes master has initialized successfully!
+
+		To start using your cluster, you need to run:
+		export KUBECONFIG=%s
 
 		You should now deploy a pod network to the cluster.
 		Run "kubectl apply -f [podnetwork].yaml" with one of the options listed at:
@@ -103,11 +105,6 @@ func NewCmdInit(out io.Writer) *cobra.Command {
 		&cfg.Networking.DNSDomain, "service-dns-domain", cfg.Networking.DNSDomain,
 		`Use alternative domain for services, e.g. "myorg.internal"`,
 	)
-	cmd.PersistentFlags().Var(
-		flags.NewCloudProviderFlag(&cfg.CloudProvider), "cloud-provider",
-		`Enable cloud provider features (external load-balancers, storage, etc). Note that you have to configure all kubelets manually`,
-	)
-
 	cmd.PersistentFlags().StringVar(
 		&cfg.KubernetesVersion, "use-kubernetes-version", cfg.KubernetesVersion,
 		`Choose a specific Kubernetes version for the control plane`,
@@ -218,7 +215,7 @@ func (i *Init) Run(out io.Writer) error {
 		return err
 	}
 
-	client, err := kubemaster.CreateClientAndWaitForAPI(path.Join(kubeadmapi.GlobalEnvParams.KubernetesDir, kubeconfigphase.AdminKubeConfigFileName))
+	client, err := kubemaster.CreateClientAndWaitForAPI(path.Join(kubeadmapi.GlobalEnvParams.KubernetesDir, kubeadmconstants.AdminKubeConfigFileName))
 	if err != nil {
 		return err
 	}
@@ -256,18 +253,16 @@ func (i *Init) Run(out io.Writer) error {
 		return err
 	}
 
-	if i.cfg.AuthorizationMode == kubeadmconstants.AuthzModeRBAC {
-		err = apiconfigphase.CreateRBACRules(client)
-		if err != nil {
-			return err
-		}
+	err = apiconfigphase.CreateRBACRules(client)
+	if err != nil {
+		return err
 	}
 
 	if err := addonsphase.CreateEssentialAddons(i.cfg, client); err != nil {
 		return err
 	}
 
-	fmt.Fprintf(out, initDoneMsgf, generateJoinArgs(i.cfg))
+	fmt.Fprintf(out, initDoneMsgf, path.Join(kubeadmapi.GlobalEnvParams.KubernetesDir, kubeadmconstants.AdminKubeConfigFileName), generateJoinArgs(i.cfg))
 	return nil
 }
 

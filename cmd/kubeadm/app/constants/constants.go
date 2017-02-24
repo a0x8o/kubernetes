@@ -16,11 +16,14 @@ limitations under the License.
 
 package constants
 
-import "time"
+import (
+	"path"
+	"time"
+)
 
 const (
-	AuthorizationPolicyFile        = "abac_policy.json"
-	AuthorizationWebhookConfigFile = "webhook_authz.conf"
+	// KubernetesDir is the directory kubernetes owns for storing various configuration files
+	KubernetesDir = "/etc/kubernetes"
 
 	CACertAndKeyBaseName = "ca"
 	CACertName           = "ca.crt"
@@ -46,13 +49,8 @@ const (
 	FrontProxyClientCertName           = "front-proxy-client.crt"
 	FrontProxyClientKeyName            = "front-proxy-client.key"
 
-	// TODO: These constants should actually come from pkg/kubeapiserver/authorizer, but we can't vendor that package in now
-	// because of all the other sub-packages that would get vendored. To fix this, a pkg/kubeapiserver/authorizer/modes package
-	// or similar should exist that only has these constants; then we can vendor it.
-	AuthzModeAlwaysAllow = "AlwaysAllow"
-	AuthzModeABAC        = "ABAC"
-	AuthzModeRBAC        = "RBAC"
-	AuthzModeWebhook     = "Webhook"
+	AdminKubeConfigFileName   = "admin.conf"
+	KubeletKubeConfigFileName = "kubelet.conf"
 
 	// Important: a "v"-prefix shouldn't exist here; semver doesn't allow that
 	MinimumControlPlaneVersion = "1.6.0-alpha.2"
@@ -70,8 +68,6 @@ const (
 
 	// DefaultTokenDuration specifies the default amount of time that a bootstrap token will be valid
 	DefaultTokenDuration = time.Duration(8) * time.Hour
-	// BootstrapTokenSecretPrefix the the prefix that will be used for the Secrets that are created as type bootstrap.kubernetes.io/token
-	BootstrapTokenSecretPrefix = "bootstrap-token-"
 
 	// CSVTokenBootstrapUser is currently the user the bootstrap token in the .csv file
 	// TODO: This should change to something more official and supported
@@ -81,4 +77,9 @@ const (
 	CSVTokenBootstrapGroup = "kubeadm:kubelet-bootstrap"
 	// The file name of the tokens file that can be used for bootstrapping
 	CSVTokenFileName = "tokens.csv"
+)
+
+var (
+	AuthorizationPolicyPath        = path.Join(KubernetesDir, "abac_policy.json")
+	AuthorizationWebhookConfigPath = path.Join(KubernetesDir, "webhook_authz.conf")
 )

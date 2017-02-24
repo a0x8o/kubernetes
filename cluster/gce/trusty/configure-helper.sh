@@ -598,6 +598,9 @@ start_kube_apiserver() {
   if [[ -n "${STORAGE_BACKEND:-}" ]]; then
     params="${params} --storage-backend=${STORAGE_BACKEND}"
   fi
+  if [[ -n "${STORAGE_MEDIA_TYPE:-}" ]]; then
+    params="${params} --storage-media-type=${STORAGE_MEDIA_TYPE}"
+  fi
   if [ -n "${NUM_NODES:-}" ]; then
     # If the cluster is large, increase max-requests-inflight limit in apiserver.
     if [[ "${NUM_NODES}" -ge 1000 ]]; then
@@ -968,6 +971,9 @@ start_kube_addons() {
   fi
   if [ "${ENABLE_CLUSTER_UI:-}" = "true" ]; then
     setup_addon_manifests "addons" "dashboard"
+  fi
+  if [[ "${ENABLE_NODE_PROBLEM_DETECTOR:-}" == "daemonset" ]]; then
+    setup-addon-manifests "addons" "node-problem-detector"
   fi
   if echo "${ADMISSION_CONTROL:-}" | grep -q "LimitRanger"; then
     setup_addon_manifests "admission-controls" "limit-range"
