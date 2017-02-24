@@ -369,6 +369,7 @@ items:
     - /api/*
     - /apis
     - /apis/*
+    - /healthz
     - /swaggerapi
     - /swaggerapi/*
     - /version
@@ -489,6 +490,7 @@ items:
     resources:
     - daemonsets
     - deployments
+    - podsecuritypolicies
     - replicasets
     verbs:
     - list
