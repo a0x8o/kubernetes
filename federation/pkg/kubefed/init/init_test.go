@@ -67,7 +67,7 @@ const (
 
 func TestInitFederation(t *testing.T) {
 	cmdErrMsg := ""
-	dnsProvider := ""
+	dnsProvider := "google-clouddns"
 	cmdutil.BehaviorOnFatal(func(str string, code int) {
 		cmdErrMsg = str
 	})
@@ -90,9 +90,7 @@ func TestInitFederation(t *testing.T) {
 		etcdPVCapacity        string
 		etcdPersistence       string
 		expectedErr           string
-		dnsProvider           string
 		dnsProviderConfig     string
-		storageBackend        string
 		dryRun                string
 		apiserverArgOverrides string
 		cmArgOverrides        string
@@ -108,9 +106,7 @@ func TestInitFederation(t *testing.T) {
 			etcdPVCapacity:        "5Gi",
 			etcdPersistence:       "true",
 			expectedErr:           "",
-			dnsProvider:           "test-dns-provider",
 			dnsProviderConfig:     "dns-provider.conf",
-			storageBackend:        "etcd2",
 			dryRun:                "",
 			apiserverArgOverrides: "--client-ca-file=override,--log-dir=override",
 			cmArgOverrides:        "--dns-provider=override,--log-dir=override",
@@ -126,8 +122,6 @@ func TestInitFederation(t *testing.T) {
 			etcdPVCapacity:       "", //test for default value of pvc-size
 			etcdPersistence:      "true",
 			expectedErr:          "",
-			dnsProvider:          "", //test for default value of dns provider
-			storageBackend:       "etcd2",
 			dryRun:               "",
 		},
 		{
@@ -141,8 +135,6 @@ func TestInitFederation(t *testing.T) {
 			etcdPVCapacity:       "",
 			etcdPersistence:      "true",
 			expectedErr:          "",
-			dnsProvider:          "test-dns-provider",
-			storageBackend:       "etcd2",
 			dryRun:               "valid-run",
 		},
 		{
@@ -156,8 +148,6 @@ func TestInitFederation(t *testing.T) {
 			etcdPVCapacity:       "5Gi",
 			etcdPersistence:      "false",
 			expectedErr:          "",
-			dnsProvider:          "test-dns-provider",
-			storageBackend:       "etcd3",
 			dryRun:               "",
 		},
 		{
@@ -170,8 +160,6 @@ func TestInitFederation(t *testing.T) {
 			etcdPVCapacity:       "5Gi",
 			etcdPersistence:      "true",
 			expectedErr:          "",
-			dnsProvider:          "test-dns-provider",
-			storageBackend:       "etcd3",
 			dryRun:               "",
 		},
 		{
@@ -185,8 +173,6 @@ func TestInitFederation(t *testing.T) {
 			etcdPVCapacity:       "5Gi",
 			etcdPersistence:      "true",
 			expectedErr:          "",
-			dnsProvider:          "test-dns-provider",
-			storageBackend:       "etcd3",
 			dryRun:               "",
 		},
 	}
@@ -195,14 +181,8 @@ func TestInitFederation(t *testing.T) {
 
 	for i, tc := range testCases {
 		cmdErrMsg = ""
-		dnsProvider = ""
 		buf := bytes.NewBuffer([]byte{})
 
-		if "" != tc.dnsProvider {
-			dnsProvider = tc.dnsProvider
-		} else {
-			dnsProvider = "google-clouddns" //default value of dns-provider
-		}
 		if tc.dnsProviderConfig != "" {
 			tmpfile, err := ioutil.TempFile("", tc.dnsProviderConfig)
 			if err != nil {
@@ -211,7 +191,7 @@ func TestInitFederation(t *testing.T) {
 			tc.dnsProviderConfig = tmpfile.Name()
 			defer os.Remove(tmpfile.Name())
 		}
-		hostFactory, err := fakeInitHostFactory(tc.apiserverServiceType, tc.federation, util.DefaultFederationSystemNamespace, tc.advertiseAddress, tc.lbIP, tc.dnsZoneName, tc.image, dnsProvider, tc.dnsProviderConfig, tc.etcdPersistence, tc.etcdPVCapacity, tc.storageBackend, tc.apiserverArgOverrides, tc.cmArgOverrides)
+		hostFactory, err := fakeInitHostFactory(tc.apiserverServiceType, tc.federation, util.DefaultFederationSystemNamespace, tc.advertiseAddress, tc.lbIP, tc.dnsZoneName, tc.image, dnsProvider, tc.dnsProviderConfig, tc.etcdPersistence, tc.etcdPVCapacity, tc.apiserverArgOverrides, tc.cmArgOverrides)
 		if err != nil {
 			t.Fatalf("[%d] unexpected error: %v", i, err)
 		}
@@ -227,15 +207,10 @@ func TestInitFederation(t *testing.T) {
 		cmd.Flags().Set("host-cluster-context", "substrate")
 		cmd.Flags().Set("dns-zone-name", tc.dnsZoneName)
 		cmd.Flags().Set("image", tc.image)
+		cmd.Flags().Set("dns-provider", dnsProvider)
 		cmd.Flags().Set("apiserver-arg-overrides", tc.apiserverArgOverrides)
 		cmd.Flags().Set("controllermanager-arg-overrides", tc.cmArgOverrides)
 
-		if tc.storageBackend != "" {
-			cmd.Flags().Set("storage-backend", tc.storageBackend)
-		}
-		if tc.dnsProvider != "" {
-			cmd.Flags().Set("dns-provider", tc.dnsProvider)
-		}
 		if tc.dnsProviderConfig != "" {
 			cmd.Flags().Set("dns-provider-config", tc.dnsProviderConfig)
 		}
@@ -579,7 +554,7 @@ func TestCertsHTTPS(t *testing.T) {
 	}
 }
 
-func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, namespaceName, advertiseAddress, lbIp, dnsZoneName, image, dnsProvider, dnsProviderConfig, etcdPersistence, etcdPVCapacity, storageProvider, apiserverOverrideArg, cmOverrideArg string) (cmdutil.Factory, error) {
+func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, namespaceName, advertiseAddress, lbIp, dnsZoneName, image, dnsProvider, dnsProviderConfig, etcdPersistence, etcdPVCapacity, apiserverOverrideArg, cmOverrideArg string) (cmdutil.Factory, error) {
 	svcName := federationName + "-apiserver"
 	svcUrlPrefix := "/api/v1/namespaces/federation-system/services"
 	credSecretName := svcName + "-credentials"
@@ -797,7 +772,6 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 		"--tls-cert-file=/etc/federation/apiserver/server.crt",
 		"--tls-private-key-file=/etc/federation/apiserver/server.key",
 		"--admission-control=NamespaceLifecycle",
-		fmt.Sprintf("--storage-backend=%s", storageProvider),
 		fmt.Sprintf("--advertise-address=%s", address),
 	}
 
@@ -855,7 +829,7 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 						},
 						{
 							Name:  "etcd",
-							Image: "gcr.io/google_containers/etcd:3.0.17-alpha.1",
+							Image: "gcr.io/google_containers/etcd:3.0.17",
 							Command: []string{
 								"/usr/local/bin/etcd",
 								"--data-dir",

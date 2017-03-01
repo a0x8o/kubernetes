@@ -481,14 +481,14 @@ func (rsc *ReplicaSetController) manageReplicas(filteredPods []*v1.Pod, rs *exte
 			go func() {
 				defer wg.Done()
 				var err error
-
-				var trueVar = true
+				boolPtr := func(b bool) *bool { return &b }
 				controllerRef := &metav1.OwnerReference{
-					APIVersion: getRSKind().GroupVersion().String(),
-					Kind:       getRSKind().Kind,
-					Name:       rs.Name,
-					UID:        rs.UID,
-					Controller: &trueVar,
+					APIVersion:         getRSKind().GroupVersion().String(),
+					Kind:               getRSKind().Kind,
+					Name:               rs.Name,
+					UID:                rs.UID,
+					BlockOwnerDeletion: boolPtr(true),
+					Controller:         boolPtr(true),
 				}
 				err = rsc.podControl.CreatePodsWithControllerRef(rs.Namespace, &rs.Spec.Template, rs, controllerRef)
 				if err != nil {
@@ -615,10 +615,17 @@ func (rsc *ReplicaSetController) syncReplicaSet(key string) error {
 	newStatus := calculateStatus(rs, filteredPods, manageReplicasErr)
 
 	// Always updates status as pods come up or die.
-	if err := updateReplicaSetStatus(rsc.kubeClient.Extensions().ReplicaSets(rs.Namespace), rs, newStatus); err != nil {
+	updatedRS, err := updateReplicaSetStatus(rsc.kubeClient.Extensions().ReplicaSets(rs.Namespace), rs, newStatus)
+	if err != nil {
 		// Multiple things could lead to this update failing. Requeuing the replica set ensures
 		// Returning an error causes a requeue without forcing a hotloop
 		return err
+	}
+	// Resync the ReplicaSet after MinReadySeconds as a last line of defense to guard against clock-skew.
+	if manageReplicasErr == nil && updatedRS.Spec.MinReadySeconds > 0 &&
+		updatedRS.Status.ReadyReplicas == *(updatedRS.Spec.Replicas) &&
+		updatedRS.Status.AvailableReplicas != *(updatedRS.Spec.Replicas) {
+		rsc.enqueueReplicaSetAfter(updatedRS, time.Duration(updatedRS.Spec.MinReadySeconds)*time.Second)
 	}
 	return manageReplicasErr
 }

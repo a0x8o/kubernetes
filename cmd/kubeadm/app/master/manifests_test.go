@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
+	"sort"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -278,16 +280,23 @@ func TestComponentResources(t *testing.T) {
 
 func TestComponentProbe(t *testing.T) {
 	var tests = []struct {
-		port int
-		path string
+		port   int
+		path   string
+		scheme api.URIScheme
 	}{
 		{
-			port: 1,
-			path: "foo",
+			port:   1,
+			path:   "foo",
+			scheme: api.URISchemeHTTP,
+		},
+		{
+			port:   2,
+			path:   "bar",
+			scheme: api.URISchemeHTTPS,
 		},
 	}
 	for _, rt := range tests {
-		actual := componentProbe(rt.port, rt.path)
+		actual := componentProbe(rt.port, rt.path, rt.scheme)
 		if actual.Handler.HTTPGet.Port != intstr.FromInt(rt.port) {
 			t.Errorf(
 				"failed componentProbe:\n\texpected: %v\n\t  actual: %v",
@@ -300,6 +309,13 @@ func TestComponentProbe(t *testing.T) {
 				"failed componentProbe:\n\texpected: %s\n\t  actual: %s",
 				rt.path,
 				actual.Handler.HTTPGet.Path,
+			)
+		}
+		if actual.Handler.HTTPGet.Scheme != rt.scheme {
+			t.Errorf(
+				"failed componentProbe:\n\texpected: %v\n\t  actual: %v",
+				rt.scheme,
+				actual.Handler.HTTPGet.Scheme,
 			)
 		}
 	}
@@ -369,7 +385,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 			},
 			expected: []string{
 				"kube-apiserver",
-				"--insecure-bind-address=127.0.0.1",
+				"--insecure-port=0",
 				"--admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,ResourceQuota,DefaultTolerationSeconds",
 				"--service-cluster-ip-range=bar",
 				"--service-account-key-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/sa.pub",
@@ -380,7 +396,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 				"--kubelet-client-key=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/apiserver-kubelet-client.key",
 				"--token-auth-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/tokens.csv",
 				fmt.Sprintf("--secure-port=%d", 123),
-				"--allow-privileged",
+				"--allow-privileged=true",
 				"--storage-backend=etcd3",
 				"--kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname",
 				"--requestheader-username-headers=X-Remote-User",
@@ -399,7 +415,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 			},
 			expected: []string{
 				"kube-apiserver",
-				"--insecure-bind-address=127.0.0.1",
+				"--insecure-port=0",
 				"--admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,ResourceQuota,DefaultTolerationSeconds",
 				"--service-cluster-ip-range=bar",
 				"--service-account-key-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/sa.pub",
@@ -410,7 +426,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 				"--kubelet-client-key=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/apiserver-kubelet-client.key",
 				"--token-auth-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/tokens.csv",
 				fmt.Sprintf("--secure-port=%d", 123),
-				"--allow-privileged",
+				"--allow-privileged=true",
 				"--storage-backend=etcd3",
 				"--kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname",
 				"--requestheader-username-headers=X-Remote-User",
@@ -431,7 +447,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 			},
 			expected: []string{
 				"kube-apiserver",
-				"--insecure-bind-address=127.0.0.1",
+				"--insecure-port=0",
 				"--admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,ResourceQuota,DefaultTolerationSeconds",
 				"--service-cluster-ip-range=bar",
 				"--service-account-key-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/sa.pub",
@@ -442,7 +458,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 				"--kubelet-client-key=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/apiserver-kubelet-client.key",
 				"--token-auth-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/tokens.csv",
 				fmt.Sprintf("--secure-port=%d", 123),
-				"--allow-privileged",
+				"--allow-privileged=true",
 				"--storage-backend=etcd3",
 				"--kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname",
 				"--requestheader-username-headers=X-Remote-User",
@@ -460,14 +476,10 @@ func TestGetAPIServerCommand(t *testing.T) {
 
 	for _, rt := range tests {
 		actual := getAPIServerCommand(rt.cfg, false)
-		for i := range actual {
-			if actual[i] != rt.expected[i] {
-				t.Errorf(
-					"failed getAPIServerCommand:\n\texpected: %s\n\t  actual: %s",
-					rt.expected[i],
-					actual[i],
-				)
-			}
+		sort.Strings(actual)
+		sort.Strings(rt.expected)
+		if !reflect.DeepEqual(actual, rt.expected) {
+			t.Errorf("failed getAPIServerCommand:\nexpected:\n%v\nsaw:\n%v", rt.expected, actual)
 		}
 	}
 }
@@ -482,14 +494,14 @@ func TestGetControllerManagerCommand(t *testing.T) {
 			expected: []string{
 				"kube-controller-manager",
 				"--address=127.0.0.1",
-				"--leader-elect",
+				"--leader-elect=true",
 				"--kubeconfig=" + kubeadmapi.GlobalEnvParams.KubernetesDir + "/controller-manager.conf",
 				"--root-ca-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/ca.crt",
 				"--service-account-private-key-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/sa.key",
 				"--cluster-signing-cert-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/ca.crt",
 				"--cluster-signing-key-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/ca.key",
 				"--insecure-experimental-approve-all-kubelet-csrs-for-group=kubeadm:kubelet-bootstrap",
-				"--use-service-account-credentials",
+				"--use-service-account-credentials=true",
 			},
 		},
 		{
@@ -497,14 +509,14 @@ func TestGetControllerManagerCommand(t *testing.T) {
 			expected: []string{
 				"kube-controller-manager",
 				"--address=127.0.0.1",
-				"--leader-elect",
+				"--leader-elect=true",
 				"--kubeconfig=" + kubeadmapi.GlobalEnvParams.KubernetesDir + "/controller-manager.conf",
 				"--root-ca-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/ca.crt",
 				"--service-account-private-key-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/sa.key",
 				"--cluster-signing-cert-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/ca.crt",
 				"--cluster-signing-key-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/ca.key",
 				"--insecure-experimental-approve-all-kubelet-csrs-for-group=kubeadm:kubelet-bootstrap",
-				"--use-service-account-credentials",
+				"--use-service-account-credentials=true",
 				"--cloud-provider=foo",
 			},
 		},
@@ -513,14 +525,14 @@ func TestGetControllerManagerCommand(t *testing.T) {
 			expected: []string{
 				"kube-controller-manager",
 				"--address=127.0.0.1",
-				"--leader-elect",
+				"--leader-elect=true",
 				"--kubeconfig=" + kubeadmapi.GlobalEnvParams.KubernetesDir + "/controller-manager.conf",
 				"--root-ca-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/ca.crt",
 				"--service-account-private-key-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/sa.key",
 				"--cluster-signing-cert-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/ca.crt",
 				"--cluster-signing-key-file=" + kubeadmapi.GlobalEnvParams.HostPKIPath + "/ca.key",
 				"--insecure-experimental-approve-all-kubelet-csrs-for-group=kubeadm:kubelet-bootstrap",
-				"--use-service-account-credentials",
+				"--use-service-account-credentials=true",
 				"--allocate-node-cidrs=true",
 				"--cluster-cidr=bar",
 			},
@@ -529,14 +541,10 @@ func TestGetControllerManagerCommand(t *testing.T) {
 
 	for _, rt := range tests {
 		actual := getControllerManagerCommand(rt.cfg, false)
-		for i := range actual {
-			if actual[i] != rt.expected[i] {
-				t.Errorf(
-					"failed getControllerManagerCommand:\n\texpected: %s\n\t  actual: %s",
-					rt.expected[i],
-					actual[i],
-				)
-			}
+		sort.Strings(actual)
+		sort.Strings(rt.expected)
+		if !reflect.DeepEqual(actual, rt.expected) {
+			t.Errorf("failed getControllerManagerCommand:\nexpected:\n%v\nsaw:\n%v", rt.expected, actual)
 		}
 	}
 }
@@ -551,7 +559,7 @@ func TestGetSchedulerCommand(t *testing.T) {
 			expected: []string{
 				"kube-scheduler",
 				"--address=127.0.0.1",
-				"--leader-elect",
+				"--leader-elect=true",
 				"--kubeconfig=" + kubeadmapi.GlobalEnvParams.KubernetesDir + "/scheduler.conf",
 			},
 		},
@@ -559,14 +567,10 @@ func TestGetSchedulerCommand(t *testing.T) {
 
 	for _, rt := range tests {
 		actual := getSchedulerCommand(rt.cfg, false)
-		for i := range actual {
-			if actual[i] != rt.expected[i] {
-				t.Errorf(
-					"failed getSchedulerCommand:\n\texpected: %s\n\t  actual: %s",
-					rt.expected[i],
-					actual[i],
-				)
-			}
+		sort.Strings(actual)
+		sort.Strings(rt.expected)
+		if !reflect.DeepEqual(actual, rt.expected) {
+			t.Errorf("failed getSchedulerCommand:\nexpected:\n%v\nsaw:\n%v", rt.expected, actual)
 		}
 	}
 }
@@ -626,6 +630,53 @@ func TestGetAuthzParameters(t *testing.T) {
 					actual[i],
 				)
 			}
+		}
+	}
+}
+
+func TestGetExtraParameters(t *testing.T) {
+	var tests = []struct {
+		overrides map[string]string
+		defaults  map[string]string
+		expected  []string
+	}{
+		{
+			overrides: map[string]string{
+				"admission-control": "NamespaceLifecycle,LimitRanger",
+			},
+			defaults: map[string]string{
+				"admission-control":     "NamespaceLifecycle",
+				"insecure-bind-address": "127.0.0.1",
+				"allow-privileged":      "true",
+			},
+			expected: []string{
+				"--admission-control=NamespaceLifecycle,LimitRanger",
+				"--insecure-bind-address=127.0.0.1",
+				"--allow-privileged=true",
+			},
+		},
+		{
+			overrides: map[string]string{
+				"admission-control": "NamespaceLifecycle,LimitRanger",
+			},
+			defaults: map[string]string{
+				"insecure-bind-address": "127.0.0.1",
+				"allow-privileged":      "true",
+			},
+			expected: []string{
+				"--admission-control=NamespaceLifecycle,LimitRanger",
+				"--insecure-bind-address=127.0.0.1",
+				"--allow-privileged=true",
+			},
+		},
+	}
+
+	for _, rt := range tests {
+		actual := getExtraParameters(rt.overrides, rt.defaults)
+		sort.Strings(actual)
+		sort.Strings(rt.expected)
+		if !reflect.DeepEqual(actual, rt.expected) {
+			t.Errorf("failed getExtraParameters:\nexpected:\n%v\nsaw:\n%v", rt.expected, actual)
 		}
 	}
 }

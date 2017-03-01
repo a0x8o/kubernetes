@@ -44,6 +44,10 @@ type MasterConfiguration struct {
 	// controller manager are managed by Kubernetes itself. This option is likely to
 	// become the default in the future.
 	SelfHosted bool
+
+	APIServerExtraArgs         map[string]string
+	ControllerManagerExtraArgs map[string]string
+	SchedulerExtraArgs         map[string]string
 }
 
 type API struct {
@@ -88,8 +92,13 @@ type Etcd struct {
 type NodeConfiguration struct {
 	metav1.TypeMeta
 
-	Discovery  Discovery
-	CACertPath string
+	CACertPath     string
+	DiscoveryFile  string
+	DiscoveryToken string
+	// Currently we only pay attention to one api server but hope to support >1 in the future
+	DiscoveryTokenAPIServers []string
+	TLSBootstrapToken        string
+	Token                    string
 }
 
 // ClusterInfo TODO add description
