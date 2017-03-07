@@ -334,6 +334,7 @@ func (dc *DeploymentController) deletePod(obj interface{}) {
 			return
 		}
 	}
+	glog.V(4).Infof("Pod %s deleted.", pod.Name)
 	if d := dc.getDeploymentForPod(pod); d != nil && d.Spec.Strategy.Type == extensions.RecreateDeploymentStrategyType {
 		podList, err := dc.listPods(d)
 		if err == nil && len(podList.Items) == 0 {
@@ -480,7 +481,7 @@ func (dc *DeploymentController) syncDeployment(key string) error {
 	}
 	deployment, err := dc.dLister.Deployments(namespace).Get(name)
 	if errors.IsNotFound(err) {
-		glog.Infof("Deployment has been deleted %v", key)
+		glog.V(2).Infof("Deployment %v has been deleted", key)
 		return nil
 	}
 	if err != nil {
@@ -569,11 +570,11 @@ func (dc *DeploymentController) syncDeployment(key string) error {
 		return dc.sync(d)
 	}
 
+	// rollback is not re-entrant in case the underlying replica sets are updated with a new
+	// revision so we should ensure that we won't proceed to update replica sets until we
+	// make sure that the deployment has cleaned up its rollback spec in subsequent enqueues.
 	if d.Spec.RollbackTo != nil {
-		revision := d.Spec.RollbackTo.Revision
-		if d, err = dc.rollback(d, &revision); err != nil {
-			return err
-		}
+		return dc.rollback(d)
 	}
 
 	scalingEvent, err := dc.isScalingEvent(d)

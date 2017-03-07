@@ -9637,7 +9637,10 @@ go_test(
 
 go_library(
     name = "k8s.io/apiserver/pkg/authentication/group",
-    srcs = ["k8s.io/apiserver/pkg/authentication/group/group_adder.go"],
+    srcs = [
+        "k8s.io/apiserver/pkg/authentication/group/authenticated_group_adder.go",
+        "k8s.io/apiserver/pkg/authentication/group/group_adder.go",
+    ],
     tags = ["automanaged"],
     deps = [
         "//vendor:k8s.io/apiserver/pkg/authentication/authenticator",
@@ -10023,6 +10026,7 @@ go_library(
         "//vendor:k8s.io/apimachinery/pkg/runtime/serializer/streaming",
         "//vendor:k8s.io/apimachinery/pkg/types",
         "//vendor:k8s.io/apimachinery/pkg/util/httpstream",
+        "//vendor:k8s.io/apimachinery/pkg/util/json",
         "//vendor:k8s.io/apimachinery/pkg/util/mergepatch",
         "//vendor:k8s.io/apimachinery/pkg/util/net",
         "//vendor:k8s.io/apimachinery/pkg/util/runtime",
@@ -16247,6 +16251,13 @@ go_library(
         "vbom.ml/util/sortorder/doc.go",
         "vbom.ml/util/sortorder/natsort.go",
     ],
+    tags = ["automanaged"],
+)
+
+go_test(
+    name = "k8s.io/apiserver/pkg/endpoints/metrics_test",
+    srcs = ["k8s.io/apiserver/pkg/endpoints/metrics/metrics_test.go"],
+    library = ":k8s.io/apiserver/pkg/endpoints/metrics",
     tags = ["automanaged"],
 )
 
