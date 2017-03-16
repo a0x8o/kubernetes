@@ -1108,6 +1108,35 @@ go_library(
 )
 
 go_library(
+    name = "github.com/codedellemc/goscaleio",
+    srcs = [
+        "github.com/codedellemc/goscaleio/api.go",
+        "github.com/codedellemc/goscaleio/certs.go",
+        "github.com/codedellemc/goscaleio/device.go",
+        "github.com/codedellemc/goscaleio/instance.go",
+        "github.com/codedellemc/goscaleio/protectiondomain.go",
+        "github.com/codedellemc/goscaleio/scsiinitiator.go",
+        "github.com/codedellemc/goscaleio/sdc.go",
+        "github.com/codedellemc/goscaleio/sds.go",
+        "github.com/codedellemc/goscaleio/storagepool.go",
+        "github.com/codedellemc/goscaleio/system.go",
+        "github.com/codedellemc/goscaleio/user.go",
+        "github.com/codedellemc/goscaleio/volume.go",
+    ],
+    tags = ["automanaged"],
+    deps = [
+        "//vendor:github.com/Sirupsen/logrus",
+        "//vendor:github.com/codedellemc/goscaleio/types/v1",
+    ],
+)
+
+go_library(
+    name = "github.com/codedellemc/goscaleio/types/v1",
+    srcs = ["github.com/codedellemc/goscaleio/types/v1/types.go"],
+    tags = ["automanaged"],
+)
+
+go_library(
     name = "github.com/codegangsta/negroni",
     srcs = [
         "github.com/codegangsta/negroni/doc.go",
@@ -2026,6 +2055,7 @@ go_library(
     name = "github.com/coreos/go-oidc/http",
     srcs = [
         "github.com/coreos/go-oidc/http/client.go",
+        "github.com/coreos/go-oidc/http/doc.go",
         "github.com/coreos/go-oidc/http/http.go",
         "github.com/coreos/go-oidc/http/url.go",
     ],
@@ -2036,12 +2066,12 @@ go_library(
     name = "github.com/coreos/go-oidc/jose",
     srcs = [
         "github.com/coreos/go-oidc/jose/claims.go",
+        "github.com/coreos/go-oidc/jose/doc.go",
         "github.com/coreos/go-oidc/jose/jose.go",
         "github.com/coreos/go-oidc/jose/jwk.go",
         "github.com/coreos/go-oidc/jose/jws.go",
         "github.com/coreos/go-oidc/jose/jwt.go",
         "github.com/coreos/go-oidc/jose/sig.go",
-        "github.com/coreos/go-oidc/jose/sig_hmac.go",
         "github.com/coreos/go-oidc/jose/sig_rsa.go",
     ],
     tags = ["automanaged"],
@@ -2050,6 +2080,7 @@ go_library(
 go_library(
     name = "github.com/coreos/go-oidc/key",
     srcs = [
+        "github.com/coreos/go-oidc/key/doc.go",
         "github.com/coreos/go-oidc/key/key.go",
         "github.com/coreos/go-oidc/key/manager.go",
         "github.com/coreos/go-oidc/key/repo.go",
@@ -2068,6 +2099,7 @@ go_library(
 go_library(
     name = "github.com/coreos/go-oidc/oauth2",
     srcs = [
+        "github.com/coreos/go-oidc/oauth2/doc.go",
         "github.com/coreos/go-oidc/oauth2/error.go",
         "github.com/coreos/go-oidc/oauth2/oauth2.go",
     ],
@@ -2079,6 +2111,7 @@ go_library(
     name = "github.com/coreos/go-oidc/oidc",
     srcs = [
         "github.com/coreos/go-oidc/oidc/client.go",
+        "github.com/coreos/go-oidc/oidc/doc.go",
         "github.com/coreos/go-oidc/oidc/identity.go",
         "github.com/coreos/go-oidc/oidc/interface.go",
         "github.com/coreos/go-oidc/oidc/key.go",
@@ -10107,6 +10140,13 @@ go_library(
     ],
 )
 
+go_test(
+    name = "k8s.io/apiserver/pkg/endpoints/metrics_test",
+    srcs = ["k8s.io/apiserver/pkg/endpoints/metrics/metrics_test.go"],
+    library = ":k8s.io/apiserver/pkg/endpoints/metrics",
+    tags = ["automanaged"],
+)
+
 go_library(
     name = "k8s.io/apiserver/pkg/endpoints/metrics",
     srcs = ["k8s.io/apiserver/pkg/endpoints/metrics/metrics.go"],
@@ -16251,13 +16291,6 @@ go_library(
     tags = ["automanaged"],
 )
 
-go_test(
-    name = "k8s.io/apiserver/pkg/endpoints/metrics_test",
-    srcs = ["k8s.io/apiserver/pkg/endpoints/metrics/metrics_test.go"],
-    library = ":k8s.io/apiserver/pkg/endpoints/metrics",
-    tags = ["automanaged"],
-)
-
 filegroup(
     name = "package-srcs",
     srcs = glob(["**"]),
@@ -16268,34 +16301,5 @@ filegroup(
 filegroup(
     name = "all-srcs",
     srcs = [":package-srcs"],
-    tags = ["automanaged"],
-)
-
-go_library(
-    name = "github.com/codedellemc/goscaleio",
-    srcs = [
-        "github.com/codedellemc/goscaleio/api.go",
-        "github.com/codedellemc/goscaleio/certs.go",
-        "github.com/codedellemc/goscaleio/device.go",
-        "github.com/codedellemc/goscaleio/instance.go",
-        "github.com/codedellemc/goscaleio/protectiondomain.go",
-        "github.com/codedellemc/goscaleio/scsiinitiator.go",
-        "github.com/codedellemc/goscaleio/sdc.go",
-        "github.com/codedellemc/goscaleio/sds.go",
-        "github.com/codedellemc/goscaleio/storagepool.go",
-        "github.com/codedellemc/goscaleio/system.go",
-        "github.com/codedellemc/goscaleio/user.go",
-        "github.com/codedellemc/goscaleio/volume.go",
-    ],
-    tags = ["automanaged"],
-    deps = [
-        "//vendor:github.com/Sirupsen/logrus",
-        "//vendor:github.com/codedellemc/goscaleio/types/v1",
-    ],
-)
-
-go_library(
-    name = "github.com/codedellemc/goscaleio/types/v1",
-    srcs = ["github.com/codedellemc/goscaleio/types/v1/types.go"],
     tags = ["automanaged"],
 )

@@ -415,6 +415,53 @@ func NewNodeController(
 				}
 			},
 		}
+	} else {
+		nodeEventHandlerFuncs = cache.ResourceEventHandlerFuncs{
+			AddFunc: func(originalObj interface{}) {
+				obj, err := api.Scheme.DeepCopy(originalObj)
+				if err != nil {
+					utilruntime.HandleError(err)
+					return
+				}
+				node := obj.(*v1.Node)
+				if nc.taintManager != nil {
+					nc.taintManager.NodeUpdated(nil, node)
+				}
+			},
+			UpdateFunc: func(oldNode, newNode interface{}) {
+				node := newNode.(*v1.Node)
+				prevNode := oldNode.(*v1.Node)
+				if nc.taintManager != nil {
+					nc.taintManager.NodeUpdated(prevNode, node)
+
+				}
+			},
+			DeleteFunc: func(originalObj interface{}) {
+				obj, err := api.Scheme.DeepCopy(originalObj)
+				if err != nil {
+					utilruntime.HandleError(err)
+					return
+				}
+
+				node, isNode := obj.(*v1.Node)
+				// We can get DeletedFinalStateUnknown instead of *v1.Node here and we need to handle that correctly. #34692
+				if !isNode {
+					deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
+					if !ok {
+						glog.Errorf("Received unexpected object: %v", obj)
+						return
+					}
+					node, ok = deletedState.Obj.(*v1.Node)
+					if !ok {
+						glog.Errorf("DeletedFinalStateUnknown contained non-Node object: %v", deletedState.Obj)
+						return
+					}
+				}
+				if nc.taintManager != nil {
+					nc.taintManager.NodeUpdated(node, nil)
+				}
+			},
+		}
 	}
 
 	if nc.runTaintManager {
@@ -485,6 +532,7 @@ func (nc *NodeController) Run() {
 							oppositeTaint = *NotReadyTaintTemplate
 						} else {
 							// It seems that the Node is ready again, so there's no need to taint it.
+							glog.V(4).Infof("Node %v was in a taint queue, but it's ready now. Ignoring taint request.", value.Value)
 							return true, 0
 						}
 
@@ -498,6 +546,8 @@ func (nc *NodeController) Run() {
 									value.Value,
 									err))
 							return false, 0
+						} else {
+							glog.V(4).Info("Added %v Taint to Node %v", taintToAdd, value.Value)
 						}
 						err = controller.RemoveTaintOffNode(nc.kubeClient, value.Value, &oppositeTaint, node)
 						if err != nil {
@@ -508,6 +558,8 @@ func (nc *NodeController) Run() {
 									value.Value,
 									err))
 							return false, 0
+						} else {
+							glog.V(4).Info("Made sure that Node %v has no %v Taint", value.Value, oppositeTaint)
 						}
 						return true, 0
 					})

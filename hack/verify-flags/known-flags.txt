@@ -64,7 +64,6 @@ bench-pods
 bench-quiet
 bench-tasks
 bench-workers
-bind-addrsse
 bind-address
 bind-pods-burst
 bind-pods-qps
@@ -263,6 +262,7 @@ federated-api-qps
 federated-kube-context
 federation-name
 federation-system-namespace
+federation-upgrade-target
 file-check-frequency
 file_content_in_loop
 file-suffix
