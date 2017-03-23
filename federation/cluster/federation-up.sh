@@ -82,7 +82,9 @@ function init() {
   kube::log::status "DNS_ZONE_NAME: \"${DNS_ZONE_NAME}\", DNS_PROVIDER: \"${DNS_PROVIDER}\""
   kube::log::status "Image: \"${kube_registry}/hyperkube-amd64:${kube_version}\""
 
-  "${KUBE_ROOT}/federation/develop/kubefed.sh" init \
+  # Send INT after 20m and KILL 1m after that if process is still alive.
+  timeout --signal=INT --kill-after=1m 20m \
+      "${KUBE_ROOT}/federation/develop/kubefed.sh" init \
       "${FEDERATION_NAME}" \
       --host-cluster-context="${HOST_CLUSTER_CONTEXT}" \
       --dns-zone-name="${DNS_ZONE_NAME}" \
@@ -90,7 +92,9 @@ function init() {
       --image="${kube_registry}/hyperkube-amd64:${kube_version}" \
       --apiserver-arg-overrides="--storage-backend=etcd2" \
       --apiserver-enable-basic-auth=true \
-      --apiserver-enable-token-auth=true
+      --apiserver-enable-token-auth=true \
+      --apiserver-arg-overrides="--v=4" \
+      --controllermanager-arg-overrides="--v=4"
 }
 
 # join_clusters joins the clusters in the local kubeconfig to federation. The clusters

@@ -272,7 +272,7 @@ function create-master-pki {
 
   # TODO(mikedanese): remove this when we don't support downgrading to versions
   # < 1.6.
-  ln -sf "${APISERVER_SERVER_CERT_PATH}" /etc/srv/kubernetes/server.key
+  ln -sf "${APISERVER_SERVER_KEY_PATH}" /etc/srv/kubernetes/server.key
   ln -sf "${APISERVER_SERVER_CERT_PATH}" /etc/srv/kubernetes/server.cert
 }
 
@@ -684,7 +684,6 @@ function start-kubelet {
     if [[ "${REGISTER_MASTER_KUBELET:-false}" == "true" ]]; then
       flags+=" --api-servers=https://${KUBELET_APISERVER}"
       flags+=" --register-schedulable=false"
-      flags+=" --register-with-taints=node.alpha.kubernetes.io/ismaster=:NoSchedule"
     else
       # Standalone mode (not widely used?)
       flags+=" --pod-cidr=${MASTER_IP_RANGE}"
