@@ -59,7 +59,6 @@ go_library(
         "limit_range.go",
         "load.go",
         "logging_soak.go",
-        "mesos.go",
         "monitoring.go",
         "namespace.go",
         "network_partition.go",
@@ -102,7 +101,6 @@ go_library(
     ],
     tags = ["automanaged"],
     deps = [
-        "//federation/apis/federation/v1beta1:go_default_library",
         "//pkg/api:go_default_library",
         "//pkg/api/annotations:go_default_library",
         "//pkg/api/v1:go_default_library",

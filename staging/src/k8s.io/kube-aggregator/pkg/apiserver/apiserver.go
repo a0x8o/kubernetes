@@ -21,6 +21,12 @@ import (
 	"os"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apimachinery/announced"
+	"k8s.io/apimachinery/pkg/apimachinery/registered"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/sets"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
@@ -30,18 +36,39 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 	kubeclientset "k8s.io/client-go/kubernetes"
 	v1listers "k8s.io/client-go/listers/core/v1"
-	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/version"
 
 	"k8s.io/kube-aggregator/pkg/apis/apiregistration"
+	"k8s.io/kube-aggregator/pkg/apis/apiregistration/install"
 	"k8s.io/kube-aggregator/pkg/apis/apiregistration/v1alpha1"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/internalclientset"
 	informers "k8s.io/kube-aggregator/pkg/client/informers/internalversion"
 	listers "k8s.io/kube-aggregator/pkg/client/listers/apiregistration/internalversion"
 	apiservicestorage "k8s.io/kube-aggregator/pkg/registry/apiservice/etcd"
-
-	_ "k8s.io/client-go/pkg/api/install"
 )
+
+var (
+	groupFactoryRegistry = make(announced.APIGroupFactoryRegistry)
+	registry             = registered.NewOrDie("")
+	Scheme               = runtime.NewScheme()
+	Codecs               = serializer.NewCodecFactory(Scheme)
+)
+
+func init() {
+	install.Install(groupFactoryRegistry, registry, Scheme)
+
+	// we need to add the options (like ListOptions) to empty v1
+	metav1.AddToGroupVersion(Scheme, schema.GroupVersion{Group: "", Version: "v1"})
+
+	unversioned := schema.GroupVersion{Group: "", Version: "v1"}
+	Scheme.AddUnversionedTypes(unversioned,
+		&metav1.Status{},
+		&metav1.APIVersions{},
+		&metav1.APIGroupList{},
+		&metav1.APIGroup{},
+		&metav1.APIResourceList{},
+	)
+}
 
 // legacyAPIServiceName is the fixed name of the only non-groupified API version
 const legacyAPIServiceName = "v1."
@@ -61,6 +88,8 @@ type APIAggregator struct {
 	GenericAPIServer *genericapiserver.GenericAPIServer
 
 	contextMapper genericapirequest.RequestContextMapper
+
+	handlerChainConfig *handlerChainConfig
 
 	// proxyClientCert/Key are the client cert used to identify this proxy. Backing APIServices use
 	// this to confirm the proxy's identity
@@ -114,13 +143,14 @@ func (c completedConfig) New(stopCh <-chan struct{}) (*APIAggregator, error) {
 
 	proxyMux := http.NewServeMux()
 
-	// most API servers don't need to do this, but we need a custom handler chain to handle the special /apis handling here
-	c.Config.GenericConfig.BuildHandlerChainsFunc = (&handlerChainConfig{
+	handlerChainConfig := &handlerChainConfig{
 		informers:       informerFactory,
 		proxyMux:        proxyMux,
 		serviceLister:   kubeInformers.Core().V1().Services().Lister(),
 		endpointsLister: kubeInformers.Core().V1().Endpoints().Lister(),
-	}).handlerChain
+	}
+	// most API servers don't need to do this, but we need a custom handler chain to handle the special /apis handling here
+	c.Config.GenericConfig.BuildHandlerChainsFunc = handlerChainConfig.handlerChain
 
 	genericServer, err := c.Config.GenericConfig.SkipComplete().New() // completion is done in Complete, no need for a second time
 	if err != nil {
@@ -128,22 +158,23 @@ func (c completedConfig) New(stopCh <-chan struct{}) (*APIAggregator, error) {
 	}
 
 	s := &APIAggregator{
-		GenericAPIServer: genericServer,
-		contextMapper:    c.GenericConfig.RequestContextMapper,
-		proxyClientCert:  c.ProxyClientCert,
-		proxyClientKey:   c.ProxyClientKey,
-		proxyHandlers:    map[string]*proxyHandler{},
-		handledGroups:    sets.String{},
-		lister:           informerFactory.Apiregistration().InternalVersion().APIServices().Lister(),
-		serviceLister:    kubeInformers.Core().V1().Services().Lister(),
-		endpointsLister:  kubeInformers.Core().V1().Endpoints().Lister(),
-		proxyMux:         proxyMux,
+		GenericAPIServer:   genericServer,
+		contextMapper:      c.GenericConfig.RequestContextMapper,
+		handlerChainConfig: handlerChainConfig,
+		proxyClientCert:    c.ProxyClientCert,
+		proxyClientKey:     c.ProxyClientKey,
+		proxyHandlers:      map[string]*proxyHandler{},
+		handledGroups:      sets.String{},
+		lister:             informerFactory.Apiregistration().InternalVersion().APIServices().Lister(),
+		serviceLister:      kubeInformers.Core().V1().Services().Lister(),
+		endpointsLister:    kubeInformers.Core().V1().Endpoints().Lister(),
+		proxyMux:           proxyMux,
 	}
 
-	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(apiregistration.GroupName, api.Registry, api.Scheme, api.ParameterCodec, api.Codecs)
+	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(apiregistration.GroupName, registry, Scheme, metav1.ParameterCodec, Codecs)
 	apiGroupInfo.GroupMeta.GroupVersion = v1alpha1.SchemeGroupVersion
 	v1alpha1storage := map[string]rest.Storage{}
-	v1alpha1storage["apiservices"] = apiservicestorage.NewREST(c.GenericConfig.RESTOptionsGetter)
+	v1alpha1storage["apiservices"] = apiservicestorage.NewREST(Scheme, c.GenericConfig.RESTOptionsGetter)
 	apiGroupInfo.VersionedResourcesStorageMap["v1alpha1"] = v1alpha1storage
 
 	if err := s.GenericAPIServer.InstallAPIGroup(&apiGroupInfo); err != nil {
@@ -152,7 +183,7 @@ func (c completedConfig) New(stopCh <-chan struct{}) (*APIAggregator, error) {
 
 	apiserviceRegistrationController := NewAPIServiceRegistrationController(informerFactory.Apiregistration().InternalVersion().APIServices(), s)
 
-	s.GenericAPIServer.AddPostStartHook("start-informers", func(context genericapiserver.PostStartHookContext) error {
+	s.GenericAPIServer.AddPostStartHook("start-kube-aggregator-informers", func(context genericapiserver.PostStartHookContext) error {
 		informerFactory.Start(stopCh)
 		kubeInformers.Start(stopCh)
 		return nil
@@ -171,6 +202,11 @@ type handlerChainConfig struct {
 	proxyMux        *http.ServeMux
 	serviceLister   v1listers.ServiceLister
 	endpointsLister v1listers.EndpointsLister
+
+	// fallThroughHandler keeps track of the handler that comes after the proxy so that it can be used
+	// to satisfy delegation cases.  It is set as a side-effect while building the handler chain.
+	// TODO refactor to run the proxy *after* authorization so we can simply run at the end of the handling chain
+	fallThroughHandler http.Handler
 }
 
 // handlerChain is a method to build the handler chain for this API server.  We need a custom handler chain so that we
@@ -178,9 +214,10 @@ type handlerChainConfig struct {
 // the endpoints differently, since we're proxying all groups except for apiregistration.k8s.io.
 func (h *handlerChainConfig) handlerChain(apiHandler http.Handler, c *genericapiserver.Config) (secure, insecure http.Handler) {
 	// add this as a filter so that we never collide with "already registered" failures on `/apis`
-	handler := WithAPIs(apiHandler, h.informers.Apiregistration().InternalVersion().APIServices(), h.serviceLister, h.endpointsLister)
+	handler := WithAPIs(apiHandler, Codecs, h.informers.Apiregistration().InternalVersion().APIServices(), h.serviceLister, h.endpointsLister)
 
 	handler = genericapifilters.WithAuthorization(handler, c.RequestContextMapper, c.Authorizer)
+	h.fallThroughHandler = handler
 
 	// this mux is NOT protected by authorization, but DOES have authentication information
 	// this is so that everyone can hit the proxy and we can properly identify the user.  The backing
@@ -220,11 +257,10 @@ func (s *APIAggregator) AddAPIService(apiService *apiregistration.APIService) {
 
 	// register the proxy handler
 	proxyHandler := &proxyHandler{
-		contextMapper:          s.contextMapper,
-		proxyClientCert:        s.proxyClientCert,
-		proxyClientKey:         s.proxyClientKey,
-		transportBuildingError: nil,
-		proxyRoundTripper:      nil,
+		contextMapper:   s.contextMapper,
+		localDelegate:   s.handlerChainConfig.fallThroughHandler,
+		proxyClientCert: s.proxyClientCert,
+		proxyClientKey:  s.proxyClientKey,
 	}
 	proxyHandler.updateAPIService(apiService)
 	s.proxyHandlers[apiService.Name] = proxyHandler
@@ -244,14 +280,15 @@ func (s *APIAggregator) AddAPIService(apiService *apiregistration.APIService) {
 	// it's time to register the group aggregation endpoint
 	groupPath := "/apis/" + apiService.Spec.Group
 	groupDiscoveryHandler := &apiGroupHandler{
+		codecs:          Codecs,
 		groupName:       apiService.Spec.Group,
 		lister:          s.lister,
 		serviceLister:   s.serviceLister,
 		endpointsLister: s.endpointsLister,
 	}
 	// aggregation is protected
-	s.GenericAPIServer.HandlerContainer.UnlistedRoutes.Handle(groupPath, groupDiscoveryHandler)
-	s.GenericAPIServer.HandlerContainer.UnlistedRoutes.Handle(groupPath+"/", groupDiscoveryHandler)
+	s.GenericAPIServer.FallThroughHandler.UnlistedHandle(groupPath, groupDiscoveryHandler)
+	s.GenericAPIServer.FallThroughHandler.UnlistedHandle(groupPath+"/", groupDiscoveryHandler)
 	s.handledGroups.Insert(apiService.Spec.Group)
 }
 
