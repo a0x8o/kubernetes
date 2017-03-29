@@ -96,7 +96,6 @@ func NewDefaultOptions(out, err io.Writer) *AggregatorOptions {
 		StdOut: out,
 		StdErr: err,
 	}
-	o.RecommendedOptions.SecureServing.ServingOptions.BindPort = 443
 	return o
 }
 
@@ -110,12 +109,11 @@ func (o *AggregatorOptions) Complete() error {
 
 func (o AggregatorOptions) RunAggregator(stopCh <-chan struct{}) error {
 	// TODO have a "real" external address
-	if err := o.RecommendedOptions.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost"); err != nil {
+	if err := o.RecommendedOptions.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, nil); err != nil {
 		return fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
 
-	serverConfig := genericapiserver.NewConfig().
-		WithSerializer(apiserver.Codecs)
+	serverConfig := genericapiserver.NewConfig(apiserver.Codecs)
 
 	if err := o.RecommendedOptions.ApplyTo(serverConfig); err != nil {
 		return err
@@ -159,7 +157,7 @@ func (o AggregatorOptions) RunAggregator(stopCh <-chan struct{}) error {
 		return err
 	}
 
-	server, err := config.Complete().New(stopCh)
+	server, err := config.Complete().NewWithDelegate(genericapiserver.EmptyDelegate, stopCh)
 	if err != nil {
 		return err
 	}

@@ -2142,7 +2142,10 @@ go_library(
 
 go_library(
     name = "github.com/coreos/go-systemd/daemon",
-    srcs = ["github.com/coreos/go-systemd/daemon/sdnotify.go"],
+    srcs = [
+        "github.com/coreos/go-systemd/daemon/sdnotify.go",
+        "github.com/coreos/go-systemd/daemon/watchdog.go",
+    ],
     tags = ["automanaged"],
 )
 
@@ -2179,7 +2182,7 @@ go_library(
 
 cgo_genrule(
     name = "github.com/coreos/go-systemd/util_cgo",
-    srcs = ["github.com/coreos/go-systemd/util/util.go"],
+    srcs = ["github.com/coreos/go-systemd/util/util_cgo.go"],
     clinkopts = [
         "-lz",
         "-lm",
@@ -2191,7 +2194,7 @@ cgo_genrule(
 
 go_library(
     name = "github.com/coreos/go-systemd/util",
-    srcs = [],
+    srcs = ["github.com/coreos/go-systemd/util/util.go"],
     library = ":github.com/coreos/go-systemd/util_cgo",
     tags = ["automanaged"],
     deps = ["//vendor:github.com/coreos/pkg/dlopen"],
@@ -4158,6 +4161,21 @@ go_library(
 )
 
 go_library(
+    name = "github.com/gophercloud/gophercloud/openstack/blockstorage/v1/apiversions",
+    srcs = [
+        "github.com/gophercloud/gophercloud/openstack/blockstorage/v1/apiversions/doc.go",
+        "github.com/gophercloud/gophercloud/openstack/blockstorage/v1/apiversions/requests.go",
+        "github.com/gophercloud/gophercloud/openstack/blockstorage/v1/apiversions/results.go",
+        "github.com/gophercloud/gophercloud/openstack/blockstorage/v1/apiversions/urls.go",
+    ],
+    tags = ["automanaged"],
+    deps = [
+        "//vendor:github.com/gophercloud/gophercloud",
+        "//vendor:github.com/gophercloud/gophercloud/pagination",
+    ],
+)
+
+go_library(
     name = "github.com/gophercloud/gophercloud/openstack/blockstorage/v1/volumes",
     srcs = [
         "github.com/gophercloud/gophercloud/openstack/blockstorage/v1/volumes/doc.go",
@@ -4165,6 +4183,22 @@ go_library(
         "github.com/gophercloud/gophercloud/openstack/blockstorage/v1/volumes/results.go",
         "github.com/gophercloud/gophercloud/openstack/blockstorage/v1/volumes/urls.go",
         "github.com/gophercloud/gophercloud/openstack/blockstorage/v1/volumes/util.go",
+    ],
+    tags = ["automanaged"],
+    deps = [
+        "//vendor:github.com/gophercloud/gophercloud",
+        "//vendor:github.com/gophercloud/gophercloud/pagination",
+    ],
+)
+
+go_library(
+    name = "github.com/gophercloud/gophercloud/openstack/blockstorage/v2/volumes",
+    srcs = [
+        "github.com/gophercloud/gophercloud/openstack/blockstorage/v2/volumes/doc.go",
+        "github.com/gophercloud/gophercloud/openstack/blockstorage/v2/volumes/requests.go",
+        "github.com/gophercloud/gophercloud/openstack/blockstorage/v2/volumes/results.go",
+        "github.com/gophercloud/gophercloud/openstack/blockstorage/v2/volumes/urls.go",
+        "github.com/gophercloud/gophercloud/openstack/blockstorage/v2/volumes/util.go",
     ],
     tags = ["automanaged"],
     deps = [
@@ -10480,7 +10514,10 @@ go_library(
 
 go_test(
     name = "k8s.io/apiserver/pkg/server_test",
-    srcs = ["k8s.io/apiserver/pkg/server/genericapiserver_test.go"],
+    srcs = [
+        "k8s.io/apiserver/pkg/server/config_test.go",
+        "k8s.io/apiserver/pkg/server/genericapiserver_test.go",
+    ],
     library = ":k8s.io/apiserver/pkg/server",
     tags = ["automanaged"],
     deps = [
@@ -10501,6 +10538,7 @@ go_test(
         "//vendor:k8s.io/apiserver/pkg/authorization/authorizer",
         "//vendor:k8s.io/apiserver/pkg/endpoints/request",
         "//vendor:k8s.io/apiserver/pkg/registry/rest",
+        "//vendor:k8s.io/apiserver/pkg/server/healthz",
         "//vendor:k8s.io/apiserver/pkg/server/mux",
         "//vendor:k8s.io/apiserver/pkg/storage/etcd/testing",
         "//vendor:k8s.io/client-go/rest",
@@ -10738,6 +10776,7 @@ go_library(
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
         "//vendor:k8s.io/apimachinery/pkg/runtime",
         "//vendor:k8s.io/apimachinery/pkg/runtime/schema",
+        "//vendor:k8s.io/apimachinery/pkg/runtime/serializer",
         "//vendor:k8s.io/apimachinery/pkg/util/net",
         "//vendor:k8s.io/apiserver/pkg/admission",
         "//vendor:k8s.io/apiserver/pkg/authentication/authenticatorfactory",
@@ -10780,6 +10819,7 @@ go_library(
         "//vendor:github.com/prometheus/client_golang/prometheus",
         "//vendor:k8s.io/apimachinery/pkg/apis/meta/v1",
         "//vendor:k8s.io/apimachinery/pkg/openapi",
+        "//vendor:k8s.io/apimachinery/pkg/util/sets",
         "//vendor:k8s.io/apimachinery/pkg/version",
         "//vendor:k8s.io/apiserver/pkg/endpoints/handlers/responsewriters",
         "//vendor:k8s.io/apiserver/pkg/endpoints/metrics",
@@ -15447,6 +15487,7 @@ go_library(
 go_test(
     name = "k8s.io/kube-aggregator/pkg/apiserver_test",
     srcs = [
+        "k8s.io/kube-aggregator/pkg/apiserver/apiservice_controller_test.go",
         "k8s.io/kube-aggregator/pkg/apiserver/handler_apis_test.go",
         "k8s.io/kube-aggregator/pkg/apiserver/handler_proxy_test.go",
     ],
@@ -15491,16 +15532,16 @@ go_library(
         "//vendor:k8s.io/apimachinery/pkg/util/runtime",
         "//vendor:k8s.io/apimachinery/pkg/util/sets",
         "//vendor:k8s.io/apimachinery/pkg/util/wait",
-        "//vendor:k8s.io/apiserver/pkg/endpoints/filters",
         "//vendor:k8s.io/apiserver/pkg/endpoints/handlers/responsewriters",
         "//vendor:k8s.io/apiserver/pkg/endpoints/request",
         "//vendor:k8s.io/apiserver/pkg/registry/generic/rest",
         "//vendor:k8s.io/apiserver/pkg/registry/rest",
         "//vendor:k8s.io/apiserver/pkg/server",
-        "//vendor:k8s.io/apiserver/pkg/server/filters",
         "//vendor:k8s.io/client-go/informers",
+        "//vendor:k8s.io/client-go/informers/core/v1",
         "//vendor:k8s.io/client-go/kubernetes",
         "//vendor:k8s.io/client-go/listers/core/v1",
+        "//vendor:k8s.io/client-go/pkg/api/v1",
         "//vendor:k8s.io/client-go/pkg/version",
         "//vendor:k8s.io/client-go/rest",
         "//vendor:k8s.io/client-go/tools/cache",
@@ -16357,5 +16398,34 @@ go_library(
         "//vendor:k8s.io/kube-aggregator/pkg/client/clientset_generated/internalclientset/typed/apiregistration/internalversion",
         "//vendor:k8s.io/kube-aggregator/pkg/client/informers/internalversion/apiregistration/internalversion",
         "//vendor:k8s.io/kube-aggregator/pkg/client/listers/apiregistration/internalversion",
+    ],
+)
+
+go_library(
+    name = "k8s.io/apiserver/pkg/admission/initializer",
+    srcs = [
+        "k8s.io/apiserver/pkg/admission/initializer/initializer.go",
+        "k8s.io/apiserver/pkg/admission/initializer/interfaces.go",
+    ],
+    tags = ["automanaged"],
+    deps = [
+        "//vendor:k8s.io/apiserver/pkg/admission",
+        "//vendor:k8s.io/apiserver/pkg/authorization/authorizer",
+        "//vendor:k8s.io/client-go/informers",
+        "//vendor:k8s.io/client-go/kubernetes",
+    ],
+)
+
+go_test(
+    name = "k8s.io/apiserver/pkg/admission/initializer_xtest",
+    srcs = ["k8s.io/apiserver/pkg/admission/initializer/initializer_test.go"],
+    tags = ["automanaged"],
+    deps = [
+        "//vendor:k8s.io/apiserver/pkg/admission",
+        "//vendor:k8s.io/apiserver/pkg/admission/initializer",
+        "//vendor:k8s.io/apiserver/pkg/authorization/authorizer",
+        "//vendor:k8s.io/client-go/informers",
+        "//vendor:k8s.io/client-go/kubernetes",
+        "//vendor:k8s.io/client-go/kubernetes/fake",
     ],
 )

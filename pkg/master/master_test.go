@@ -64,7 +64,7 @@ func setUp(t *testing.T) (*etcdtesting.EtcdTestServer, Config, *assert.Assertion
 	server, storageConfig := etcdtesting.NewUnsecuredEtcd3TestClientServer(t, api.Scheme)
 
 	config := &Config{
-		GenericConfig:           genericapiserver.NewConfig().WithSerializer(api.Codecs),
+		GenericConfig:           genericapiserver.NewConfig(api.Codecs),
 		APIResourceConfigSource: DefaultAPIResourceConfigSource(),
 		APIServerServicePort:    443,
 		MasterCount:             1,
@@ -148,7 +148,7 @@ func TestVersion(t *testing.T) {
 
 	req, _ := http.NewRequest("GET", "/version", nil)
 	resp := httptest.NewRecorder()
-	s.GenericAPIServer.InsecureHandler.ServeHTTP(resp, req)
+	s.GenericAPIServer.Handler.ServeHTTP(resp, req)
 	if resp.Code != 200 {
 		t.Fatalf("expected http 200, got: %d", resp.Code)
 	}

@@ -72,6 +72,9 @@ ENABLE_RBAC=${ENABLE_RBAC:-false}
 KUBECONFIG_TOKEN=${KUBECONFIG_TOKEN:-""}
 AUTH_ARGS=${AUTH_ARGS:-""}
 
+# Install a default storage class (enabled by default)
+DEFAULT_STORAGE_CLASS=${KUBE_DEFAULT_STORAGE_CLASS:-true}
+
 # start the cache mutation detector by default so that cache mutators will be found
 KUBE_CACHE_MUTATION_DETECTOR="${KUBE_CACHE_MUTATION_DETECTOR:-true}"
 export KUBE_CACHE_MUTATION_DETECTOR
@@ -149,7 +152,7 @@ do
 done
 
 if [ "x$GO_OUT" == "x" ]; then
-    make -C "${KUBE_ROOT}" WHAT="cmd/kubectl cmd/hyperkube vendor/k8s.io/kube-aggregator"
+    make -C "${KUBE_ROOT}" WHAT="cmd/kubectl cmd/hyperkube"
 else
     echo "skipped the build."
 fi
@@ -460,6 +463,8 @@ function start_apiserver {
       --requestheader-extra-headers-prefix=X-Remote-Extra- \
       --requestheader-client-ca-file="${CERT_DIR}/request-header-ca.crt" \
       --requestheader-allowed-names=system:auth-proxy \
+      --proxy-client-cert-file="${CERT_DIR}/client-auth-proxy.crt" \
+      --proxy-client-key-file="${CERT_DIR}/client-auth-proxy.key" \
       --cors-allowed-origins="${API_CORS_ALLOWED_ORIGINS}" >"${APISERVER_LOG}" 2>&1 &
     APISERVER_PID=$!
 
@@ -707,6 +712,21 @@ function create_psp_policy {
     ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" create -f ${KUBE_ROOT}/examples/podsecuritypolicy/rbac/bindings.yaml
 }
 
+function create_storage_class {
+    if [ -z "$CLOUD_PROVIDER" ]; then
+        # No cloud provider -> no default storage class
+        return
+    fi
+
+    CLASS_FILE=${KUBE_ROOT}/cluster/addons/storage-class/${CLOUD_PROVIDER}/default.yaml
+    if [ -e $CLASS_FILE ]; then
+        echo "Create default storage class for $CLOUD_PROVIDER"
+        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" create -f $CLASS_FILE
+    else
+        echo "No storage class available for $CLOUD_PROVIDER."
+    fi
+}
+
 function print_success {
 if [[ "${START_MODE}" != "kubeletonly" ]]; then
   cat <<EOF
@@ -814,6 +834,10 @@ fi
 
 if [[ -n "${PSP_ADMISSION}" && "${ENABLE_RBAC}" = true ]]; then
   create_psp_policy
+fi
+
+if [[ "$DEFAULT_STORAGE_CLASS" = "true" ]]; then
+  create_storage_class
 fi
 
 print_success
