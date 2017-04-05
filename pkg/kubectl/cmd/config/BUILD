@@ -49,6 +49,7 @@ go_test(
     srcs = [
         "config_test.go",
         "create_authinfo_test.go",
+        "create_context_test.go",
         "current_context_test.go",
         "delete_cluster_test.go",
         "delete_context_test.go",
@@ -56,6 +57,7 @@ go_test(
         "get_contexts_test.go",
         "navigation_step_parser_test.go",
         "unset_test.go",
+        "use_context_test.go",
     ],
     library = ":go_default_library",
     tags = ["automanaged"],
