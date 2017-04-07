@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	clientv1 "k8s.io/client-go/pkg/api/v1"
+	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/flowcontrol"
@@ -88,8 +89,20 @@ type SecretController struct {
 	updateTimeout         time.Duration
 }
 
-// NewSecretController returns a new secret controller
-func NewSecretController(client federationclientset.Interface) *SecretController {
+// StartSecretController starts a new secret controller
+func StartSecretController(config *restclient.Config, stopChan <-chan struct{}, minimizeLatency bool) {
+	restclient.AddUserAgent(config, "secret-controller")
+	client := federationclientset.NewForConfigOrDie(config)
+	controller := newSecretController(client)
+	if minimizeLatency {
+		controller.minimizeLatency()
+	}
+	glog.Infof("Starting Secret controller")
+	controller.Run(stopChan)
+}
+
+// newSecretController returns a new secret controller
+func newSecretController(client federationclientset.Interface) *SecretController {
 	broadcaster := record.NewBroadcaster()
 	broadcaster.StartRecordingToSink(eventsink.NewFederatedEventSink(client))
 	recorder := broadcaster.NewRecorder(api.Scheme, clientv1.EventSource{Component: "federated-secrets-controller"})
@@ -168,7 +181,8 @@ func NewSecretController(client federationclientset.Interface) *SecretController
 		},
 		func(client kubeclientset.Interface, obj pkgruntime.Object) error {
 			secret := obj.(*apiv1.Secret)
-			err := client.Core().Secrets(secret.Namespace).Delete(secret.Name, &metav1.DeleteOptions{})
+			orphanDependents := false
+			err := client.Core().Secrets(secret.Namespace).Delete(secret.Name, &metav1.DeleteOptions{OrphanDependents: &orphanDependents})
 			return err
 		})
 
@@ -190,6 +204,14 @@ func NewSecretController(client federationclientset.Interface) *SecretController
 	return secretcontroller
 }
 
+// minimizeLatency reduces delays and timeouts to make the controller more responsive (useful for testing).
+func (secretcontroller *SecretController) minimizeLatency() {
+	secretcontroller.clusterAvailableDelay = time.Second
+	secretcontroller.secretReviewDelay = 50 * time.Millisecond
+	secretcontroller.smallDelay = 20 * time.Millisecond
+	secretcontroller.updateTimeout = 5 * time.Second
+}
+
 // Returns true if the given object has the given finalizer in its ObjectMeta.
 func (secretcontroller *SecretController) hasFinalizerFunc(obj pkgruntime.Object, finalizer string) bool {
 	secret := obj.(*apiv1.Secret)
@@ -201,14 +223,14 @@ func (secretcontroller *SecretController) hasFinalizerFunc(obj pkgruntime.Object
 	return false
 }
 
-// Removes the finalizer from the given objects ObjectMeta.
+// Removes the finalizers from the given objects ObjectMeta.
 // Assumes that the given object is a secret.
-func (secretcontroller *SecretController) removeFinalizerFunc(obj pkgruntime.Object, finalizer string) (pkgruntime.Object, error) {
+func (secretcontroller *SecretController) removeFinalizerFunc(obj pkgruntime.Object, finalizers []string) (pkgruntime.Object, error) {
 	secret := obj.(*apiv1.Secret)
 	newFinalizers := []string{}
 	hasFinalizer := false
 	for i := range secret.ObjectMeta.Finalizers {
-		if string(secret.ObjectMeta.Finalizers[i]) != finalizer {
+		if !deletionhelper.ContainsString(finalizers, secret.ObjectMeta.Finalizers[i]) {
 			newFinalizers = append(newFinalizers, secret.ObjectMeta.Finalizers[i])
 		} else {
 			hasFinalizer = true
@@ -221,7 +243,7 @@ func (secretcontroller *SecretController) removeFinalizerFunc(obj pkgruntime.Obj
 	secret.ObjectMeta.Finalizers = newFinalizers
 	secret, err := secretcontroller.federatedApiClient.Core().Secrets(secret.Namespace).Update(secret)
 	if err != nil {
-		return nil, fmt.Errorf("failed to remove finalizer %s from secret %s: %v", finalizer, secret.Name, err)
+		return nil, fmt.Errorf("failed to remove finalizers %v from secret %s: %v", finalizers, secret.Name, err)
 	}
 	return secret, nil
 }

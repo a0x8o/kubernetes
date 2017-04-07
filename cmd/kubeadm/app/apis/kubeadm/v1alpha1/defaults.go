@@ -26,7 +26,7 @@ import (
 const (
 	DefaultServiceDNSDomain  = "cluster.local"
 	DefaultServicesSubnet    = "10.96.0.0/12"
-	DefaultKubernetesVersion = "stable"
+	DefaultKubernetesVersion = "stable-1.6"
 	DefaultAPIBindPort       = 6443
 	DefaultDiscoveryBindPort = 9898
 	DefaultAuthorizationMode = "RBAC"
@@ -59,8 +59,8 @@ func SetDefaults_MasterConfiguration(obj *MasterConfiguration) {
 		obj.Networking.DNSDomain = DefaultServiceDNSDomain
 	}
 
-	if obj.AuthorizationMode == "" {
-		obj.AuthorizationMode = DefaultAuthorizationMode
+	if len(obj.AuthorizationModes) == 0 {
+		obj.AuthorizationModes = []string{DefaultAuthorizationMode}
 	}
 
 	if obj.CertificatesDir == "" {
