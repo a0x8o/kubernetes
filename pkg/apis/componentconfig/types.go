@@ -468,6 +468,9 @@ type KubeletConfiguration struct {
 	// Enable Container Runtime Interface (CRI) integration.
 	// +optional
 	EnableCRI bool
+	// Enable dockershim only mode.
+	// +optional
+	ExperimentalDockershim bool
 	// TODO(#34726:1.8.0): Remove the opt-in for failing when swap is enabled.
 	// Tells the Kubelet to fail to start if swap is enabled on the node.
 	ExperimentalFailSwapOn bool
@@ -599,6 +602,19 @@ type KubeSchedulerConfiguration struct {
 	LockObjectNamespace string
 	// LockObjectName defines the lock object name
 	LockObjectName string
+	// PolicyConfigMapName is the name of the ConfigMap object that specifies
+	// the scheduler's policy config. If UseLegacyPolicyConfig is true, scheduler
+	// uses PolicyConfigFile. If UseLegacyPolicyConfig is false and
+	// PolicyConfigMapName is not empty, the ConfigMap object with this name must
+	// exist in PolicyConfigMapNamespace before scheduler initialization.
+	PolicyConfigMapName string
+	// PolicyConfigMapNamespace is the namespace where the above policy config map
+	// is located. If none is provided default system namespace ("kube-system")
+	// will be used.
+	PolicyConfigMapNamespace string
+	// UseLegacyPolicyConfig tells the scheduler to ignore Policy ConfigMap and
+	// to use PolicyConfigFile if available.
+	UseLegacyPolicyConfig bool
 }
 
 // LeaderElectionConfiguration defines the configuration of leader election
@@ -778,9 +794,11 @@ type KubeControllerManagerConfiguration struct {
 	ServiceCIDR string
 	// NodeCIDRMaskSize is the mask size for node cidr in cluster.
 	NodeCIDRMaskSize int32
-	// allocateNodeCIDRs enables CIDRs for Pods to be allocated and, if
+	// AllocateNodeCIDRs enables CIDRs for Pods to be allocated and, if
 	// ConfigureCloudRoutes is true, to be set on the cloud provider.
 	AllocateNodeCIDRs bool
+	// CIDRAllocatorType determines what kind of pod CIDR allocator will be used.
+	CIDRAllocatorType string
 	// configureCloudRoutes enables CIDRs allocated with allocateNodeCIDRs
 	// to be configured on the cloud provider.
 	ConfigureCloudRoutes bool

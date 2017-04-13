@@ -42,9 +42,11 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest/fake"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/kubernetes/federation/apis/federation"
 	kubefedtesting "k8s.io/kubernetes/federation/pkg/kubefed/testing"
 	"k8s.io/kubernetes/federation/pkg/kubefed/util"
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/helper"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
@@ -322,8 +324,10 @@ func TestMarshallAndMergeOverrides(t *testing.T) {
 			expectedErr:    "wrong format for override arg: wrong-format-arg",
 		},
 		{
-			overrideParams: "wrong-format-arg=override=wrong-format-arg=override",
-			expectedErr:    "wrong format for override arg: wrong-format-arg=override=wrong-format-arg=override",
+			// TODO: Multiple arg values separated by , are not supported yet
+			overrideParams: "multiple-equalto-char=first-key=1",
+			expectedSet:    sets.NewString("arg2=val2", "arg1=val1", "multiple-equalto-char=first-key=1"),
+			expectedErr:    "",
 		},
 		{
 			overrideParams: "=wrong-format-only-value",
@@ -617,6 +621,9 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namespaceName,
+			Annotations: map[string]string{
+				federation.FederationNameAnnotation: federationName,
+			},
 		},
 	}
 
@@ -629,6 +636,9 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 			Namespace: namespaceName,
 			Name:      svcName,
 			Labels:    componentLabel,
+			Annotations: map[string]string{
+				federation.FederationNameAnnotation: federationName,
+			},
 		},
 		Spec: v1.ServiceSpec{
 			Type:     apiserverServiceType,
@@ -662,6 +672,9 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      credSecretName,
 			Namespace: namespaceName,
+			Annotations: map[string]string{
+				federation.FederationNameAnnotation: federationName,
+			},
 		},
 		Data: nil,
 	}
@@ -674,6 +687,9 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cmKubeconfigSecretName,
 			Namespace: namespaceName,
+			Annotations: map[string]string{
+				federation.FederationNameAnnotation: federationName,
+			},
 		},
 		Data: nil,
 	}
@@ -686,6 +702,9 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      dnsProviderSecretName,
 			Namespace: namespaceName,
+			Annotations: map[string]string{
+				federation.FederationNameAnnotation: federationName,
+			},
 		},
 		Data: nil,
 	}
@@ -701,6 +720,7 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 			Labels:    componentLabel,
 			Annotations: map[string]string{
 				"volume.alpha.kubernetes.io/storage-class": "yes",
+				federation.FederationNameAnnotation:        federationName,
 			},
 		},
 		Spec: v1.PersistentVolumeClaimSpec{
@@ -724,6 +744,9 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 			Name:      "federation-controller-manager",
 			Namespace: namespaceName,
 			Labels:    componentLabel,
+			Annotations: map[string]string{
+				federation.FederationNameAnnotation: federationName,
+			},
 		},
 	}
 
@@ -736,6 +759,9 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 			Name:      "federation-system:federation-controller-manager",
 			Namespace: namespaceName,
 			Labels:    componentLabel,
+			Annotations: map[string]string{
+				federation.FederationNameAnnotation: federationName,
+			},
 		},
 		Rules: []rbacv1beta1.PolicyRule{
 			{
@@ -755,6 +781,9 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 			Name:      "federation-system:federation-controller-manager",
 			Namespace: namespaceName,
 			Labels:    componentLabel,
+			Annotations: map[string]string{
+				federation.FederationNameAnnotation: federationName,
+			},
 		},
 		Subjects: []rbacv1beta1.Subject{
 			{
@@ -836,17 +865,19 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 			APIVersion: testapi.Extensions.GroupVersion().String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      svcName,
-			Namespace: namespaceName,
-			Labels:    componentLabel,
+			Name:        svcName,
+			Namespace:   namespaceName,
+			Labels:      componentLabel,
+			Annotations: map[string]string{federation.FederationNameAnnotation: federationName},
 		},
 		Spec: v1beta1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: nil,
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:   svcName,
-					Labels: apiserverPodLabels,
+					Name:        svcName,
+					Labels:      apiserverPodLabels,
+					Annotations: map[string]string{federation.FederationNameAnnotation: federationName},
 				},
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{
@@ -952,7 +983,8 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 			Namespace: namespaceName,
 			Labels:    componentLabel,
 			Annotations: map[string]string{
-				util.FedDomainMapKey: fmt.Sprintf("%s=%s", federationName, strings.TrimRight(dnsZoneName, ".")),
+				util.FedDomainMapKey:                fmt.Sprintf("%s=%s", federationName, strings.TrimRight(dnsZoneName, ".")),
+				federation.FederationNameAnnotation: federationName,
 			},
 		},
 		Spec: v1beta1.DeploymentSpec{
@@ -960,8 +992,9 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 			Selector: nil,
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:   cmName,
-					Labels: controllerManagerPodLabels,
+					Name:        cmName,
+					Labels:      controllerManagerPodLabels,
+					Annotations: map[string]string{federation.FederationNameAnnotation: federationName},
 				},
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{
@@ -1194,6 +1227,7 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 				case cmName:
 					want = *cm
 				}
+				//want = *cm
 				if !apiequality.Semantic.DeepEqual(got, want) {
 					return nil, fmt.Errorf("unexpected deployment object\n\tDiff: %s", diff.ObjectGoPrintDiff(got, want))
 				}
@@ -1210,7 +1244,7 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 				if err != nil {
 					return nil, err
 				}
-				if !api.Semantic.DeepEqual(got, sa) {
+				if !helper.Semantic.DeepEqual(got, sa) {
 					return nil, fmt.Errorf("unexpected service account object\n\tDiff: %s", diff.ObjectGoPrintDiff(got, sa))
 				}
 				return &http.Response{StatusCode: http.StatusCreated, Header: kubefedtesting.DefaultHeader(), Body: kubefedtesting.ObjBody(codec, &sa)}, nil
@@ -1224,7 +1258,7 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 				if err != nil {
 					return nil, err
 				}
-				if !api.Semantic.DeepEqual(got, role) {
+				if !helper.Semantic.DeepEqual(got, role) {
 					return nil, fmt.Errorf("unexpected role object\n\tDiff: %s", diff.ObjectGoPrintDiff(got, role))
 				}
 				return &http.Response{StatusCode: http.StatusCreated, Header: kubefedtesting.DefaultHeader(), Body: kubefedtesting.ObjBody(rbacCodec, &role)}, nil
@@ -1238,7 +1272,7 @@ func fakeInitHostFactory(apiserverServiceType v1.ServiceType, federationName, na
 				if err != nil {
 					return nil, err
 				}
-				if !api.Semantic.DeepEqual(got, rolebinding) {
+				if !helper.Semantic.DeepEqual(got, rolebinding) {
 					return nil, fmt.Errorf("unexpected rolebinding object\n\tDiff: %s", diff.ObjectGoPrintDiff(got, rolebinding))
 				}
 				return &http.Response{StatusCode: http.StatusCreated, Header: kubefedtesting.DefaultHeader(), Body: kubefedtesting.ObjBody(rbacCodec, &rolebinding)}, nil

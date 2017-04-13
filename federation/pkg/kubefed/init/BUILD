@@ -14,6 +14,7 @@ go_library(
     tags = ["automanaged"],
     deps = [
         "//cmd/kubeadm/app/util/kubeconfig:go_default_library",
+        "//federation/apis/federation:go_default_library",
         "//federation/pkg/kubefed/util:go_default_library",
         "//pkg/api:go_default_library",
         "//pkg/api/v1:go_default_library",
@@ -42,9 +43,11 @@ go_test(
     library = ":go_default_library",
     tags = ["automanaged"],
     deps = [
+        "//federation/apis/federation:go_default_library",
         "//federation/pkg/kubefed/testing:go_default_library",
         "//federation/pkg/kubefed/util:go_default_library",
         "//pkg/api:go_default_library",
+        "//pkg/api/helper:go_default_library",
         "//pkg/api/testapi:go_default_library",
         "//pkg/api/v1:go_default_library",
         "//pkg/apis/extensions/v1beta1:go_default_library",

@@ -97,7 +97,7 @@ import (
 //
 // The binding is two-step process. PV.Spec.ClaimRef is modified first and
 // PVC.Spec.VolumeName second. At any point of this transaction, the PV or PVC
-// can be modified by user or other controller or completelly deleted. Also,
+// can be modified by user or other controller or completely deleted. Also,
 // two (or more) controllers may try to bind different volumes to different
 // claims at the same time. The controller must recover from any conflicts
 // that may arise from these conditions.
@@ -203,10 +203,6 @@ type PersistentVolumeController struct {
 
 	createProvisionedPVRetryCount int
 	createProvisionedPVInterval   time.Duration
-
-	// Provisioner for annAlphaClass.
-	// TODO: remove in 1.5
-	alphaProvisioner vol.ProvisionableVolumePlugin
 }
 
 // syncClaim is the main controller method to decide what to do with a claim.
@@ -262,7 +258,7 @@ func (ctrl *PersistentVolumeController) syncUnboundClaim(claim *v1.PersistentVol
 			glog.V(4).Infof("synchronizing unbound PersistentVolumeClaim[%s]: no volume found", claimToClaimKey(claim))
 			// No PV could be found
 			// OBSERVATION: pvc is "Pending", will retry
-			if v1.GetPersistentVolumeClaimClass(claim) != "" || metav1.HasAnnotation(claim.ObjectMeta, v1.AlphaStorageClassAnnotation) {
+			if v1.GetPersistentVolumeClaimClass(claim) != "" {
 				if err = ctrl.provisionClaim(claim); err != nil {
 					return err
 				}
@@ -1277,7 +1273,7 @@ func (ctrl *PersistentVolumeController) provisionClaimOperation(claimObj interfa
 		// This means that an unknown provisioner is requested. Report an event
 		// and wait for the external provisioner
 		if storageClass != nil {
-			msg := fmt.Sprintf("cannot find provisioner %q, expecting that a volume for the claim is provisioned either manually or via external software", storageClass.Provisioner)
+			msg := fmt.Sprintf("waiting for a volume to be created, either by external provisioner %q or manually created by system administrator", storageClass.Provisioner)
 			ctrl.eventRecorder.Event(claim, v1.EventTypeNormal, "ExternalProvisioning", msg)
 			glog.V(3).Infof("provisioning claim %q: %s", claimToClaimKey(claim), msg)
 		} else {
@@ -1353,8 +1349,6 @@ func (ctrl *PersistentVolumeController) provisionClaimOperation(claimObj interfa
 	// Add annBoundByController (used in deleting the volume)
 	metav1.SetMetaDataAnnotation(&volume.ObjectMeta, annBoundByController, "yes")
 	metav1.SetMetaDataAnnotation(&volume.ObjectMeta, annDynamicallyProvisioned, plugin.GetPluginName())
-	// For Alpha provisioning behavior, do not add storage.BetaStorageClassAnnotations for volumes created
-	// by storage.AlphaStorageClassAnnotation
 	// TODO: remove this check in 1.5, storage.StorageClassAnnotation will be always non-empty there.
 	if claimClass != "" {
 		volume.Spec.StorageClassName = claimClass
@@ -1465,20 +1459,6 @@ func (ctrl *PersistentVolumeController) newRecyclerEventRecorder(volume *v1.Pers
 // It returns either the provisioning plugin or nil when an external
 // provisioner is requested.
 func (ctrl *PersistentVolumeController) findProvisionablePlugin(claim *v1.PersistentVolumeClaim) (vol.ProvisionableVolumePlugin, *storage.StorageClass, error) {
-	// TODO: remove this alpha behavior in 1.5
-	alpha := metav1.HasAnnotation(claim.ObjectMeta, v1.AlphaStorageClassAnnotation)
-	if alpha && v1.PersistentVolumeClaimHasClass(claim) {
-		// Both Alpha annotation and storage class name is set. Use the storage
-		// class name.
-		alpha = false
-		msg := fmt.Sprintf("both %q annotation and storageClassName are present, using storageClassName", v1.AlphaStorageClassAnnotation)
-		ctrl.eventRecorder.Event(claim, v1.EventTypeNormal, "ProvisioningIgnoreAlpha", msg)
-	}
-	if alpha {
-		// Fall back to fixed list of provisioner plugins
-		return ctrl.findAlphaProvisionablePlugin()
-	}
-
 	// provisionClaim() which leads here is never called with claimClass=="", we
 	// can save some checks.
 	claimClass := v1.GetPersistentVolumeClaimClass(claim)
@@ -1497,28 +1477,6 @@ func (ctrl *PersistentVolumeController) findProvisionablePlugin(claim *v1.Persis
 		return nil, class, err
 	}
 	return plugin, class, nil
-}
-
-// findAlphaProvisionablePlugin returns a volume plugin compatible with
-// Kubernetes 1.3.
-// TODO: remove in Kubernetes 1.5
-func (ctrl *PersistentVolumeController) findAlphaProvisionablePlugin() (vol.ProvisionableVolumePlugin, *storage.StorageClass, error) {
-	if ctrl.alphaProvisioner == nil {
-		return nil, nil, fmt.Errorf("cannot find volume plugin for alpha provisioning")
-	}
-
-	// Return a dummy StorageClass instance with no parameters
-	storageClass := &storage.StorageClass{
-		TypeMeta: metav1.TypeMeta{
-			Kind: "StorageClass",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "",
-		},
-		Provisioner: ctrl.alphaProvisioner.GetPluginName(),
-	}
-	glog.V(4).Infof("using alpha provisioner %s", ctrl.alphaProvisioner.GetPluginName())
-	return ctrl.alphaProvisioner, storageClass, nil
 }
 
 // findDeletablePlugin finds a deleter plugin for a given volume. It returns

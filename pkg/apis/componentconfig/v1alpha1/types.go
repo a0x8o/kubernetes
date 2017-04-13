@@ -134,6 +134,19 @@ type KubeSchedulerConfiguration struct {
 	LockObjectNamespace string `json:"lockObjectNamespace"`
 	// LockObjectName defines the lock object name
 	LockObjectName string `json:"lockObjectName"`
+	// PolicyConfigMapName is the name of the ConfigMap object that specifies
+	// the scheduler's policy config. If UseLegacyPolicyConfig is true, scheduler
+	// uses PolicyConfigFile. If UseLegacyPolicyConfig is false and
+	// PolicyConfigMapName is not empty, the ConfigMap object with this name must
+	// exist in PolicyConfigMapNamespace before scheduler initialization.
+	PolicyConfigMapName string `json:"policyConfigMapName"`
+	// PolicyConfigMapNamespace is the namespace where the above policy config map
+	// is located. If none is provided default system namespace ("kube-system")
+	// will be used.
+	PolicyConfigMapNamespace string `json:"policyConfigMapNamespace"`
+	// UseLegacyPolicyConfig tells the scheduler to ignore Policy ConfigMap and
+	// to use PolicyConfigFile if available.
+	UseLegacyPolicyConfig bool `json:"useLegacyPolicyConfig"`
 }
 
 // HairpinMode denotes how the kubelet should configure networking to handle
@@ -510,6 +523,9 @@ type KubeletConfiguration struct {
 	// Enable Container Runtime Interface (CRI) integration.
 	// +optional
 	EnableCRI *bool `json:"enableCRI,omitempty"`
+	// Enable dockershim only mode.
+	// +optional
+	ExperimentalDockershim *bool `json:"experimentalDockershim,omitempty"`
 	// TODO(#34726:1.8.0): Remove the opt-in for failing when swap is enabled.
 	// Tells the Kubelet to fail to start if swap is enabled on the node.
 	ExperimentalFailSwapOn bool `json:"experimentalFailSwapOn,omitempty"`

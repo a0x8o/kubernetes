@@ -280,7 +280,7 @@ func KnownControllers() []string {
 		serviceControllerName,
 		routeControllerName,
 		pvBinderControllerName,
-		attachDetatchControllerName,
+		attachDetachControllerName,
 	)
 
 	// add "special" controllers that aren't initialized normally
@@ -365,12 +365,12 @@ func getAvailableResources(clientBuilder controller.ControllerClientBuilder) (ma
 }
 
 const (
-	saTokenControllerName       = "serviceaccount-token"
-	nodeControllerName          = "node"
-	serviceControllerName       = "service"
-	routeControllerName         = "route"
-	pvBinderControllerName      = "persistentvolume-binder"
-	attachDetatchControllerName = "attachdetach"
+	saTokenControllerName      = "serviceaccount-token"
+	nodeControllerName         = "node"
+	serviceControllerName      = "service"
+	routeControllerName        = "route"
+	pvBinderControllerName     = "persistentvolume-binder"
+	attachDetachControllerName = "attachdetach"
 )
 
 func StartControllers(controllers map[string]InitFunc, s *options.CMServer, rootClientBuilder, clientBuilder controller.ControllerClientBuilder, stop <-chan struct{}) error {
@@ -444,7 +444,7 @@ func StartControllers(controllers map[string]InitFunc, s *options.CMServer, root
 		glog.Infof("Started %q", controllerName)
 	}
 
-	// all the remaning plugins want this cloud variable
+	// all the remaining plugins want this cloud variable
 	cloud, err := cloudprovider.InitCloudProvider(s.CloudProvider, s.CloudConfigFile)
 	if err != nil {
 		return fmt.Errorf("cloud provider could not be initialized: %v", err)
@@ -477,6 +477,7 @@ func StartControllers(controllers map[string]InitFunc, s *options.CMServer, root
 			serviceCIDR,
 			int(s.NodeCIDRMaskSize),
 			s.AllocateNodeCIDRs,
+			nodecontroller.CIDRAllocatorType(s.CIDRAllocatorType),
 			s.EnableTaintManager,
 			utilfeature.DefaultFeatureGate.Enabled(features.TaintBasedEvictions),
 		)
@@ -530,14 +531,9 @@ func StartControllers(controllers map[string]InitFunc, s *options.CMServer, root
 	}
 
 	if ctx.IsControllerEnabled(pvBinderControllerName) {
-		alphaProvisioner, err := NewAlphaVolumeProvisioner(cloud, s.VolumeConfiguration)
-		if err != nil {
-			return fmt.Errorf("an backward-compatible provisioner could not be created: %v, but one was expected. Provisioning will not work. This functionality is considered an early Alpha version.", err)
-		}
 		params := persistentvolumecontroller.ControllerParameters{
 			KubeClient:                clientBuilder.ClientOrDie("persistent-volume-binder"),
 			SyncPeriod:                s.PVClaimBinderSyncPeriod.Duration,
-			AlphaProvisioner:          alphaProvisioner,
 			VolumePlugins:             ProbeControllerVolumePlugins(cloud, s.VolumeConfiguration),
 			Cloud:                     cloud,
 			ClusterName:               s.ClusterName,
@@ -546,14 +542,17 @@ func StartControllers(controllers map[string]InitFunc, s *options.CMServer, root
 			ClassInformer:             sharedInformers.Storage().V1beta1().StorageClasses(),
 			EnableDynamicProvisioning: s.VolumeConfiguration.EnableDynamicProvisioning,
 		}
-		volumeController := persistentvolumecontroller.NewController(params)
+		volumeController, volumeControllerErr := persistentvolumecontroller.NewController(params)
+		if volumeControllerErr != nil {
+			return fmt.Errorf("failed to construct persistentvolume controller: %v", volumeControllerErr)
+		}
 		go volumeController.Run(stop)
 		time.Sleep(wait.Jitter(s.ControllerStartInterval.Duration, ControllerStartJitter))
 	} else {
 		glog.Warningf("%q is disabled", pvBinderControllerName)
 	}
 
-	if ctx.IsControllerEnabled(attachDetatchControllerName) {
+	if ctx.IsControllerEnabled(attachDetachControllerName) {
 		if s.ReconcilerSyncLoopPeriod.Duration < time.Second {
 			return fmt.Errorf("Duration time must be greater than one second as set via command line option reconcile-sync-loop-period.")
 		}
@@ -575,7 +574,7 @@ func StartControllers(controllers map[string]InitFunc, s *options.CMServer, root
 		go attachDetachController.Run(stop)
 		time.Sleep(wait.Jitter(s.ControllerStartInterval.Duration, ControllerStartJitter))
 	} else {
-		glog.Warningf("%q is disabled", attachDetatchControllerName)
+		glog.Warningf("%q is disabled", attachDetachControllerName)
 	}
 
 	sharedInformers.Start(stop)

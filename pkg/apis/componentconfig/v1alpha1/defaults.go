@@ -164,6 +164,9 @@ func SetDefaults_KubeSchedulerConfiguration(obj *KubeSchedulerConfiguration) {
 	if obj.LockObjectName == "" {
 		obj.LockObjectName = SchedulerDefaultLockObjectName
 	}
+	if obj.PolicyConfigMapNamespace == "" {
+		obj.PolicyConfigMapNamespace = api.NamespaceSystem
+	}
 }
 
 func SetDefaults_LeaderElectionConfiguration(obj *LeaderElectionConfiguration) {
@@ -417,6 +420,9 @@ func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
 	}
 	if obj.EnableCRI == nil {
 		obj.EnableCRI = boolVar(true)
+	}
+	if obj.ExperimentalDockershim == nil {
+		obj.ExperimentalDockershim = boolVar(false)
 	}
 }
 
