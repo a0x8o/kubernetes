@@ -72,6 +72,7 @@ import (
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/v1"
+	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
 	apps "k8s.io/kubernetes/pkg/apis/apps/v1beta1"
 	batchinternal "k8s.io/kubernetes/pkg/apis/batch"
 	batch "k8s.io/kubernetes/pkg/apis/batch/v1"
@@ -1886,7 +1887,11 @@ func LoadConfig() (*restclient.Config, error) {
 	}
 	c, err := RestclientConfig(TestContext.KubeContext)
 	if err != nil {
-		return nil, err
+		if TestContext.KubeConfig == "" {
+			return restclient.InClusterConfig()
+		} else {
+			return nil, err
+		}
 	}
 
 	return clientcmd.NewDefaultClientConfig(*c, &clientcmd.ConfigOverrides{ClusterInfo: clientcmdapi.Cluster{Server: TestContext.Host}}).ClientConfig()
@@ -2604,7 +2609,7 @@ func VerifyThatTaintIsGone(c clientset.Interface, nodeName string, taint *v1.Tai
 	By("verifying the node doesn't have the taint " + taint.ToString())
 	nodeUpdated, err := c.Core().Nodes().Get(nodeName, metav1.GetOptions{})
 	ExpectNoError(err)
-	if v1.TaintExists(nodeUpdated.Spec.Taints, taint) {
+	if v1helper.TaintExists(nodeUpdated.Spec.Taints, taint) {
 		Failf("Failed removing taint " + taint.ToString() + " of the node " + nodeName)
 	}
 }
@@ -2625,7 +2630,7 @@ func NodeHasTaint(c clientset.Interface, nodeName string, taint *v1.Taint) (bool
 
 	nodeTaints := node.Spec.Taints
 
-	if len(nodeTaints) == 0 || !v1.TaintExists(nodeTaints, taint) {
+	if len(nodeTaints) == 0 || !v1helper.TaintExists(nodeTaints, taint) {
 		return false, nil
 	}
 	return true, nil
@@ -3206,16 +3211,6 @@ func NewDeployment(deploymentName string, replicas int32, podLabels map[string]s
 // Note that the status should stay valid at all times unless shortly after a scaling event or the deployment is just created.
 // To verify that the deployment status is valid and wait for the rollout to finish, use WaitForDeploymentStatus instead.
 func WaitForDeploymentStatusValid(c clientset.Interface, d *extensions.Deployment) error {
-	return waitForDeploymentStatusValid(c, d, false)
-}
-
-// WaitForDeploymentStatusValidV15 is a compatibility function that behaves the
-// way WaitForDeploymentStatusValid() did in v1.5.x.
-func WaitForDeploymentStatusValidV15(c clientset.Interface, d *extensions.Deployment) error {
-	return waitForDeploymentStatusValid(c, d, true)
-}
-
-func waitForDeploymentStatusValid(c clientset.Interface, d *extensions.Deployment, v15Compatible bool) error {
 	var (
 		oldRSs, allOldRSs, allRSs []*extensions.ReplicaSet
 		newRS                     *extensions.ReplicaSet
@@ -3229,11 +3224,7 @@ func waitForDeploymentStatusValid(c clientset.Interface, d *extensions.Deploymen
 		if err != nil {
 			return false, err
 		}
-		if v15Compatible {
-			oldRSs, allOldRSs, newRS, err = deploymentutil.GetAllReplicaSetsV15(deployment, c)
-		} else {
-			oldRSs, allOldRSs, newRS, err = deploymentutil.GetAllReplicaSets(deployment, c)
-		}
+		oldRSs, allOldRSs, newRS, err = deploymentutil.GetAllReplicaSets(deployment, c)
 		if err != nil {
 			return false, err
 		}
@@ -3279,7 +3270,7 @@ func waitForDeploymentStatusValid(c clientset.Interface, d *extensions.Deploymen
 
 	if err == wait.ErrWaitTimeout {
 		logReplicaSetsOfDeployment(deployment, allOldRSs, newRS)
-		logPodsOfDeployment(c, deployment, allRSs, v15Compatible)
+		logPodsOfDeployment(c, deployment, allRSs)
 		err = fmt.Errorf("%s", reason)
 	}
 	if err != nil {
@@ -3291,16 +3282,6 @@ func waitForDeploymentStatusValid(c clientset.Interface, d *extensions.Deploymen
 // Waits for the deployment to reach desired state.
 // Returns an error if the deployment's rolling update strategy (max unavailable or max surge) is broken at any times.
 func WaitForDeploymentStatus(c clientset.Interface, d *extensions.Deployment) error {
-	return waitForDeploymentStatus(c, d, false)
-}
-
-// WaitForDeploymentStatusV15 is a compatibility function that behaves the way
-// WaitForDeploymentStatus() did in v1.5.x.
-func WaitForDeploymentStatusV15(c clientset.Interface, d *extensions.Deployment) error {
-	return waitForDeploymentStatus(c, d, true)
-}
-
-func waitForDeploymentStatus(c clientset.Interface, d *extensions.Deployment, v15Compatible bool) error {
 	var (
 		oldRSs, allOldRSs, allRSs []*extensions.ReplicaSet
 		newRS                     *extensions.ReplicaSet
@@ -3313,11 +3294,7 @@ func waitForDeploymentStatus(c clientset.Interface, d *extensions.Deployment, v1
 		if err != nil {
 			return false, err
 		}
-		if v15Compatible {
-			oldRSs, allOldRSs, newRS, err = deploymentutil.GetAllReplicaSetsV15(deployment, c)
-		} else {
-			oldRSs, allOldRSs, newRS, err = deploymentutil.GetAllReplicaSets(deployment, c)
-		}
+		oldRSs, allOldRSs, newRS, err = deploymentutil.GetAllReplicaSets(deployment, c)
 		if err != nil {
 			return false, err
 		}
@@ -3336,13 +3313,13 @@ func waitForDeploymentStatus(c clientset.Interface, d *extensions.Deployment, v1
 		maxCreated := *(deployment.Spec.Replicas) + deploymentutil.MaxSurge(*deployment)
 		if totalCreated > maxCreated {
 			logReplicaSetsOfDeployment(deployment, allOldRSs, newRS)
-			logPodsOfDeployment(c, deployment, allRSs, v15Compatible)
+			logPodsOfDeployment(c, deployment, allRSs)
 			return false, fmt.Errorf("total pods created: %d, more than the max allowed: %d", totalCreated, maxCreated)
 		}
 		minAvailable := deploymentutil.MinAvailable(deployment)
 		if deployment.Status.AvailableReplicas < minAvailable {
 			logReplicaSetsOfDeployment(deployment, allOldRSs, newRS)
-			logPodsOfDeployment(c, deployment, allRSs, v15Compatible)
+			logPodsOfDeployment(c, deployment, allRSs)
 			return false, fmt.Errorf("total pods available: %d, less than the min required: %d", deployment.Status.AvailableReplicas, minAvailable)
 		}
 
@@ -3352,7 +3329,7 @@ func waitForDeploymentStatus(c clientset.Interface, d *extensions.Deployment, v1
 
 	if err == wait.ErrWaitTimeout {
 		logReplicaSetsOfDeployment(deployment, allOldRSs, newRS)
-		logPodsOfDeployment(c, deployment, allRSs, v15Compatible)
+		logPodsOfDeployment(c, deployment, allRSs)
 	}
 	if err != nil {
 		return fmt.Errorf("error waiting for deployment %q status to match expectation: %v", d.Name, err)
@@ -3422,7 +3399,7 @@ func WatchRecreateDeployment(c clientset.Interface, d *extensions.Deployment) er
 			if err == nil && nerr == nil {
 				Logf("%+v", d)
 				logReplicaSetsOfDeployment(d, allOldRSs, newRS)
-				logPodsOfDeployment(c, d, append(allOldRSs, newRS), false)
+				logPodsOfDeployment(c, d, append(allOldRSs, newRS))
 			}
 			return false, fmt.Errorf("deployment %q is running new pods alongside old pods: %#v", d.Name, status)
 		}
@@ -3442,16 +3419,6 @@ func WatchRecreateDeployment(c clientset.Interface, d *extensions.Deployment) er
 // WaitForDeploymentRevisionAndImage waits for the deployment's and its new RS's revision and container image to match the given revision and image.
 // Note that deployment revision and its new RS revision should be updated shortly, so we only wait for 1 minute here to fail early.
 func WaitForDeploymentRevisionAndImage(c clientset.Interface, ns, deploymentName string, revision, image string) error {
-	return waitForDeploymentRevisionAndImage(c, ns, deploymentName, revision, image, false)
-}
-
-// WaitForDeploymentRevisionAndImageV15 is a compatibility function that behaves
-// the way WaitForDeploymentRevisionAndImage() did in v1.5.x.
-func WaitForDeploymentRevisionAndImageV15(c clientset.Interface, ns, deploymentName string, revision, image string) error {
-	return waitForDeploymentRevisionAndImage(c, ns, deploymentName, revision, image, true)
-}
-
-func waitForDeploymentRevisionAndImage(c clientset.Interface, ns, deploymentName string, revision, image string, v15Compatible bool) error {
 	var deployment *extensions.Deployment
 	var newRS *extensions.ReplicaSet
 	var reason string
@@ -3462,11 +3429,9 @@ func waitForDeploymentRevisionAndImage(c clientset.Interface, ns, deploymentName
 			return false, err
 		}
 		// The new ReplicaSet needs to be non-nil and contain the pod-template-hash label
-		if v15Compatible {
-			newRS, err = deploymentutil.GetNewReplicaSetV15(deployment, c)
-		} else {
-			newRS, err = deploymentutil.GetNewReplicaSet(deployment, c)
-		}
+
+		newRS, err = deploymentutil.GetNewReplicaSet(deployment, c)
+
 		if err != nil {
 			return false, err
 		}
@@ -3613,24 +3578,20 @@ func WaitForDeploymentWithCondition(c clientset.Interface, ns, deploymentName, r
 		_, allOldRSs, newRS, err := deploymentutil.GetAllReplicaSets(deployment, c)
 		if err == nil {
 			logReplicaSetsOfDeployment(deployment, allOldRSs, newRS)
-			logPodsOfDeployment(c, deployment, append(allOldRSs, newRS), false)
+			logPodsOfDeployment(c, deployment, append(allOldRSs, newRS))
 		}
 	}
 	return pollErr
 }
 
-func logPodsOfDeployment(c clientset.Interface, deployment *extensions.Deployment, rsList []*extensions.ReplicaSet, v15Compatible bool) {
+func logPodsOfDeployment(c clientset.Interface, deployment *extensions.Deployment, rsList []*extensions.ReplicaSet) {
 	minReadySeconds := deployment.Spec.MinReadySeconds
 	podListFunc := func(namespace string, options metav1.ListOptions) (*v1.PodList, error) {
 		return c.Core().Pods(namespace).List(options)
 	}
-	var podList *v1.PodList
-	var err error
-	if v15Compatible {
-		podList, err = deploymentutil.ListPodsV15(deployment, rsList, podListFunc)
-	} else {
-		podList, err = deploymentutil.ListPods(deployment, rsList, podListFunc)
-	}
+
+	podList, err := deploymentutil.ListPods(deployment, rsList, podListFunc)
+
 	if err != nil {
 		Logf("Failed to list Pods of Deployment %s: %v", deployment.Name, err)
 		return
