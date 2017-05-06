@@ -25,7 +25,7 @@ import (
 	"time"
 
 	systemd "github.com/coreos/go-systemd/daemon"
-	"github.com/emicklei/go-restful/swagger"
+	"github.com/emicklei/go-restful-swagger12"
 	"github.com/golang/glog"
 
 	"k8s.io/apimachinery/pkg/apimachinery"
@@ -192,7 +192,7 @@ type emptyDelegate struct {
 }
 
 func (s emptyDelegate) UnprotectedHandler() http.Handler {
-	return http.NotFoundHandler()
+	return nil
 }
 func (s emptyDelegate) PostStartHooks() map[string]postStartHookEntry {
 	return map[string]postStartHookEntry{}
