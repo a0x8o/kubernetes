@@ -185,7 +185,7 @@ func New(federationClient fedclientset.Interface, dns dnsprovider.Interface,
 
 	s.federatedInformer = fedutil.NewFederatedInformer(federationClient, fedInformerFactory, &clusterLifecycle)
 
-	s.federatedUpdater = fedutil.NewFederatedUpdater(s.federatedInformer, "service", s.eventRecorder,
+	s.federatedUpdater = fedutil.NewFederatedUpdater(s.federatedInformer, "service", updateTimeout, s.eventRecorder,
 		func(client kubeclientset.Interface, obj pkgruntime.Object) error {
 			svc := obj.(*v1.Service)
 			_, err := client.Core().Services(svc.Namespace).Create(svc)
@@ -242,7 +242,6 @@ func New(federationClient fedclientset.Interface, dns dnsprovider.Interface,
 			service := obj.(*v1.Service)
 			return fmt.Sprintf("%s/%s", service.Namespace, service.Name)
 		},
-		updateTimeout,
 		s.federatedInformer,
 		s.federatedUpdater,
 	)
@@ -600,7 +599,7 @@ func (s *ServiceController) reconcileService(key string) reconciliationStatus {
 	}
 
 	if len(operations) != 0 {
-		err = s.federatedUpdater.Update(operations, s.updateTimeout)
+		err = s.federatedUpdater.Update(operations)
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
 				runtime.HandleError(fmt.Errorf("Failed to execute updates for %s: %v", key, err))
@@ -664,6 +663,11 @@ func (s *ServiceController) getOperationsToPerformOnCluster(cluster *v1beta1.Clu
 					desiredService.Spec.Ports[i].NodePort = cPort.NodePort
 				}
 			}
+		}
+		// If ExternalTrafficPolicy is not set in federated service, use the ExternalTrafficPolicy
+		// defaulted to in federated cluster.
+		if desiredService.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyType("") {
+			desiredService.Spec.ExternalTrafficPolicy = clusterService.Spec.ExternalTrafficPolicy
 		}
 
 		// Update existing service, if needed.

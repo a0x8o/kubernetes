@@ -28,9 +28,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"k8s.io/kubernetes/pkg/api/v1"
-	runtimeapi "k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/runtime"
-	"k8s.io/kubernetes/pkg/kubelet/dockertools"
+
+	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/v1alpha1"
 	"k8s.io/kubernetes/pkg/security/apparmor"
+
+	"k8s.io/kubernetes/pkg/kubelet/dockershim/libdocker"
 )
 
 func TestLabelsAndAnnotationsRoundTrip(t *testing.T) {
@@ -138,8 +140,6 @@ func TestLoadSeccompLocalhostProfiles(t *testing.T) {
 }
 
 // TestGetApparmorSecurityOpts tests the logic of generating container apparmor options from sandbox annotations.
-// The actual profile loading logic is tested in dockertools.
-// TODO: Migrate the corresponding test to dockershim.
 func TestGetApparmorSecurityOpts(t *testing.T) {
 	makeConfig := func(profile string) *runtimeapi.LinuxContainerSecurityContext {
 		return &runtimeapi.LinuxContainerSecurityContext{
@@ -172,46 +172,6 @@ func TestGetApparmorSecurityOpts(t *testing.T) {
 		for _, opt := range test.expectedOpts {
 			assert.Contains(t, opts, opt, "TestCase[%d]: %s", i, test.msg)
 		}
-	}
-}
-
-// TestGetSystclsFromAnnotations tests the logic of getting sysctls from annotations.
-func TestGetSystclsFromAnnotations(t *testing.T) {
-	tests := []struct {
-		annotations     map[string]string
-		expectedSysctls map[string]string
-	}{{
-		annotations: map[string]string{
-			v1.SysctlsPodAnnotationKey:       "kernel.shmmni=32768,kernel.shmmax=1000000000",
-			v1.UnsafeSysctlsPodAnnotationKey: "knet.ipv4.route.min_pmtu=1000",
-		},
-		expectedSysctls: map[string]string{
-			"kernel.shmmni":            "32768",
-			"kernel.shmmax":            "1000000000",
-			"knet.ipv4.route.min_pmtu": "1000",
-		},
-	}, {
-		annotations: map[string]string{
-			v1.SysctlsPodAnnotationKey: "kernel.shmmni=32768,kernel.shmmax=1000000000",
-		},
-		expectedSysctls: map[string]string{
-			"kernel.shmmni": "32768",
-			"kernel.shmmax": "1000000000",
-		},
-	}, {
-		annotations: map[string]string{
-			v1.UnsafeSysctlsPodAnnotationKey: "knet.ipv4.route.min_pmtu=1000",
-		},
-		expectedSysctls: map[string]string{
-			"knet.ipv4.route.min_pmtu": "1000",
-		},
-	}}
-
-	for i, test := range tests {
-		actual, err := getSysctlsFromAnnotations(test.annotations)
-		assert.NoError(t, err, "TestCase[%d]", i)
-		assert.Len(t, actual, len(test.expectedSysctls), "TestCase[%d]", i)
-		assert.Equal(t, test.expectedSysctls, actual, "TestCase[%d]", i)
 	}
 }
 
@@ -302,7 +262,7 @@ func TestEnsureSandboxImageExists(t *testing.T) {
 		},
 		"should pull image when it doesn't exist": {
 			injectImage: false,
-			injectErr:   dockertools.ImageNotFoundError{ID: "image_id"},
+			injectErr:   libdocker.ImageNotFoundError{ID: "image_id"},
 			calls:       []string{"inspect_image", "pull"},
 		},
 		"should return error when inspect image fails": {

@@ -25,7 +25,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/watch"
-	apiextensionsv1alpha1 "k8s.io/kube-apiextensions-server/pkg/apis/apiextensions/v1alpha1"
 	"k8s.io/kube-apiextensions-server/test/integration/testserver"
 )
 
@@ -51,10 +50,7 @@ func TestSimpleCRUD(t *testing.T) {
 	}
 
 	ns := "not-the-default"
-	noxuNamespacedResourceClient := noxuVersionClient.Resource(&metav1.APIResource{
-		Name:       noxuDefinition.Spec.Names.Plural,
-		Namespaced: noxuDefinition.Spec.Scope == apiextensionsv1alpha1.NamespaceScoped,
-	}, ns)
+	noxuNamespacedResourceClient := NewNamespacedCustomResourceClient(ns, noxuVersionClient, noxuDefinition)
 	initialList, err := noxuNamespacedResourceClient.List(metav1.ListOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -83,29 +79,9 @@ func TestSimpleCRUD(t *testing.T) {
 	}
 	defer noxuNamespacedWatch.Stop()
 
-	noxuInstanceToCreate := testserver.NewNoxuInstance(ns, "foo")
-	createdNoxuInstance, err := noxuNamespacedResourceClient.Create(noxuInstanceToCreate)
+	createdNoxuInstance, err := instantiateCustomResource(t, testserver.NewNoxuInstance(ns, "foo"), noxuNamespacedResourceClient, noxuDefinition)
 	if err != nil {
-		t.Logf("%#v", createdNoxuInstance)
-		t.Fatal(err)
-	}
-	createdObjectMeta, err := meta.Accessor(createdNoxuInstance)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// it should have a UUID
-	if len(createdObjectMeta.GetUID()) == 0 {
-		t.Errorf("missing uuid: %#v", createdNoxuInstance)
-	}
-	createdTypeMeta, err := meta.TypeAccessor(createdNoxuInstance)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if e, a := noxuDefinition.Spec.Group+"/"+noxuDefinition.Spec.Version, createdTypeMeta.GetAPIVersion(); e != a {
-		t.Errorf("expected %v, got %v", e, a)
-	}
-	if e, a := noxuDefinition.Spec.Names.Kind, createdTypeMeta.GetKind(); e != a {
-		t.Errorf("expected %v, got %v", e, a)
+		t.Fatalf("unable to create noxu Instance:%v", err)
 	}
 
 	select {
@@ -179,6 +155,10 @@ func TestSimpleCRUD(t *testing.T) {
 			t.Fatal(err)
 		}
 		// it should have a UUID
+		createdObjectMeta, err := meta.Accessor(createdNoxuInstance)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if e, a := createdObjectMeta.GetUID(), deletedObjectMeta.GetUID(); e != a {
 			t.Errorf("expected %v, got %v", e, a)
 		}
@@ -186,4 +166,37 @@ func TestSimpleCRUD(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Errorf("missing watch event")
 	}
+}
+
+func TestSelfLink(t *testing.T) {
+	stopCh, apiExtensionClient, clientPool, err := testserver.StartDefaultServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer close(stopCh)
+
+	noxuDefinition := testserver.NewNoxuCustomResourceDefinition()
+	noxuVersionClient, err := testserver.CreateNewCustomResourceDefinition(noxuDefinition, apiExtensionClient, clientPool)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ns := "not-the-default"
+	noxuNamespacedResourceClient := noxuVersionClient.Resource(&metav1.APIResource{
+		Name:       noxuDefinition.Spec.Names.Plural,
+		Namespaced: true,
+	}, ns)
+
+	noxuInstanceToCreate := testserver.NewNoxuInstance(ns, "foo")
+	createdNoxuInstance, err := noxuNamespacedResourceClient.Create(noxuInstanceToCreate)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if e, a := "/apis/mygroup.example.com/v1alpha1/namespaces/not-the-default/noxus/foo", createdNoxuInstance.GetSelfLink(); e != a {
+		t.Errorf("expected %v, got %v", e, a)
+	}
+
+	// TODO add test for cluster scoped self-link when its available
+
 }

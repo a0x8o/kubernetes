@@ -178,6 +178,7 @@ dns-provider
 dns-provider-config
 dns-zone-name
 dockercfg-path
+docker-disable-shared-pid
 docker-email
 docker-endpoint
 docker-exec-handler
@@ -192,7 +193,6 @@ duration-sec
 e2e-output-dir
 e2e-verify-service-account
 enable-controller-attach-detach
-enable-cri
 enable-custom-metrics
 enable-debugging-handlers
 enable-dynamic-provisioning
@@ -245,7 +245,6 @@ experimental-check-node-capabilities-before-mount
 experimental-cri
 experimental-dockershim
 experimental-dockershim-root-directory
-experimental-docker-enable-shared-pid
 experimental-fail-swap-on
 experimental-kernel-memcg-notification
 experimental-keystone-ca-file
@@ -545,6 +544,7 @@ private-mountns
 prom-push-gateway
 protect-kernel-defaults
 proto-import
+provider-id
 proxy-bindall
 proxy-client-cert-file
 proxy-client-key-file

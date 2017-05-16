@@ -20,7 +20,6 @@ import (
 	"net"
 	"os"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -1042,6 +1041,7 @@ func TestRestoreAll(t *testing.T) {
 		},
 	}
 	runner := newInternal(&fexec, dbus.NewFake(nil, nil), ProtocolIpv4, TestLockfilePath)
+	defer os.Remove(TestLockfilePath)
 	defer runner.Destroy()
 
 	err := runner.RestoreAll([]byte{}, NoFlushTables, RestoreCounters)
@@ -1086,6 +1086,7 @@ func TestRestoreAllWait(t *testing.T) {
 		},
 	}
 	runner := newInternal(&fexec, dbus.NewFake(nil, nil), ProtocolIpv4, TestLockfilePath)
+	defer os.Remove(TestLockfilePath)
 	defer runner.Destroy()
 
 	err := runner.RestoreAll([]byte{}, NoFlushTables, RestoreCounters)
@@ -1131,6 +1132,7 @@ func TestRestoreAllWaitOldIptablesRestore(t *testing.T) {
 		},
 	}
 	runner := newInternal(&fexec, dbus.NewFake(nil, nil), ProtocolIpv4, TestLockfilePath)
+	defer os.Remove(TestLockfilePath)
 	defer runner.Destroy()
 
 	err := runner.RestoreAll([]byte{}, NoFlushTables, RestoreCounters)
@@ -1177,6 +1179,7 @@ func TestRestoreAllGrabNewLock(t *testing.T) {
 	}
 
 	runner := newInternal(&fexec, dbus.NewFake(nil, nil), ProtocolIpv4, TestLockfilePath)
+	defer os.Remove(TestLockfilePath)
 	defer runner.Destroy()
 
 	// Grab the /run lock and ensure the RestoreAll fails
@@ -1186,7 +1189,7 @@ func TestRestoreAllGrabNewLock(t *testing.T) {
 	}
 	defer runLock.Close()
 
-	if err := syscall.Flock(int(runLock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := grabIptablesFileLock(runLock); err != nil {
 		t.Errorf("expected to lock %s, got %v", TestLockfilePath, err)
 	}
 
@@ -1219,6 +1222,7 @@ func TestRestoreAllGrabOldLock(t *testing.T) {
 	}
 
 	runner := newInternal(&fexec, dbus.NewFake(nil, nil), ProtocolIpv4, TestLockfilePath)
+	defer os.Remove(TestLockfilePath)
 	defer runner.Destroy()
 
 	// Grab the abstract @xtables socket

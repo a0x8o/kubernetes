@@ -21,21 +21,16 @@ import (
 	"k8s.io/apimachinery/pkg/apimachinery/registered"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/pkg/api"
 	"k8s.io/kube-apiextensions-server/pkg/apis/apiextensions"
 	"k8s.io/kube-apiextensions-server/pkg/apis/apiextensions/v1alpha1"
 )
-
-func init() {
-	Install(api.GroupFactoryRegistry, api.Registry, api.Scheme)
-}
 
 // Install registers the API group and adds types to a scheme
 func Install(groupFactoryRegistry announced.APIGroupFactoryRegistry, registry *registered.APIRegistrationManager, scheme *runtime.Scheme) {
 	if err := announced.NewGroupMetaFactory(
 		&announced.GroupMetaFactoryArgs{
 			GroupName:                  apiextensions.GroupName,
-			RootScopedKinds:            sets.NewString("CustomResource"),
+			RootScopedKinds:            sets.NewString("CustomResourceDefinition"),
 			VersionPreferenceOrder:     []string{v1alpha1.SchemeGroupVersion.Version},
 			ImportPrefix:               "k8s.io/kube-apiextensions-server/pkg/apis/apiextension",
 			AddInternalObjectsToScheme: apiextensions.AddToScheme,

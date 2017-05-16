@@ -1,5 +1,4 @@
 name,owner,auto-assigned,sig
-DEFAULT,rmmh/spxtr/ixdy/apelisse/fejta,0,
 Addon update should propagate add-on file changes,eparis,1,
 AppArmor should enforce an AppArmor profile,derekwaynecarr,0,node
 AppArmor when running with AppArmor should enforce a permissive profile,yujuhong,1,node
@@ -124,7 +123,7 @@ Empty starts a pod,childsb,1,
 "EmptyDir volumes should support (non-root,0644,default)",timstclair,1,node
 "EmptyDir volumes should support (non-root,0644,tmpfs)",spxtr,1,node
 "EmptyDir volumes should support (non-root,0666,default)",dchen1107,1,node
-"EmptyDir volumes should support (non-root,0666,tmpfs)",apelisse,1,storage
+"EmptyDir volumes should support (non-root,0666,tmpfs)",apelisse,1,node
 "EmptyDir volumes should support (non-root,0777,default)",mwielgus,1,node
 "EmptyDir volumes should support (non-root,0777,tmpfs)",smarterclayton,1,node
 "EmptyDir volumes should support (root,0644,default)",mtaufen,1,node
@@ -656,7 +655,6 @@ k8s.io/kubernetes/pkg/client/listers/extensions/v1beta1,jszczepkowski,1,
 k8s.io/kubernetes/pkg/client/retry,caesarxuchao,1,
 k8s.io/kubernetes/pkg/client/tests,Q-Lee,1,
 k8s.io/kubernetes/pkg/client/unversioned,justinsb,1,
-k8s.io/kubernetes/pkg/client/unversioned/remotecommand,rrati,0,
 k8s.io/kubernetes/pkg/cloudprovider/providers/aws,eparis,1,
 k8s.io/kubernetes/pkg/cloudprovider/providers/azure,saad-ali,1,
 k8s.io/kubernetes/pkg/cloudprovider/providers/cloudstack,roberthbailey,1,
@@ -722,8 +720,6 @@ k8s.io/kubernetes/pkg/kubelet/config,mikedanese,1,
 k8s.io/kubernetes/pkg/kubelet/container,yujuhong,0,
 k8s.io/kubernetes/pkg/kubelet/custommetrics,kevin-wangzefeng,0,
 k8s.io/kubernetes/pkg/kubelet/dockershim,zmerlynn,1,
-k8s.io/kubernetes/pkg/kubelet/dockertools,deads2k,1,
-k8s.io/kubernetes/pkg/kubelet/dockertools/securitycontext,yifan-gu,1,
 k8s.io/kubernetes/pkg/kubelet/envvars,rrati,0,
 k8s.io/kubernetes/pkg/kubelet/eviction,childsb,1,
 k8s.io/kubernetes/pkg/kubelet/images,caesarxuchao,1,

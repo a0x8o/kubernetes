@@ -34,11 +34,11 @@ import (
 	"github.com/golang/glog"
 
 	"k8s.io/kubernetes/pkg/api/v1"
-	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
-	runtimeapi "k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/runtime"
-	"k8s.io/kubernetes/pkg/kubelet/dockertools"
+	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/v1alpha1"
 	"k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/security/apparmor"
+
+	"k8s.io/kubernetes/pkg/kubelet/dockershim/libdocker"
 )
 
 const (
@@ -273,27 +273,6 @@ func getNetworkNamespace(c *dockertypes.ContainerJSON) string {
 	return fmt.Sprintf(dockerNetNSFmt, c.State.Pid)
 }
 
-// getSysctlsFromAnnotations gets sysctls from annotations.
-func getSysctlsFromAnnotations(annotations map[string]string) (map[string]string, error) {
-	var results map[string]string
-
-	sysctls, unsafeSysctls, err := v1helper.SysctlsFromPodAnnotations(annotations)
-	if err != nil {
-		return nil, err
-	}
-	if len(sysctls)+len(unsafeSysctls) > 0 {
-		results = make(map[string]string, len(sysctls)+len(unsafeSysctls))
-		for _, c := range sysctls {
-			results[c.Name] = c.Value
-		}
-		for _, c := range unsafeSysctls {
-			results[c.Name] = c.Value
-		}
-	}
-
-	return results, nil
-}
-
 // dockerFilter wraps around dockerfilters.Args and provides methods to modify
 // the filter easily.
 type dockerFilter struct {
@@ -354,7 +333,7 @@ func getUserFromImageUser(imageUser string) (*int64, string) {
 // In that case we have to create the container with a randomized name.
 // TODO(random-liu): Remove this work around after docker 1.11 is deprecated.
 // TODO(#33189): Monitor the tests to see if the fix is sufficient.
-func recoverFromCreationConflictIfNeeded(client dockertools.DockerInterface, createConfig dockertypes.ContainerCreateConfig, err error) (*dockertypes.ContainerCreateResponse, error) {
+func recoverFromCreationConflictIfNeeded(client libdocker.Interface, createConfig dockertypes.ContainerCreateConfig, err error) (*dockertypes.ContainerCreateResponse, error) {
 	matches := conflictRE.FindStringSubmatch(err.Error())
 	if len(matches) != 2 {
 		return nil, err
@@ -368,7 +347,7 @@ func recoverFromCreationConflictIfNeeded(client dockertools.DockerInterface, cre
 	} else {
 		glog.Errorf("Failed to remove the conflicting container %q: %v", id, rmErr)
 		// Return if the error is not container not found error.
-		if !dockertools.IsContainerNotFoundError(rmErr) {
+		if !libdocker.IsContainerNotFoundError(rmErr) {
 			return nil, err
 		}
 	}
@@ -395,12 +374,12 @@ func getSecurityOptSeparator(v *semver.Version) rune {
 }
 
 // ensureSandboxImageExists pulls the sandbox image when it's not present.
-func ensureSandboxImageExists(client dockertools.DockerInterface, image string) error {
+func ensureSandboxImageExists(client libdocker.Interface, image string) error {
 	_, err := client.InspectImageByRef(image)
 	if err == nil {
 		return nil
 	}
-	if !dockertools.IsImageNotFoundError(err) {
+	if !libdocker.IsImageNotFoundError(err) {
 		return fmt.Errorf("failed to inspect sandbox image %q: %v", image, err)
 	}
 	err = client.PullImage(image, dockertypes.AuthConfig{}, dockertypes.ImagePullOptions{})
@@ -437,7 +416,7 @@ type dockerOpt struct {
 	msg string
 }
 
-// Expose key/value from dockertools
+// Expose key/value from  dockerOpt.
 func (d dockerOpt) GetKV() (string, string) {
 	return d.key, d.value
 }

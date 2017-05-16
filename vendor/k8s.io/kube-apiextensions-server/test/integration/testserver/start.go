@@ -41,7 +41,7 @@ func DefaultServerConfig() (*extensionsapiserver.Config, error) {
 		return nil, err
 	}
 
-	options := server.NewCustomResourcesServerOptions(os.Stdout, os.Stderr)
+	options := server.NewCustomResourceDefinitionsServerOptions(os.Stdout, os.Stderr)
 	options.RecommendedOptions.Audit.Path = "-"
 	options.RecommendedOptions.SecureServing.BindPort = port
 	options.RecommendedOptions.Authentication.SkipInClusterLookup = true
@@ -76,19 +76,20 @@ func DefaultServerConfig() (*extensionsapiserver.Config, error) {
 		return nil, err
 	}
 
-	customResourceRESTOptionsGetter := extensionsapiserver.CustomResourceRESTOptionsGetter{
+	customResourceDefinitionRESTOptionsGetter := extensionsapiserver.CustomResourceDefinitionRESTOptionsGetter{
 		StorageConfig:           options.RecommendedOptions.Etcd.StorageConfig,
 		StoragePrefix:           options.RecommendedOptions.Etcd.StorageConfig.Prefix,
 		EnableWatchCache:        options.RecommendedOptions.Etcd.EnableWatchCache,
+		DefaultWatchCacheSize:   options.RecommendedOptions.Etcd.DefaultWatchCacheSize,
 		EnableGarbageCollection: options.RecommendedOptions.Etcd.EnableGarbageCollection,
 		DeleteCollectionWorkers: options.RecommendedOptions.Etcd.DeleteCollectionWorkers,
 	}
-	customResourceRESTOptionsGetter.StorageConfig.Codec = unstructured.UnstructuredJSONScheme
-	customResourceRESTOptionsGetter.StorageConfig.Copier = extensionsapiserver.UnstructuredCopier{}
+	customResourceDefinitionRESTOptionsGetter.StorageConfig.Codec = unstructured.UnstructuredJSONScheme
+	customResourceDefinitionRESTOptionsGetter.StorageConfig.Copier = extensionsapiserver.UnstructuredCopier{}
 
 	config := &extensionsapiserver.Config{
-		GenericConfig:                   genericConfig,
-		CustomResourceRESTOptionsGetter: customResourceRESTOptionsGetter,
+		GenericConfig:                             genericConfig,
+		CustomResourceDefinitionRESTOptionsGetter: customResourceDefinitionRESTOptionsGetter,
 	}
 
 	return config, nil
@@ -96,9 +97,8 @@ func DefaultServerConfig() (*extensionsapiserver.Config, error) {
 
 func StartServer(config *extensionsapiserver.Config) (chan struct{}, clientset.Interface, dynamic.ClientPool, error) {
 	stopCh := make(chan struct{})
-	server, err := config.Complete().New(genericapiserver.EmptyDelegate, stopCh)
+	server, err := config.Complete().New(genericapiserver.EmptyDelegate)
 	if err != nil {
-		close(stopCh)
 		return nil, nil, nil, err
 	}
 	go func() {
