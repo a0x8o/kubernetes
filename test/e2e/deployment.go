@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/kubernetes/pkg/api/annotations"
 	"k8s.io/kubernetes/pkg/api/v1"
 	extensionsinternal "k8s.io/kubernetes/pkg/apis/extensions"
 	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
@@ -64,9 +63,6 @@ var _ = framework.KubeDescribe("Deployment", func() {
 	// TODO: Add failure traps once we have JustAfterEach
 	// See https://github.com/onsi/ginkgo/issues/303
 
-	It("deployment should create new pods", func() {
-		testNewDeployment(f)
-	})
 	It("deployment reaping should cascade to its replica sets and pods", func() {
 		testDeleteDeployment(f)
 	})
@@ -193,37 +189,6 @@ func stopDeployment(c clientset.Interface, internalClient internalclientset.Inte
 	}
 }
 
-func testNewDeployment(f *framework.Framework) {
-	ns := f.Namespace.Name
-	c := f.ClientSet
-
-	deploymentName := "test-new-deployment"
-	podLabels := map[string]string{"name": nginxImageName}
-	replicas := int32(1)
-	framework.Logf("Creating simple deployment %s", deploymentName)
-	d := framework.NewDeployment(deploymentName, replicas, podLabels, nginxImageName, nginxImage, extensions.RollingUpdateDeploymentStrategyType)
-	d.Annotations = map[string]string{"test": "should-copy-to-replica-set", annotations.LastAppliedConfigAnnotation: "should-not-copy-to-replica-set"}
-	deploy, err := c.Extensions().Deployments(ns).Create(d)
-	Expect(err).NotTo(HaveOccurred())
-
-	// Wait for it to be updated to revision 1
-	err = framework.WaitForDeploymentRevisionAndImage(c, ns, deploymentName, "1", nginxImage)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = framework.WaitForDeploymentStatusValid(c, deploy)
-	Expect(err).NotTo(HaveOccurred())
-
-	deployment, err := c.Extensions().Deployments(ns).Get(deploymentName, metav1.GetOptions{})
-	Expect(err).NotTo(HaveOccurred())
-	newRS, err := deploymentutil.GetNewReplicaSet(deployment, c)
-	Expect(err).NotTo(HaveOccurred())
-	// Check new RS annotations
-	Expect(newRS.Annotations["test"]).Should(Equal("should-copy-to-replica-set"))
-	Expect(newRS.Annotations[annotations.LastAppliedConfigAnnotation]).Should(Equal(""))
-	Expect(deployment.Annotations["test"]).Should(Equal("should-copy-to-replica-set"))
-	Expect(deployment.Annotations[annotations.LastAppliedConfigAnnotation]).Should(Equal("should-not-copy-to-replica-set"))
-}
-
 func testDeleteDeployment(f *framework.Framework) {
 	ns := f.Namespace.Name
 	c := f.ClientSet
@@ -234,7 +199,7 @@ func testDeleteDeployment(f *framework.Framework) {
 	replicas := int32(1)
 	framework.Logf("Creating simple deployment %s", deploymentName)
 	d := framework.NewDeployment(deploymentName, replicas, podLabels, nginxImageName, nginxImage, extensions.RollingUpdateDeploymentStrategyType)
-	d.Annotations = map[string]string{"test": "should-copy-to-replica-set", annotations.LastAppliedConfigAnnotation: "should-not-copy-to-replica-set"}
+	d.Annotations = map[string]string{"test": "should-copy-to-replica-set", v1.LastAppliedConfigAnnotation: "should-not-copy-to-replica-set"}
 	deploy, err := c.Extensions().Deployments(ns).Create(d)
 	Expect(err).NotTo(HaveOccurred())
 

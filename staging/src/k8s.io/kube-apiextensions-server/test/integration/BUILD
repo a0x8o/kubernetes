@@ -18,12 +18,15 @@ go_test(
         "integration",
     ],
     deps = [
+        "//vendor/github.com/coreos/etcd/clientv3:go_default_library",
+        "//vendor/k8s.io/apimachinery/pkg/api/errors:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/api/meta:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/watch:go_default_library",
         "//vendor/k8s.io/client-go/dynamic:go_default_library",
         "//vendor/k8s.io/kube-apiextensions-server/pkg/apis/apiextensions/v1alpha1:go_default_library",
+        "//vendor/k8s.io/kube-apiextensions-server/pkg/apiserver:go_default_library",
         "//vendor/k8s.io/kube-apiextensions-server/test/integration/testserver:go_default_library",
     ],
 )

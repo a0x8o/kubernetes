@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/service"
 	"k8s.io/kubernetes/pkg/proxy"
 	"k8s.io/kubernetes/pkg/util/exec"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
@@ -579,7 +578,7 @@ func TestClusterIPReject(t *testing.T) {
 		}),
 	)
 	makeEndpointsMap(fp)
-	fp.syncProxyRules()
+	fp.syncProxyRules(syncReasonForce)
 
 	svcChain := string(servicePortChainName(svcPortName.String(), strings.ToLower(string(api.ProtocolTCP))))
 	svcRules := ipt.GetRules(svcChain)
@@ -628,7 +627,7 @@ func TestClusterIPEndpointsJump(t *testing.T) {
 		}),
 	)
 
-	fp.syncProxyRules()
+	fp.syncProxyRules(syncReasonForce)
 
 	epStr := fmt.Sprintf("%s:%d", epIP, svcPort)
 	svcChain := string(servicePortChainName(svcPortName.String(), strings.ToLower(string(api.ProtocolTCP))))
@@ -692,7 +691,7 @@ func TestLoadBalancer(t *testing.T) {
 		}),
 	)
 
-	fp.syncProxyRules()
+	fp.syncProxyRules(syncReasonForce)
 
 	proto := strings.ToLower(string(api.ProtocolTCP))
 	fwChain := string(serviceFirewallChainName(svcPortName.String(), proto))
@@ -749,7 +748,7 @@ func TestNodePort(t *testing.T) {
 		}),
 	)
 
-	fp.syncProxyRules()
+	fp.syncProxyRules(syncReasonForce)
 
 	proto := strings.ToLower(string(api.ProtocolTCP))
 	svcChain := string(servicePortChainName(svcPortName.String(), proto))
@@ -786,7 +785,7 @@ func TestExternalIPsReject(t *testing.T) {
 	)
 	makeEndpointsMap(fp)
 
-	fp.syncProxyRules()
+	fp.syncProxyRules(syncReasonForce)
 
 	kubeSvcRules := ipt.GetRules(string(kubeServicesChain))
 	if !hasJump(kubeSvcRules, iptablestest.Reject, svcExternalIPs, svcPort) {
@@ -819,7 +818,7 @@ func TestNodePortReject(t *testing.T) {
 	)
 	makeEndpointsMap(fp)
 
-	fp.syncProxyRules()
+	fp.syncProxyRules(syncReasonForce)
 
 	kubeSvcRules := ipt.GetRules(string(kubeServicesChain))
 	if !hasJump(kubeSvcRules, iptablestest.Reject, svcIP, svcNodePort) {
@@ -856,7 +855,7 @@ func TestOnlyLocalLoadBalancing(t *testing.T) {
 			svc.Status.LoadBalancer.Ingress = []api.LoadBalancerIngress{{
 				IP: svcLBIP,
 			}}
-			svc.Annotations[service.BetaAnnotationExternalTraffic] = service.AnnotationValueExternalTrafficLocal
+			svc.Annotations[api.BetaAnnotationExternalTraffic] = api.AnnotationValueExternalTrafficLocal
 		}),
 	)
 
@@ -882,7 +881,7 @@ func TestOnlyLocalLoadBalancing(t *testing.T) {
 		}),
 	)
 
-	fp.syncProxyRules()
+	fp.syncProxyRules(syncReasonForce)
 
 	proto := strings.ToLower(string(api.ProtocolTCP))
 	fwChain := string(serviceFirewallChainName(svcPortName.String(), proto))
@@ -947,7 +946,7 @@ func onlyLocalNodePorts(t *testing.T, fp *Proxier, ipt *iptablestest.FakeIPTable
 				Protocol: api.ProtocolTCP,
 				NodePort: int32(svcNodePort),
 			}}
-			svc.Annotations[service.BetaAnnotationExternalTraffic] = service.AnnotationValueExternalTrafficLocal
+			svc.Annotations[api.BetaAnnotationExternalTraffic] = api.AnnotationValueExternalTrafficLocal
 		}),
 	)
 
@@ -973,7 +972,7 @@ func onlyLocalNodePorts(t *testing.T, fp *Proxier, ipt *iptablestest.FakeIPTable
 		}),
 	)
 
-	fp.syncProxyRules()
+	fp.syncProxyRules(syncReasonForce)
 
 	proto := strings.ToLower(string(api.ProtocolTCP))
 	lbChain := string(serviceLBChainName(svcPortName.String(), proto))
@@ -1059,8 +1058,8 @@ func TestBuildServiceMapAddRemove(t *testing.T) {
 		}),
 		makeTestService("somewhere", "only-local-load-balancer", func(svc *api.Service) {
 			svc.ObjectMeta.Annotations = map[string]string{
-				service.BetaAnnotationExternalTraffic:     service.AnnotationValueExternalTrafficLocal,
-				service.BetaAnnotationHealthCheckNodePort: "345",
+				api.BetaAnnotationExternalTraffic:     api.AnnotationValueExternalTrafficLocal,
+				api.BetaAnnotationHealthCheckNodePort: "345",
 			}
 			svc.Spec.Type = api.ServiceTypeLoadBalancer
 			svc.Spec.ClusterIP = "172.16.55.12"
@@ -1200,8 +1199,8 @@ func TestBuildServiceMapServiceUpdate(t *testing.T) {
 	})
 	servicev2 := makeTestService("somewhere", "some-service", func(svc *api.Service) {
 		svc.ObjectMeta.Annotations = map[string]string{
-			service.BetaAnnotationExternalTraffic:     service.AnnotationValueExternalTrafficLocal,
-			service.BetaAnnotationHealthCheckNodePort: "345",
+			api.BetaAnnotationExternalTraffic:     api.AnnotationValueExternalTrafficLocal,
+			api.BetaAnnotationHealthCheckNodePort: "345",
 		}
 		svc.Spec.Type = api.ServiceTypeLoadBalancer
 		svc.Spec.ClusterIP = "172.16.55.4"

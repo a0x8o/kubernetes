@@ -131,7 +131,7 @@ type ObjectMeta struct {
 	//
 	// Populated by the system when a graceful deletion is requested.
 	// Read-only.
-	// More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata
+	// More info: https://github.com/kubernetes/community/blob/master/contributors/devel/api-conventions.md#metadata
 	// +optional
 	DeletionTimestamp *metav1.Time
 
@@ -165,6 +165,17 @@ type ObjectMeta struct {
 	// There cannot be more than one managing controller.
 	// +optional
 	OwnerReferences []metav1.OwnerReference
+
+	// An initializer is a controller which enforces some system invariant at object creation time.
+	// This field is a list of initializers that have not yet acted on this object. If nil or empty,
+	// this object has been completely initialized. Otherwise, the object is considered uninitialized
+	// and is hidden (in list/watch and get calls) from clients that haven't explicitly asked to
+	// observe uninitialized objects.
+	//
+	// When an object is created, the system will populate this list with the current set of initializers.
+	// Only privileged users may set or modify this list. Once it is empty, it may not be modified further
+	// by any user.
+	Initializers *metav1.Initializers
 
 	// Must be empty before the object is deleted from the registry. Each entry
 	// is an identifier for the responsible component that will remove the entry
@@ -507,7 +518,7 @@ type PersistentVolumeClaimSpec struct {
 	// +optional
 	VolumeName string
 	// Name of the StorageClass required by the claim.
-	// More info: http://kubernetes.io/docs/user-guide/persistent-volumes#class-1
+	// More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#class-1
 	// +optional
 	StorageClassName *string
 }
@@ -2221,7 +2232,7 @@ type PodStatus struct {
 	// The list has one entry per init container in the manifest. The most recent successful
 	// init container will have ready = true, the most recently started container will have
 	// startTime set.
-	// More info: http://kubernetes.io/docs/user-guide/pod-states#container-statuses
+	// More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-and-container-status
 	InitContainerStatuses []ContainerStatus
 	// The list has one entry per container in the manifest. Each entry is
 	// currently the output of `docker inspect`. This output format is *not*
@@ -2508,7 +2519,7 @@ type ServiceSpec struct {
 	// "LoadBalancer" builds on NodePort and creates an
 	// external load-balancer (if supported in the current cloud) which routes
 	// to the clusterIP.
-	// More info: http://kubernetes.io/docs/user-guide/services#overview
+	// More info: https://kubernetes.io/docs/concepts/services-networking/service/
 	// +optional
 	Type ServiceType
 
@@ -2520,7 +2531,7 @@ type ServiceSpec struct {
 	// external process managing its endpoints, which Kubernetes will not
 	// modify. Only applies to types ClusterIP, NodePort, and LoadBalancer.
 	// Ignored if type is ExternalName.
-	// More info: http://kubernetes.io/docs/user-guide/services#overview
+	// More info: https://kubernetes.io/docs/concepts/services-networking/service/
 	Selector map[string]string
 
 	// ClusterIP is the IP address of the service and is usually assigned
@@ -2531,7 +2542,7 @@ type ServiceSpec struct {
 	// can be specified for headless services when proxying is not required.
 	// Only applies to types ClusterIP, NodePort, and LoadBalancer. Ignored if
 	// type is ExternalName.
-	// More info: http://kubernetes.io/docs/user-guide/services#virtual-ips-and-service-proxies
+	// More info: https://kubernetes.io/docs/concepts/services-networking/service/#virtual-ips-and-service-proxies
 	// +optional
 	ClusterIP string
 
@@ -3152,6 +3163,10 @@ type ListOptions struct {
 	LabelSelector labels.Selector
 	// A selector based on fields
 	FieldSelector fields.Selector
+
+	// If true, partially initialized resources are included in the response.
+	IncludeUninitialized bool
+
 	// If true, watch for changes to this list
 	Watch bool
 	// When specified with a watch call, shows changes that occur after that particular version of a resource.

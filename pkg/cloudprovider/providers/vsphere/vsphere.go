@@ -50,6 +50,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1"
 	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
 	"k8s.io/kubernetes/pkg/cloudprovider"
+	"k8s.io/kubernetes/pkg/controller"
 )
 
 const (
@@ -228,6 +229,9 @@ func init() {
 		return newVSphere(cfg)
 	})
 }
+
+// Initialize passes a Kubernetes clientBuilder interface to the cloud provider
+func (vs *VSphere) Initialize(clientBuilder controller.ControllerClientBuilder) {}
 
 // UUID gets the BIOS UUID via the sys interface.  This UUID is known by vsphere
 func getvmUUID() (string, error) {
@@ -479,16 +483,17 @@ func getLocalIP() ([]v1.NodeAddress, error) {
 						var addressType v1.NodeAddressType
 						if strings.HasPrefix(i.HardwareAddr.String(), MAC_OUI_VC) ||
 							strings.HasPrefix(i.HardwareAddr.String(), MAC_OUI_ESX) {
-							addressType = v1.NodeExternalIP
-						} else {
-							addressType = v1.NodeInternalIP
+							v1helper.AddToNodeAddresses(&addrs,
+								v1.NodeAddress{
+									Type:    v1.NodeExternalIP,
+									Address: ipnet.IP.String(),
+								},
+								v1.NodeAddress{
+									Type:    v1.NodeInternalIP,
+									Address: ipnet.IP.String(),
+								},
+							)
 						}
-						v1helper.AddToNodeAddresses(&addrs,
-							v1.NodeAddress{
-								Type:    addressType,
-								Address: ipnet.IP.String(),
-							},
-						)
 						glog.V(4).Infof("Find local IP address %v and set type to %v", ipnet.IP.String(), addressType)
 					}
 				}
@@ -547,20 +552,19 @@ func (vs *VSphere) NodeAddresses(nodeName k8stypes.NodeName) ([]v1.NodeAddress, 
 
 	// retrieve VM's ip(s)
 	for _, v := range mvm.Guest.Net {
-		var addressType v1.NodeAddressType
 		if vs.cfg.Network.PublicNetwork == v.Network {
-			addressType = v1.NodeExternalIP
-		} else {
-			addressType = v1.NodeInternalIP
-		}
-		for _, ip := range v.IpAddress {
-			if net.ParseIP(ip).To4() != nil {
-				v1helper.AddToNodeAddresses(&addrs,
-					v1.NodeAddress{
-						Type:    addressType,
-						Address: ip,
-					},
-				)
+			for _, ip := range v.IpAddress {
+				if net.ParseIP(ip).To4() != nil {
+					v1helper.AddToNodeAddresses(&addrs,
+						v1.NodeAddress{
+							Type:    v1.NodeExternalIP,
+							Address: ip,
+						}, v1.NodeAddress{
+							Type:    v1.NodeInternalIP,
+							Address: ip,
+						},
+					)
+				}
 			}
 		}
 	}

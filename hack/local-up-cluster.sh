@@ -388,6 +388,9 @@ function start_apiserver {
     if [[ -n "${PSP_ADMISSION}" ]]; then
       security_admission=",PodSecurityPolicy"
     fi
+    if [[ -n "${NODE_ADMISSION}" ]]; then
+      security_admission=",NodeRestriction"
+    fi
 
     # Admission Controllers to invoke prior to persisting objects in cluster
     ADMISSION_CONTROL=NamespaceLifecycle,LimitRanger,ServiceAccount${security_admission},ResourceQuota,DefaultStorageClass,DefaultTolerationSeconds
@@ -761,11 +764,11 @@ function create_psp_policy {
 
 function create_storage_class {
     if [ -z "$CLOUD_PROVIDER" ]; then
-        # No cloud provider -> no default storage class
-        return
+        CLASS_FILE=${KUBE_ROOT}/cluster/addons/storage-class/local/default.yaml
+    else
+        CLASS_FILE=${KUBE_ROOT}/cluster/addons/storage-class/${CLOUD_PROVIDER}/default.yaml
     fi
 
-    CLASS_FILE=${KUBE_ROOT}/cluster/addons/storage-class/${CLOUD_PROVIDER}/default.yaml
     if [ -e $CLASS_FILE ]; then
         echo "Create default storage class for $CLOUD_PROVIDER"
         ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" create -f $CLASS_FILE

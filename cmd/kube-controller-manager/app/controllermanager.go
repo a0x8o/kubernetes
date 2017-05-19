@@ -32,7 +32,6 @@ import (
 	"strconv"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -192,21 +191,20 @@ func Run(s *options.CMServer) error {
 		return err
 	}
 
-	// TODO: enable other lock types
-	rl := resourcelock.EndpointsLock{
-		EndpointsMeta: metav1.ObjectMeta{
-			Namespace: "kube-system",
-			Name:      "kube-controller-manager",
-		},
-		Client: leaderElectionClient,
-		LockConfig: resourcelock.ResourceLockConfig{
+	rl, err := resourcelock.New(s.LeaderElection.ResourceLock,
+		"kube-system",
+		"kube-controller-manager",
+		leaderElectionClient,
+		resourcelock.ResourceLockConfig{
 			Identity:      id,
 			EventRecorder: recorder,
-		},
+		})
+	if err != nil {
+		glog.Fatalf("error creating lock: %v", err)
 	}
 
 	leaderelection.RunOrDie(leaderelection.LeaderElectionConfig{
-		Lock:          &rl,
+		Lock:          rl,
 		LeaseDuration: s.LeaderElection.LeaseDuration.Duration,
 		RenewDeadline: s.LeaderElection.RenewDeadline.Duration,
 		RetryPeriod:   s.LeaderElection.RetryPeriod.Duration,
@@ -451,6 +449,11 @@ func StartControllers(controllers map[string]InitFunc, s *options.CMServer, root
 	cloud, err := cloudprovider.InitCloudProvider(s.CloudProvider, s.CloudConfigFile)
 	if err != nil {
 		return fmt.Errorf("cloud provider could not be initialized: %v", err)
+	}
+
+	if cloud != nil {
+		// Initialize the cloud provider with a reference to the clientBuilder
+		cloud.Initialize(clientBuilder)
 	}
 
 	if ctx.IsControllerEnabled(nodeControllerName) {

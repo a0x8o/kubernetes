@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"fmt"
-	"reflect"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,7 +32,7 @@ import (
 func TestGetLoadBalancerSourceRanges(t *testing.T) {
 	checkError := func(v string) {
 		annotations := make(map[string]string)
-		annotations[AnnotationLoadBalancerSourceRangesKey] = v
+		annotations[api.AnnotationLoadBalancerSourceRangesKey] = v
 		svc := api.Service{}
 		svc.Annotations = annotations
 		_, err := GetLoadBalancerSourceRanges(&svc)
@@ -56,7 +55,7 @@ func TestGetLoadBalancerSourceRanges(t *testing.T) {
 
 	checkOK := func(v string) netsets.IPNet {
 		annotations := make(map[string]string)
-		annotations[AnnotationLoadBalancerSourceRangesKey] = v
+		annotations[api.AnnotationLoadBalancerSourceRangesKey] = v
 		svc := api.Service{}
 		svc.Annotations = annotations
 		cidrs, err := GetLoadBalancerSourceRanges(&svc)
@@ -101,7 +100,7 @@ func TestGetLoadBalancerSourceRanges(t *testing.T) {
 	}
 	// check SourceRanges annotation is empty
 	annotations := make(map[string]string)
-	annotations[AnnotationLoadBalancerSourceRangesKey] = ""
+	annotations[api.AnnotationLoadBalancerSourceRangesKey] = ""
 	svc = api.Service{}
 	svc.Annotations = annotations
 	cidrs, err = GetLoadBalancerSourceRanges(&svc)
@@ -226,7 +225,7 @@ func TestNeedsHealthCheck(t *testing.T) {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
-				BetaAnnotationExternalTraffic: "invalid",
+				api.BetaAnnotationExternalTraffic: "invalid",
 			},
 		},
 	})
@@ -236,7 +235,7 @@ func TestNeedsHealthCheck(t *testing.T) {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
-				BetaAnnotationExternalTraffic: AnnotationValueExternalTrafficGlobal,
+				api.BetaAnnotationExternalTraffic: api.AnnotationValueExternalTrafficGlobal,
 			},
 		},
 	})
@@ -246,7 +245,7 @@ func TestNeedsHealthCheck(t *testing.T) {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
-				BetaAnnotationExternalTraffic: AnnotationValueExternalTrafficLocal,
+				api.BetaAnnotationExternalTraffic: api.AnnotationValueExternalTrafficLocal,
 			},
 		},
 	})
@@ -291,111 +290,11 @@ func TestGetServiceHealthCheckNodePort(t *testing.T) {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
-				BetaAnnotationExternalTraffic:     AnnotationValueExternalTrafficLocal,
-				BetaAnnotationHealthCheckNodePort: "34567",
+				api.BetaAnnotationExternalTraffic:     api.AnnotationValueExternalTrafficLocal,
+				api.BetaAnnotationHealthCheckNodePort: "34567",
 			},
 		},
 	})
-}
-
-func TestSetDefaultExternalTrafficPolicyIfNeeded(t *testing.T) {
-	testCases := []struct {
-		inputService    *api.Service
-		expectedService *api.Service
-	}{
-		// First class fields cases.
-		{
-			&api.Service{
-				Spec: api.ServiceSpec{
-					Type: api.ServiceTypeLoadBalancer,
-				},
-			},
-			&api.Service{
-				Spec: api.ServiceSpec{
-					Type: api.ServiceTypeLoadBalancer,
-					ExternalTrafficPolicy: api.ServiceExternalTrafficPolicyTypeGlobal,
-				},
-			},
-		},
-		{
-			&api.Service{
-				Spec: api.ServiceSpec{
-					Type: api.ServiceTypeNodePort,
-				},
-			},
-			&api.Service{
-				Spec: api.ServiceSpec{
-					Type: api.ServiceTypeNodePort,
-					ExternalTrafficPolicy: api.ServiceExternalTrafficPolicyTypeGlobal,
-				},
-			},
-		},
-		{
-			&api.Service{
-				Spec: api.ServiceSpec{
-					Type: api.ServiceTypeClusterIP,
-				},
-			},
-			&api.Service{
-				Spec: api.ServiceSpec{
-					Type: api.ServiceTypeClusterIP,
-				},
-			},
-		},
-		// Beta annotations cases.
-		{
-			&api.Service{
-				Spec: api.ServiceSpec{
-					Type: api.ServiceTypeLoadBalancer,
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						BetaAnnotationExternalTraffic: AnnotationValueExternalTrafficLocal,
-					},
-				},
-			},
-			&api.Service{
-				Spec: api.ServiceSpec{
-					Type: api.ServiceTypeLoadBalancer,
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						BetaAnnotationExternalTraffic: AnnotationValueExternalTrafficLocal,
-					},
-				},
-			},
-		},
-		{
-			&api.Service{
-				Spec: api.ServiceSpec{
-					Type: api.ServiceTypeLoadBalancer,
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						BetaAnnotationExternalTraffic: AnnotationValueExternalTrafficGlobal,
-					},
-				},
-			},
-			&api.Service{
-				Spec: api.ServiceSpec{
-					Type: api.ServiceTypeLoadBalancer,
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						BetaAnnotationExternalTraffic: AnnotationValueExternalTrafficGlobal,
-					},
-				},
-			},
-		},
-	}
-
-	for i, tc := range testCases {
-		SetDefaultExternalTrafficPolicyIfNeeded(tc.inputService)
-		if !reflect.DeepEqual(tc.inputService, tc.expectedService) {
-			t.Errorf("%v: got unexpected service", i)
-			spew.Dump(tc)
-		}
-	}
 }
 
 func TestClearExternalTrafficPolicy(t *testing.T) {
@@ -419,7 +318,7 @@ func TestClearExternalTrafficPolicy(t *testing.T) {
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						BetaAnnotationExternalTraffic: AnnotationValueExternalTrafficLocal,
+						api.BetaAnnotationExternalTraffic: api.AnnotationValueExternalTrafficLocal,
 					},
 				},
 			},
@@ -428,7 +327,7 @@ func TestClearExternalTrafficPolicy(t *testing.T) {
 
 	for i, tc := range testCases {
 		ClearExternalTrafficPolicy(tc.inputService)
-		if _, ok := tc.inputService.Annotations[BetaAnnotationExternalTraffic]; ok ||
+		if _, ok := tc.inputService.Annotations[api.BetaAnnotationExternalTraffic]; ok ||
 			tc.inputService.Spec.ExternalTrafficPolicy != "" {
 			t.Errorf("%v: failed to clear ExternalTrafficPolicy", i)
 			spew.Dump(tc)
@@ -471,7 +370,7 @@ func TestSetServiceHealthCheckNodePort(t *testing.T) {
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						BetaAnnotationExternalTraffic: AnnotationValueExternalTrafficGlobal,
+						api.BetaAnnotationExternalTraffic: api.AnnotationValueExternalTrafficGlobal,
 					},
 				},
 			},
@@ -485,7 +384,7 @@ func TestSetServiceHealthCheckNodePort(t *testing.T) {
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						BetaAnnotationExternalTraffic: AnnotationValueExternalTrafficGlobal,
+						api.BetaAnnotationExternalTraffic: api.AnnotationValueExternalTrafficGlobal,
 					},
 				},
 			},
@@ -501,7 +400,7 @@ func TestSetServiceHealthCheckNodePort(t *testing.T) {
 				t.Errorf("%v: got HealthCheckNodePort %v, want %v", i, tc.inputService.Spec.HealthCheckNodePort, tc.hcNodePort)
 			}
 		} else {
-			l, ok := tc.inputService.Annotations[BetaAnnotationHealthCheckNodePort]
+			l, ok := tc.inputService.Annotations[api.BetaAnnotationHealthCheckNodePort]
 			if tc.hcNodePort == 0 {
 				if ok {
 					t.Errorf("%v: HealthCheckNodePort set, want it to be cleared", i)

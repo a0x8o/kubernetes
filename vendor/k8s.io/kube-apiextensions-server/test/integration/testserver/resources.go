@@ -19,6 +19,7 @@ package testserver
 import (
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -28,19 +29,20 @@ import (
 	"k8s.io/kube-apiextensions-server/pkg/client/clientset/clientset"
 )
 
-func NewNoxuCustomResourceDefinition() *apiextensionsv1alpha1.CustomResourceDefinition {
+func NewNoxuCustomResourceDefinition(scope apiextensionsv1alpha1.ResourceScope) *apiextensionsv1alpha1.CustomResourceDefinition {
 	return &apiextensionsv1alpha1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{Name: "noxus.mygroup.example.com"},
 		Spec: apiextensionsv1alpha1.CustomResourceDefinitionSpec{
 			Group:   "mygroup.example.com",
 			Version: "v1alpha1",
 			Names: apiextensionsv1alpha1.CustomResourceDefinitionNames{
-				Plural:   "noxus",
-				Singular: "nonenglishnoxu",
-				Kind:     "WishIHadChosenNoxu",
-				ListKind: "NoxuItemList",
+				Plural:     "noxus",
+				Singular:   "nonenglishnoxu",
+				Kind:       "WishIHadChosenNoxu",
+				ShortNames: []string{"foo", "bar", "abc", "def"},
+				ListKind:   "NoxuItemList",
 			},
-			Scope: apiextensionsv1alpha1.NamespaceScoped,
+			Scope: scope,
 		},
 	}
 }
@@ -61,7 +63,7 @@ func NewNoxuInstance(namespace, name string) *unstructured.Unstructured {
 	}
 }
 
-func NewCurletCustomResourceDefinition() *apiextensionsv1alpha1.CustomResourceDefinition {
+func NewCurletCustomResourceDefinition(scope apiextensionsv1alpha1.ResourceScope) *apiextensionsv1alpha1.CustomResourceDefinition {
 	return &apiextensionsv1alpha1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{Name: "curlets.mygroup.example.com"},
 		Spec: apiextensionsv1alpha1.CustomResourceDefinitionSpec{
@@ -73,7 +75,7 @@ func NewCurletCustomResourceDefinition() *apiextensionsv1alpha1.CustomResourceDe
 				Kind:     "Curlet",
 				ListKind: "CurletList",
 			},
-			Scope: apiextensionsv1alpha1.NamespaceScoped,
+			Scope: scope,
 		},
 	}
 }
@@ -122,4 +124,24 @@ func CreateNewCustomResourceDefinition(customResourceDefinition *apiextensionsv1
 		return nil, err
 	}
 	return dynamicClient, nil
+}
+
+func DeleteCustomResourceDefinition(customResource *apiextensionsv1alpha1.CustomResourceDefinition, apiExtensionsClient clientset.Interface) error {
+	if err := apiExtensionsClient.Apiextensions().CustomResourceDefinitions().Delete(customResource.Name, nil); err != nil {
+		return err
+	}
+	err := wait.PollImmediate(30*time.Millisecond, 30*time.Second, func() (bool, error) {
+		if _, err := apiExtensionsClient.Discovery().ServerResourcesForGroupVersion(customResource.Spec.Group + "/" + customResource.Spec.Version); err != nil {
+			if errors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, err
+		}
+		return false, nil
+	})
+	return err
+}
+
+func GetCustomResourceDefinition(customResource *apiextensionsv1alpha1.CustomResourceDefinition, apiExtensionsClient clientset.Interface) (*apiextensionsv1alpha1.CustomResourceDefinition, error) {
+	return apiExtensionsClient.Apiextensions().CustomResourceDefinitions().Get(customResource.Name, metav1.GetOptions{})
 }
