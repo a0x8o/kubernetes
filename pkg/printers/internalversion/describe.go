@@ -818,8 +818,12 @@ func printISCSIVolumeSource(iscsi *api.ISCSIVolumeSource, w PrefixWriter) {
 		"    Lun:\t%v\n"+
 		"    ISCSIInterface\t%v\n"+
 		"    FSType:\t%v\n"+
-		"    ReadOnly:\t%v\n",
-		iscsi.TargetPortal, iscsi.IQN, iscsi.Lun, iscsi.ISCSIInterface, iscsi.FSType, iscsi.ReadOnly)
+		"    ReadOnly:\t%v\n"+
+		"    Portals:\t%v\n"+
+		"    DiscoveryCHAPAuth:\t%v\n"+
+		"    SessionCHAPAuth:\t%v\n"+
+		"    SecretRef:\t%v\n",
+		iscsi.TargetPortal, iscsi.IQN, iscsi.Lun, iscsi.ISCSIInterface, iscsi.FSType, iscsi.ReadOnly, iscsi.Portals, iscsi.DiscoveryCHAPAuth, iscsi.SessionCHAPAuth, iscsi.SecretRef)
 }
 
 func printGlusterfsVolumeSource(glusterfs *api.GlusterfsVolumeSource, w PrefixWriter) {
@@ -866,10 +870,11 @@ func printAzureDiskVolumeSource(d *api.AzureDiskVolumeSource, w PrefixWriter) {
 	w.Write(LEVEL_2, "Type:\tAzureDisk (an Azure Data Disk mount on the host and bind mount to the pod)\n"+
 		"    DiskName:\t%v\n"+
 		"    DiskURI:\t%v\n"+
+		"    Kind: \t%v\n"+
 		"    FSType:\t%v\n"+
 		"    CachingMode:\t%v\n"+
 		"    ReadOnly:\t%v\n",
-		d.DiskName, d.DataDiskURI, *d.FSType, *d.CachingMode, *d.ReadOnly)
+		d.DiskName, d.DataDiskURI, *d.Kind, *d.FSType, *d.CachingMode, *d.ReadOnly)
 }
 
 func printVsphereVolumeSource(vsphere *api.VsphereVirtualDiskVolumeSource, w PrefixWriter) {
