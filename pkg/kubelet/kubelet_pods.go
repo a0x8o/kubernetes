@@ -44,6 +44,7 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/v1"
 	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
+	v1qos "k8s.io/kubernetes/pkg/api/v1/helper/qos"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	"k8s.io/kubernetes/pkg/api/v1/resource"
 	"k8s.io/kubernetes/pkg/api/v1/validation"
@@ -52,7 +53,6 @@ import (
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/envvars"
 	"k8s.io/kubernetes/pkg/kubelet/images"
-	"k8s.io/kubernetes/pkg/kubelet/qos"
 	"k8s.io/kubernetes/pkg/kubelet/server/portforward"
 	remotecommandserver "k8s.io/kubernetes/pkg/kubelet/server/remotecommand"
 	"k8s.io/kubernetes/pkg/kubelet/status"
@@ -733,15 +733,10 @@ func (kl *Kubelet) podIsTerminated(pod *v1.Pod) bool {
 	return status.Phase == v1.PodFailed || status.Phase == v1.PodSucceeded || (pod.DeletionTimestamp != nil && notRunning(status.ContainerStatuses))
 }
 
-// OkToDeletePod returns true if all required node-level resources that a pod was consuming have
-// been reclaimed by the kubelet.  Reclaiming resources is a prerequisite to deleting a pod from the
-// API server.
-func (kl *Kubelet) OkToDeletePod(pod *v1.Pod) bool {
-	if pod.DeletionTimestamp == nil {
-		// We shouldnt delete pods whose DeletionTimestamp is not set
-		return false
-	}
-	if !notRunning(pod.Status.ContainerStatuses) {
+// PodResourcesAreReclaimed returns true if all required node-level resources that a pod was consuming have
+// been reclaimed by the kubelet.  Reclaiming resources is a prerequisite to deleting a pod from the API server.
+func (kl *Kubelet) PodResourcesAreReclaimed(pod *v1.Pod, status v1.PodStatus) bool {
+	if !notRunning(status.ContainerStatuses) {
 		// We shouldnt delete pods that still have running containers
 		glog.V(3).Infof("Pod %q is terminated, but some containers are still running", format.Pod(pod))
 		return false
@@ -759,6 +754,15 @@ func (kl *Kubelet) OkToDeletePod(pod *v1.Pod) bool {
 		}
 	}
 	return true
+}
+
+// podResourcesAreReclaimed simply calls PodResourcesAreReclaimed with the most up-to-date status.
+func (kl *Kubelet) podResourcesAreReclaimed(pod *v1.Pod) bool {
+	status, ok := kl.statusManager.GetPodStatus(pod.UID)
+	if !ok {
+		status = pod.Status
+	}
+	return kl.PodResourcesAreReclaimed(pod, status)
 }
 
 // notRunning returns true if every status is terminated or waiting, or the status list
@@ -1225,7 +1229,7 @@ func (kl *Kubelet) convertStatusToAPIStatus(pod *v1.Pod, podStatus *kubecontaine
 	var apiPodStatus v1.PodStatus
 	apiPodStatus.PodIP = podStatus.IP
 	// set status for Pods created on versions of kube older than 1.6
-	apiPodStatus.QOSClass = qos.GetPodQOS(pod)
+	apiPodStatus.QOSClass = v1qos.GetPodQOS(pod)
 
 	apiPodStatus.ContainerStatuses = kl.convertToAPIContainerStatuses(
 		pod, podStatus,

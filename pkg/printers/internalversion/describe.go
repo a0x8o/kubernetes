@@ -49,6 +49,7 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/events"
 	"k8s.io/kubernetes/pkg/api/helper"
+	"k8s.io/kubernetes/pkg/api/helper/qos"
 	"k8s.io/kubernetes/pkg/api/ref"
 	resourcehelper "k8s.io/kubernetes/pkg/api/resource"
 	"k8s.io/kubernetes/pkg/apis/apps"
@@ -58,6 +59,7 @@ import (
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	versionedextension "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	"k8s.io/kubernetes/pkg/apis/policy"
+	"k8s.io/kubernetes/pkg/apis/rbac"
 	"k8s.io/kubernetes/pkg/apis/storage"
 	storageutil "k8s.io/kubernetes/pkg/apis/storage/util"
 	versionedclientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
@@ -68,7 +70,6 @@ import (
 	"k8s.io/kubernetes/pkg/controller"
 	deploymentutil "k8s.io/kubernetes/pkg/controller/deployment/util"
 	"k8s.io/kubernetes/pkg/fieldpath"
-	"k8s.io/kubernetes/pkg/kubelet/qos"
 	"k8s.io/kubernetes/pkg/printers"
 	"k8s.io/kubernetes/pkg/util/slice"
 )
@@ -143,6 +144,8 @@ func describerMap(c clientset.Interface) map[schema.GroupKind]printers.Describer
 		certificates.Kind("CertificateSigningRequest"): &CertificateSigningRequestDescriber{c},
 		storage.Kind("StorageClass"):                   &StorageClassDescriber{c},
 		policy.Kind("PodDisruptionBudget"):             &PodDisruptionBudgetDescriber{c},
+		rbac.Kind("RoleBinding"):                       &RoleBindingDescriber{c},
+		rbac.Kind("ClusterRoleBinding"):                &ClusterRoleBindingDescriber{c},
 	}
 
 	return m
@@ -649,7 +652,7 @@ func describePod(pod *api.Pod, events *api.EventList) (string, error) {
 		if pod.Status.QOSClass != "" {
 			w.Write(LEVEL_0, "QoS Class:\t%s\n", pod.Status.QOSClass)
 		} else {
-			w.Write(LEVEL_0, "QoS Class:\t%s\n", qos.InternalGetPodQOS(pod))
+			w.Write(LEVEL_0, "QoS Class:\t%s\n", qos.GetPodQOS(pod))
 		}
 		printLabelsMultiline(w, "Node-Selectors", pod.Spec.NodeSelector)
 		printPodTolerationsMultiline(w, "Tolerations", pod.Spec.Tolerations)
@@ -912,6 +915,12 @@ func printScaleIOVolumeSource(sio *api.ScaleIOVolumeSource, w PrefixWriter) {
 		sio.Gateway, sio.System, sio.ProtectionDomain, sio.StoragePool, sio.StorageMode, sio.VolumeName, sio.FSType, sio.ReadOnly)
 }
 
+func printLocalVolumeSource(ls *api.LocalVolumeSource, w PrefixWriter) {
+	w.Write(LEVEL_2, "Type:\tLocalVolume (a persistent volume backed by local storage on a node)\n"+
+		"    Path:\t%v\n",
+		ls.Path)
+}
+
 type PersistentVolumeDescriber struct {
 	clientset.Interface
 }
@@ -981,6 +990,8 @@ func describePersistentVolume(pv *api.PersistentVolume, events *api.EventList) (
 			printPortworxVolumeSource(pv.Spec.PortworxVolume, w)
 		case pv.Spec.ScaleIO != nil:
 			printScaleIOVolumeSource(pv.Spec.ScaleIO, w)
+		case pv.Spec.Local != nil:
+			printLocalVolumeSource(pv.Spec.Local, w)
 		}
 
 		if events != nil {
@@ -2096,6 +2107,70 @@ func describeServiceAccount(serviceAccount *api.ServiceAccount, tokens []api.Sec
 				}
 			}
 			w.WriteLine()
+		}
+
+		return nil
+	})
+}
+
+// RoleBindingDescriber generates information about a node.
+type RoleBindingDescriber struct {
+	clientset.Interface
+}
+
+func (d *RoleBindingDescriber) Describe(namespace, name string, describerSettings printers.DescriberSettings) (string, error) {
+	binding, err := d.Rbac().RoleBindings(namespace).Get(name, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	return tabbedString(func(out io.Writer) error {
+		w := NewPrefixWriter(out)
+		w.Write(LEVEL_0, "Name:\t%s\n", binding.Name)
+		printLabelsMultiline(w, "Labels", binding.Labels)
+		printAnnotationsMultiline(w, "Annotations", binding.Annotations)
+
+		w.Write(LEVEL_0, "Role:\n")
+		w.Write(LEVEL_1, "Kind:\t%s\n", binding.RoleRef.Kind)
+		w.Write(LEVEL_1, "Name:\t%s\n", binding.RoleRef.Name)
+
+		w.Write(LEVEL_0, "Subjects:\n")
+		w.Write(LEVEL_1, "Kind\tName\tNamespace\n")
+		w.Write(LEVEL_1, "----\t----\t---------\n")
+		for _, s := range binding.Subjects {
+			w.Write(LEVEL_1, "%s\t%s\t%s\n", s.Kind, s.Name, s.Namespace)
+		}
+
+		return nil
+	})
+}
+
+// ClusterRoleBindingDescriber generates information about a node.
+type ClusterRoleBindingDescriber struct {
+	clientset.Interface
+}
+
+func (d *ClusterRoleBindingDescriber) Describe(namespace, name string, describerSettings printers.DescriberSettings) (string, error) {
+	binding, err := d.Rbac().ClusterRoleBindings().Get(name, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	return tabbedString(func(out io.Writer) error {
+		w := NewPrefixWriter(out)
+		w.Write(LEVEL_0, "Name:\t%s\n", binding.Name)
+		printLabelsMultiline(w, "Labels", binding.Labels)
+		printAnnotationsMultiline(w, "Annotations", binding.Annotations)
+
+		w.Write(LEVEL_0, "Role:\n")
+		w.Write(LEVEL_1, "Kind:\t%s\n", binding.RoleRef.Kind)
+		w.Write(LEVEL_1, "Name:\t%s\n", binding.RoleRef.Name)
+
+		w.Write(LEVEL_0, "Subjects:\n")
+		w.Write(LEVEL_1, "Kind\tName\tNamespace\n")
+		w.Write(LEVEL_1, "----\t----\t---------\n")
+		for _, s := range binding.Subjects {
+			w.Write(LEVEL_1, "%s\t%s\t%s\n", s.Kind, s.Name, s.Namespace)
 		}
 
 		return nil
