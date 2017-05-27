@@ -89,7 +89,10 @@ type OperationExecutor interface {
 	// * Mount the volume to the pod specific path.
 	// * Update actual state of world to reflect volume is mounted to the pod
 	//   path.
-	MountVolume(waitForAttachTimeout time.Duration, volumeToMount VolumeToMount, actualStateOfWorld ActualStateOfWorldMounterUpdater) error
+	// The parameter "isRemount" is informational and used to adjust logging
+	// verbosity. An initial mount is more log-worthy than a remount, for
+	// example.
+	MountVolume(waitForAttachTimeout time.Duration, volumeToMount VolumeToMount, actualStateOfWorld ActualStateOfWorldMounterUpdater, isRemount bool) error
 
 	// UnmountVolume unmounts the volume from the pod specified in
 	// volumeToUnmount and updates the actual state of the world to reflect that.
@@ -160,11 +163,11 @@ type ActualStateOfWorldAttacherUpdater interface {
 	MarkVolumeAsDetached(volumeName v1.UniqueVolumeName, nodeName types.NodeName)
 
 	// Marks desire to detach the specified volume (remove the volume from the node's
-	// volumesToReportedAsAttached list)
+	// volumesToReportAsAttached list)
 	RemoveVolumeFromReportAsAttached(volumeName v1.UniqueVolumeName, nodeName types.NodeName) error
 
 	// Unmarks the desire to detach for the specified volume (add the volume back to
-	// the node's volumesToReportedAsAttached list)
+	// the node's volumesToReportAsAttached list)
 	AddVolumeToReportAsAttached(volumeName v1.UniqueVolumeName, nodeName types.NodeName)
 }
 
@@ -652,9 +655,10 @@ func (oe *operationExecutor) VerifyVolumesAreAttachedPerNode(
 func (oe *operationExecutor) MountVolume(
 	waitForAttachTimeout time.Duration,
 	volumeToMount VolumeToMount,
-	actualStateOfWorld ActualStateOfWorldMounterUpdater) error {
+	actualStateOfWorld ActualStateOfWorldMounterUpdater,
+	isRemount bool) error {
 	mountFunc, err := oe.operationGenerator.GenerateMountVolumeFunc(
-		waitForAttachTimeout, volumeToMount, actualStateOfWorld)
+		waitForAttachTimeout, volumeToMount, actualStateOfWorld, isRemount)
 	if err != nil {
 		return err
 	}

@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/compute/metadata"
@@ -80,7 +81,7 @@ type GCECloud struct {
 	serviceBeta              *computebeta.Service
 	containerService         *container.Service
 	clientBuilder            controller.ControllerClientBuilder
-	ClusterId                ClusterId
+	ClusterID                ClusterID
 	projectID                string
 	region                   string
 	localZone                string   // The zone in which we are running
@@ -91,6 +92,30 @@ type GCECloud struct {
 	nodeInstancePrefix       string   // If non-"", an advisory prefix for all nodes in the cluster
 	useMetadataServer        bool
 	operationPollRateLimiter flowcontrol.RateLimiter
+	manager                  ServiceManager
+	// sharedResourceLock is used to serialize GCE operations that may mutate shared state to
+	// prevent inconsistencies. For example, load balancers manipulation methods will take the
+	// lock to prevent shared resources from being prematurely deleted while the operation is
+	// in progress.
+	sharedResourceLock sync.Mutex
+}
+
+type ServiceManager interface {
+	// Creates a new persistent disk on GCE with the given disk spec.
+	CreateDisk(project string, zone string, disk *compute.Disk) (*compute.Operation, error)
+
+	// Gets the persistent disk from GCE with the given diskName.
+	GetDisk(project string, zone string, diskName string) (*compute.Disk, error)
+
+	// Deletes the persistent disk from GCE with the given diskName.
+	DeleteDisk(project string, zone string, disk string) (*compute.Operation, error)
+
+	// Waits until GCE reports the given operation in the given zone as done.
+	WaitForZoneOp(op *compute.Operation, zone string, mc *metricContext) error
+}
+
+type GCEServiceManager struct {
+	gce *GCECloud
 }
 
 type Config struct {
@@ -230,7 +255,7 @@ func CreateGCECloud(projectID, region, zone string, managedZones []string, netwo
 
 	operationPollRateLimiter := flowcontrol.NewTokenBucketRateLimiter(10, 100) // 10 qps, 100 bucket size.
 
-	return &GCECloud{
+	gce := &GCECloud{
 		service:                  service,
 		serviceBeta:              serviceBeta,
 		containerService:         containerService,
@@ -244,14 +269,17 @@ func CreateGCECloud(projectID, region, zone string, managedZones []string, netwo
 		nodeInstancePrefix:       nodeInstancePrefix,
 		useMetadataServer:        useMetadataServer,
 		operationPollRateLimiter: operationPollRateLimiter,
-	}, nil
+	}
+
+	gce.manager = &GCEServiceManager{gce}
+	return gce, nil
 }
 
 // Initialize takes in a clientBuilder and spawns a goroutine for watching the clusterid configmap.
-// This must be called before utilizing the funcs of gce.ClusterId
+// This must be called before utilizing the funcs of gce.ClusterID
 func (gce *GCECloud) Initialize(clientBuilder controller.ControllerClientBuilder) {
 	gce.clientBuilder = clientBuilder
-	go gce.watchClusterId()
+	go gce.watchClusterID()
 }
 
 // LoadBalancer returns an implementation of LoadBalancer for Google Compute Engine.
@@ -382,4 +410,32 @@ func newOauthClient(tokenSource oauth2.TokenSource) (*http.Client, error) {
 	}
 
 	return oauth2.NewClient(oauth2.NoContext, tokenSource), nil
+}
+
+func (manager *GCEServiceManager) CreateDisk(
+	project string,
+	zone string,
+	disk *compute.Disk) (*compute.Operation, error) {
+
+	return manager.gce.service.Disks.Insert(project, zone, disk).Do()
+}
+
+func (manager *GCEServiceManager) GetDisk(
+	project string,
+	zone string,
+	diskName string) (*compute.Disk, error) {
+
+	return manager.gce.service.Disks.Get(project, zone, diskName).Do()
+}
+
+func (manager *GCEServiceManager) DeleteDisk(
+	project string,
+	zone string,
+	diskName string) (*compute.Operation, error) {
+
+	return manager.gce.service.Disks.Delete(project, zone, diskName).Do()
+}
+
+func (manager *GCEServiceManager) WaitForZoneOp(op *compute.Operation, zone string, mc *metricContext) error {
+	return manager.gce.waitForZoneOp(op, zone, mc)
 }

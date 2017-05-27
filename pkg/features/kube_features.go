@@ -25,8 +25,8 @@ const (
 	// Every feature gate should add method here following this template:
 	//
 	// // owner: @username
-	// // alpha: v1.4
-	// MyFeature() bool
+	// // alpha: v1.X
+	// MyFeature utilfeature.Feature = "MyFeature"
 
 	// owner: @timstclair
 	// beta: v1.4
@@ -117,5 +117,6 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:
-	StreamingProxyRedirects: {Default: true, PreRelease: utilfeature.Beta},
+	StreamingProxyRedirects:          {Default: true, PreRelease: utilfeature.Beta},
+	genericfeatures.AdvancedAuditing: {Default: false, PreRelease: utilfeature.Alpha},
 }

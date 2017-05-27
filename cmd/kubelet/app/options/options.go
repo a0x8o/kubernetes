@@ -263,7 +263,8 @@ func (c *kubeletConfiguration) addFlags(fs *pflag.FlagSet) {
 	// TODO(#40229): Remove the docker-exec-handler flag.
 	fs.StringVar(&c.DockerExecHandlerName, "docker-exec-handler", c.DockerExecHandlerName, "Handler to use when executing a command in a container. Valid values are 'native' and 'nsenter'.")
 	fs.MarkDeprecated("docker-exec-handler", "this flag will be removed and only the 'native' handler will be supported in the future.")
-	fs.StringVar(&c.NonMasqueradeCIDR, "non-masquerade-cidr", c.NonMasqueradeCIDR, "Traffic to IPs outside this range will use IP masquerade.")
+	fs.StringVar(&c.NonMasqueradeCIDR, "non-masquerade-cidr", c.NonMasqueradeCIDR, "Traffic to IPs outside this range will use IP masquerade. Set to '0.0.0.0/0' to never masquerade.")
+	fs.MarkDeprecated("non-masquerade-cidr", "will be removed in a future version")
 	fs.StringVar(&c.PodCIDR, "pod-cidr", "", "The CIDR to use for pod IP addresses, only used in standalone mode.  In cluster mode, this is obtained from the master.")
 	fs.StringVar(&c.ResolverConfig, "resolv-conf", c.ResolverConfig, "Resolver configuration file used as the basis for the container DNS resolution configuration.")
 	fs.BoolVar(&c.CPUCFSQuota, "cpu-cfs-quota", c.CPUCFSQuota, "Enable CPU CFS quota enforcement for containers that specify CPU limits")
@@ -302,8 +303,8 @@ func (c *kubeletConfiguration) addFlags(fs *pflag.FlagSet) {
 	// CRI flags.
 	fs.BoolVar(&c.ExperimentalDockershim, "experimental-dockershim", c.ExperimentalDockershim, "Enable dockershim only mode. In this mode, kubelet will only start dockershim without any other functionalities. This flag only serves test purpose, please do not use it unless you are conscious of what you are doing. [default=false]")
 	fs.MarkHidden("experimental-dockershim")
-	fs.StringVar(&c.RemoteRuntimeEndpoint, "container-runtime-endpoint", c.RemoteRuntimeEndpoint, "[Experimental] The unix socket endpoint of remote runtime service.")
-	fs.StringVar(&c.RemoteImageEndpoint, "image-service-endpoint", c.RemoteImageEndpoint, "[Experimental] The unix socket endpoint of remote image service. If not specified, it will be the same with container-runtime-endpoint by default.")
+	fs.StringVar(&c.RemoteRuntimeEndpoint, "container-runtime-endpoint", c.RemoteRuntimeEndpoint, "[Experimental] The endpoint of remote runtime service. Currently unix socket is supported on Linux, and tcp is supported on windows.  Examples:'unix:///var/run/dockershim.sock', 'tcp://localhost:3735'")
+	fs.StringVar(&c.RemoteImageEndpoint, "image-service-endpoint", c.RemoteImageEndpoint, "[Experimental] The endpoint of remote image service. If not specified, it will be the same with container-runtime-endpoint by default. Currently unix socket is supported on Linux, and tcp is supported on windows.  Examples:'unix:///var/run/dockershim.sock', 'tcp://localhost:3735'")
 	fs.BoolVar(&c.DockerDisableSharedPID, "docker-disable-shared-pid", c.DockerDisableSharedPID, "The Container Runtime Interface (CRI) defaults to using a shared PID namespace for containers in a pod when running with Docker 1.13.1 or higher. Setting this flag reverts to the previous behavior of isolated PID namespaces. This ability will be removed in a future Kubernetes release.")
 
 	fs.BoolVar(&c.ExperimentalCheckNodeCapabilitiesBeforeMount, "experimental-check-node-capabilities-before-mount", c.ExperimentalCheckNodeCapabilitiesBeforeMount, "[Experimental] if set true, the kubelet will check the underlying node for required componenets (binaries, etc.) before performing the mount")
