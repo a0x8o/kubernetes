@@ -26,9 +26,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
-	apiextensionsv1alpha1 "k8s.io/kube-apiextensions-server/pkg/apis/apiextensions/v1alpha1"
+	apiextensionsv1beta1 "k8s.io/kube-apiextensions-server/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/kube-apiextensions-server/test/integration/testserver"
 )
 
@@ -47,7 +48,7 @@ func TestNamespaceScopedCRUD(t *testing.T) {
 	}
 	defer close(stopCh)
 
-	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(apiextensionsv1alpha1.NamespaceScoped)
+	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(apiextensionsv1beta1.NamespaceScoped)
 	noxuVersionClient, err := testserver.CreateNewCustomResourceDefinition(noxuDefinition, apiExtensionClient, clientPool)
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +65,7 @@ func TestClusterScopedCRUD(t *testing.T) {
 	}
 	defer close(stopCh)
 
-	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(apiextensionsv1alpha1.ClusterScoped)
+	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(apiextensionsv1beta1.ClusterScoped)
 	noxuVersionClient, err := testserver.CreateNewCustomResourceDefinition(noxuDefinition, apiExtensionClient, clientPool)
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +75,7 @@ func TestClusterScopedCRUD(t *testing.T) {
 	testSimpleCRUD(t, ns, noxuDefinition, noxuVersionClient)
 }
 
-func testSimpleCRUD(t *testing.T, ns string, noxuDefinition *apiextensionsv1alpha1.CustomResourceDefinition, noxuVersionClient *dynamic.Client) {
+func testSimpleCRUD(t *testing.T, ns string, noxuDefinition *apiextensionsv1beta1.CustomResourceDefinition, noxuVersionClient *dynamic.Client) {
 	noxuResourceClient := NewNamespacedCustomResourceClient(ns, noxuVersionClient, noxuDefinition)
 	initialList, err := noxuResourceClient.List(metav1.ListOptions{})
 	if err != nil {
@@ -198,7 +199,7 @@ func testSimpleCRUD(t *testing.T, ns string, noxuDefinition *apiextensionsv1alph
 
 func TestDiscovery(t *testing.T) {
 	group := "mygroup.example.com"
-	version := "v1alpha1"
+	version := "v1beta1"
 
 	stopCh, apiExtensionClient, clientPool, err := testserver.StartDefaultServer()
 	if err != nil {
@@ -206,7 +207,7 @@ func TestDiscovery(t *testing.T) {
 	}
 	defer close(stopCh)
 
-	scope := apiextensionsv1alpha1.NamespaceScoped
+	scope := apiextensionsv1beta1.NamespaceScoped
 	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(scope)
 	_, err = testserver.CreateNewCustomResourceDefinition(noxuDefinition, apiExtensionClient, clientPool)
 	if err != nil {
@@ -250,7 +251,7 @@ func TestNoNamespaceReject(t *testing.T) {
 	}
 	defer close(stopCh)
 
-	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(apiextensionsv1alpha1.NamespaceScoped)
+	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(apiextensionsv1beta1.NamespaceScoped)
 	noxuVersionClient, err := testserver.CreateNewCustomResourceDefinition(noxuDefinition, apiExtensionClient, clientPool)
 	if err != nil {
 		t.Fatal(err)
@@ -289,7 +290,7 @@ func TestSameNameDiffNamespace(t *testing.T) {
 	}
 	defer close(stopCh)
 
-	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(apiextensionsv1alpha1.NamespaceScoped)
+	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(apiextensionsv1beta1.NamespaceScoped)
 	noxuVersionClient, err := testserver.CreateNewCustomResourceDefinition(noxuDefinition, apiExtensionClient, clientPool)
 	if err != nil {
 		t.Fatal(err)
@@ -309,7 +310,8 @@ func TestSelfLink(t *testing.T) {
 	}
 	defer close(stopCh)
 
-	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(apiextensionsv1alpha1.NamespaceScoped)
+	// namespace scoped
+	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(apiextensionsv1beta1.NamespaceScoped)
 	noxuVersionClient, err := testserver.CreateNewCustomResourceDefinition(noxuDefinition, apiExtensionClient, clientPool)
 	if err != nil {
 		t.Fatal(err)
@@ -318,7 +320,7 @@ func TestSelfLink(t *testing.T) {
 	ns := "not-the-default"
 	noxuNamespacedResourceClient := noxuVersionClient.Resource(&metav1.APIResource{
 		Name:       noxuDefinition.Spec.Names.Plural,
-		Namespaced: true,
+		Namespaced: noxuDefinition.Spec.Scope == apiextensionsv1beta1.NamespaceScoped,
 	}, ns)
 
 	noxuInstanceToCreate := testserver.NewNoxuInstance(ns, "foo")
@@ -327,12 +329,31 @@ func TestSelfLink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if e, a := "/apis/mygroup.example.com/v1alpha1/namespaces/not-the-default/noxus/foo", createdNoxuInstance.GetSelfLink(); e != a {
+	if e, a := "/apis/mygroup.example.com/v1beta1/namespaces/not-the-default/noxus/foo", createdNoxuInstance.GetSelfLink(); e != a {
 		t.Errorf("expected %v, got %v", e, a)
 	}
 
-	// TODO add test for cluster scoped self-link when its available
+	// cluster scoped
+	curletDefinition := testserver.NewCurletCustomResourceDefinition(apiextensionsv1beta1.ClusterScoped)
+	curletVersionClient, err := testserver.CreateNewCustomResourceDefinition(curletDefinition, apiExtensionClient, clientPool)
+	if err != nil {
+		t.Fatal(err)
+	}
 
+	curletResourceClient := curletVersionClient.Resource(&metav1.APIResource{
+		Name:       curletDefinition.Spec.Names.Plural,
+		Namespaced: curletDefinition.Spec.Scope == apiextensionsv1beta1.NamespaceScoped,
+	}, ns)
+
+	curletInstanceToCreate := testserver.NewCurletInstance(ns, "foo")
+	createdCurletInstance, err := curletResourceClient.Create(curletInstanceToCreate)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if e, a := "/apis/mygroup.example.com/v1beta1/foo", createdCurletInstance.GetSelfLink(); e != a {
+		t.Errorf("expected %v, got %v", e, a)
+	}
 }
 
 func TestPreserveInt(t *testing.T) {
@@ -342,7 +363,7 @@ func TestPreserveInt(t *testing.T) {
 	}
 	defer close(stopCh)
 
-	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(apiextensionsv1alpha1.ClusterScoped)
+	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(apiextensionsv1beta1.ClusterScoped)
 	noxuVersionClient, err := testserver.CreateNewCustomResourceDefinition(noxuDefinition, apiExtensionClient, clientPool)
 	if err != nil {
 		t.Fatal(err)
@@ -387,7 +408,7 @@ func TestCrossNamespaceListWatch(t *testing.T) {
 	}
 	defer close(stopCh)
 
-	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(apiextensionsv1alpha1.NamespaceScoped)
+	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(apiextensionsv1beta1.NamespaceScoped)
 	noxuVersionClient, err := testserver.CreateNewCustomResourceDefinition(noxuDefinition, apiExtensionClient, clientPool)
 	if err != nil {
 		t.Fatal(err)
@@ -480,7 +501,7 @@ func TestCrossNamespaceListWatch(t *testing.T) {
 	checkNamespacesWatchHelper(t, ns2, noxuNamespacesWatch2)
 }
 
-func createInstanceWithNamespaceHelper(t *testing.T, ns string, name string, noxuNamespacedResourceClient *dynamic.ResourceClient, noxuDefinition *apiextensionsv1alpha1.CustomResourceDefinition) *unstructured.Unstructured {
+func createInstanceWithNamespaceHelper(t *testing.T, ns string, name string, noxuNamespacedResourceClient *dynamic.ResourceClient, noxuDefinition *apiextensionsv1beta1.CustomResourceDefinition) *unstructured.Unstructured {
 	createdInstance, err := instantiateCustomResource(t, testserver.NewNoxuInstance(ns, name), noxuNamespacedResourceClient, noxuDefinition)
 	if err != nil {
 		t.Fatalf("unable to create noxu Instance:%v", err)
@@ -513,5 +534,66 @@ func checkNamespacesWatchHelper(t *testing.T, ns string, namespacedwatch watch.I
 			}
 		}
 		namespacedAddEvent++
+	}
+}
+
+func TestNameConflict(t *testing.T) {
+	stopCh, apiExtensionClient, clientPool, err := testserver.StartDefaultServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer close(stopCh)
+
+	noxuDefinition := testserver.NewNoxuCustomResourceDefinition(apiextensionsv1beta1.NamespaceScoped)
+	_, err = testserver.CreateNewCustomResourceDefinition(noxuDefinition, apiExtensionClient, clientPool)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	noxu2Definition := testserver.NewNoxu2CustomResourceDefinition(apiextensionsv1beta1.NamespaceScoped)
+	_, err = apiExtensionClient.Apiextensions().CustomResourceDefinitions().Create(noxu2Definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A NameConflict occurs
+	err = wait.Poll(500*time.Millisecond, wait.ForeverTestTimeout, func() (bool, error) {
+		crd, err := testserver.GetCustomResourceDefinition(noxu2Definition, apiExtensionClient)
+		if err != nil {
+			return false, err
+		}
+
+		for _, condition := range crd.Status.Conditions {
+			if condition.Type == apiextensionsv1beta1.NamesAccepted && condition.Status == apiextensionsv1beta1.ConditionFalse {
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = testserver.DeleteCustomResourceDefinition(noxuDefinition, apiExtensionClient)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Names are now accepted
+	err = wait.Poll(500*time.Millisecond, wait.ForeverTestTimeout, func() (bool, error) {
+		crd, err := testserver.GetCustomResourceDefinition(noxu2Definition, apiExtensionClient)
+		if err != nil {
+			return false, err
+		}
+
+		for _, condition := range crd.Status.Conditions {
+			if condition.Type == apiextensionsv1beta1.NamesAccepted && condition.Status == apiextensionsv1beta1.ConditionTrue {
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

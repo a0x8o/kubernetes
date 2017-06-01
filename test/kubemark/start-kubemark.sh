@@ -16,6 +16,10 @@
 
 # Script that creates a Kubemark cluster for any given cloud provider.
 
+set -o errexit
+set -o nounset
+set -o pipefail
+
 TMP_ROOT="$(dirname "${BASH_SOURCE}")/../.."
 KUBE_ROOT=$(readlink -e ${TMP_ROOT} 2> /dev/null || perl -MCwd -e 'print Cwd::abs_path shift' ${TMP_ROOT})
 
@@ -161,9 +165,7 @@ function copy-resource-files-to-master {
 # Make startup scripts executable and run start-kubemark-master.sh.
 function start-master-components {
   echo ""
-  MASTER_STARTUP_CMD="sudo chmod a+x /home/kubernetes/configure-kubectl.sh && \
-    sudo chmod a+x /home/kubernetes/start-kubemark-master.sh && \
-    sudo bash /home/kubernetes/start-kubemark-master.sh"
+  MASTER_STARTUP_CMD="sudo bash /home/kubernetes/start-kubemark-master.sh"
   execute-cmd-on-master-with-retries "${MASTER_STARTUP_CMD}"
   echo "The master has started and is now live."
 }

@@ -38,11 +38,13 @@ import (
 	"k8s.io/kubernetes/pkg/apis/batch"
 	"k8s.io/kubernetes/pkg/apis/certificates"
 	"k8s.io/kubernetes/pkg/apis/extensions"
+	"k8s.io/kubernetes/pkg/apis/networking"
 	"k8s.io/kubernetes/pkg/apis/policy"
 	"k8s.io/kubernetes/pkg/apis/rbac"
 	"k8s.io/kubernetes/pkg/apis/settings"
 	"k8s.io/kubernetes/pkg/apis/storage"
 	storageutil "k8s.io/kubernetes/pkg/apis/storage/util"
+	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/printers"
 	"k8s.io/kubernetes/pkg/util/node"
 )
@@ -102,6 +104,7 @@ var (
 	networkPolicyColumns             = []string{"NAME", "POD-SELECTOR", "AGE"}
 	certificateSigningRequestColumns = []string{"NAME", "AGE", "REQUESTOR", "CONDITION"}
 	podPresetColumns                 = []string{"NAME", "AGE"}
+	controllerRevisionColumns        = []string{"NAME", "CONTROLLER", "REVISION", "AGE"}
 )
 
 func printPod(pod *api.Pod, w io.Writer, options printers.PrintOptions) error {
@@ -181,6 +184,8 @@ func AddHandlers(h *printers.HumanReadablePrinter) {
 	h.Handler(thirdPartyResourceDataColumns, nil, printThirdPartyResourceDataList)
 	h.Handler(clusterColumns, nil, printCluster)
 	h.Handler(clusterColumns, nil, printClusterList)
+	h.Handler(networkPolicyColumns, nil, printExtensionsNetworkPolicy)
+	h.Handler(networkPolicyColumns, nil, printExtensionsNetworkPolicyList)
 	h.Handler(networkPolicyColumns, nil, printNetworkPolicy)
 	h.Handler(networkPolicyColumns, nil, printNetworkPolicyList)
 	h.Handler(roleColumns, nil, printRole)
@@ -198,6 +203,8 @@ func AddHandlers(h *printers.HumanReadablePrinter) {
 	h.Handler(podPresetColumns, nil, printPodPreset)
 	h.Handler(podPresetColumns, nil, printPodPresetList)
 	h.Handler(statusColumns, nil, printStatus)
+	h.Handler(controllerRevisionColumns, nil, printControllerRevision)
+	h.Handler(controllerRevisionColumns, nil, printControllerRevisionList)
 }
 
 // Pass ports=nil for all ports.
@@ -1856,7 +1863,7 @@ func printPodSecurityPolicyList(list *extensions.PodSecurityPolicyList, w io.Wri
 	return nil
 }
 
-func printNetworkPolicy(networkPolicy *extensions.NetworkPolicy, w io.Writer, options printers.PrintOptions) error {
+func printExtensionsNetworkPolicy(networkPolicy *extensions.NetworkPolicy, w io.Writer, options printers.PrintOptions) error {
 	name := printers.FormatResourceName(options.Kind, networkPolicy.Name, options.WithKind)
 
 	namespace := networkPolicy.Namespace
@@ -1876,7 +1883,36 @@ func printNetworkPolicy(networkPolicy *extensions.NetworkPolicy, w io.Writer, op
 	return err
 }
 
-func printNetworkPolicyList(list *extensions.NetworkPolicyList, w io.Writer, options printers.PrintOptions) error {
+func printExtensionsNetworkPolicyList(list *extensions.NetworkPolicyList, w io.Writer, options printers.PrintOptions) error {
+	for i := range list.Items {
+		if err := printExtensionsNetworkPolicy(&list.Items[i], w, options); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func printNetworkPolicy(networkPolicy *networking.NetworkPolicy, w io.Writer, options printers.PrintOptions) error {
+	name := printers.FormatResourceName(options.Kind, networkPolicy.Name, options.WithKind)
+
+	namespace := networkPolicy.Namespace
+
+	if options.WithNamespace {
+		if _, err := fmt.Fprintf(w, "%s\t", namespace); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintf(w, "%s\t%v\t%s", name, metav1.FormatLabelSelector(&networkPolicy.Spec.PodSelector), translateTimestamp(networkPolicy.CreationTimestamp)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprint(w, printers.AppendLabels(networkPolicy.Labels, options.ColumnLabels)); err != nil {
+		return err
+	}
+	_, err := fmt.Fprint(w, printers.AppendAllLabels(options.ShowLabels, networkPolicy.Labels))
+	return err
+}
+
+func printNetworkPolicyList(list *networking.NetworkPolicyList, w io.Writer, options printers.PrintOptions) error {
 	for i := range list.Items {
 		if err := printNetworkPolicy(&list.Items[i], w, options); err != nil {
 			return err
@@ -1967,4 +2003,40 @@ func formatEventSource(es api.EventSource) string {
 		EventSourceString = append(EventSourceString, es.Host)
 	}
 	return strings.Join(EventSourceString, ", ")
+}
+
+func printControllerRevision(history *apps.ControllerRevision, w io.Writer, options printers.PrintOptions) error {
+	name := printers.FormatResourceName(options.Kind, history.Name, options.WithKind)
+
+	if options.WithNamespace {
+		if _, err := fmt.Fprintf(w, "%s\t", history.Namespace); err != nil {
+			return err
+		}
+	}
+
+	controllerRef := controller.GetControllerOf(history)
+	controllerName := "<none>"
+	if controllerRef != nil {
+		withKind := true
+		controllerName = printers.FormatResourceName(controllerRef.Kind, controllerRef.Name, withKind)
+	}
+	revision := history.Revision
+	age := translateTimestamp(history.CreationTimestamp)
+	if _, err := fmt.Fprintf(w, "%s\t%s\t%d\t%s", name, controllerName, revision, age); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprint(w, printers.AppendLabels(history.Labels, options.ColumnLabels)); err != nil {
+		return err
+	}
+	_, err := fmt.Fprint(w, printers.AppendAllLabels(options.ShowLabels, history.Labels))
+	return err
+}
+
+func printControllerRevisionList(list *apps.ControllerRevisionList, w io.Writer, options printers.PrintOptions) error {
+	for _, item := range list.Items {
+		if err := printControllerRevision(&item, w, options); err != nil {
+			return err
+		}
+	}
+	return nil
 }
