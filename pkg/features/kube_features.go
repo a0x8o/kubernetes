@@ -97,11 +97,24 @@ const (
 	// certificate as expiration approaches.
 	RotateKubeletServerCertificate utilfeature.Feature = "RotateKubeletServerCertificate"
 
+	// owner: @jcbsmpsn
+	// alpha: v1.7
+	//
+	// Automatically renews the client certificate used for communicating with
+	// the API server as the certificate approaches expiration.
+	RotateKubeletClientCertificate utilfeature.Feature = "RotateKubeletClientCertificate"
+
 	// owner: @msau
 	// alpha: v1.7
 	//
 	// A new volume type that supports local disks on a node.
 	PersistentLocalVolumes utilfeature.Feature = "PersistentLocalVolumes"
+
+	// owner: @jinxu
+	// alpha: v1.7
+	//
+	// New local storage types to support local storage capacity isolation
+	LocalStorageCapacityIsolation utilfeature.Feature = "LocalStorageCapacityIsolation"
 )
 
 func init() {
@@ -122,7 +135,9 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	Accelerators:                                {Default: false, PreRelease: utilfeature.Alpha},
 	TaintBasedEvictions:                         {Default: false, PreRelease: utilfeature.Alpha},
 	RotateKubeletServerCertificate:              {Default: false, PreRelease: utilfeature.Alpha},
+	RotateKubeletClientCertificate:              {Default: false, PreRelease: utilfeature.Alpha},
 	PersistentLocalVolumes:                      {Default: false, PreRelease: utilfeature.Alpha},
+	LocalStorageCapacityIsolation:               {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

@@ -42,7 +42,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -50,6 +49,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1/service"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
+	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 	"k8s.io/kubernetes/pkg/volume"
 )
 
@@ -419,6 +419,11 @@ type CloudConfig struct {
 		//has setup a rule that allows inbound traffic on kubelet ports from the
 		//local VPC subnet (so load balancers can access it). E.g. 10.82.0.0/16 30000-32000.
 		DisableSecurityGroupIngress bool
+
+		//AWS has a hard limit of 500 security groups. For large clusters creating a security group for each ELB
+		//can cause the max number of security groups to be reached. If this is set instead of creating a new
+		//Security group for each ELB this security group will be used instead.
+		ElbSecurityGroup string
 
 		//During the instantiation of an new AWS cloud provider, the detected region
 		//is validated against a known set of regions.
@@ -1522,6 +1527,28 @@ func (c *Cloud) getAwsInstance(nodeName types.NodeName) (*awsInstance, error) {
 	return awsInstance, nil
 }
 
+// wrapAttachError wraps the error returned by an AttachVolume request with
+// additional information, if needed and possible.
+func wrapAttachError(err error, disk *awsDisk, instance string) error {
+	if awsError, ok := err.(awserr.Error); ok {
+		if awsError.Code() == "VolumeInUse" {
+			info, err := disk.describeVolume()
+			if err != nil {
+				glog.Errorf("Error describing volume %q: %v", disk.awsID, err)
+			} else {
+				for _, a := range info.Attachments {
+					if disk.awsID != awsVolumeID(aws.StringValue(a.VolumeId)) {
+						glog.Warningf("Expected to get attachment info of volume %q but instead got info of %q", disk.awsID, aws.StringValue(a.VolumeId))
+					} else if aws.StringValue(a.State) == "attached" {
+						return fmt.Errorf("Error attaching EBS volume %q to instance %q: %v. The volume is currently attached to instance %q", disk.awsID, instance, awsError, aws.StringValue(a.InstanceId))
+					}
+				}
+			}
+		}
+	}
+	return fmt.Errorf("Error attaching EBS volume %q to instance %q: %v", disk.awsID, instance, err)
+}
+
 // AttachDisk implements Volumes.AttachDisk
 func (c *Cloud) AttachDisk(diskName KubernetesVolumeID, nodeName types.NodeName, readOnly bool) (string, error) {
 	disk, err := newAWSDisk(c, diskName)
@@ -1578,7 +1605,7 @@ func (c *Cloud) AttachDisk(diskName KubernetesVolumeID, nodeName types.NodeName,
 		if err != nil {
 			attachEnded = true
 			// TODO: Check if the volume was concurrently attached?
-			return "", fmt.Errorf("Error attaching EBS volume %q to instance %q: %v", disk.awsID, awsInstance.awsID, err)
+			return "", wrapAttachError(err, disk, awsInstance.awsID)
 		}
 		if da, ok := c.deviceAllocators[awsInstance.nodeName]; ok {
 			da.Deprioritize(mountDevice)
@@ -1794,12 +1821,12 @@ func (c *Cloud) GetVolumeLabels(volumeName KubernetesVolumeID) (map[string]strin
 		return nil, fmt.Errorf("volume did not have AZ information: %q", info.VolumeId)
 	}
 
-	labels[metav1.LabelZoneFailureDomain] = az
+	labels[kubeletapis.LabelZoneFailureDomain] = az
 	region, err := azToRegion(az)
 	if err != nil {
 		return nil, err
 	}
-	labels[metav1.LabelZoneRegion] = region
+	labels[kubeletapis.LabelZoneRegion] = region
 
 	return labels, nil
 }
@@ -2742,48 +2769,54 @@ func (c *Cloud) EnsureLoadBalancer(clusterName string, apiService *v1.Service, n
 	// Create a security group for the load balancer
 	var securityGroupID string
 	{
-		sgName := "k8s-elb-" + loadBalancerName
-		sgDescription := fmt.Sprintf("Security group for Kubernetes ELB %s (%v)", loadBalancerName, serviceName)
-		securityGroupID, err = c.ensureSecurityGroup(sgName, sgDescription)
-		if err != nil {
-			glog.Error("Error creating load balancer security group: ", err)
-			return nil, err
-		}
+		if c.cfg.Global.ElbSecurityGroup != "" {
+			securityGroupID = c.cfg.Global.ElbSecurityGroup
 
-		ec2SourceRanges := []*ec2.IpRange{}
-		for _, sourceRange := range sourceRanges.StringSlice() {
-			ec2SourceRanges = append(ec2SourceRanges, &ec2.IpRange{CidrIp: aws.String(sourceRange)})
-		}
+		} else {
 
-		permissions := NewIPPermissionSet()
-		for _, port := range apiService.Spec.Ports {
-			portInt64 := int64(port.Port)
-			protocol := strings.ToLower(string(port.Protocol))
-
-			permission := &ec2.IpPermission{}
-			permission.FromPort = &portInt64
-			permission.ToPort = &portInt64
-			permission.IpRanges = ec2SourceRanges
-			permission.IpProtocol = &protocol
-
-			permissions.Insert(permission)
-		}
-
-		// Allow ICMP fragmentation packets, important for MTU discovery
-		{
-			permission := &ec2.IpPermission{
-				IpProtocol: aws.String("icmp"),
-				FromPort:   aws.Int64(3),
-				ToPort:     aws.Int64(4),
-				IpRanges:   []*ec2.IpRange{{CidrIp: aws.String("0.0.0.0/0")}},
+			sgName := "k8s-elb-" + loadBalancerName
+			sgDescription := fmt.Sprintf("Security group for Kubernetes ELB %s (%v)", loadBalancerName, serviceName)
+			securityGroupID, err = c.ensureSecurityGroup(sgName, sgDescription)
+			if err != nil {
+				glog.Error("Error creating load balancer security group: ", err)
+				return nil, err
 			}
 
-			permissions.Insert(permission)
-		}
+			ec2SourceRanges := []*ec2.IpRange{}
+			for _, sourceRange := range sourceRanges.StringSlice() {
+				ec2SourceRanges = append(ec2SourceRanges, &ec2.IpRange{CidrIp: aws.String(sourceRange)})
+			}
 
-		_, err = c.setSecurityGroupIngress(securityGroupID, permissions)
-		if err != nil {
-			return nil, err
+			permissions := NewIPPermissionSet()
+			for _, port := range apiService.Spec.Ports {
+				portInt64 := int64(port.Port)
+				protocol := strings.ToLower(string(port.Protocol))
+
+				permission := &ec2.IpPermission{}
+				permission.FromPort = &portInt64
+				permission.ToPort = &portInt64
+				permission.IpRanges = ec2SourceRanges
+				permission.IpProtocol = &protocol
+
+				permissions.Insert(permission)
+			}
+
+			// Allow ICMP fragmentation packets, important for MTU discovery
+			{
+				permission := &ec2.IpPermission{
+					IpProtocol: aws.String("icmp"),
+					FromPort:   aws.Int64(3),
+					ToPort:     aws.Int64(4),
+					IpRanges:   []*ec2.IpRange{{CidrIp: aws.String("0.0.0.0/0")}},
+				}
+
+				permissions.Insert(permission)
+			}
+
+			_, err = c.setSecurityGroupIngress(securityGroupID, permissions)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	securityGroupIDs := []string{securityGroupID}
@@ -3121,6 +3154,10 @@ func (c *Cloud) EnsureLoadBalancerDeleted(clusterName string, service *v1.Servic
 		// Collect the security groups to delete
 		securityGroupIDs := map[string]struct{}{}
 		for _, securityGroupID := range lb.SecurityGroups {
+			if *securityGroupID == c.cfg.Global.ElbSecurityGroup {
+				//We don't want to delete a security group that was defined in the Cloud Configurationn.
+				continue
+			}
 			if isNilOrEmpty(securityGroupID) {
 				glog.Warning("Ignoring empty security group in ", service.Name)
 				continue

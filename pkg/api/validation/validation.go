@@ -398,7 +398,12 @@ func validateVolumeSource(source *api.VolumeSource, fldPath *field.Path) field.E
 	allErrs := field.ErrorList{}
 	if source.EmptyDir != nil {
 		numVolumes++
-		// EmptyDirs have nothing to validate
+		if !utilfeature.DefaultFeatureGate.Enabled(features.LocalStorageCapacityIsolation) {
+			unsetSizeLimit := resource.Quantity{}
+			if unsetSizeLimit.Cmp(source.EmptyDir.SizeLimit) != 0 {
+				allErrs = append(allErrs, field.Forbidden(fldPath.Child("emptyDir").Child("sizeLimit"), "SizeLimit field disabled by feature-gate for EmptyDir volumes"))
+			}
+		}
 	}
 	if source.HostPath != nil {
 		if numVolumes > 0 {
@@ -2190,11 +2195,9 @@ func ValidatePodSpec(spec *api.PodSpec, fldPath *field.Path) field.ErrorList {
 	}
 
 	if spec.ActiveDeadlineSeconds != nil {
-		if spec.ActiveDeadlineSeconds != nil {
-			value := *spec.ActiveDeadlineSeconds
-			if value < 1 || value > math.MaxUint32 {
-				allErrs = append(allErrs, field.Invalid(fldPath.Child("activeDeadlineSeconds"), value, validation.InclusiveRangeError(1, math.MaxUint32)))
-			}
+		value := *spec.ActiveDeadlineSeconds
+		if value < 1 || value > math.MaxInt32 {
+			allErrs = append(allErrs, field.Invalid(fldPath.Child("activeDeadlineSeconds"), value, validation.InclusiveRangeError(1, math.MaxInt32)))
 		}
 	}
 
@@ -2580,8 +2583,8 @@ func ValidatePodUpdate(newPod, oldPod *api.Pod) field.ErrorList {
 	// 2.  from a positive value to a lesser, non-negative value
 	if newPod.Spec.ActiveDeadlineSeconds != nil {
 		newActiveDeadlineSeconds := *newPod.Spec.ActiveDeadlineSeconds
-		if newActiveDeadlineSeconds < 0 || newActiveDeadlineSeconds > math.MaxUint32 {
-			allErrs = append(allErrs, field.Invalid(specPath.Child("activeDeadlineSeconds"), newActiveDeadlineSeconds, validation.InclusiveRangeError(0, math.MaxUint32)))
+		if newActiveDeadlineSeconds < 0 || newActiveDeadlineSeconds > math.MaxInt32 {
+			allErrs = append(allErrs, field.Invalid(specPath.Child("activeDeadlineSeconds"), newActiveDeadlineSeconds, validation.InclusiveRangeError(0, math.MaxInt32)))
 			return allErrs
 		}
 		if oldPod.Spec.ActiveDeadlineSeconds != nil {
@@ -2898,10 +2901,10 @@ func validateServiceExternalTrafficFieldsValue(service *api.Service) field.Error
 
 	// Check first class fields.
 	if service.Spec.ExternalTrafficPolicy != "" &&
-		service.Spec.ExternalTrafficPolicy != api.ServiceExternalTrafficPolicyTypeGlobal &&
+		service.Spec.ExternalTrafficPolicy != api.ServiceExternalTrafficPolicyTypeCluster &&
 		service.Spec.ExternalTrafficPolicy != api.ServiceExternalTrafficPolicyTypeLocal {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("externalTrafficPolicy"), service.Spec.ExternalTrafficPolicy,
-			fmt.Sprintf("ExternalTrafficPolicy must be empty, %v or %v", api.ServiceExternalTrafficPolicyTypeGlobal, api.ServiceExternalTrafficPolicyTypeLocal)))
+			fmt.Sprintf("ExternalTrafficPolicy must be empty, %v or %v", api.ServiceExternalTrafficPolicyTypeCluster, api.ServiceExternalTrafficPolicyTypeLocal)))
 	}
 	if service.Spec.HealthCheckNodePort < 0 {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("healthCheckNodePort"), service.Spec.HealthCheckNodePort,
@@ -3637,6 +3640,9 @@ func ValidateResourceRequirements(requirements *api.ResourceRequirements, fldPat
 			} else if quantity.Cmp(requestQuantity) < 0 {
 				allErrs = append(allErrs, field.Invalid(limPath, quantity.String(), fmt.Sprintf("must be greater than or equal to %s request", resourceName)))
 			}
+		}
+		if resourceName == api.ResourceStorageOverlay && !utilfeature.DefaultFeatureGate.Enabled(features.LocalStorageCapacityIsolation) {
+			allErrs = append(allErrs, field.Forbidden(limPath, "ResourceStorageOverlay field disabled by feature-gate for ResourceRequirements"))
 		}
 	}
 	for resourceName, quantity := range requirements.Requests {

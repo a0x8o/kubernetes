@@ -37,6 +37,7 @@ import (
 	clientgoclientset "k8s.io/client-go/kubernetes"
 
 	cadvisorapi "github.com/google/cadvisor/info/v1"
+	cadvisorapiv2 "github.com/google/cadvisor/info/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -68,6 +69,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/certificate"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
 	"k8s.io/kubernetes/pkg/kubelet/config"
+	"k8s.io/kubernetes/pkg/kubelet/configmap"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/dockershim"
 	"k8s.io/kubernetes/pkg/kubelet/dockershim/libdocker"
@@ -487,8 +489,11 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 
 	secretManager := secret.NewCachingSecretManager(
 		kubeDeps.KubeClient, secret.GetObjectTTLFromNodeFunc(klet.GetNode))
-
 	klet.secretManager = secretManager
+
+	configMapManager := configmap.NewCachingConfigMapManager(
+		kubeDeps.KubeClient, configmap.GetObjectTTLFromNodeFunc(klet.GetNode))
+	klet.configMapManager = configMapManager
 
 	if klet.experimentalHostUserNamespaceDefaulting {
 		glog.Infof("Experimental host user namespace defaulting is enabled.")
@@ -518,8 +523,8 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	klet.livenessManager = proberesults.NewManager()
 
 	klet.podCache = kubecontainer.NewCache()
-	// podManager is also responsible for keeping secretManager contents up-to-date.
-	klet.podManager = kubepod.NewBasicPodManager(kubepod.NewBasicMirrorClient(klet.kubeClient), secretManager)
+	// podManager is also responsible for keeping secretManager and configMapManager contents up-to-date.
+	klet.podManager = kubepod.NewBasicPodManager(kubepod.NewBasicMirrorClient(klet.kubeClient), secretManager, configMapManager)
 
 	if kubeCfg.RemoteRuntimeEndpoint != "" {
 		// kubeCfg.RemoteImageEndpoint is same as kubeCfg.RemoteRuntimeEndpoint if not explicitly specified
@@ -666,7 +671,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	klet.updatePodCIDR(kubeCfg.PodCIDR)
 
 	// setup containerGC
-	containerGC, err := kubecontainer.NewContainerGC(klet.containerRuntime, containerGCPolicy)
+	containerGC, err := kubecontainer.NewContainerGC(klet.containerRuntime, containerGCPolicy, klet.sourcesReady)
 	if err != nil {
 		return nil, err
 	}
@@ -717,7 +722,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		kubeDeps.Recorder)
 
 	klet.volumePluginMgr, err =
-		NewInitializedVolumePluginMgr(klet, secretManager, kubeDeps.VolumePlugins)
+		NewInitializedVolumePluginMgr(klet, secretManager, configMapManager, kubeDeps.VolumePlugins)
 	if err != nil {
 		return nil, err
 	}
@@ -756,7 +761,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	klet.setNodeStatusFuncs = klet.defaultNodeStatusFuncs()
 
 	// setup eviction manager
-	evictionManager, evictionAdmitHandler := eviction.NewManager(klet.resourceAnalyzer, evictionConfig, killPodNow(klet.podWorkers, kubeDeps.Recorder), klet.imageManager, kubeDeps.Recorder, nodeRef, klet.clock)
+	evictionManager, evictionAdmitHandler := eviction.NewManager(klet.resourceAnalyzer, evictionConfig, killPodNow(klet.podWorkers, kubeDeps.Recorder), klet.imageManager, klet.containerGC, kubeDeps.Recorder, nodeRef, klet.clock)
 
 	klet.evictionManager = evictionManager
 	klet.admitHandlers.AddPodAdmitHandler(evictionAdmitHandler)
@@ -917,8 +922,14 @@ type Kubelet struct {
 	// Secret manager.
 	secretManager secret.Manager
 
+	// ConfigMap manager.
+	configMapManager configmap.Manager
+
 	// Cached MachineInfo returned by cadvisor.
 	machineInfo *cadvisorapi.MachineInfo
+
+	//Cached RootFsInfo returned by cadvisor
+	rootfsInfo *cadvisorapiv2.FsInfo
 
 	// Handles certificate rotations.
 	serverCertificateManager certificate.Manager
@@ -1173,7 +1184,7 @@ func (kl *Kubelet) setupDataDirs() error {
 func (kl *Kubelet) StartGarbageCollection() {
 	loggedContainerGCFailure := false
 	go wait.Until(func() {
-		if err := kl.containerGC.GarbageCollect(kl.sourcesReady.AllReady()); err != nil {
+		if err := kl.containerGC.GarbageCollect(); err != nil {
 			glog.Errorf("Container garbage collection failed: %v", err)
 			kl.recorder.Eventf(kl.nodeRef, v1.EventTypeWarning, events.ContainerGCFailed, err.Error())
 			loggedContainerGCFailure = true

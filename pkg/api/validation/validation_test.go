@@ -2374,6 +2374,62 @@ func TestValidateVolumes(t *testing.T) {
 	}
 }
 
+func TestAlphaLocalStorageCapacityIsolation(t *testing.T) {
+
+	testCases := []api.VolumeSource{
+		{EmptyDir: &api.EmptyDirVolumeSource{SizeLimit: *resource.NewQuantity(int64(5), resource.BinarySI)}},
+	}
+	// Enable alpha feature LocalStorageCapacityIsolation
+	err := utilfeature.DefaultFeatureGate.Set("LocalStorageCapacityIsolation=true")
+	if err != nil {
+		t.Errorf("Failed to enable feature gate for LocalStorageCapacityIsolation: %v", err)
+		return
+	}
+	for _, tc := range testCases {
+		if errs := validateVolumeSource(&tc, field.NewPath("spec")); len(errs) != 0 {
+			t.Errorf("expected success: %v", errs)
+		}
+	}
+	// Disable alpha feature LocalStorageCapacityIsolation
+	err = utilfeature.DefaultFeatureGate.Set("LocalStorageCapacityIsolation=false")
+	if err != nil {
+		t.Errorf("Failed to disable feature gate for LocalStorageCapacityIsolation: %v", err)
+		return
+	}
+	for _, tc := range testCases {
+		if errs := validateVolumeSource(&tc, field.NewPath("spec")); len(errs) == 0 {
+			t.Errorf("expected failure: %v", errs)
+		}
+	}
+
+	containerLimitCase := api.ResourceRequirements{
+		Limits: api.ResourceList{
+			api.ResourceStorageOverlay: *resource.NewMilliQuantity(
+				int64(40000),
+				resource.BinarySI),
+		},
+	}
+	// Enable alpha feature LocalStorageCapacityIsolation
+	err = utilfeature.DefaultFeatureGate.Set("LocalStorageCapacityIsolation=true")
+	if err != nil {
+		t.Errorf("Failed to enable feature gate for LocalStorageCapacityIsolation: %v", err)
+		return
+	}
+	if errs := ValidateResourceRequirements(&containerLimitCase, field.NewPath("resources")); len(errs) != 0 {
+		t.Errorf("expected success: %v", errs)
+	}
+	// Disable alpha feature LocalStorageCapacityIsolation
+	err = utilfeature.DefaultFeatureGate.Set("LocalStorageCapacityIsolation=false")
+	if err != nil {
+		t.Errorf("Failed to disable feature gate for LocalStorageCapacityIsolation: %v", err)
+		return
+	}
+	if errs := ValidateResourceRequirements(&containerLimitCase, field.NewPath("resources")); len(errs) == 0 {
+		t.Errorf("expected failure: %v", errs)
+	}
+
+}
+
 func TestValidatePorts(t *testing.T) {
 	successCase := []api.ContainerPort{
 		{Name: "abc", ContainerPort: 80, HostPort: 80, Protocol: "TCP"},
@@ -3443,7 +3499,7 @@ func TestValidateDNSPolicy(t *testing.T) {
 
 func TestValidatePodSpec(t *testing.T) {
 	activeDeadlineSeconds := int64(30)
-	activeDeadlineSecondsMax := int64(math.MaxUint32)
+	activeDeadlineSecondsMax := int64(math.MaxInt32)
 
 	minUserID := types.UnixUserID(0)
 	maxUserID := types.UnixUserID(2147483647)
@@ -3559,7 +3615,7 @@ func TestValidatePodSpec(t *testing.T) {
 	}
 
 	activeDeadlineSeconds = int64(0)
-	activeDeadlineSecondsTooLarge := int64(math.MaxUint32 + 1)
+	activeDeadlineSecondsTooLarge := int64(math.MaxInt32 + 1)
 
 	minUserID = types.UnixUserID(-1)
 	maxUserID = types.UnixUserID(2147483648)
@@ -6324,7 +6380,7 @@ func TestValidateServiceExternalTrafficFieldsCombination(t *testing.T) {
 			name: "cannot set healthCheckNodePort field on loadBalancer service with externalTrafficPolicy!=Local",
 			tweakSvc: func(s *api.Service) {
 				s.Spec.Type = api.ServiceTypeLoadBalancer
-				s.Spec.ExternalTrafficPolicy = api.ServiceExternalTrafficPolicyTypeGlobal
+				s.Spec.ExternalTrafficPolicy = api.ServiceExternalTrafficPolicyTypeCluster
 				s.Spec.HealthCheckNodePort = 34567
 			},
 			numErrs: 1,

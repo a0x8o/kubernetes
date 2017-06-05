@@ -425,9 +425,23 @@ EOF
   fi
 }
 
+function create-master-audit-policy {
+  # This is the config for the audit policy.
+  # TODO(timstclair): Provide a more thorough policy.
+  cat <<EOF >/etc/audit_policy.config
+rules:
+  - level: None
+    nonResourceURLs:
+      - /healthz*
+      - /version
+      - /swagger*
+  - level: Metadata
+EOF
+}
+
 function create-kubelet-kubeconfig {
   echo "Creating kubelet kubeconfig file"
-  cat <<EOF >/var/lib/kubelet/kubeconfig
+  cat <<EOF >/var/lib/kubelet/bootstrap-kubeconfig
 apiVersion: v1
 kind: Config
 users:
@@ -439,6 +453,7 @@ clusters:
 - name: local
   cluster:
     certificate-authority: ${CA_CERT_BUNDLE_PATH}
+    server: https://${KUBERNETES_MASTER_NAME}
 contexts:
 - context:
     cluster: local
@@ -689,7 +704,11 @@ function start-kubelet {
     flags+=" --enable-debugging-handlers=false"
     flags+=" --hairpin-mode=none"
     if [[ "${REGISTER_MASTER_KUBELET:-false}" == "true" ]]; then
-      flags+=" --api-servers=https://${KUBELET_APISERVER}"
+      #TODO(mikedanese): allow static pods to start before creating a client
+      #flags+=" --experimental-bootstrap-kubeconfig=/var/lib/kubelet/bootstrap-kubeconfig"
+      #flags+=" --kubeconfig=/var/lib/kubelet/kubeconfig"
+      flags+=" --kubeconfig=/var/lib/kubelet/bootstrap-kubeconfig"
+      flags+=" --require-kubeconfig"
       flags+=" --register-schedulable=false"
     else
       # Standalone mode (not widely used?)
@@ -698,7 +717,9 @@ function start-kubelet {
   else # For nodes
     flags+="${NODE_KUBELET_TEST_ARGS:-}"
     flags+=" --enable-debugging-handlers=true"
-    flags+=" --api-servers=https://${KUBERNETES_MASTER_NAME}"
+    flags+=" --experimental-bootstrap-kubeconfig=/var/lib/kubelet/bootstrap-kubeconfig"
+    flags+=" --require-kubeconfig"
+    flags+=" --kubeconfig=/var/lib/kubelet/kubeconfig"
     if [[ "${HAIRPIN_MODE:-}" == "promiscuous-bridge" ]] || \
        [[ "${HAIRPIN_MODE:-}" == "hairpin-veth" ]] || \
        [[ "${HAIRPIN_MODE:-}" == "none" ]]; then
@@ -1053,6 +1074,8 @@ function start-kube-apiserver {
     params+=" --etcd-quorum-read=${ETCD_QUORUM_READ}"
   fi
 
+  local audit_policy_config_mount=""
+  local audit_policy_config_volume=""
   if [[ "${ENABLE_APISERVER_BASIC_AUDIT:-}" == "true" ]]; then
     # We currently only support enabling with a fixed path and with built-in log
     # rotation "disabled" (large value) so it behaves like kube-apiserver.log.
@@ -1066,6 +1089,27 @@ function start-kube-apiserver {
     # grows at 10MiB/s (~30K QPS), it will rotate after ~6 years if apiserver
     # never restarts. Please manually restart apiserver before this time.
     params+=" --audit-log-maxsize=2000000000"
+  elif [[ "${ENABLE_APISERVER_ADVANCED_AUDIT:-}" == "true" ]]; then
+    # We currently only support enabling with a fixed path and with built-in log
+    # rotation "disabled" (large value) so it behaves like kube-apiserver.log.
+    # External log rotation should be set up the same as for kube-apiserver.log.
+    params+=" --audit-log-path=/var/log/kube-apiserver-audit.log"
+    params+=" --audit-log-maxage=0"
+    params+=" --audit-log-maxbackup=0"
+    # Lumberjack doesn't offer any way to disable size-based rotation. It also
+    # has an in-memory counter that doesn't notice if you truncate the file.
+    # 2000000000 (in MiB) is a large number that fits in 31 bits. If the log
+    # grows at 10MiB/s (~30K QPS), it will rotate after ~6 years if apiserver
+    # never restarts. Please manually restart apiserver before this time.
+    params+=" --audit-log-maxsize=2000000000"
+
+    local audit_policy_file="/etc/audit_policy.config"
+    params+=" --audit-policy-file=${audit_policy_file}"
+
+    # Create the audit policy file, and mount it into the apiserver pod.
+    create-master-audit-policy
+    audit_policy_config_mount="{\"name\": \"auditpolicyconfigmount\",\"mountPath\": \"${audit_policy_file}\", \"readOnly\": false},"
+    audit_policy_config_volume="{\"name\": \"auditpolicyconfigmount\",\"hostPath\": {\"path\": \"${audit_policy_file}\"}},"
   fi
 
   if [[ "${ENABLE_APISERVER_LOGS_HANDLER:-}" == "false" ]]; then
@@ -1174,6 +1218,8 @@ function start-kube-apiserver {
   sed -i -e "s@{{webhook_authn_config_volume}}@${webhook_authn_config_volume}@g" "${src_file}"
   sed -i -e "s@{{webhook_config_mount}}@${webhook_config_mount}@g" "${src_file}"
   sed -i -e "s@{{webhook_config_volume}}@${webhook_config_volume}@g" "${src_file}"
+  sed -i -e "s@{{audit_policy_config_mount}}@${audit_policy_config_mount}@g" "${src_file}"
+  sed -i -e "s@{{audit_policy_config_volume}}@${audit_policy_config_volume}@g" "${src_file}"
   sed -i -e "s@{{admission_controller_config_mount}}@${admission_controller_config_mount}@g" "${src_file}"
   sed -i -e "s@{{admission_controller_config_volume}}@${admission_controller_config_volume}@g" "${src_file}"
   sed -i -e "s@{{image_policy_webhook_config_mount}}@${image_policy_webhook_config_mount}@g" "${src_file}"
@@ -1447,6 +1493,9 @@ function start-kube-addons {
   fi
   if [[ "${NON_MASQUERADE_CIDR:-}" == "0.0.0.0/0" ]]; then
     setup-addon-manifests "addons" "ip-masq-agent"
+  fi
+  if [[ "${ENABLE_METADATA_PROXY:-}" == "simple" ]]; then
+    setup-addon-manifests "addons" "metadata-proxy/gce"
   fi
 
   # Place addon manager pod manifest.

@@ -686,6 +686,14 @@ type EmptyDirVolumeSource struct {
 	// More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
 	// +optional
 	Medium StorageMedium `json:"medium,omitempty" protobuf:"bytes,1,opt,name=medium,casttype=StorageMedium"`
+	// Total amount of local storage required for this EmptyDir volume.
+	// The size limit is also applicable for memory medium.
+	// The maximum usage on memory medium EmptyDir would be the minimum value between
+	// the SizeLimit specified here and the sum of memory limits of all containers in a pod.
+	// The default is nil which means that the limit is undefined.
+	// More info: http://kubernetes.io/docs/user-guide/volumes#emptydir
+	// +optional
+	SizeLimit resource.Quantity `json:"sizeLimit,omitempty" protobuf:"bytes,2,opt,name=sizeLimit"`
 }
 
 // Represents a Glusterfs mount that lasts the lifetime of a pod.
@@ -2834,10 +2842,10 @@ const (
 type ServiceExternalTrafficPolicyType string
 
 const (
-	// ServiceExternalTrafficPolicyTypeLocal specifies local endpoints behavior.
+	// ServiceExternalTrafficPolicyTypeLocal specifies node-local endpoints behavior.
 	ServiceExternalTrafficPolicyTypeLocal ServiceExternalTrafficPolicyType = "Local"
-	// ServiceExternalTrafficPolicyTypeGlobal specifies global (legacy) behavior.
-	ServiceExternalTrafficPolicyTypeGlobal ServiceExternalTrafficPolicyType = "Global"
+	// ServiceExternalTrafficPolicyTypeCluster specifies node-global (legacy) behavior.
+	ServiceExternalTrafficPolicyTypeCluster ServiceExternalTrafficPolicyType = "Cluster"
 )
 
 // ServiceStatus represents the current status of a service.
@@ -2953,9 +2961,12 @@ type ServiceSpec struct {
 	// +optional
 	ExternalName string `json:"externalName,omitempty" protobuf:"bytes,10,opt,name=externalName"`
 
-	// externalTrafficPolicy denotes if this Service desires to route external traffic to
-	// local endpoints only. This preserves Source IP and avoids a second hop for
-	// LoadBalancer and Nodeport type services.
+	// externalTrafficPolicy denotes if this Service desires to route external
+	// traffic to node-local or cluster-wide endpoints. "Local" preserves the
+	// client source IP and avoids a second hop for LoadBalancer and Nodeport
+	// type services, but risks potentially imbalanced traffic spreading.
+	// "Cluster" obscures the client source IP and may cause a second hop to
+	// another node, but should have good overall load-spreading.
 	// +optional
 	ExternalTrafficPolicy ServiceExternalTrafficPolicyType `json:"externalTrafficPolicy,omitempty" protobuf:"bytes,11,opt,name=externalTrafficPolicy"`
 
@@ -3455,6 +3466,12 @@ const (
 	ResourceMemory ResourceName = "memory"
 	// Volume size, in bytes (e,g. 5Gi = 5GiB = 5 * 1024 * 1024 * 1024)
 	ResourceStorage ResourceName = "storage"
+	// Local Storage for container overlay filesystem, in bytes. (500Gi = 500GiB = 500 * 1024 * 1024 * 1024)
+	// The resource name for ResourceStorageOverlay is alpha and it can change across releases.
+	ResourceStorageOverlay ResourceName = "storage.kubernetes.io/overlay"
+	// Local Storage for scratch space, in bytes. (500Gi = 500GiB = 500 * 1024 * 1024 * 1024)
+	// The resource name for ResourceStorageScratch is alpha and it can change across releases.
+	ResourceStorageScratch ResourceName = "storage.kubernetes.io/scratch"
 	// NVIDIA GPU, in devices. Alpha, might change: although fractional and allowing values >1, only one whole device per node is assigned.
 	ResourceNvidiaGPU ResourceName = "alpha.kubernetes.io/nvidia-gpu"
 	// Number of Pods that may be running on this Node: see ResourcePods
@@ -4486,10 +4503,6 @@ const (
 	// When the --hard-pod-affinity-weight scheduler flag is not specified,
 	// DefaultHardPodAffinityWeight defines the weight of the implicit PreferredDuringScheduling affinity rule.
 	DefaultHardPodAffinitySymmetricWeight int = 1
-
-	// When the --failure-domains scheduler flag is not specified,
-	// DefaultFailureDomains defines the set of label keys used when TopologyKey is empty in PreferredDuringScheduling anti-affinity.
-	DefaultFailureDomains string = metav1.LabelHostname + "," + metav1.LabelZoneFailureDomain + "," + metav1.LabelZoneRegion
 )
 
 // Sysctl defines a kernel parameter to be set

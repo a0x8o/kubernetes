@@ -86,6 +86,7 @@ func init() {
 			rbac.NewRule("list", "watch").Groups(legacyGroup).Resources("nodes").RuleOrDie(),
 			rbac.NewRule("list", "watch", "create", "delete", "patch").Groups(legacyGroup).Resources("pods").RuleOrDie(),
 			rbac.NewRule("create").Groups(legacyGroup).Resources("pods/binding").RuleOrDie(),
+			rbac.NewRule("list", "watch", "create", "delete", "update", "patch").Groups(appsGroup).Resources("controllerrevisions").RuleOrDie(),
 			eventsRule(),
 		},
 	})
@@ -277,6 +278,7 @@ func init() {
 		Rules: []rbac.PolicyRule{
 			rbac.NewRule("get", "list", "watch").Groups(certificatesGroup).Resources("certificatesigningrequests").RuleOrDie(),
 			rbac.NewRule("update").Groups(certificatesGroup).Resources("certificatesigningrequests/status", "certificatesigningrequests/approval").RuleOrDie(),
+			rbac.NewRule("create").Groups(authorizationGroup).Resources("subjectaccessreviews").RuleOrDie(),
 			eventsRule(),
 		},
 	})

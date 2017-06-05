@@ -58,6 +58,8 @@ type managerImpl struct {
 	killPodFunc KillPodFunc
 	// the interface that knows how to do image gc
 	imageGC ImageGC
+	// the interface that knows how to do image gc
+	containerGC ContainerGC
 	// protects access to internal state
 	sync.RWMutex
 	// node conditions are the set of conditions present
@@ -82,6 +84,8 @@ type managerImpl struct {
 	lastObservations signalObservations
 	// notifiersInitialized indicates if the threshold notifiers have been initialized (i.e. synchronize() has been called once)
 	notifiersInitialized bool
+	// dedicatedImageFs indicates if imagefs is on a separate device from the rootfs
+	dedicatedImageFs *bool
 }
 
 // ensure it implements the required interface
@@ -93,6 +97,7 @@ func NewManager(
 	config Config,
 	killPodFunc KillPodFunc,
 	imageGC ImageGC,
+	containerGC ContainerGC,
 	recorder record.EventRecorder,
 	nodeRef *clientv1.ObjectReference,
 	clock clock.Clock) (Manager, lifecycle.PodAdmitHandler) {
@@ -100,12 +105,14 @@ func NewManager(
 		clock:           clock,
 		killPodFunc:     killPodFunc,
 		imageGC:         imageGC,
+		containerGC:     containerGC,
 		config:          config,
 		recorder:        recorder,
 		summaryProvider: summaryProvider,
 		nodeRef:         nodeRef,
 		nodeConditionsLastObservedAt: nodeConditionsObservedAt{},
 		thresholdsFirstObservedAt:    thresholdsObservedAt{},
+		dedicatedImageFs:             nil,
 	}
 	return manager, manager
 }
@@ -211,21 +218,21 @@ func (m *managerImpl) synchronize(diskInfoProvider DiskInfoProvider, podFunc Act
 	}
 
 	glog.V(3).Infof("eviction manager: synchronize housekeeping")
-
 	// build the ranking functions (if not yet known)
 	// TODO: have a function in cadvisor that lets us know if global housekeeping has completed
-	if len(m.resourceToRankFunc) == 0 || len(m.resourceToNodeReclaimFuncs) == 0 {
-		// this may error if cadvisor has yet to complete housekeeping, so we will just try again in next pass.
-		hasDedicatedImageFs, err := diskInfoProvider.HasDedicatedImageFs()
-		if err != nil {
+	if m.dedicatedImageFs == nil {
+		hasImageFs, ok := diskInfoProvider.HasDedicatedImageFs()
+		if ok != nil {
 			return nil
 		}
-		m.resourceToRankFunc = buildResourceToRankFunc(hasDedicatedImageFs)
-		m.resourceToNodeReclaimFuncs = buildResourceToNodeReclaimFuncs(m.imageGC, hasDedicatedImageFs)
+		m.dedicatedImageFs = &hasImageFs
+		m.resourceToRankFunc = buildResourceToRankFunc(hasImageFs)
+		m.resourceToNodeReclaimFuncs = buildResourceToNodeReclaimFuncs(m.imageGC, m.containerGC, hasImageFs)
 	}
 
+	activePods := podFunc()
 	// make observations and get a function to derive pod usage stats relative to those observations.
-	observations, statsFunc, err := makeSignalObservations(m.summaryProvider, nodeProvider)
+	observations, statsFunc, err := makeSignalObservations(m.summaryProvider, nodeProvider, activePods, *m.dedicatedImageFs)
 	if err != nil {
 		glog.Errorf("eviction manager: unexpected err: %v", err)
 		return nil
@@ -336,7 +343,11 @@ func (m *managerImpl) synchronize(diskInfoProvider DiskInfoProvider, podFunc Act
 	}
 
 	// the only candidates viable for eviction are those pods that had anything running.
-	activePods := podFunc()
+	if len(activePods) == 0 {
+		glog.Errorf("eviction manager: eviction thresholds have been met, but no pods are active to evict")
+		return nil
+	}
+
 	// rank the running pods for eviction for the specified resource
 	rank(activePods, statsFunc)
 

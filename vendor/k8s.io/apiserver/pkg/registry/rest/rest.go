@@ -23,6 +23,7 @@ import (
 
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1alpha1 "k8s.io/apimachinery/pkg/apis/meta/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
@@ -116,6 +117,10 @@ type GetterWithOptions interface {
 	NewGetOptions() (runtime.Object, bool, string)
 }
 
+type TableConvertor interface {
+	ConvertToTable(ctx genericapirequest.Context, object runtime.Object, tableOptions runtime.Object) (*metav1alpha1.Table, error)
+}
+
 // Deleter is an object that can delete a named RESTful resource.
 type Deleter interface {
 	// Delete finds a resource in the storage and deletes it.
@@ -169,8 +174,9 @@ type Creater interface {
 	// This object must be a pointer type for use with Codec.DecodeInto([]byte, runtime.Object)
 	New() runtime.Object
 
-	// Create creates a new version of a resource.
-	Create(ctx genericapirequest.Context, obj runtime.Object) (runtime.Object, error)
+	// Create creates a new version of a resource. If includeUninitialized is set, the object may be returned
+	// without completing initialization.
+	Create(ctx genericapirequest.Context, obj runtime.Object, includeUninitialized bool) (runtime.Object, error)
 }
 
 // NamedCreater is an object that can create an instance of a RESTful object using a name parameter.
@@ -181,8 +187,9 @@ type NamedCreater interface {
 
 	// Create creates a new version of a resource. It expects a name parameter from the path.
 	// This is needed for create operations on subresources which include the name of the parent
-	// resource in the path.
-	Create(ctx genericapirequest.Context, name string, obj runtime.Object) (runtime.Object, error)
+	// resource in the path. If includeUninitialized is set, the object may be returned without
+	// completing initialization.
+	Create(ctx genericapirequest.Context, name string, obj runtime.Object, includeUninitialized bool) (runtime.Object, error)
 }
 
 // UpdatedObjectInfo provides information about an updated object to an Updater.

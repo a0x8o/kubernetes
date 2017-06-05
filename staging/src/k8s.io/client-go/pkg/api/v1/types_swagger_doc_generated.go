@@ -396,8 +396,9 @@ func (DownwardAPIVolumeSource) SwaggerDoc() map[string]string {
 }
 
 var map_EmptyDirVolumeSource = map[string]string{
-	"":       "Represents an empty directory for a pod. Empty directory volumes support ownership management and SELinux relabeling.",
-	"medium": "What type of storage medium should back this directory. The default is \"\" which means to use the node's default medium. Must be an empty string (default) or Memory. More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir",
+	"":          "Represents an empty directory for a pod. Empty directory volumes support ownership management and SELinux relabeling.",
+	"medium":    "What type of storage medium should back this directory. The default is \"\" which means to use the node's default medium. Must be an empty string (default) or Memory. More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir",
+	"sizeLimit": "Total amount of local storage required for this EmptyDir volume. The size limit is also applicable for memory medium. The maximum usage on memory medium EmptyDir would be the minimum value between the SizeLimit specified here and the sum of memory limits of all containers in a pod. The default is nil which means that the limit is undefined. More info: http://kubernetes.io/docs/user-guide/volumes#emptydir",
 }
 
 func (EmptyDirVolumeSource) SwaggerDoc() map[string]string {
@@ -1857,7 +1858,7 @@ var map_ServiceSpec = map[string]string{
 	"loadBalancerIP":           "Only applies to Service Type: LoadBalancer LoadBalancer will get created with the IP specified in this field. This feature depends on whether the underlying cloud-provider supports specifying the loadBalancerIP when a load balancer is created. This field will be ignored if the cloud-provider does not support the feature.",
 	"loadBalancerSourceRanges": "If specified and supported by the platform, this will restrict traffic through the cloud-provider load-balancer will be restricted to the specified client IPs. This field will be ignored if the cloud-provider does not support the feature.\" More info: https://kubernetes.io/docs/tasks/access-application-cluster/configure-cloud-provider-firewall/",
 	"externalName":             "externalName is the external reference that kubedns or equivalent will return as a CNAME record for this service. No proxying will be involved. Must be a valid DNS name and requires Type to be ExternalName.",
-	"externalTrafficPolicy":    "externalTrafficPolicy denotes if this Service desires to route external traffic to local endpoints only. This preserves Source IP and avoids a second hop for LoadBalancer and Nodeport type services.",
+	"externalTrafficPolicy":    "externalTrafficPolicy denotes if this Service desires to route external traffic to node-local or cluster-wide endpoints. \"Local\" preserves the client source IP and avoids a second hop for LoadBalancer and Nodeport type services, but risks potentially imbalanced traffic spreading. \"Cluster\" obscures the client source IP and may cause a second hop to another node, but should have good overall load-spreading.",
 	"healthCheckNodePort":      "healthCheckNodePort specifies the healthcheck nodePort for the service. If not specified, HealthCheckNodePort is created by the service api backend with the allocated nodePort. Will use user-specified nodePort value if specified by the client. Only effects when Type is set to LoadBalancer and ExternalTrafficPolicy is set to Local.",
 }
 

@@ -27,6 +27,7 @@ import (
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubernetes/pkg/api"
 	rl "k8s.io/kubernetes/pkg/client/leaderelection/resourcelock"
+	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 	"k8s.io/kubernetes/pkg/kubelet/qos"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/master/ports"
@@ -160,7 +161,7 @@ func SetDefaults_KubeSchedulerConfiguration(obj *KubeSchedulerConfiguration) {
 		obj.HardPodAffinitySymmetricWeight = api.DefaultHardPodAffinitySymmetricWeight
 	}
 	if obj.FailureDomains == "" {
-		obj.FailureDomains = api.DefaultFailureDomains
+		obj.FailureDomains = kubeletapis.DefaultFailureDomains
 	}
 	if obj.LockObjectNamespace == "" {
 		obj.LockObjectNamespace = SchedulerDefaultLockObjectNamespace
@@ -282,9 +283,6 @@ func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
 		temp := int32(80)
 		obj.ImageGCLowThresholdPercent = &temp
 	}
-	if obj.LowDiskSpaceThresholdMB == 0 {
-		obj.LowDiskSpaceThresholdMB = 256
-	}
 	if obj.MasterServiceNamespace == "" {
 		obj.MasterServiceNamespace = metav1.NamespaceDefault
 	}
@@ -371,7 +369,7 @@ func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
 		obj.HairpinMode = PromiscuousBridge
 	}
 	if obj.EvictionHard == nil {
-		temp := "memory.available<100Mi"
+		temp := "memory.available<100Mi,nodefs.available<10%,nodefs.inodesFree<5%"
 		obj.EvictionHard = &temp
 	}
 	if obj.EvictionPressureTransitionPeriod == zeroDuration {
