@@ -29,7 +29,7 @@ package v1beta1
 // AUTO-GENERATED FUNCTIONS START HERE
 var map_ControllerRevision = map[string]string{
 	"":         "ControllerRevision implements an immutable snapshot of state data. Clients are responsible for serializing and deserializing the objects that contain their internal state. Once a ControllerRevision has been successfully created, it can not be updated. The API Server will fail validation of all requests that attempt to mutate the Data field. ControllerRevisions may, however, be deleted. Note that, due to its use by both the DaemonSet and StatefulSet controllers for update and rollback, this object is beta. However, it may be subject to name and representation changes in future releases, and clients should not depend on its stability. It is primarily for internal use by controllers.",
-	"metadata": "Standard object's metadata. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata",
+	"metadata": "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata",
 	"data":     "Data is the serialized representation of the state.",
 	"revision": "Revision indicates the revision of the state represented by Data.",
 }
@@ -40,7 +40,7 @@ func (ControllerRevision) SwaggerDoc() map[string]string {
 
 var map_ControllerRevisionList = map[string]string{
 	"":         "ControllerRevisionList is a resource containing a list of ControllerRevision objects.",
-	"metadata": "More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata",
+	"metadata": "More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata",
 	"items":    "Items is the list of ControllerRevisions",
 }
 
@@ -137,6 +137,15 @@ func (DeploymentStrategy) SwaggerDoc() map[string]string {
 	return map_DeploymentStrategy
 }
 
+var map_PartitionStatefulSetStrategy = map[string]string{
+	"":        "PartitionStatefulSetStrategy contains the parameters used with the PartitionStatefulSetStrategyType.",
+	"ordinal": "Ordinal indicates the ordinal at which the StatefulSet should be partitioned.",
+}
+
+func (PartitionStatefulSetStrategy) SwaggerDoc() map[string]string {
+	return map_PartitionStatefulSetStrategy
+}
+
 var map_RollbackConfig = map[string]string{
 	"revision": "The revision to rollback to. If set to 0, rollback to the last revision.",
 }
@@ -157,9 +166,9 @@ func (RollingUpdateDeployment) SwaggerDoc() map[string]string {
 
 var map_Scale = map[string]string{
 	"":         "Scale represents a scaling request for a resource.",
-	"metadata": "Standard object metadata; More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata.",
-	"spec":     "defines the behavior of the scale. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#spec-and-status.",
-	"status":   "current status of the scale. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#spec-and-status. Read-only.",
+	"metadata": "Standard object metadata; More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata.",
+	"spec":     "defines the behavior of the scale. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#spec-and-status.",
+	"status":   "current status of the scale. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#spec-and-status. Read-only.",
 }
 
 func (Scale) SwaggerDoc() map[string]string {
@@ -212,6 +221,8 @@ var map_StatefulSetSpec = map[string]string{
 	"volumeClaimTemplates": "volumeClaimTemplates is a list of claims that pods are allowed to reference. The StatefulSet controller is responsible for mapping network identities to claims in a way that maintains the identity of a pod. Every claim in this list must have at least one matching (by name) volumeMount in one container in the template. A claim in this list takes precedence over any volumes in the template, with the same name.",
 	"serviceName":          "serviceName is the name of the service that governs this StatefulSet. This service must exist before the StatefulSet, and is responsible for the network identity of the set. Pods get DNS/hostnames that follow the pattern: pod-specific-string.serviceName.default.svc.cluster.local where \"pod-specific-string\" is managed by the StatefulSet controller.",
 	"podManagementPolicy":  "podManagementPolicy controls how pods are created during initial scale up, when replacing pods on nodes, or when scaling down. The default policy is `OrderedReady`, where pods are created in increasing order (pod-0, then pod-1, etc) and the controller will wait until each pod is ready before continuing. When scaling down, the pods are removed in the opposite order. The alternative policy is `Parallel` which will create pods in parallel to match the desired scale without waiting, and on scale down will delete all pods at once.",
+	"updateStrategy":       "updateStrategy indicates the StatefulSetUpdateStrategy that will be employed to update Pods in the StatefulSet when a revision is made to Template.",
+	"revisionHistoryLimit": "revisionHistoryLimit is the maximum number of revisions that will be maintained in the StatefulSet's revision history. The revision history consists of all revisions not represented by a currently applied StatefulSetSpec version. The default value is 10.",
 }
 
 func (StatefulSetSpec) SwaggerDoc() map[string]string {
@@ -220,12 +231,27 @@ func (StatefulSetSpec) SwaggerDoc() map[string]string {
 
 var map_StatefulSetStatus = map[string]string{
 	"":                   "StatefulSetStatus represents the current state of a StatefulSet.",
-	"observedGeneration": "observedGeneration is the most recent generation observed by this StatefulSet.",
-	"replicas":           "replicas is the number of actual replicas.",
+	"observedGeneration": "observedGeneration is the most recent generation observed for this StatefulSet. It corresponds to the StatefulSet's generation, which is updated on mutation by the API Server.",
+	"replicas":           "replicas is the number of Pods created by the StatefulSet controller.",
+	"readyReplicas":      "readyReplicas is the number of Pods created by the StatefulSet controller that have a Ready Condition.",
+	"currentReplicas":    "currentReplicas is the number of Pods created by the StatefulSet controller from the StatefulSet version indicated by currentRevision.",
+	"updatedReplicas":    "updatedReplicas is the number of Pods created by the StatefulSet controller from the StatefulSet version indicated by updateRevision.",
+	"currentRevision":    "currentRevision, if not empty, indicates the version of the StatefulSet used to generate Pods in the sequence [0,currentReplicas).",
+	"updateRevision":     "updateRevision, if not empty, indicates the version of the StatefulSet used to generate Pods in the sequence [replicas-updatedReplicas,replicas)",
 }
 
 func (StatefulSetStatus) SwaggerDoc() map[string]string {
 	return map_StatefulSetStatus
+}
+
+var map_StatefulSetUpdateStrategy = map[string]string{
+	"":          "StatefulSetUpdateStrategy indicates the strategy that the StatefulSet controller will use to perform updates. It includes any additional parameters necessary to perform the update for the indicated strategy.",
+	"type":      "Type indicates the type of the StatefulSetUpdateStrategy.",
+	"partition": "Partition is used to communicate the ordinal at which to partition the StatefulSet when Type is PartitionStatefulSetStrategyType. This value must be set when Type is PartitionStatefulSetStrategyType, and it must be nil otherwise.",
+}
+
+func (StatefulSetUpdateStrategy) SwaggerDoc() map[string]string {
+	return map_StatefulSetUpdateStrategy
 }
 
 // AUTO-GENERATED FUNCTIONS END HERE

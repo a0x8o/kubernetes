@@ -20,13 +20,17 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/v1"
 	autoscalingv1 "k8s.io/kubernetes/pkg/apis/autoscaling/v1"
+	extensionsinternal "k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -58,9 +62,9 @@ const (
 )
 
 const (
-	KindRC         = "replicationController"
-	KindDeployment = "deployment"
-	KindReplicaSet = "replicaset"
+	KindRC         = "ReplicationController"
+	KindDeployment = "Deployment"
+	KindReplicaSet = "ReplicaSet"
 	subresource    = "scale"
 )
 
@@ -83,6 +87,7 @@ type ResourceConsumer struct {
 	stopCPU                  chan int
 	stopMem                  chan int
 	stopCustomMetric         chan int
+	stopWaitGroup            sync.WaitGroup
 	consumptionTimeInSeconds int
 	sleepTime                time.Duration
 	requestSizeInMillicores  int
@@ -164,6 +169,8 @@ func (rc *ResourceConsumer) ConsumeCustomMetric(amount int) {
 
 func (rc *ResourceConsumer) makeConsumeCPURequests() {
 	defer GinkgoRecover()
+	rc.stopWaitGroup.Add(1)
+	defer rc.stopWaitGroup.Done()
 	sleepTime := time.Duration(0)
 	millicores := 0
 	for {
@@ -183,6 +190,8 @@ func (rc *ResourceConsumer) makeConsumeCPURequests() {
 
 func (rc *ResourceConsumer) makeConsumeMemRequests() {
 	defer GinkgoRecover()
+	rc.stopWaitGroup.Add(1)
+	defer rc.stopWaitGroup.Done()
 	sleepTime := time.Duration(0)
 	megabytes := 0
 	for {
@@ -202,6 +211,8 @@ func (rc *ResourceConsumer) makeConsumeMemRequests() {
 
 func (rc *ResourceConsumer) makeConsumeCustomMetric() {
 	defer GinkgoRecover()
+	rc.stopWaitGroup.Add(1)
+	defer rc.stopWaitGroup.Done()
 	sleepTime := time.Duration(0)
 	delta := 0
 	for {
@@ -361,6 +372,7 @@ func (rc *ResourceConsumer) Pause() {
 	rc.stopCPU <- 0
 	rc.stopMem <- 0
 	rc.stopCustomMetric <- 0
+	rc.stopWaitGroup.Wait()
 }
 
 // Pause starts background goroutines responsible for consuming resources.
@@ -376,12 +388,28 @@ func (rc *ResourceConsumer) CleanUp() {
 	close(rc.stopCPU)
 	close(rc.stopMem)
 	close(rc.stopCustomMetric)
+	rc.stopWaitGroup.Wait()
 	// Wait some time to ensure all child goroutines are finished.
 	time.Sleep(10 * time.Second)
-	framework.ExpectNoError(framework.DeleteRCAndPods(rc.framework.ClientSet, rc.framework.InternalClientset, rc.framework.Namespace.Name, rc.name))
+	kind, err := kindOf(rc.kind)
+	framework.ExpectNoError(err)
+	framework.ExpectNoError(framework.DeleteResourceAndPods(rc.framework.ClientSet, rc.framework.InternalClientset, kind, rc.framework.Namespace.Name, rc.name))
 	framework.ExpectNoError(rc.framework.ClientSet.Core().Services(rc.framework.Namespace.Name).Delete(rc.name, nil))
-	framework.ExpectNoError(framework.DeleteRCAndPods(rc.framework.ClientSet, rc.framework.InternalClientset, rc.framework.Namespace.Name, rc.controllerName))
+	framework.ExpectNoError(framework.DeleteResourceAndPods(rc.framework.ClientSet, rc.framework.InternalClientset, api.Kind("ReplicationController"), rc.framework.Namespace.Name, rc.controllerName))
 	framework.ExpectNoError(rc.framework.ClientSet.Core().Services(rc.framework.Namespace.Name).Delete(rc.controllerName, nil))
+}
+
+func kindOf(kind string) (schema.GroupKind, error) {
+	switch kind {
+	case KindRC:
+		return api.Kind(kind), nil
+	case KindReplicaSet:
+		return extensionsinternal.Kind(kind), nil
+	case KindDeployment:
+		return extensionsinternal.Kind(kind), nil
+	default:
+		return schema.GroupKind{}, fmt.Errorf("Unsupported kind: %v", kind)
+	}
 }
 
 func runServiceAndWorkloadForResourceConsumer(c clientset.Interface, internalClient internalclientset.Interface, ns, name, kind string, replicas int, cpuLimitMillis, memLimitMb int64) {

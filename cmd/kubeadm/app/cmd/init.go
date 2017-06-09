@@ -41,6 +41,7 @@ import (
 	"k8s.io/kubernetes/cmd/kubeadm/app/preflight"
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/util/version"
 )
 
 var (
@@ -49,9 +50,9 @@ var (
 
 		To start using your cluster, you need to run (as a regular user):
 
-		  sudo cp {{.KubeConfigPath}} $HOME/
-		  sudo chown $(id -u):$(id -g) $HOME/{{.KubeConfigName}}
-		  export KUBECONFIG=$HOME/{{.KubeConfigName}}
+		  mkdir -p $HOME/.kube
+		  sudo cp -i {{.KubeConfigPath}} $HOME/.kube/config
+		  sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
 		You should now deploy a pod network to the cluster.
 		Run "kubectl apply -f [podnetwork].yaml" with one of the options listed at:
@@ -253,13 +254,18 @@ func (i *Init) Run(out io.Writer) error {
 
 	// PHASE 5: Install and deploy all addons, and configure things as necessary
 
+	k8sVersion, err := version.ParseSemantic(i.cfg.KubernetesVersion)
+	if err != nil {
+		return fmt.Errorf("couldn't parse kubernetes version %q: %v", i.cfg.KubernetesVersion, err)
+	}
+
 	// Create the necessary ServiceAccounts
 	err = apiconfigphase.CreateServiceAccounts(client)
 	if err != nil {
 		return err
 	}
 
-	err = apiconfigphase.CreateRBACRules(client)
+	err = apiconfigphase.CreateRBACRules(client, k8sVersion)
 	if err != nil {
 		return err
 	}
