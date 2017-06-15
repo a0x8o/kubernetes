@@ -507,6 +507,16 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	}
 	glog.Infof("Hairpin mode set to %q", hairpinMode)
 
+	// TODO(#36485) Remove this workaround once we fix the init-container issue.
+	// Touch iptables lock file, which will be shared among all processes accessing
+	// the iptables.
+	f, err := os.OpenFile(utilipt.LockfilePath16x, os.O_CREATE, 0600)
+	if err != nil {
+		glog.Warningf("Failed to open iptables lock file: %v", err)
+	} else if err = f.Close(); err != nil {
+		glog.Warningf("Failed to close iptables lock file: %v", err)
+	}
+
 	if plug, err := network.InitNetworkPlugin(kubeDeps.NetworkPlugins, crOptions.NetworkPluginName, &criNetworkHost{&networkHost{klet}, &network.NoopPortMappingGetter{}}, hairpinMode, kubeCfg.NonMasqueradeCIDR, int(crOptions.NetworkPluginMTU)); err != nil {
 		return nil, err
 	} else {
@@ -1802,9 +1812,12 @@ func (kl *Kubelet) syncLoop(updates <-chan kubetypes.PodUpdate, handler SyncHand
 			time.Sleep(5 * time.Second)
 			continue
 		}
+
+		kl.syncLoopMonitor.Store(kl.clock.Now())
 		if !kl.syncLoopIteration(updates, handler, syncTicker.C, housekeepingTicker.C, plegCh) {
 			break
 		}
+		kl.syncLoopMonitor.Store(kl.clock.Now())
 	}
 }
 
@@ -1842,7 +1855,6 @@ func (kl *Kubelet) syncLoop(updates <-chan kubetypes.PodUpdate, handler SyncHand
 //                     containers have failed liveness checks
 func (kl *Kubelet) syncLoopIteration(configCh <-chan kubetypes.PodUpdate, handler SyncHandler,
 	syncCh <-chan time.Time, housekeepingCh <-chan time.Time, plegCh <-chan *pleg.PodLifecycleEvent) bool {
-	kl.syncLoopMonitor.Store(kl.clock.Now())
 	select {
 	case u, open := <-configCh:
 		// Update from a config source; dispatch it to the right handler
@@ -1936,7 +1948,6 @@ func (kl *Kubelet) syncLoopIteration(configCh <-chan kubetypes.PodUpdate, handle
 			}
 		}
 	}
-	kl.syncLoopMonitor.Store(kl.clock.Now())
 	return true
 }
 

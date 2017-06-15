@@ -433,6 +433,7 @@ staging/src/k8s.io/client-go/listers/settings/v1alpha1
 staging/src/k8s.io/client-go/listers/storage/v1
 staging/src/k8s.io/client-go/listers/storage/v1beta1
 staging/src/k8s.io/client-go/plugin/pkg/client/auth
+staging/src/k8s.io/client-go/plugin/pkg/client/auth/azure
 staging/src/k8s.io/client-go/plugin/pkg/client/auth/gcp
 staging/src/k8s.io/client-go/rest/watch
 staging/src/k8s.io/client-go/tools/auth
@@ -456,7 +457,9 @@ staging/src/k8s.io/metrics/pkg/apis/custom_metrics/install
 staging/src/k8s.io/metrics/pkg/apis/metrics/install
 staging/src/k8s.io/sample-apiserver
 staging/src/k8s.io/sample-apiserver/pkg/apis/wardle/install
+test/e2e/framework/ginkgowrapper
 test/e2e/perftype
+test/e2e_node/perftype
 test/e2e_node/runner/local
 test/images/clusterapi-tester
 test/images/entrypoint-tester
@@ -493,3 +496,4 @@ test/integration/thirdparty
 test/integration/ttlcontroller
 test/soak/cauldron
 test/soak/serve_hostnames
+test/utils/junit

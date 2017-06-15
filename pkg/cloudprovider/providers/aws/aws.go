@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -157,6 +156,10 @@ const (
 	createTagInitialDelay = 1 * time.Second
 	createTagFactor       = 2.0
 	createTagSteps        = 9
+
+	// Number of node names that can be added to a filter. The AWS limit is 200
+	// but we are using a lower limit on purpose
+	filterNodeLimit = 150
 )
 
 // awsTagNameMasterRoles is a set of well-known AWS tag names that indicate the instance is a master
@@ -948,7 +951,7 @@ func (c *Cloud) NodeAddresses(name types.NodeName) ([]v1.NodeAddress, error) {
 
 		internalIP, err := c.metadata.GetMetadata("local-ipv4")
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error querying AWS metadata for %q: %v", "local-ipv4", err)
 		}
 		addresses = append(addresses, v1.NodeAddress{Type: v1.NodeInternalIP, Address: internalIP})
 
@@ -981,38 +984,51 @@ func (c *Cloud) NodeAddresses(name types.NodeName) ([]v1.NodeAddress, error) {
 
 		return addresses, nil
 	}
+
 	instance, err := c.getInstanceByNodeName(name)
 	if err != nil {
 		return nil, fmt.Errorf("getInstanceByNodeName failed for %q with %v", name, err)
 	}
+	return extractNodeAddresses(instance)
+}
+
+// extractNodeAddresses maps the instance information from EC2 to an array of NodeAddresses
+func extractNodeAddresses(instance *ec2.Instance) ([]v1.NodeAddress, error) {
+	// Not clear if the order matters here, but we might as well indicate a sensible preference order
+
+	if instance == nil {
+		return nil, fmt.Errorf("nil instance passed to extractNodeAddresses")
+	}
 
 	addresses := []v1.NodeAddress{}
 
-	if !isNilOrEmpty(instance.PrivateIpAddress) {
-		ipAddress := *instance.PrivateIpAddress
-		ip := net.ParseIP(ipAddress)
+	privateIPAddress := aws.StringValue(instance.PrivateIpAddress)
+	if privateIPAddress != "" {
+		ip := net.ParseIP(privateIPAddress)
 		if ip == nil {
-			return nil, fmt.Errorf("EC2 instance had invalid private address: %s (%s)", orEmpty(instance.InstanceId), ipAddress)
+			return nil, fmt.Errorf("EC2 instance had invalid private address: %s (%s)", aws.StringValue(instance.InstanceId), privateIPAddress)
 		}
 		addresses = append(addresses, v1.NodeAddress{Type: v1.NodeInternalIP, Address: ip.String()})
 	}
 
 	// TODO: Other IP addresses (multiple ips)?
-	if !isNilOrEmpty(instance.PublicIpAddress) {
-		ipAddress := *instance.PublicIpAddress
-		ip := net.ParseIP(ipAddress)
+	publicIPAddress := aws.StringValue(instance.PublicIpAddress)
+	if publicIPAddress != "" {
+		ip := net.ParseIP(publicIPAddress)
 		if ip == nil {
-			return nil, fmt.Errorf("EC2 instance had invalid public address: %s (%s)", orEmpty(instance.InstanceId), ipAddress)
+			return nil, fmt.Errorf("EC2 instance had invalid public address: %s (%s)", aws.StringValue(instance.InstanceId), publicIPAddress)
 		}
 		addresses = append(addresses, v1.NodeAddress{Type: v1.NodeExternalIP, Address: ip.String()})
 	}
 
-	if !isNilOrEmpty(instance.PrivateDnsName) {
-		addresses = append(addresses, v1.NodeAddress{Type: v1.NodeInternalDNS, Address: *instance.PrivateDnsName})
+	privateDNSName := aws.StringValue(instance.PrivateDnsName)
+	if privateDNSName != "" {
+		addresses = append(addresses, v1.NodeAddress{Type: v1.NodeInternalDNS, Address: privateDNSName})
 	}
 
-	if !isNilOrEmpty(instance.PublicDnsName) {
-		addresses = append(addresses, v1.NodeAddress{Type: v1.NodeExternalDNS, Address: *instance.PublicDnsName})
+	publicDNSName := aws.StringValue(instance.PublicDnsName)
+	if publicDNSName != "" {
+		addresses = append(addresses, v1.NodeAddress{Type: v1.NodeExternalDNS, Address: publicDNSName})
 	}
 
 	return addresses, nil
@@ -1022,7 +1038,17 @@ func (c *Cloud) NodeAddresses(name types.NodeName) ([]v1.NodeAddress, error) {
 // This method will not be called from the node that is requesting this ID. i.e. metadata service
 // and other local methods cannot be used here
 func (c *Cloud) NodeAddressesByProviderID(providerID string) ([]v1.NodeAddress, error) {
-	return []v1.NodeAddress{}, errors.New("unimplemented")
+	instanceID, err := kubernetesInstanceID(providerID).mapToAWSInstanceID()
+	if err != nil {
+		return nil, err
+	}
+
+	instance, err := describeInstance(c.ec2, instanceID)
+	if err != nil {
+		return nil, err
+	}
+
+	return extractNodeAddresses(instance)
 }
 
 // ExternalID returns the cloud provider ID of the node with the specified nodeName (deprecated).
@@ -1061,7 +1087,17 @@ func (c *Cloud) InstanceID(nodeName types.NodeName) (string, error) {
 // This method will not be called from the node that is requesting this ID. i.e. metadata service
 // and other local methods cannot be used here
 func (c *Cloud) InstanceTypeByProviderID(providerID string) (string, error) {
-	return "", errors.New("unimplemented")
+	instanceID, err := kubernetesInstanceID(providerID).mapToAWSInstanceID()
+	if err != nil {
+		return "", err
+	}
+
+	instance, err := describeInstance(c.ec2, instanceID)
+	if err != nil {
+		return "", err
+	}
+
+	return aws.StringValue(instance.InstanceType), nil
 }
 
 // InstanceType returns the type of the node with the specified nodeName.
@@ -1073,57 +1109,7 @@ func (c *Cloud) InstanceType(nodeName types.NodeName) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("getInstanceByNodeName failed for %q with %v", nodeName, err)
 	}
-	return orEmpty(inst.InstanceType), nil
-}
-
-// Return a list of instances matching regex string.
-func (c *Cloud) getInstancesByRegex(regex string) ([]types.NodeName, error) {
-	filters := []*ec2.Filter{newEc2Filter("instance-state-name", "running")}
-
-	instances, err := c.describeInstances(filters)
-	if err != nil {
-		return []types.NodeName{}, err
-	}
-
-	if len(instances) == 0 {
-		return []types.NodeName{}, fmt.Errorf("no instances returned")
-	}
-
-	if strings.HasPrefix(regex, "'") && strings.HasSuffix(regex, "'") {
-		glog.Infof("Stripping quotes around regex (%s)", regex)
-		regex = regex[1 : len(regex)-1]
-	}
-
-	re, err := regexp.Compile(regex)
-	if err != nil {
-		return []types.NodeName{}, err
-	}
-
-	matchingInstances := []types.NodeName{}
-	for _, instance := range instances {
-		// Only return fully-ready instances when listing instances
-		// (vs a query by name, where we will return it if we find it)
-		if orEmpty(instance.State.Name) == "pending" {
-			glog.V(2).Infof("Skipping EC2 instance (pending): %s", *instance.InstanceId)
-			continue
-		}
-
-		nodeName := mapInstanceToNodeName(instance)
-		if nodeName == "" {
-			glog.V(2).Infof("Skipping EC2 instance (no PrivateDNSName): %s",
-				aws.StringValue(instance.InstanceId))
-			continue
-		}
-
-		for _, tag := range instance.Tags {
-			if orEmpty(tag.Key) == "Name" && re.MatchString(orEmpty(tag.Value)) {
-				matchingInstances = append(matchingInstances, nodeName)
-				break
-			}
-		}
-	}
-	glog.V(2).Infof("Matched EC2 instances: %s", matchingInstances)
-	return matchingInstances, nil
+	return aws.StringValue(inst.InstanceType), nil
 }
 
 // getCandidateZonesForDynamicVolume retrieves  a list of all the zones in which nodes are running
@@ -1242,22 +1228,7 @@ func (i *awsInstance) getInstanceType() *awsInstanceType {
 
 // Gets the full information about this instance from the EC2 API
 func (i *awsInstance) describeInstance() (*ec2.Instance, error) {
-	instanceID := i.awsID
-	request := &ec2.DescribeInstancesInput{
-		InstanceIds: []*string{&instanceID},
-	}
-
-	instances, err := i.ec2.DescribeInstances(request)
-	if err != nil {
-		return nil, err
-	}
-	if len(instances) == 0 {
-		return nil, fmt.Errorf("no instances found for instance: %s", i.awsID)
-	}
-	if len(instances) > 1 {
-		return nil, fmt.Errorf("multiple instances found for instance: %s", i.awsID)
-	}
-	return instances[0], nil
+	return describeInstance(i.ec2, awsInstanceID(i.awsID))
 }
 
 // Gets the mountDevice already assigned to the volume, or assigns an unused mountDevice.
@@ -1884,15 +1855,17 @@ func (c *Cloud) DisksAreAttached(nodeDisks map[types.NodeName][]KubernetesVolume
 		return attached, nil
 	}
 
-	dnsNameSlice := []string{}
+	nodeNames := []string{}
 	for nodeName, diskNames := range nodeDisks {
 		for _, diskName := range diskNames {
 			setNodeDisk(attached, diskName, nodeName, false)
 		}
-		dnsNameSlice = append(dnsNameSlice, mapNodeNameToPrivateDNSName(nodeName))
+		nodeNames = append(nodeNames, mapNodeNameToPrivateDNSName(nodeName))
 	}
 
-	awsInstances, err := c.getInstancesByNodeNames(dnsNameSlice)
+	// Note that we get instances regardless of state.
+	// This means there might be multiple nodes with the same node names.
+	awsInstances, err := c.getInstancesByNodeNames(nodeNames)
 	if err != nil {
 		// When there is an error fetching instance information
 		// it is safer to return nil and let volume information not be touched.
@@ -1900,24 +1873,26 @@ func (c *Cloud) DisksAreAttached(nodeDisks map[types.NodeName][]KubernetesVolume
 	}
 
 	if len(awsInstances) == 0 {
-		glog.V(2).Infof("DisksAreAttached will assume no disks are attached to any node on AWS cluster.")
+		glog.V(2).Infof("DisksAreAttached found no instances matching node names; will assume disks not attached")
 		return attached, nil
 	}
 
-	awsInstanceMap := make(map[types.NodeName]*ec2.Instance)
-	for _, awsInstance := range awsInstances {
-		awsInstanceMap[mapInstanceToNodeName(awsInstance)] = awsInstance
-	}
-
 	// Note that we check that the volume is attached to the correct node, not that it is attached to _a_ node
-	for nodeName, diskNames := range nodeDisks {
-		awsInstance := awsInstanceMap[nodeName]
-		if awsInstance == nil {
-			// If instance no longer exists, safe to assume volume is not attached.
-			glog.Warningf(
-				"Node %q does not exist. DisksAreAttached will assume disks %v are not attached to it.",
-				nodeName,
-				diskNames)
+	for _, awsInstance := range awsInstances {
+		nodeName := mapInstanceToNodeName(awsInstance)
+
+		diskNames := nodeDisks[nodeName]
+		if len(diskNames) == 0 {
+			continue
+		}
+
+		awsInstanceState := "<nil>"
+		if awsInstance != nil && awsInstance.State != nil {
+			awsInstanceState = aws.StringValue(awsInstance.State.Name)
+		}
+		if awsInstanceState == "terminated" {
+			// Instance is terminated, safe to assume volumes not attached
+			// Note that we keep volumes attached to instances in other states (most notably, stopped)
 			continue
 		}
 
@@ -3318,28 +3293,39 @@ func (c *Cloud) getInstancesByNodeNamesCached(nodeNames sets.String, states ...s
 
 func (c *Cloud) getInstancesByNodeNames(nodeNames []string, states ...string) ([]*ec2.Instance, error) {
 	names := aws.StringSlice(nodeNames)
+	ec2Instances := []*ec2.Instance{}
 
-	nodeNameFilter := &ec2.Filter{
-		Name:   aws.String("private-dns-name"),
-		Values: names,
+	for i := 0; i < len(names); i += filterNodeLimit {
+		end := i + filterNodeLimit
+		if end > len(names) {
+			end = len(names)
+		}
+
+		nameSlice := names[i:end]
+
+		nodeNameFilter := &ec2.Filter{
+			Name:   aws.String("private-dns-name"),
+			Values: nameSlice,
+		}
+
+		filters := []*ec2.Filter{nodeNameFilter}
+		if len(states) > 0 {
+			filters = append(filters, newEc2Filter("instance-state-name", states...))
+		}
+
+		instances, err := c.describeInstances(filters)
+		if err != nil {
+			glog.V(2).Infof("Failed to describe instances %v", nodeNames)
+			return nil, err
+		}
+		ec2Instances = append(ec2Instances, instances...)
 	}
 
-	filters := []*ec2.Filter{nodeNameFilter}
-	if len(states) > 0 {
-		filters = append(filters, newEc2Filter("instance-state-name", states...))
-	}
-
-	instances, err := c.describeInstances(filters)
-	if err != nil {
-		glog.V(2).Infof("Failed to describe instances %v", nodeNames)
-		return nil, err
-	}
-
-	if len(instances) == 0 {
+	if len(ec2Instances) == 0 {
 		glog.V(3).Infof("Failed to find any instances %v", nodeNames)
 		return nil, nil
 	}
-	return instances, nil
+	return ec2Instances, nil
 }
 
 func (c *Cloud) describeInstances(filters []*ec2.Filter) ([]*ec2.Instance, error) {

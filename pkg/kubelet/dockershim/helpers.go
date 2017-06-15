@@ -36,7 +36,7 @@ import (
 
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/credentialprovider"
-	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/v1alpha1"
+	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/v1alpha1/runtime"
 	"k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/security/apparmor"
 
@@ -54,6 +54,10 @@ const (
 
 var (
 	conflictRE = regexp.MustCompile(`Conflict. (?:.)+ is already in use by container ([0-9a-z]+)`)
+
+	// this is hacky, but extremely common.
+	// if a container starts but the executable file is not found, runc gives a message that matches
+	startRE = regexp.MustCompile(`\\\\\\\"(.*)\\\\\\\": executable file not found`)
 
 	// Docker changes the security option separator from ':' to '=' in the 1.23
 	// API version.
@@ -266,14 +270,12 @@ func getApparmorSecurityOpts(sc *runtimeapi.LinuxContainerSecurityContext, separ
 	return fmtOpts, nil
 }
 
-func getNetworkNamespace(c *dockertypes.ContainerJSON) string {
+func getNetworkNamespace(c *dockertypes.ContainerJSON) (string, error) {
 	if c.State.Pid == 0 {
-		// Docker reports pid 0 for an exited container. We can't use it to
-		// check the network namespace, so return an empty string instead.
-		glog.V(4).Infof("Cannot find network namespace for the terminated container %q", c.ID)
-		return ""
+		// Docker reports pid 0 for an exited container.
+		return "", fmt.Errorf("Cannot find network namespace for the terminated container %q", c.ID)
 	}
-	return fmt.Sprintf(dockerNetNSFmt, c.State.Pid)
+	return fmt.Sprintf(dockerNetNSFmt, c.State.Pid), nil
 }
 
 // dockerFilter wraps around dockerfilters.Args and provides methods to modify
@@ -359,6 +361,19 @@ func recoverFromCreationConflictIfNeeded(client libdocker.Interface, createConfi
 	createConfig.Name = randomizeName(createConfig.Name)
 	glog.V(2).Infof("Create the container with randomized name %s", createConfig.Name)
 	return client.CreateContainer(createConfig)
+}
+
+// transformStartContainerError does regex parsing on returned error
+// for where container runtimes are giving less than ideal error messages.
+func transformStartContainerError(err error) error {
+	if err == nil {
+		return nil
+	}
+	matches := startRE.FindStringSubmatch(err.Error())
+	if len(matches) > 0 {
+		return fmt.Errorf("executable not found in $PATH")
+	}
+	return err
 }
 
 // getSecurityOptSeparator returns the security option separator based on the
