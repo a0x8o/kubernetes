@@ -115,8 +115,13 @@ func PrinterForCommand(cmd *cobra.Command, outputOpts *printers.OutputOptions, m
 		outputOpts = extractOutputOptions(cmd)
 	}
 
-	printer, err := printers.GetStandardPrinter(outputOpts,
-		GetFlagBool(cmd, "no-headers"), mapper, typer, encoder, decoders, options)
+	// this function may be invoked by a command that did not call AddPrinterFlags first, so we need
+	// to be safe about how we access the no-headers flag
+	noHeaders := false
+	if cmd.Flags().Lookup("no-headers") != nil {
+		noHeaders = GetFlagBool(cmd, "no-headers")
+	}
+	printer, err := printers.GetStandardPrinter(outputOpts, noHeaders, mapper, typer, encoder, decoders, options)
 	if err != nil {
 		return nil, err
 	}
@@ -129,12 +134,12 @@ func PrinterForCommand(cmd *cobra.Command, outputOpts *printers.OutputOptions, m
 // object passed is non-generic, it attempts to print the object using a HumanReadablePrinter.
 // Requires that printer flags have been added to cmd (see AddPrinterFlags).
 func PrintResourceInfoForCommand(cmd *cobra.Command, info *resource.Info, f Factory, out io.Writer) error {
-	printer, err := f.PrinterForCommand(cmd, nil, printers.PrintOptions{})
+	printer, err := f.PrinterForCommand(cmd, false, nil, printers.PrintOptions{})
 	if err != nil {
 		return err
 	}
 	if !printer.IsGeneric() {
-		printer, err = f.PrinterForMapping(cmd, nil, nil, false)
+		printer, err = f.PrinterForMapping(cmd, false, nil, nil, false)
 		if err != nil {
 			return err
 		}

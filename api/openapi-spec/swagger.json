@@ -46746,7 +46746,8 @@
     "required": [
      "service",
      "caBundle",
-     "priority"
+     "groupPriorityMinimum",
+     "versionPriority"
     ],
     "properties": {
      "caBundle": {
@@ -46758,14 +46759,14 @@
       "description": "Group is the API group name this server hosts",
       "type": "string"
      },
+     "groupPriorityMinimum": {
+      "description": "GroupPriorityMininum is the priority this group should have at least. Higher priority means that the group is prefered by clients over lower priority ones. Note that other versions of this group might specify even higher GroupPriorityMininum values such that the whole group gets a higher priority. The primary sort is based on GroupPriorityMinimum, ordered highest number to lowest (20 before 10). The secondary sort is based on the alphabetical comparison of the name of the object.  (v1.bar before v1.foo) We'd recommend something like: *.k8s.io (except extensions) at 18000 and PaaSes (OpenShift, Deis) are recommended to be in the 2000s",
+      "type": "integer",
+      "format": "int32"
+     },
      "insecureSkipTLSVerify": {
       "description": "InsecureSkipTLSVerify disables TLS certificate verification when communicating with this server. This is strongly discouraged.  You should use the CABundle instead.",
       "type": "boolean"
-     },
-     "priority": {
-      "description": "Priority controls the ordering of this API group in the overall discovery document that gets served. Client tools like `kubectl` use this ordering to derive preference, so this ordering mechanism is important. Values must be between 1 and 1000 The primary sort is based on priority, ordered lowest number to highest (10 before 20). The secondary sort is based on the alphabetical comparison of the name of the object.  (v1.bar before v1.foo) We'd recommend something like: *.k8s.io (except extensions) at 100, extensions at 150 PaaSes (OpenShift, Deis) are recommended to be in the 200s",
-      "type": "integer",
-      "format": "int64"
      },
      "service": {
       "description": "Service is a reference to the service for this API server.  It must communicate on port 443 If the Service is nil, that means the handling for the API groupversion is handled locally on this server. The call will simply delegate to the normal handler chain to be fulfilled.",
@@ -46774,6 +46775,11 @@
      "version": {
       "description": "Version is the API version this server hosts.  For example, \"v1\"",
       "type": "string"
+     },
+     "versionPriority": {
+      "description": "VersionPriority controls the ordering of this API version inside of its group.  Must be greater than zero. The primary sort is based on VersionPriority, ordered highest to lowest (20 before 10). The secondary sort is based on the alphabetical comparison of the name of the object.  (v1.bar before v1.foo) Since it's inside of a group, the number can be small, probably in the 10s.",
+      "type": "integer",
+      "format": "int32"
      }
     }
    },
@@ -47260,7 +47266,8 @@
    "io.k8s.kubernetes.pkg.api.v1.Container": {
     "description": "A single application container that you want to run within a pod.",
     "required": [
-     "name"
+     "name",
+     "image"
     ],
     "properties": {
      "args": {
@@ -48146,7 +48153,7 @@
     "description": "HostAlias holds the mapping between IP and hostnames that will be injected as an entry in the pod's hosts file.",
     "properties": {
      "hostnames": {
-      "description": "Hostnames for the the above IP address.",
+      "description": "Hostnames for the above IP address.",
       "type": "array",
       "items": {
        "type": "string"
@@ -48869,7 +48876,7 @@
       "type": "string"
      },
      "machineID": {
-      "description": "MachineID reported by the node. For unique machine identification in the cluster this field is prefered. Learn more from man(5) machine-id: http://man7.org/linux/man-pages/man5/machine-id.5.html",
+      "description": "MachineID reported by the node. For unique machine identification in the cluster this field is preferred. Learn more from man(5) machine-id: http://man7.org/linux/man-pages/man5/machine-id.5.html",
       "type": "string"
      },
      "operatingSystem": {
@@ -48881,7 +48888,7 @@
       "type": "string"
      },
      "systemUUID": {
-      "description": "SystemUUID reported by the node. For unique machine identification MachineID is prefered. This field is specific to Red Hat hosts https://access.redhat.com/documentation/en-US/Red_Hat_Subscription_Management/1/html/RHSM/getting-system-uuid.html",
+      "description": "SystemUUID reported by the node. For unique machine identification MachineID is preferred. This field is specific to Red Hat hosts https://access.redhat.com/documentation/en-US/Red_Hat_Subscription_Management/1/html/RHSM/getting-system-uuid.html",
       "type": "string"
      }
     }
@@ -49238,6 +49245,10 @@
      "storageClassName": {
       "description": "Name of StorageClass to which this persistent volume belongs. Empty value means that this volume does not belong to any StorageClass.",
       "type": "string"
+     },
+     "storageos": {
+      "description": "StorageOS represents a StorageOS volume that is attached to the kubelet's host machine and mounted into the pod More info: https://releases.k8s.io/HEAD/examples/volumes/storageos/README.md",
+      "$ref": "#/definitions/io.k8s.kubernetes.pkg.api.v1.StorageOSPersistentVolumeSource"
      },
      "vsphereVolume": {
       "description": "VsphereVolume represents a vSphere volume attached and mounted on kubelets host machine",
@@ -50712,6 +50723,56 @@
      }
     }
    },
+   "io.k8s.kubernetes.pkg.api.v1.StorageOSPersistentVolumeSource": {
+    "description": "Represents a StorageOS persistent volume resource.",
+    "properties": {
+     "fsType": {
+      "description": "Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.",
+      "type": "string"
+     },
+     "readOnly": {
+      "description": "Defaults to false (read/write). ReadOnly here will force the ReadOnly setting in VolumeMounts.",
+      "type": "boolean"
+     },
+     "secretRef": {
+      "description": "SecretRef specifies the secret to use for obtaining the StorageOS API credentials.  If not specified, default values will be attempted.",
+      "$ref": "#/definitions/io.k8s.kubernetes.pkg.api.v1.ObjectReference"
+     },
+     "volumeName": {
+      "description": "VolumeName is the human-readable name of the StorageOS volume.  Volume names are only unique within a namespace.",
+      "type": "string"
+     },
+     "volumeNamespace": {
+      "description": "VolumeNamespace specifies the scope of the volume within StorageOS.  If no namespace is specified then the Pod's namespace will be used.  This allows the Kubernetes name scoping to be mirrored within StorageOS for tighter integration. Set VolumeName to any name to override the default behaviour. Set to \"default\" if you are not using namespaces within StorageOS. Namespaces that do not pre-exist within StorageOS will be created.",
+      "type": "string"
+     }
+    }
+   },
+   "io.k8s.kubernetes.pkg.api.v1.StorageOSVolumeSource": {
+    "description": "Represents a StorageOS persistent volume resource.",
+    "properties": {
+     "fsType": {
+      "description": "Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.",
+      "type": "string"
+     },
+     "readOnly": {
+      "description": "Defaults to false (read/write). ReadOnly here will force the ReadOnly setting in VolumeMounts.",
+      "type": "boolean"
+     },
+     "secretRef": {
+      "description": "SecretRef specifies the secret to use for obtaining the StorageOS API credentials.  If not specified, default values will be attempted.",
+      "$ref": "#/definitions/io.k8s.kubernetes.pkg.api.v1.LocalObjectReference"
+     },
+     "volumeName": {
+      "description": "VolumeName is the human-readable name of the StorageOS volume.  Volume names are only unique within a namespace.",
+      "type": "string"
+     },
+     "volumeNamespace": {
+      "description": "VolumeNamespace specifies the scope of the volume within StorageOS.  If no namespace is specified then the Pod's namespace will be used.  This allows the Kubernetes name scoping to be mirrored within StorageOS for tighter integration. Set VolumeName to any name to override the default behaviour. Set to \"default\" if you are not using namespaces within StorageOS. Namespaces that do not pre-exist within StorageOS will be created.",
+      "type": "string"
+     }
+    }
+   },
    "io.k8s.kubernetes.pkg.api.v1.TCPSocketAction": {
     "description": "TCPSocketAction describes an action based on opening a socket",
     "required": [
@@ -50892,6 +50953,10 @@
      "secret": {
       "description": "Secret represents a secret that should populate this volume. More info: https://kubernetes.io/docs/concepts/storage/volumes#secret",
       "$ref": "#/definitions/io.k8s.kubernetes.pkg.api.v1.SecretVolumeSource"
+     },
+     "storageos": {
+      "description": "StorageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.",
+      "$ref": "#/definitions/io.k8s.kubernetes.pkg.api.v1.StorageOSVolumeSource"
      },
      "vsphereVolume": {
       "description": "VsphereVolume represents a vSphere volume attached and mounted on kubelets host machine",
@@ -51580,19 +51645,6 @@
      }
     }
    },
-   "io.k8s.kubernetes.pkg.apis.apps.v1beta1.PartitionStatefulSetStrategy": {
-    "description": "PartitionStatefulSetStrategy contains the parameters used with the PartitionStatefulSetStrategyType.",
-    "required": [
-     "ordinal"
-    ],
-    "properties": {
-     "ordinal": {
-      "description": "Ordinal indicates the ordinal at which the StatefulSet should be partitioned.",
-      "type": "integer",
-      "format": "int32"
-     }
-    }
-   },
    "io.k8s.kubernetes.pkg.apis.apps.v1beta1.RollbackConfig": {
     "properties": {
      "revision": {
@@ -51612,6 +51664,16 @@
      "maxUnavailable": {
       "description": "The maximum number of pods that can be unavailable during the update. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). Absolute number is calculated from percentage by rounding down. This can not be 0 if MaxSurge is 0. Defaults to 25%. Example: when this is set to 30%, the old RC can be scaled down to 70% of desired pods immediately when the rolling update starts. Once new pods are ready, old RC can be scaled down further, followed by scaling up the new RC, ensuring that the total number of pods available at all times during the update is at least 70% of desired pods.",
       "$ref": "#/definitions/io.k8s.apimachinery.pkg.util.intstr.IntOrString"
+     }
+    }
+   },
+   "io.k8s.kubernetes.pkg.apis.apps.v1beta1.RollingUpdateStatefulSetStrategy": {
+    "description": "RollingUpdateStatefulSetStrategy is used to communicate parameter for RollingUpdateStatefulSetStrategyType.",
+    "properties": {
+     "partition": {
+      "description": "Partition indicates the ordinal at which the StatefulSet should be partitioned.",
+      "type": "integer",
+      "format": "int32"
      }
     }
    },
@@ -51834,9 +51896,9 @@
    "io.k8s.kubernetes.pkg.apis.apps.v1beta1.StatefulSetUpdateStrategy": {
     "description": "StatefulSetUpdateStrategy indicates the strategy that the StatefulSet controller will use to perform updates. It includes any additional parameters necessary to perform the update for the indicated strategy.",
     "properties": {
-     "partition": {
-      "description": "Partition is used to communicate the ordinal at which to partition the StatefulSet when Type is PartitionStatefulSetStrategyType. This value must be set when Type is PartitionStatefulSetStrategyType, and it must be nil otherwise.",
-      "$ref": "#/definitions/io.k8s.kubernetes.pkg.apis.apps.v1beta1.PartitionStatefulSetStrategy"
+     "rollingUpdate": {
+      "description": "RollingUpdate is used to communicate parameters when Type is RollingUpdateStatefulSetStrategyType.",
+      "$ref": "#/definitions/io.k8s.kubernetes.pkg.apis.apps.v1beta1.RollingUpdateStatefulSetStrategy"
      },
      "type": {
       "description": "Type indicates the type of the StatefulSetUpdateStrategy.",
@@ -52993,7 +53055,7 @@
       "format": "int32"
      },
      "targetAverageValue": {
-      "description": "targetAverageValue is the the target value of the average of the resource metric across all relevant pods, as a raw value (instead of as a percentage of the request), similar to the \"pods\" metric source type.",
+      "description": "targetAverageValue is the target value of the average of the resource metric across all relevant pods, as a raw value (instead of as a percentage of the request), similar to the \"pods\" metric source type.",
       "$ref": "#/definitions/io.k8s.apimachinery.pkg.api.resource.Quantity"
      }
     }
@@ -53011,7 +53073,7 @@
       "format": "int32"
      },
      "currentAverageValue": {
-      "description": "currentAverageValue is the the current value of the average of the resource metric across all relevant pods, as a raw value (instead of as a percentage of the request), similar to the \"pods\" metric source type. It will always be set, regardless of the corresponding metric specification.",
+      "description": "currentAverageValue is the current value of the average of the resource metric across all relevant pods, as a raw value (instead of as a percentage of the request), similar to the \"pods\" metric source type. It will always be set, regardless of the corresponding metric specification.",
       "$ref": "#/definitions/io.k8s.apimachinery.pkg.api.resource.Quantity"
      },
      "name": {

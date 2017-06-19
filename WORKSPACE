@@ -1,15 +1,15 @@
 http_archive(
     name = "io_bazel_rules_go",
-    sha256 = "64294fd0e74d2aafa03ec3a1f2f9c167e27d17c9a5cf393e8bf79e43258de73d",
-    strip_prefix = "rules_go-a9df110cf04e167b33f10473c7e904d780d921e6",
-    urls = ["https://github.com/bazelbuild/rules_go/archive/a9df110cf04e167b33f10473c7e904d780d921e6.tar.gz"],
+    sha256 = "a1596c14c799d5a1b5f49ca28fa948414c2242110d69ef324d6ed160ec890dbf",
+    strip_prefix = "rules_go-03c634753160632c00f506afeafc819fbea4c422",
+    urls = ["https://github.com/bazelbuild/rules_go/archive/03c634753160632c00f506afeafc819fbea4c422.tar.gz"],
 )
 
 http_archive(
     name = "io_kubernetes_build",
-    sha256 = "8d1cff71523565996903076cec6cad8424afa6eb93a342d0d810a55c911e23c7",
-    strip_prefix = "repo-infra-61b7247ebf472398bdea148d8f67e3a1849d6de9",
-    urls = ["https://github.com/kubernetes/repo-infra/archive/61b7247ebf472398bdea148d8f67e3a1849d6de9.tar.gz"],
+    sha256 = "a9fb7027f060b868cdbd235a0de0971b557b9d26f9c89e422feb80f48d8c0e90",
+    strip_prefix = "repo-infra-9dedd5f4093884c133ad5ea73695b28338b954ab",
+    urls = ["https://github.com/kubernetes/repo-infra/archive/9dedd5f4093884c133ad5ea73695b28338b954ab.tar.gz"],
 )
 
 # This contains a patch to not prepend ./ to tarfiles produced by pkg_tar.
@@ -62,7 +62,7 @@ http_file(
 
 docker_pull(
     name = "debian-iptables-amd64",
-    digest = "sha256:adde513f7b3561042cd2d2af4d2d355189bbb2f579584b5766e7d07be4f7e71e",  # v7
+    digest = "sha256:bfc7cc030258f53495b5dacf1e1d750db9b8687577a8648a3c8e245f8d7d2c52",  # v7
     registry = "gcr.io",
     repository = "google-containers/debian-iptables-amd64",
 )

@@ -645,7 +645,7 @@ func (Handler) SwaggerDoc() map[string]string {
 var map_HostAlias = map[string]string{
 	"":          "HostAlias holds the mapping between IP and hostnames that will be injected as an entry in the pod's hosts file.",
 	"ip":        "IP address of the host file entry.",
-	"hostnames": "Hostnames for the the above IP address.",
+	"hostnames": "Hostnames for the above IP address.",
 }
 
 func (HostAlias) SwaggerDoc() map[string]string {
@@ -998,8 +998,8 @@ func (NodeStatus) SwaggerDoc() map[string]string {
 
 var map_NodeSystemInfo = map[string]string{
 	"":                        "NodeSystemInfo is a set of ids/uuids to uniquely identify the node.",
-	"machineID":               "MachineID reported by the node. For unique machine identification in the cluster this field is prefered. Learn more from man(5) machine-id: http://man7.org/linux/man-pages/man5/machine-id.5.html",
-	"systemUUID":              "SystemUUID reported by the node. For unique machine identification MachineID is prefered. This field is specific to Red Hat hosts https://access.redhat.com/documentation/en-US/Red_Hat_Subscription_Management/1/html/RHSM/getting-system-uuid.html",
+	"machineID":               "MachineID reported by the node. For unique machine identification in the cluster this field is preferred. Learn more from man(5) machine-id: http://man7.org/linux/man-pages/man5/machine-id.5.html",
+	"systemUUID":              "SystemUUID reported by the node. For unique machine identification MachineID is preferred. This field is specific to Red Hat hosts https://access.redhat.com/documentation/en-US/Red_Hat_Subscription_Management/1/html/RHSM/getting-system-uuid.html",
 	"bootID":                  "Boot ID reported by the node.",
 	"kernelVersion":           "Kernel Version reported by the node from 'uname -r' (e.g. 3.16.0-0.bpo.4-amd64).",
 	"osImage":                 "OS Image reported by the node from /etc/os-release (e.g. Debian GNU/Linux 7 (wheezy)).",
@@ -1161,6 +1161,7 @@ var map_PersistentVolumeSource = map[string]string{
 	"portworxVolume":       "PortworxVolume represents a portworx volume attached and mounted on kubelets host machine",
 	"scaleIO":              "ScaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.",
 	"local":                "Local represents directly-attached storage with node affinity",
+	"storageos":            "StorageOS represents a StorageOS volume that is attached to the kubelet's host machine and mounted into the pod More info: https://releases.k8s.io/HEAD/examples/volumes/storageos/README.md",
 }
 
 func (PersistentVolumeSource) SwaggerDoc() map[string]string {
@@ -1875,6 +1876,32 @@ func (ServiceStatus) SwaggerDoc() map[string]string {
 	return map_ServiceStatus
 }
 
+var map_StorageOSPersistentVolumeSource = map[string]string{
+	"":                "Represents a StorageOS persistent volume resource.",
+	"volumeName":      "VolumeName is the human-readable name of the StorageOS volume.  Volume names are only unique within a namespace.",
+	"volumeNamespace": "VolumeNamespace specifies the scope of the volume within StorageOS.  If no namespace is specified then the Pod's namespace will be used.  This allows the Kubernetes name scoping to be mirrored within StorageOS for tighter integration. Set VolumeName to any name to override the default behaviour. Set to \"default\" if you are not using namespaces within StorageOS. Namespaces that do not pre-exist within StorageOS will be created.",
+	"fsType":          "Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.",
+	"readOnly":        "Defaults to false (read/write). ReadOnly here will force the ReadOnly setting in VolumeMounts.",
+	"secretRef":       "SecretRef specifies the secret to use for obtaining the StorageOS API credentials.  If not specified, default values will be attempted.",
+}
+
+func (StorageOSPersistentVolumeSource) SwaggerDoc() map[string]string {
+	return map_StorageOSPersistentVolumeSource
+}
+
+var map_StorageOSVolumeSource = map[string]string{
+	"":                "Represents a StorageOS persistent volume resource.",
+	"volumeName":      "VolumeName is the human-readable name of the StorageOS volume.  Volume names are only unique within a namespace.",
+	"volumeNamespace": "VolumeNamespace specifies the scope of the volume within StorageOS.  If no namespace is specified then the Pod's namespace will be used.  This allows the Kubernetes name scoping to be mirrored within StorageOS for tighter integration. Set VolumeName to any name to override the default behaviour. Set to \"default\" if you are not using namespaces within StorageOS. Namespaces that do not pre-exist within StorageOS will be created.",
+	"fsType":          "Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.",
+	"readOnly":        "Defaults to false (read/write). ReadOnly here will force the ReadOnly setting in VolumeMounts.",
+	"secretRef":       "SecretRef specifies the secret to use for obtaining the StorageOS API credentials.  If not specified, default values will be attempted.",
+}
+
+func (StorageOSVolumeSource) SwaggerDoc() map[string]string {
+	return map_StorageOSVolumeSource
+}
+
 var map_Sysctl = map[string]string{
 	"":      "Sysctl defines a kernel parameter to be set",
 	"Name":  "Name of a property to set",
@@ -1980,6 +2007,7 @@ var map_VolumeSource = map[string]string{
 	"projected":            "Items for all in one resources secrets, configmaps, and downward API",
 	"portworxVolume":       "PortworxVolume represents a portworx volume attached and mounted on kubelets host machine",
 	"scaleIO":              "ScaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.",
+	"storageos":            "StorageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.",
 }
 
 func (VolumeSource) SwaggerDoc() map[string]string {

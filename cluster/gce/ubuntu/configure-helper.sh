@@ -32,6 +32,59 @@ function setup-os-params {
   echo "core.%e.%p.%t" > /proc/sys/kernel/core_pattern
 }
 
+# Vars assumed:
+#   NUM_NODES
+function get-calico-node-cpu {
+  local suggested_calico_cpus=100m
+  if [[ "${NUM_NODES}" -gt "10" ]]; then
+    suggested_calico_cpus=250m
+  fi
+  if [[ "${NUM_NODES}" -gt "100" ]]; then
+    suggested_calico_cpus=500m
+  fi
+  if [[ "${NUM_NODES}" -gt "500" ]]; then
+    suggested_calico_cpus=1000m
+  fi
+  echo "${suggested_calico_cpus}"
+}
+
+# Vars assumed:
+#    NUM_NODES
+function get-calico-typha-replicas {
+  local typha_count=1
+  if [[ "${NUM_NODES}" -gt "10" ]]; then
+    typha_count=2
+  fi
+  if [[ "${NUM_NODES}" -gt "100" ]]; then
+    typha_count=3
+  fi
+  if [[ "${NUM_NODES}" -gt "250" ]]; then
+    typha_count=4
+  fi
+  if [[ "${NUM_NODES}" -gt "500" ]]; then
+    typha_count=5
+  fi
+  if [[ "${NETWORK_POLICY_PROVIDER:-}" != "calico" ]]; then
+    # We're not configured to use Calico, so don't start any Typhas.
+    typha_count=0
+  fi
+  echo "${typha_count}"
+}
+
+# Vars assumed:
+#    NUM_NODES
+function get-calico-typha-cpu {
+  local typha_cpu=200m
+  if [[ "${NUM_NODES}" -gt "10" ]]; then
+    typha_cpu=500m
+  fi
+  if [[ "${NUM_NODES}" -gt "100" ]]; then
+    typha_cpu=1000m
+  fi
+  echo "${typha_cpu}"
+}
+
+
 function config-ip-firewall {
   echo "Configuring IP firewall rules"
   # The GCI image has host firewall which drop most inbound/forwarded packets.
@@ -50,7 +103,7 @@ function config-ip-firewall {
   fi
 
   iptables -N KUBE-METADATA-SERVER
-  iptables -A FORWARD -p tcp -d 169.254.169.254 --dport 80 -j KUBE-METADATA-SERVER
+  iptables -I FORWARD -p tcp -d 169.254.169.254 --dport 80 -j KUBE-METADATA-SERVER
 
   if [[ -n "${KUBE_FIREWALL_METADATA_SERVER:-}" ]]; then
     iptables -A KUBE-METADATA-SERVER -j DROP
@@ -274,6 +327,18 @@ function create-master-pki {
   # < 1.6.
   ln -sf "${APISERVER_SERVER_KEY_PATH}" /etc/srv/kubernetes/server.key
   ln -sf "${APISERVER_SERVER_CERT_PATH}" /etc/srv/kubernetes/server.cert
+
+  AGGREGATOR_CA_KEY_PATH="${pki_dir}/aggr_ca.key"
+  echo "${AGGREGATOR_CA_KEY:-}" | base64 --decode > "${AGGREGATOR_CA_KEY_PATH}"
+
+  REQUESTHEADER_CA_CERT_PATH="${pki_dir}/aggr_ca.crt"
+  echo "${REQUESTHEADER_CA_CERT:-}" | base64 --decode > "${REQUESTHEADER_CA_CERT_PATH}"
+
+  PROXY_CLIENT_KEY_PATH="${pki_dir}/proxy_client.key"
+  echo "${PROXY_CLIENT_KEY:-}" | base64 --decode > "${PROXY_CLIENT_KEY_PATH}"
+
+  PROXY_CLIENT_CERT_PATH="${pki_dir}/proxy_client.crt"
+  echo "${PROXY_CLIENT_CERT:-}" | base64 --decode > "${PROXY_CLIENT_CERT_PATH}"
 }
 
 # After the first boot and on upgrade, these files exist on the master-pd
@@ -460,7 +525,7 @@ rules:
     # Ingress controller reads `configmaps/ingress-uid` through the unsecured port.
     # TODO(#46983): Change this to the ingress controller service account.
     users: ["system:unsecured"]
-    namespaces: ["kube-sytem"]
+    namespaces: ["kube-system"]
     verbs: ["get"]
     resources:
       - group: "" # core
@@ -472,7 +537,7 @@ rules:
       - group: "" # core
         resources: ["nodes"]
   - level: None
-    groups: ["system:nodes"]
+    userGroups: ["system:nodes"]
     verbs: ["get"]
     resources:
       - group: "" # core
@@ -483,7 +548,7 @@ rules:
       - system:kube-scheduler
       - system:serviceaccount:kube-system:endpoint-controller
     verbs: ["get", "update"]
-    namespaces: ["kube-sytem"]
+    namespaces: ["kube-system"]
     resources:
       - group: "" # core
         resources: ["endpoints"]
@@ -862,6 +927,10 @@ function start-kubelet {
   if [[ -n "${NON_MASQUERADE_CIDR:-}" ]]; then
     flags+=" --non-masquerade-cidr=${NON_MASQUERADE_CIDR}"
   fi
+  # FlexVolume plugin
+  if [[ -n "${VOLUME_PLUGIN_DIR:-}" ]]; then
+    flags+=" --volume-plugin-dir=${VOLUME_PLUGIN_DIR}"
+  fi
   if [[ "${ENABLE_MANIFEST_URL:-}" == "true" ]]; then
     flags+=" --manifest-url=${MANIFEST_URL}"
     flags+=" --manifest-url-header=${MANIFEST_URL_HEADER}"
@@ -1153,6 +1222,15 @@ function start-kube-apiserver {
   params+=" --secure-port=443"
   params+=" --tls-cert-file=${APISERVER_SERVER_CERT_PATH}"
   params+=" --tls-private-key-file=${APISERVER_SERVER_KEY_PATH}"
+  if [[ ! -z "${REQUESTHEADER_CA_CERT:-}" ]]; then
+    params+=" --requestheader-client-ca-file=${REQUESTHEADER_CA_CERT_PATH}"
+    params+=" --requestheader-allowed-names=aggregator"
+    params+=" --requestheader-extra-headers-prefix=X-Remote-Extra-"
+    params+=" --requestheader-group-headers=X-Remote-Group"
+    params+=" --requestheader-username-headers=X-Remote-User"
+    params+=" --proxy-client-cert-file=${PROXY_CLIENT_CERT_PATH}"
+    params+=" --proxy-client-key-file=${PROXY_CLIENT_KEY_PATH}"
+  fi
   params+=" --enable-aggregator-routing=true"
   if [[ -e "${APISERVER_CLIENT_CERT_PATH}" ]] && [[ -e "${APISERVER_CLIENT_KEY_PATH}" ]]; then
     params+=" --kubelet-client-certificate=${APISERVER_CLIENT_CERT_PATH}"
@@ -1288,7 +1366,7 @@ function start-kube-apiserver {
   fi
 
 
-  local authorization_mode="RBAC"
+  local authorization_mode="Node,RBAC"
   local -r src_dir="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty"
 
   # Enable ABAC mode unless the user explicitly opts out with ENABLE_LEGACY_ABAC=false
@@ -1323,6 +1401,12 @@ function start-kube-apiserver {
   local container_env=""
   if [[ -n "${ENABLE_CACHE_MUTATION_DETECTOR:-}" ]]; then
     container_env="\"env\":[{\"name\": \"KUBE_CACHE_MUTATION_DETECTOR\", \"value\": \"${ENABLE_CACHE_MUTATION_DETECTOR}\"}],"
+  fi
+
+  if [[ -n "${ENCRYPTION_PROVIDER_CONFIG:-}" ]]; then
+    local encryption_provider_config_path="/etc/srv/kubernetes/encryption-provider-config.yml"
+    echo "${ENCRYPTION_PROVIDER_CONFIG}" | base64 --decode > "${encryption_provider_config_path}"
+    params+=" --experimental-encryption-provider-config=${encryption_provider_config_path}"
   fi
 
   src_file="${src_dir}/kube-apiserver.manifest"
@@ -1520,10 +1604,6 @@ function start-kube-addons {
   local -r src_dir="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty"
   local -r dst_dir="/etc/kubernetes/addons"
 
-  # TODO(mikedanese): only enable these in e2e
-  # prep the additional bindings that are particular to e2e users and groups
-  setup-addon-manifests "addons" "e2e-rbac-bindings"
-
   # prep addition kube-up specific rbac objects
   setup-addon-manifests "addons" "rbac"
 
@@ -1534,6 +1614,7 @@ function start-kube-addons {
      [[ "${ENABLE_CLUSTER_MONITORING:-}" == "standalone" ]] || \
      [[ "${ENABLE_CLUSTER_MONITORING:-}" == "googleinfluxdb" ]]; then
     local -r file_dir="cluster-monitoring/${ENABLE_CLUSTER_MONITORING}"
+    setup-addon-manifests "addons" "cluster-monitoring"
     setup-addon-manifests "addons" "${file_dir}"
     # Replace the salt configurations with variable values.
     base_metrics_memory="140Mi"
@@ -1614,9 +1695,13 @@ function start-kube-addons {
   if [[ "${NETWORK_POLICY_PROVIDER:-}" == "calico" ]]; then
     setup-addon-manifests "addons" "calico-policy-controller"
 
-    # Replace the cluster cidr.
-    local -r calico_file="${dst_dir}/calico-policy-controller/calico-node.yaml"
-    sed -i -e "s@__CLUSTER_CIDR__@${CLUSTER_IP_RANGE}@g" "${calico_file}"
+    # Configure Calico based on cluster size and image type.
+    local -r ds_file="${dst_dir}/calico-policy-controller/calico-node-daemonset.yaml"
+    local -r typha_dep_file="${dst_dir}/calico-policy-controller/typha-deployment.yaml"
+    sed -i -e "s@__CALICO_CNI_DIR__@/home/kubernetes/bin@g" "${ds_file}"
+    sed -i -e "s@__CALICO_NODE_CPU__@$(get-calico-node-cpu)@g" "${ds_file}"
+    sed -i -e "s@__CALICO_TYPHA_CPU__@$(get-calico-typha-cpu)@g" "${typha_dep_file}"
+    sed -i -e "s@__CALICO_TYPHA_REPLICAS__@$(get-calico-typha-replicas)@g" "${typha_dep_file}"
   fi
   if [[ "${ENABLE_DEFAULT_STORAGE_CLASS:-}" == "true" ]]; then
     setup-addon-manifests "addons" "storage-class/gce"

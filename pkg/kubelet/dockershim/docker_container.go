@@ -28,7 +28,7 @@ import (
 	dockerstrslice "github.com/docker/engine-api/types/strslice"
 	"github.com/golang/glog"
 
-	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/v1alpha1"
+	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/v1alpha1/runtime"
 	"k8s.io/kubernetes/pkg/kubelet/dockershim/libdocker"
 )
 
@@ -138,6 +138,7 @@ func (ds *dockerService) CreateContainer(podSandboxID string, config *runtimeapi
 	}
 
 	hc := createConfig.HostConfig
+	ds.updateCreateConfig(&createConfig, config, sandboxConfig, podSandboxID, securityOptSep, apiVersion)
 	// Set devices for container.
 	devices := make([]dockercontainer.DeviceMapping, len(config.Devices))
 	for i, device := range config.Devices {
@@ -148,7 +149,6 @@ func (ds *dockerService) CreateContainer(podSandboxID string, config *runtimeapi
 		}
 	}
 	hc.Resources.Devices = devices
-	ds.updateCreateConfig(&createConfig, config, sandboxConfig, podSandboxID, securityOptSep, apiVersion)
 
 	securityOpts, err := ds.getSecurityOpts(config.Metadata.Name, sandboxConfig, securityOptSep)
 	if err != nil {
@@ -233,6 +233,7 @@ func (ds *dockerService) removeContainerLogSymlink(containerID string) error {
 func (ds *dockerService) StartContainer(containerID string) error {
 	err := ds.client.StartContainer(containerID)
 	if err != nil {
+		err = transformStartContainerError(err)
 		return fmt.Errorf("failed to start container %q: %v", containerID, err)
 	}
 	// Create container log symlink.

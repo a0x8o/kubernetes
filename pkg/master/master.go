@@ -35,7 +35,6 @@ import (
 	"k8s.io/kubernetes/cmd/kube-apiserver/app/options"
 	"k8s.io/kubernetes/pkg/api"
 	apiv1 "k8s.io/kubernetes/pkg/api/v1"
-	admissionregistrationv1alpha1 "k8s.io/kubernetes/pkg/apis/admissionregistration/v1alpha1"
 	appsv1beta1 "k8s.io/kubernetes/pkg/apis/apps/v1beta1"
 	authenticationv1 "k8s.io/kubernetes/pkg/apis/authentication/v1"
 	authenticationv1beta1 "k8s.io/kubernetes/pkg/apis/authentication/v1beta1"
@@ -249,6 +248,10 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget,
 	// The order here is preserved in discovery.
 	// If resources with identical names exist in more than one of these groups (e.g. "deployments.apps"" and "deployments.extensions"),
 	// the order of this list determines which group an unqualified resource name (e.g. "deployments") should prefer.
+	// This priority order is used for local discovery, but it ends up aggregated in `k8s.io/kubernetes/cmd/kube-apiserver/app/aggregator.go
+	// with specific priorities.
+	// TODO: describe the priority all the way down in the RESTStorageProviders and plumb it back through the various discovery
+	// handlers that we have.
 	restStorageProviders := []RESTStorageProvider{
 		authenticationrest.RESTStorageProvider{Authenticator: c.GenericConfig.Authenticator},
 		authorizationrest.RESTStorageProvider{Authorizer: c.GenericConfig.Authorizer},
@@ -377,9 +380,9 @@ func (n nodeAddressProvider) externalAddresses() ([]string, error) {
 
 func DefaultAPIResourceConfigSource() *serverstorage.ResourceConfig {
 	ret := serverstorage.NewResourceConfig()
+	// NOTE: GroupVersions listed here will be enabled by default. Don't put alpha versions in the list.
 	ret.EnableVersions(
 		apiv1.SchemeGroupVersion,
-		admissionregistrationv1alpha1.SchemeGroupVersion,
 		extensionsapiv1beta1.SchemeGroupVersion,
 		batchapiv1.SchemeGroupVersion,
 		authenticationv1.SchemeGroupVersion,
@@ -388,6 +391,10 @@ func DefaultAPIResourceConfigSource() *serverstorage.ResourceConfig {
 		appsv1beta1.SchemeGroupVersion,
 		policyapiv1beta1.SchemeGroupVersion,
 		rbacv1beta1.SchemeGroupVersion,
+		// Don't copy this pattern. We enable rbac/v1alpha1 and settings/v1laph1
+		// by default only because they were enabled in previous releases.
+		// See https://github.com/kubernetes/kubernetes/pull/47690.
+		// TODO: disable rbac/v1alpha1 and settings/v1alpha1 by default in 1.8
 		rbacv1alpha1.SchemeGroupVersion,
 		settingv1alpha1.SchemeGroupVersion,
 		storageapiv1.SchemeGroupVersion,

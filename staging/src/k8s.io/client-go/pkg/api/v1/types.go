@@ -348,6 +348,9 @@ type VolumeSource struct {
 	// ScaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.
 	// +optional
 	ScaleIO *ScaleIOVolumeSource `json:"scaleIO,omitempty" protobuf:"bytes,25,opt,name=scaleIO"`
+	// StorageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.
+	// +optional
+	StorageOS *StorageOSVolumeSource `json:"storageos,omitempty" protobuf:"bytes,27,opt,name=storageos"`
 }
 
 // PersistentVolumeClaimVolumeSource references the user's PVC in the same namespace.
@@ -442,6 +445,10 @@ type PersistentVolumeSource struct {
 	// Local represents directly-attached storage with node affinity
 	// +optional
 	Local *LocalVolumeSource `json:"local,omitempty" protobuf:"bytes,20,opt,name=local"`
+	// StorageOS represents a StorageOS volume that is attached to the kubelet's host machine and mounted into the pod
+	// More info: https://releases.k8s.io/HEAD/examples/volumes/storageos/README.md
+	// +optional
+	StorageOS *StorageOSPersistentVolumeSource `json:"storageos,omitempty" protobuf:"bytes,21,opt,name=storageos"`
 }
 
 const (
@@ -1228,6 +1235,62 @@ type ScaleIOVolumeSource struct {
 	ReadOnly bool `json:"readOnly,omitempty" protobuf:"varint,10,opt,name=readOnly"`
 }
 
+// Represents a StorageOS persistent volume resource.
+type StorageOSVolumeSource struct {
+	// VolumeName is the human-readable name of the StorageOS volume.  Volume
+	// names are only unique within a namespace.
+	VolumeName string `json:"volumeName,omitempty" protobuf:"bytes,1,opt,name=volumeName"`
+	// VolumeNamespace specifies the scope of the volume within StorageOS.  If no
+	// namespace is specified then the Pod's namespace will be used.  This allows the
+	// Kubernetes name scoping to be mirrored within StorageOS for tighter integration.
+	// Set VolumeName to any name to override the default behaviour.
+	// Set to "default" if you are not using namespaces within StorageOS.
+	// Namespaces that do not pre-exist within StorageOS will be created.
+	// +optional
+	VolumeNamespace string `json:"volumeNamespace,omitempty" protobuf:"bytes,2,opt,name=volumeNamespace"`
+	// Filesystem type to mount.
+	// Must be a filesystem type supported by the host operating system.
+	// Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+	// +optional
+	FSType string `json:"fsType,omitempty" protobuf:"bytes,3,opt,name=fsType"`
+	// Defaults to false (read/write). ReadOnly here will force
+	// the ReadOnly setting in VolumeMounts.
+	// +optional
+	ReadOnly bool `json:"readOnly,omitempty" protobuf:"varint,4,opt,name=readOnly"`
+	// SecretRef specifies the secret to use for obtaining the StorageOS API
+	// credentials.  If not specified, default values will be attempted.
+	// +optional
+	SecretRef *LocalObjectReference `json:"secretRef,omitempty" protobuf:"bytes,5,opt,name=secretRef"`
+}
+
+// Represents a StorageOS persistent volume resource.
+type StorageOSPersistentVolumeSource struct {
+	// VolumeName is the human-readable name of the StorageOS volume.  Volume
+	// names are only unique within a namespace.
+	VolumeName string `json:"volumeName,omitempty" protobuf:"bytes,1,opt,name=volumeName"`
+	// VolumeNamespace specifies the scope of the volume within StorageOS.  If no
+	// namespace is specified then the Pod's namespace will be used.  This allows the
+	// Kubernetes name scoping to be mirrored within StorageOS for tighter integration.
+	// Set VolumeName to any name to override the default behaviour.
+	// Set to "default" if you are not using namespaces within StorageOS.
+	// Namespaces that do not pre-exist within StorageOS will be created.
+	// +optional
+	VolumeNamespace string `json:"volumeNamespace,omitempty" protobuf:"bytes,2,opt,name=volumeNamespace"`
+	// Filesystem type to mount.
+	// Must be a filesystem type supported by the host operating system.
+	// Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+	// +optional
+	FSType string `json:"fsType,omitempty" protobuf:"bytes,3,opt,name=fsType"`
+	// Defaults to false (read/write). ReadOnly here will force
+	// the ReadOnly setting in VolumeMounts.
+	// +optional
+	ReadOnly bool `json:"readOnly,omitempty" protobuf:"varint,4,opt,name=readOnly"`
+	// SecretRef specifies the secret to use for obtaining the StorageOS API
+	// credentials.  If not specified, default values will be attempted.
+	// +optional
+	SecretRef *ObjectReference `json:"secretRef,omitempty" protobuf:"bytes,5,opt,name=secretRef"`
+}
+
 // Adapts a ConfigMap into a volume.
 //
 // The contents of the target ConfigMap's Data field will be presented in a
@@ -1658,8 +1721,7 @@ type Container struct {
 	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
 	// Docker image name.
 	// More info: https://kubernetes.io/docs/concepts/containers/images
-	// +optional
-	Image string `json:"image,omitempty" protobuf:"bytes,2,opt,name=image"`
+	Image string `json:"image" protobuf:"bytes,2,opt,name=image"`
 	// Entrypoint array. Not executed within a shell.
 	// The docker image's ENTRYPOINT is used if this is not provided.
 	// Variable references $(VAR_NAME) are expanded using the container's environment. If a variable
@@ -2465,7 +2527,7 @@ type PodSpec struct {
 type HostAlias struct {
 	// IP address of the host file entry.
 	IP string `json:"ip,omitempty" protobuf:"bytes,1,opt,name=ip"`
-	// Hostnames for the the above IP address.
+	// Hostnames for the above IP address.
 	Hostnames []string `json:"hostnames,omitempty" protobuf:"bytes,2,rep,name=hostnames"`
 }
 
@@ -3254,11 +3316,11 @@ type NodeDaemonEndpoints struct {
 // NodeSystemInfo is a set of ids/uuids to uniquely identify the node.
 type NodeSystemInfo struct {
 	// MachineID reported by the node. For unique machine identification
-	// in the cluster this field is prefered. Learn more from man(5)
+	// in the cluster this field is preferred. Learn more from man(5)
 	// machine-id: http://man7.org/linux/man-pages/man5/machine-id.5.html
 	MachineID string `json:"machineID" protobuf:"bytes,1,opt,name=machineID"`
 	// SystemUUID reported by the node. For unique machine identification
-	// MachineID is prefered. This field is specific to Red Hat hosts
+	// MachineID is preferred. This field is specific to Red Hat hosts
 	// https://access.redhat.com/documentation/en-US/Red_Hat_Subscription_Management/1/html/RHSM/getting-system-uuid.html
 	SystemUUID string `json:"systemUUID" protobuf:"bytes,2,opt,name=systemUUID"`
 	// Boot ID reported by the node.

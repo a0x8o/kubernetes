@@ -34,6 +34,58 @@ function create-dirs {
   fi
 }
 
+# Vars assumed:
+#   NUM_NODES
+function get-calico-node-cpu {
+  local suggested_calico_cpus=100m
+  if [[ "${NUM_NODES}" -gt "10" ]]; then
+    suggested_calico_cpus=250m
+  fi
+  if [[ "${NUM_NODES}" -gt "100" ]]; then
+    suggested_calico_cpus=500m
+  fi
+  if [[ "${NUM_NODES}" -gt "500" ]]; then
+    suggested_calico_cpus=1000m
+  fi
+  echo "${suggested_calico_cpus}"
+}
+
+# Vars assumed:
+#    NUM_NODES
+function get-calico-typha-replicas {
+  local typha_count=1
+  if [[ "${NUM_NODES}" -gt "10" ]]; then
+    typha_count=2
+  fi
+  if [[ "${NUM_NODES}" -gt "100" ]]; then
+    typha_count=3
+  fi
+  if [[ "${NUM_NODES}" -gt "250" ]]; then
+    typha_count=4
+  fi
+  if [[ "${NUM_NODES}" -gt "500" ]]; then
+    typha_count=5
+  fi
+  if [[ "${NETWORK_POLICY_PROVIDER:-}" != "calico" ]]; then
+    # We're not configured to use Calico, so don't start any Typhas.
+    typha_count=0
+  fi
+  echo "${typha_count}"
+}
+
+# Vars assumed:
+#    NUM_NODES
+function get-calico-typha-cpu {
+  local typha_cpu=200m
+  if [[ "${NUM_NODES}" -gt "10" ]]; then
+    typha_cpu=500m
+  fi
+  if [[ "${NUM_NODES}" -gt "100" ]]; then
+    typha_cpu=1000m
+  fi
+  echo "${typha_cpu}"
+}
+
 # Create directories referenced in the kube-controller-manager manifest for
 # bindmounts. This is used under the rkt runtime to work around
 # https://github.com/kubernetes/kubernetes/issues/26816
@@ -1126,8 +1178,8 @@ function start-kube-addons {
   local -r src_dir="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty"
   local -r dst_dir="/etc/kubernetes/addons"
 
-  # prep the additional bindings that are particular to e2e users and groups
-  setup-addon-manifests "addons" "e2e-rbac-bindings"
+  # prep addition kube-up specific rbac objects
+  setup-addon-manifests "addons" "rbac"
 
   # Set up manifests of other addons.
   if [[ "${ENABLE_CLUSTER_MONITORING:-}" == "influxdb" ]] || \
@@ -1136,6 +1188,7 @@ function start-kube-addons {
      [[ "${ENABLE_CLUSTER_MONITORING:-}" == "standalone" ]] || \
      [[ "${ENABLE_CLUSTER_MONITORING:-}" == "googleinfluxdb" ]]; then
     local -r file_dir="cluster-monitoring/${ENABLE_CLUSTER_MONITORING}"
+    setup-addon-manifests "addons" "cluster-monitoring"
     setup-addon-manifests "addons" "${file_dir}"
     # Replace the salt configurations with variable values.
     base_metrics_memory="140Mi"
@@ -1212,9 +1265,13 @@ function start-kube-addons {
   if [[ "${NETWORK_POLICY_PROVIDER:-}" == "calico" ]]; then
     setup-addon-manifests "addons" "calico-policy-controller"
 
-    # Replace the cluster cidr.
-    local -r calico_file="${dst_dir}/calico-policy-controller/calico-node.yaml"
-    sed -i -e "s@__CLUSTER_CIDR__@${CLUSTER_IP_RANGE}@g" "${calico_file}"
+    # Configure Calico based on cluster size and image type. 
+    local -r ds_file="${dst_dir}/calico-policy-controller/calico-node-daemonset.yaml"
+    local -r typha_dep_file="${dst_dir}/calico-policy-controller/typha-deployment.yaml"
+    sed -i -e "s@__CALICO_CNI_DIR__@/opt/cni/bin@g" "${ds_file}"
+    sed -i -e "s@__CALICO_NODE_CPU__@$(get-calico-node-cpu)@g" "${ds_file}"
+    sed -i -e "s@__CALICO_TYPHA_CPU__@$(get-calico-typha-cpu)@g" "${typha_dep_file}"
+    sed -i -e "s@__CALICO_TYPHA_REPLICAS__@$(get-calico-typha-replicas)@g" "${typha_dep_file}"
   fi
   if [[ "${ENABLE_DEFAULT_STORAGE_CLASS:-}" == "true" ]]; then
     setup-addon-manifests "addons" "storage-class/gce"

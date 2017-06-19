@@ -268,6 +268,19 @@ func TestValidatePersistentVolumes(t *testing.T) {
 					StorageClassName: "test-storage-class",
 				}),
 		},
+		"bad-hostpath-volume-backsteps": {
+			isExpectedFailure: true,
+			volume: testVolume("foo", "", api.PersistentVolumeSpec{
+				Capacity: api.ResourceList{
+					api.ResourceName(api.ResourceStorage): resource.MustParse("10G"),
+				},
+				AccessModes: []api.PersistentVolumeAccessMode{api.ReadWriteOnce},
+				PersistentVolumeSource: api.PersistentVolumeSource{
+					HostPath: &api.HostPathVolumeSource{Path: "/foo/.."},
+				},
+				StorageClassName: "backstep-hostpath",
+			}),
+		},
 	}
 
 	for name, scenario := range scenarios {
@@ -1101,6 +1114,20 @@ func TestValidateVolumes(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name: "invalid HostPath backsteps",
+			vol: api.Volume{
+				Name: "hostpath",
+				VolumeSource: api.VolumeSource{
+					HostPath: &api.HostPathVolumeSource{
+						Path: "/mnt/path/..",
+					},
+				},
+			},
+			errtype:   field.ErrorTypeInvalid,
+			errfield:  "path",
+			errdetail: "must not contain '..'",
 		},
 		// GcePersistentDisk
 		{
@@ -3080,6 +3107,9 @@ func TestValidateContainers(t *testing.T) {
 
 	successCase := []api.Container{
 		{Name: "abc", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"},
+		// backwards compatibility to ensure containers in pod template spec do not check for this
+		{Name: "def", Image: " ", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"},
+		{Name: "ghi", Image: " some  ", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"},
 		{Name: "123", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"},
 		{Name: "abc-123", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"},
 		{
@@ -3234,6 +3264,7 @@ func TestValidateContainers(t *testing.T) {
 	})
 	errorCases := map[string][]api.Container{
 		"zero-length name":     {{Name: "", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
+		"zero-length-image":    {{Name: "abc", Image: "", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
 		"name > 63 characters": {{Name: strings.Repeat("a", 64), Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
 		"name not a DNS label": {{Name: "a.b.c", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
 		"name not unique": {
@@ -4211,6 +4242,28 @@ func TestValidatePod(t *testing.T) {
 					RestartPolicy: api.RestartPolicyAlways,
 					DNSPolicy:     api.DNSClusterFirst,
 					Containers:    []api.Container{{Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
+				},
+			},
+		},
+		"image whitespace": {
+			expectedError: "spec.containers[0].image",
+			spec: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "abc", Namespace: "ns"},
+				Spec: api.PodSpec{
+					RestartPolicy: api.RestartPolicyAlways,
+					DNSPolicy:     api.DNSClusterFirst,
+					Containers:    []api.Container{{Name: "ctr", Image: " ", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
+				},
+			},
+		},
+		"image leading and trailing whitespace": {
+			expectedError: "spec.containers[0].image",
+			spec: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "abc", Namespace: "ns"},
+				Spec: api.PodSpec{
+					RestartPolicy: api.RestartPolicyAlways,
+					DNSPolicy:     api.DNSClusterFirst,
+					Containers:    []api.Container{{Name: "ctr", Image: " something ", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
 				},
 			},
 		},
@@ -7788,7 +7841,7 @@ func TestValidateServiceUpdate(t *testing.T) {
 				oldSvc.Spec.Type = api.ServiceTypeLoadBalancer
 				oldSvc.Spec.LoadBalancerSourceRanges = []string{"10.0.0.0/8"}
 				newSvc.Spec.Type = api.ServiceTypeLoadBalancer
-				newSvc.Spec.LoadBalancerSourceRanges = []string{"10.180.0.0/16"}
+				newSvc.Spec.LoadBalancerSourceRanges = []string{"10.100.0.0/16"}
 			},
 			numErrs: 0,
 		},
