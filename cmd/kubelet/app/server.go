@@ -320,7 +320,7 @@ func initConfigz(kc *componentconfig.KubeletConfiguration) (*configz.Config, err
 	return cz, err
 }
 
-// validateConfig validates configuration of Kubelet and returns an error is the input configuration is invalid.
+// validateConfig validates configuration of Kubelet and returns an error if the input configuration is invalid.
 func validateConfig(s *options.KubeletServer) error {
 	if !s.CgroupsPerQOS && len(s.EnforceNodeAllocatable) > 0 {
 		return fmt.Errorf("Node Allocatable enforcement is not supported unless Cgroups Per QOS feature is turned on")
@@ -457,7 +457,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 				if err != nil {
 					return err
 				}
-				clientCertificateManager, err = initializeClientCertificateManager(s.CertDirectory, nodeName, clientConfig.CertData, clientConfig.KeyData)
+				clientCertificateManager, err = initializeClientCertificateManager(s.CertDirectory, nodeName, clientConfig.CertData, clientConfig.KeyData, clientConfig.CertFile, clientConfig.KeyFile)
 				if err != nil {
 					return err
 				}
@@ -664,13 +664,13 @@ func updateTransport(clientConfig *restclient.Config, clientCertificateManager c
 // client that can be used to sign new certificates (or rotate). It answers with
 // whatever certificate it is initialized with. If a CSR client is set later, it
 // may begin rotating/renewing the client cert
-func initializeClientCertificateManager(certDirectory string, nodeName types.NodeName, certData []byte, keyData []byte) (certificate.Manager, error) {
+func initializeClientCertificateManager(certDirectory string, nodeName types.NodeName, certData []byte, keyData []byte, certFile string, keyFile string) (certificate.Manager, error) {
 	certificateStore, err := certificate.NewFileStore(
 		"kubelet-client",
 		certDirectory,
 		certDirectory,
-		"",
-		"")
+		certFile,
+		keyFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize certificate store: %v", err)
 	}

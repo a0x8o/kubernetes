@@ -583,11 +583,7 @@ function start-kubelet {
   fi
   # Network plugin
   if [[ -n "${NETWORK_PROVIDER:-}" ]]; then
-    if [[ "${NETWORK_PROVIDER:-}" == "cni" ]]; then
-      flags+=" --cni-bin-dir=/opt/kubernetes/bin"
-    else
-      flags+=" --network-plugin-dir=/opt/kubernetes/bin"
-    fi
+    flags+=" --cni-bin-dir=/opt/kubernetes/bin"
     flags+=" --network-plugin=${NETWORK_PROVIDER}"
   fi
   if [[ -n "${NON_MASQUERADE_CIDR:-}" ]]; then
@@ -602,6 +598,9 @@ function start-kubelet {
   fi
   if [[ -n "${NODE_LABELS:-}" ]]; then
     flags+=" --node-labels=${NODE_LABELS}"
+  fi
+  if [[ -n "${NODE_TAINTS:-}" ]]; then
+    flags+=" --register-with-taints=${NODE_TAINTS}"
   fi
   if [[ -n "${EVICTION_HARD:-}" ]]; then
     flags+=" --eviction-hard=${EVICTION_HARD}"
@@ -1130,7 +1129,7 @@ function start-cluster-autoscaler {
     local -r src_file="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/cluster-autoscaler.manifest"
     remove-salt-config-comments "${src_file}"
 
-    local params="${AUTOSCALER_MIG_CONFIG} ${CLOUD_CONFIG_OPT}"
+    local params="${AUTOSCALER_MIG_CONFIG} ${CLOUD_CONFIG_OPT} ${AUTOSCALER_EXPANDER_CONFIG:-}"
     sed -i -e "s@{{params}}@${params}@g" "${src_file}"
     sed -i -e "s@{{cloud_config_mount}}@${CLOUD_CONFIG_MOUNT}@g" "${src_file}"
     sed -i -e "s@{{cloud_config_volume}}@${CLOUD_CONFIG_VOLUME}@g" "${src_file}"
@@ -1268,6 +1267,13 @@ function start-kube-addons {
     sed -i -e "s@__CALICO_NODE_CPU__@$(get-calico-node-cpu)@g" "${ds_file}"
     sed -i -e "s@__CALICO_TYPHA_CPU__@$(get-calico-typha-cpu)@g" "${typha_dep_file}"
     sed -i -e "s@__CALICO_TYPHA_REPLICAS__@$(get-calico-typha-replicas)@g" "${typha_dep_file}"
+  else
+    # If not configured to use Calico, the set the typha replica count to 0, but only if the 
+    # addon is present.
+    local -r typha_dep_file="${dst_dir}/calico-policy-controller/typha-deployment.yaml"
+    if [[ -e $typha_dep_file ]]; then
+      sed -i -e "s@__CALICO_TYPHA_REPLICAS__@0@g" "${typha_dep_file}"
+    fi
   fi
   if [[ "${ENABLE_DEFAULT_STORAGE_CLASS:-}" == "true" ]]; then
     setup-addon-manifests "addons" "storage-class/gce"

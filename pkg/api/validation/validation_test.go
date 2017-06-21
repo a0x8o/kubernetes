@@ -24,7 +24,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -267,6 +266,34 @@ func TestValidatePersistentVolumes(t *testing.T) {
 					},
 					StorageClassName: "test-storage-class",
 				}),
+		},
+		"bad-hostpath-volume-backsteps": {
+			isExpectedFailure: true,
+			volume: testVolume("foo", "", api.PersistentVolumeSpec{
+				Capacity: api.ResourceList{
+					api.ResourceName(api.ResourceStorage): resource.MustParse("10G"),
+				},
+				AccessModes: []api.PersistentVolumeAccessMode{api.ReadWriteOnce},
+				PersistentVolumeSource: api.PersistentVolumeSource{
+					HostPath: &api.HostPathVolumeSource{Path: "/foo/.."},
+				},
+				StorageClassName: "backstep-hostpath",
+			}),
+		},
+		"bad-local-volume-backsteps": {
+			isExpectedFailure: true,
+			volume: testVolume("foo", "", api.PersistentVolumeSpec{
+				Capacity: api.ResourceList{
+					api.ResourceName(api.ResourceStorage): resource.MustParse("10G"),
+				},
+				AccessModes: []api.PersistentVolumeAccessMode{api.ReadWriteOnce},
+				PersistentVolumeSource: api.PersistentVolumeSource{
+					Local: &api.LocalVolumeSource{
+						Path: "/foo/..",
+					},
+				},
+				StorageClassName: "backstep-local",
+			}),
 		},
 	}
 
@@ -1101,6 +1128,20 @@ func TestValidateVolumes(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name: "invalid HostPath backsteps",
+			vol: api.Volume{
+				Name: "hostpath",
+				VolumeSource: api.VolumeSource{
+					HostPath: &api.HostPathVolumeSource{
+						Path: "/mnt/path/..",
+					},
+				},
+			},
+			errtype:   field.ErrorTypeInvalid,
+			errfield:  "path",
+			errdetail: "must not contain '..'",
 		},
 		// GcePersistentDisk
 		{
@@ -2707,6 +2748,34 @@ func TestValidateEnv(t *testing.T) {
 			expectedError: `[0].valueFrom: Invalid value: "": may not have more than one field specified at a time`,
 		},
 		{
+			name: "valueFrom.secretKeyRef.name invalid",
+			envs: []api.EnvVar{{
+				Name: "abc",
+				ValueFrom: &api.EnvVarSource{
+					SecretKeyRef: &api.SecretKeySelector{
+						LocalObjectReference: api.LocalObjectReference{
+							Name: "$%^&*#",
+						},
+						Key: "a-key",
+					},
+				},
+			}},
+		},
+		{
+			name: "valueFrom.configMapKeyRef.name invalid",
+			envs: []api.EnvVar{{
+				Name: "abc",
+				ValueFrom: &api.EnvVarSource{
+					ConfigMapKeyRef: &api.ConfigMapKeySelector{
+						LocalObjectReference: api.LocalObjectReference{
+							Name: "$%^&*#",
+						},
+						Key: "some-key",
+					},
+				},
+			}},
+		},
+		{
 			name: "missing FieldPath on ObjectFieldSelector",
 			envs: []api.EnvVar{{
 				Name: "abc",
@@ -2911,6 +2980,26 @@ func TestValidateEnvFrom(t *testing.T) {
 				},
 			},
 			expectedError: "field: Invalid value: \"\": may not have more than one field specified at a time",
+		},
+		{
+			name: "invalid secret ref name",
+			envs: []api.EnvFromSource{
+				{
+					SecretRef: &api.SecretEnvSource{
+						LocalObjectReference: api.LocalObjectReference{Name: "$%^&*#"}},
+				},
+			},
+			expectedError: "field[0].secretRef.name: Invalid value: \"$%^&*#\": " + dnsSubdomainLabelErrMsg,
+		},
+		{
+			name: "invalid config ref name",
+			envs: []api.EnvFromSource{
+				{
+					ConfigMapRef: &api.ConfigMapEnvSource{
+						LocalObjectReference: api.LocalObjectReference{Name: "$%^&*#"}},
+				},
+			},
+			expectedError: "field[0].configMapRef.name: Invalid value: \"$%^&*#\": " + dnsSubdomainLabelErrMsg,
 		},
 	}
 	for _, tc := range errorCases {
@@ -3226,6 +3315,21 @@ func TestValidateContainers(t *testing.T) {
 			ImagePullPolicy:          "IfNotPresent",
 			TerminationMessagePolicy: "File",
 		},
+		{
+			Name:                     "env-from-source",
+			Image:                    "image",
+			ImagePullPolicy:          "IfNotPresent",
+			TerminationMessagePolicy: "File",
+			EnvFrom: []api.EnvFromSource{
+				{
+					ConfigMapRef: &api.ConfigMapEnvSource{
+						LocalObjectReference: api.LocalObjectReference{
+							Name: "test",
+						},
+					},
+				},
+			},
+		},
 		{Name: "abc-1234", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File", SecurityContext: fakeValidSecurityContext(true)},
 	}
 	if errs := validateContainers(successCase, volumes, field.NewPath("field")); len(errs) != 0 {
@@ -3456,6 +3560,23 @@ func TestValidateContainers(t *testing.T) {
 				TerminationMessagePolicy: "File",
 			},
 		},
+		"Invalid env from": {
+			{
+				Name:                     "env-from-source",
+				Image:                    "image",
+				ImagePullPolicy:          "IfNotPresent",
+				TerminationMessagePolicy: "File",
+				EnvFrom: []api.EnvFromSource{
+					{
+						ConfigMapRef: &api.ConfigMapEnvSource{
+							LocalObjectReference: api.LocalObjectReference{
+								Name: "$%^&*#",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	for k, v := range errorCases {
 		if errs := validateContainers(v, volumes, field.NewPath("field")); len(errs) == 0 {
@@ -3505,10 +3626,10 @@ func TestValidatePodSpec(t *testing.T) {
 	activeDeadlineSeconds := int64(30)
 	activeDeadlineSecondsMax := int64(math.MaxInt32)
 
-	minUserID := types.UnixUserID(0)
-	maxUserID := types.UnixUserID(2147483647)
-	minGroupID := types.UnixGroupID(0)
-	maxGroupID := types.UnixGroupID(2147483647)
+	minUserID := int64(0)
+	maxUserID := int64(2147483647)
+	minGroupID := int64(0)
+	maxGroupID := int64(2147483647)
 
 	successCases := []api.PodSpec{
 		{ // Populate basic fields, leave defaults for most.
@@ -3563,7 +3684,7 @@ func TestValidatePodSpec(t *testing.T) {
 		{ // Populate RunAsUser SupplementalGroups FSGroup with minID 0
 			Containers: []api.Container{{Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
 			SecurityContext: &api.PodSecurityContext{
-				SupplementalGroups: []types.UnixGroupID{minGroupID},
+				SupplementalGroups: []int64{minGroupID},
 				RunAsUser:          &minUserID,
 				FSGroup:            &minGroupID,
 			},
@@ -3573,7 +3694,7 @@ func TestValidatePodSpec(t *testing.T) {
 		{ // Populate RunAsUser SupplementalGroups FSGroup with maxID 2147483647
 			Containers: []api.Container{{Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
 			SecurityContext: &api.PodSecurityContext{
-				SupplementalGroups: []types.UnixGroupID{maxGroupID},
+				SupplementalGroups: []int64{maxGroupID},
 				RunAsUser:          &maxUserID,
 				FSGroup:            &maxGroupID,
 			},
@@ -3628,10 +3749,10 @@ func TestValidatePodSpec(t *testing.T) {
 	activeDeadlineSeconds = int64(0)
 	activeDeadlineSecondsTooLarge := int64(math.MaxInt32 + 1)
 
-	minUserID = types.UnixUserID(-1)
-	maxUserID = types.UnixUserID(2147483648)
-	minGroupID = types.UnixGroupID(-1)
-	maxGroupID = types.UnixGroupID(2147483648)
+	minUserID = int64(-1)
+	maxUserID = int64(2147483648)
+	minGroupID = int64(-1)
+	maxGroupID = int64(2147483648)
 
 	failureCases := map[string]api.PodSpec{
 		"bad volume": {
@@ -3705,7 +3826,7 @@ func TestValidatePodSpec(t *testing.T) {
 			Containers: []api.Container{{Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
 			SecurityContext: &api.PodSecurityContext{
 				HostNetwork:        false,
-				SupplementalGroups: []types.UnixGroupID{maxGroupID, 1234},
+				SupplementalGroups: []int64{maxGroupID, 1234},
 			},
 			RestartPolicy: api.RestartPolicyAlways,
 			DNSPolicy:     api.DNSClusterFirst,
@@ -3714,7 +3835,7 @@ func TestValidatePodSpec(t *testing.T) {
 			Containers: []api.Container{{Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
 			SecurityContext: &api.PodSecurityContext{
 				HostNetwork:        false,
-				SupplementalGroups: []types.UnixGroupID{minGroupID, 1234},
+				SupplementalGroups: []int64{minGroupID, 1234},
 			},
 			RestartPolicy: api.RestartPolicyAlways,
 			DNSPolicy:     api.DNSClusterFirst,
@@ -7814,7 +7935,7 @@ func TestValidateServiceUpdate(t *testing.T) {
 				oldSvc.Spec.Type = api.ServiceTypeLoadBalancer
 				oldSvc.Spec.LoadBalancerSourceRanges = []string{"10.0.0.0/8"}
 				newSvc.Spec.Type = api.ServiceTypeLoadBalancer
-				newSvc.Spec.LoadBalancerSourceRanges = []string{"10.180.0.0/16"}
+				newSvc.Spec.LoadBalancerSourceRanges = []string{"10.100.0.0/16"}
 			},
 			numErrs: 0,
 		},
@@ -9475,7 +9596,7 @@ func TestValidateTLSSecret(t *testing.T) {
 
 func TestValidateSecurityContext(t *testing.T) {
 	priv := false
-	runAsUser := types.UnixUserID(1)
+	runAsUser := int64(1)
 	fullValidSC := func() *api.SecurityContext {
 		return &api.SecurityContext{
 			Privileged: &priv,
@@ -9527,7 +9648,7 @@ func TestValidateSecurityContext(t *testing.T) {
 	privRequestWithGlobalDeny.Privileged = &requestPrivileged
 
 	negativeRunAsUser := fullValidSC()
-	negativeUser := types.UnixUserID(-1)
+	negativeUser := int64(-1)
 	negativeRunAsUser.RunAsUser = &negativeUser
 
 	errorCases := map[string]struct {

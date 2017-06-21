@@ -20,8 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"os"
 	"path"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -627,7 +627,10 @@ func validateHostPathVolumeSource(hostPath *api.HostPathVolumeSource, fldPath *f
 	allErrs := field.ErrorList{}
 	if len(hostPath.Path) == 0 {
 		allErrs = append(allErrs, field.Required(fldPath.Child("path"), ""))
+		return allErrs
 	}
+
+	allErrs = append(allErrs, validatePathNoBacksteps(hostPath.Path, fldPath.Child("path"))...)
 	return allErrs
 }
 
@@ -958,8 +961,18 @@ func validateLocalDescendingPath(targetPath string, fldPath *field.Path) field.E
 		allErrs = append(allErrs, field.Invalid(fldPath, targetPath, "must be a relative path"))
 	}
 
-	// TODO: this assumes the OS of apiserver & nodes are the same
-	parts := strings.Split(targetPath, string(os.PathSeparator))
+	allErrs = append(allErrs, validatePathNoBacksteps(targetPath, fldPath)...)
+
+	return allErrs
+}
+
+// validatePathNoBacksteps makes sure the targetPath does not have any `..` path elements when split
+//
+// This assumes the OS of the apiserver and the nodes are the same. The same check should be done
+// on the node to ensure there are no backsteps.
+func validatePathNoBacksteps(targetPath string, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	parts := strings.Split(filepath.ToSlash(targetPath), "/")
 	for _, item := range parts {
 		if item == ".." {
 			allErrs = append(allErrs, field.Invalid(fldPath, targetPath, "must not contain '..'"))
@@ -1120,7 +1133,10 @@ func validateLocalVolumeSource(ls *api.LocalVolumeSource, fldPath *field.Path) f
 	allErrs := field.ErrorList{}
 	if ls.Path == "" {
 		allErrs = append(allErrs, field.Required(fldPath.Child("path"), ""))
+		return allErrs
 	}
+
+	allErrs = append(allErrs, validatePathNoBacksteps(ls.Path, fldPath.Child("path"))...)
 	return allErrs
 }
 
@@ -1538,6 +1554,7 @@ func validateContainerPorts(ports []api.ContainerPort, fldPath *field.Path) fiel
 	return allErrs
 }
 
+// ValidateEnv validates env vars
 func ValidateEnv(vars []api.EnvVar, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
@@ -1708,8 +1725,9 @@ func validateContainerResourceDivisor(rName string, divisor resource.Quantity, f
 func validateConfigMapKeySelector(s *api.ConfigMapKeySelector, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	if len(s.Name) == 0 {
-		allErrs = append(allErrs, field.Required(fldPath.Child("name"), ""))
+	nameFn := ValidateNameFunc(ValidateSecretName)
+	for _, msg := range nameFn(s.Name, false) {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("name"), s.Name, msg))
 	}
 	if len(s.Key) == 0 {
 		allErrs = append(allErrs, field.Required(fldPath.Child("key"), ""))
@@ -1725,8 +1743,9 @@ func validateConfigMapKeySelector(s *api.ConfigMapKeySelector, fldPath *field.Pa
 func validateSecretKeySelector(s *api.SecretKeySelector, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	if len(s.Name) == 0 {
-		allErrs = append(allErrs, field.Required(fldPath.Child("name"), ""))
+	nameFn := ValidateNameFunc(ValidateSecretName)
+	for _, msg := range nameFn(s.Name, false) {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("name"), s.Name, msg))
 	}
 	if len(s.Key) == 0 {
 		allErrs = append(allErrs, field.Required(fldPath.Child("key"), ""))
@@ -1998,6 +2017,7 @@ func validateContainers(containers []api.Container, volumes sets.String, fldPath
 		allErrs = append(allErrs, validateProbe(ctr.ReadinessProbe, idxPath.Child("readinessProbe"))...)
 		allErrs = append(allErrs, validateContainerPorts(ctr.Ports, idxPath.Child("ports"))...)
 		allErrs = append(allErrs, ValidateEnv(ctr.Env, idxPath.Child("env"))...)
+		allErrs = append(allErrs, ValidateEnvFrom(ctr.EnvFrom, idxPath.Child("envFrom"))...)
 		allErrs = append(allErrs, ValidateVolumeMounts(ctr.VolumeMounts, volumes, idxPath.Child("volumeMounts"))...)
 		allErrs = append(allErrs, validatePullPolicy(ctr.ImagePullPolicy, idxPath.Child("imagePullPolicy"))...)
 		allErrs = append(allErrs, ValidateResourceRequirements(&ctr.Resources, idxPath.Child("resources"))...)

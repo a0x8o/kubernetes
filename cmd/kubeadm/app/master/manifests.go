@@ -34,9 +34,11 @@ import (
 	kubeadmapiext "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha1"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/cmd/kubeadm/app/images"
+	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
 	bootstrapapi "k8s.io/kubernetes/pkg/bootstrap/api"
 	authzmodes "k8s.io/kubernetes/pkg/kubeapiserver/authorizer/modes"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
+	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/util/version"
 )
 
@@ -300,9 +302,10 @@ func componentPod(container api.Container, volumes ...api.Volume) api.Pod {
 			Kind:       "Pod",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      container.Name,
-			Namespace: "kube-system",
-			Labels:    map[string]string{"component": container.Name, "tier": "control-plane"},
+			Name:        container.Name,
+			Namespace:   "kube-system",
+			Annotations: map[string]string{kubetypes.CriticalPodAnnotationKey: ""},
+			Labels:      map[string]string{"component": container.Name, "tier": "control-plane"},
 		},
 		Spec: api.PodSpec{
 			Containers:  []api.Container{container},
@@ -355,7 +358,7 @@ func getAPIServerCommand(cfg *kubeadmapi.MasterConfiguration, selfHosted bool, k
 		defaultArguments["proxy-client-cert-file"] = filepath.Join(cfg.CertificatesDir, kubeadmconstants.FrontProxyClientCertName)
 		defaultArguments["proxy-client-key-file"] = filepath.Join(cfg.CertificatesDir, kubeadmconstants.FrontProxyClientKeyName)
 	}
-	if k8sVersion.AtLeast(kubeadmconstants.MinimumNodeAuthorizerVersion) {
+	if kubeadmutil.IsNodeAuthorizerSupported(k8sVersion) {
 		// enable the NodeRestriction admission plugin
 		defaultArguments["admission-control"] = defaultv17AdmissionControl
 	}

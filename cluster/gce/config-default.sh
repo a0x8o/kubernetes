@@ -68,9 +68,7 @@ fi
 # variable. Also please update corresponding image for node e2e at:
 # https://github.com/kubernetes/kubernetes/blob/master/test/e2e_node/jenkins/image-config.yaml
 CVM_VERSION=${CVM_VERSION:-container-vm-v20170214}
-# NOTE: Update the kernel commit SHA in cluster/addons/nvidia-gpus/cos-installer-daemonset.yaml
-# while updating the COS version here.
-GCI_VERSION=${KUBE_GCI_VERSION:-cos-beta-59-9460-20-0}
+GCI_VERSION=${KUBE_GCI_VERSION:-cos-stable-59-9460-64-0}
 MASTER_IMAGE=${KUBE_GCE_MASTER_IMAGE:-}
 MASTER_IMAGE_PROJECT=${KUBE_GCE_MASTER_PROJECT:-cos-cloud}
 NODE_IMAGE=${KUBE_GCE_NODE_IMAGE:-${CVM_VERSION}}
@@ -83,6 +81,7 @@ NETWORK=${KUBE_GCE_NETWORK:-default}
 INSTANCE_PREFIX="${KUBE_GCE_INSTANCE_PREFIX:-kubernetes}"
 CLUSTER_NAME="${CLUSTER_NAME:-${INSTANCE_PREFIX}}"
 MASTER_NAME="${INSTANCE_PREFIX}-master"
+AGGREGATOR_MASTER_NAME="${INSTANCE_PREFIX}-aggregator"
 INITIAL_ETCD_CLUSTER="${MASTER_NAME}"
 ETCD_QUORUM_READ="${ENABLE_ETCD_QUORUM_READ:-false}"
 MASTER_TAG="${INSTANCE_PREFIX}-master"
@@ -125,6 +124,10 @@ ENABLE_CLUSTER_MONITORING="${KUBE_ENABLE_CLUSTER_MONITORING:-influxdb}"
 # fluentd is not running as a manifest pod with appropriate label.
 # TODO(piosz): remove this in 1.8
 NODE_LABELS="${KUBE_NODE_LABELS:-beta.kubernetes.io/fluentd-ds-ready=true}"
+
+# To avoid running the DaemonSet on older version make sure the ip-masq-agent
+# only runs when the readiness label is set.
+NODE_LABELS="${NODE_LABELS},beta.kubernetes.io/masq-agent-ds-ready=true"
 
 # To avoid running Calico on a node that is not configured appropriately, 
 # label each Node so that the DaemonSet can run the Pods only on ready Nodes.
@@ -197,6 +200,7 @@ if [[ "${ENABLE_CLUSTER_AUTOSCALER}" == "true" ]]; then
   AUTOSCALER_MIN_NODES="${KUBE_AUTOSCALER_MIN_NODES:-}"
   AUTOSCALER_MAX_NODES="${KUBE_AUTOSCALER_MAX_NODES:-}"
   AUTOSCALER_ENABLE_SCALE_DOWN="${KUBE_AUTOSCALER_ENABLE_SCALE_DOWN:-true}"
+  AUTOSCALER_EXPANDER_CONFIG="${KUBE_AUTOSCALER_EXPANDER_CONFIG:---expander=price}"
 fi
 
 # Optional: Enable Rescheduler

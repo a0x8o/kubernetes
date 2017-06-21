@@ -387,8 +387,9 @@ func (ec2 *FakeEC2) DeleteVolume(request *ec2.DeleteVolumeInput) (resp *ec2.Dele
 	panic("Not implemented")
 }
 
-func (ec2 *FakeEC2) DescribeSecurityGroups(request *ec2.DescribeSecurityGroupsInput) ([]*ec2.SecurityGroup, error) {
-	panic("Not implemented")
+func (e *FakeEC2) DescribeSecurityGroups(request *ec2.DescribeSecurityGroupsInput) ([]*ec2.SecurityGroup, error) {
+	args := e.Called(request)
+	return args.Get(0).([]*ec2.SecurityGroup), nil
 }
 
 func (ec2 *FakeEC2) CreateSecurityGroup(*ec2.CreateSecurityGroupInput) (*ec2.CreateSecurityGroupOutput, error) {
@@ -1012,62 +1013,6 @@ func TestFindInstanceByNodeNameExcludesTerminatedInstances(t *testing.T) {
 	}
 }
 
-func TestFindInstancesByNodeNameCached(t *testing.T) {
-	awsServices := NewFakeAWSServices()
-
-	nodeNameOne := "my-dns.internal"
-	nodeNameTwo := "my-dns-two.internal"
-
-	var tag ec2.Tag
-	tag.Key = aws.String(TagNameKubernetesClusterPrefix + TestClusterId)
-	tag.Value = aws.String("")
-	tags := []*ec2.Tag{&tag}
-
-	var runningInstance ec2.Instance
-	runningInstance.InstanceId = aws.String("i-running")
-	runningInstance.PrivateDnsName = aws.String(nodeNameOne)
-	runningInstance.State = &ec2.InstanceState{Code: aws.Int64(16), Name: aws.String("running")}
-	runningInstance.Tags = tags
-
-	var secondInstance ec2.Instance
-
-	secondInstance.InstanceId = aws.String("i-running")
-	secondInstance.PrivateDnsName = aws.String(nodeNameTwo)
-	secondInstance.State = &ec2.InstanceState{Code: aws.Int64(48), Name: aws.String("running")}
-	secondInstance.Tags = tags
-
-	var terminatedInstance ec2.Instance
-	terminatedInstance.InstanceId = aws.String("i-terminated")
-	terminatedInstance.PrivateDnsName = aws.String(nodeNameOne)
-	terminatedInstance.State = &ec2.InstanceState{Code: aws.Int64(48), Name: aws.String("terminated")}
-	terminatedInstance.Tags = tags
-
-	instances := []*ec2.Instance{&secondInstance, &runningInstance, &terminatedInstance}
-	awsServices.instances = append(awsServices.instances, instances...)
-
-	c, err := newAWSCloud(strings.NewReader("[global]"), awsServices)
-	if err != nil {
-		t.Errorf("Error building aws cloud: %v", err)
-		return
-	}
-
-	nodeNames := sets.NewString(nodeNameOne)
-	returnedInstances, errr := c.getInstancesByNodeNamesCached(nodeNames, "running")
-
-	if errr != nil {
-		t.Errorf("Failed to find instance: %v", err)
-		return
-	}
-
-	if len(returnedInstances) != 1 {
-		t.Errorf("Expected a single isntance but found: %v", returnedInstances)
-	}
-
-	if *returnedInstances[0].PrivateDnsName != nodeNameOne {
-		t.Errorf("Expected node name %v but got %v", nodeNameOne, returnedInstances[0].PrivateDnsName)
-	}
-}
-
 func TestGetInstanceByNodeNameBatching(t *testing.T) {
 	awsServices := NewFakeAWSServices()
 	c, err := newAWSCloud(strings.NewReader("[global]"), awsServices)
@@ -1121,6 +1066,18 @@ func (self *FakeELB) expectDescribeLoadBalancers(loadBalancerName string) {
 	self.On("DescribeLoadBalancers", &elb.DescribeLoadBalancersInput{LoadBalancerNames: []*string{aws.String(loadBalancerName)}}).Return(&elb.DescribeLoadBalancersOutput{
 		LoadBalancerDescriptions: []*elb.LoadBalancerDescription{{}},
 	})
+}
+
+func (self *FakeEC2) expectDescribeSecurityGroups(groupName, clusterID string) {
+	tags := []*ec2.Tag{
+		{Key: aws.String(TagNameKubernetesClusterLegacy), Value: aws.String(TestClusterId)},
+		{Key: aws.String(fmt.Sprintf("%s%s", TagNameKubernetesClusterPrefix, TestClusterId)), Value: aws.String(ResourceLifecycleOwned)},
+	}
+
+	self.On("DescribeSecurityGroups", &ec2.DescribeSecurityGroupsInput{Filters: []*ec2.Filter{
+		newEc2Filter("group-name", groupName),
+		newEc2Filter("vpc-id", ""),
+	}}).Return([]*ec2.SecurityGroup{{Tags: tags}})
 }
 
 func TestDescribeLoadBalancerOnDelete(t *testing.T) {
@@ -1376,5 +1333,39 @@ func TestGetLoadBalancerAdditionalTags(t *testing.T) {
 				continue
 			}
 		}
+	}
+}
+
+func TestLBExtraSecurityGroupsAnnotation(t *testing.T) {
+	awsServices := NewFakeAWSServices()
+	c, _ := newAWSCloud(strings.NewReader("[global]"), awsServices)
+
+	sg1 := "sg-000001"
+	sg2 := "sg-000002"
+
+	tests := []struct {
+		name string
+
+		extraSGsAnnotation string
+		expectedSGs        []string
+	}{
+		{"No extra SG annotation", "", []string{}},
+		{"Empty extra SGs specified", ", ,,", []string{}},
+		{"SG specified", sg1, []string{sg1}},
+		{"Multiple SGs specified", fmt.Sprintf("%s, %s", sg1, sg2), []string{sg1, sg2}},
+	}
+
+	awsServices.ec2.expectDescribeSecurityGroups("k8s-elb-aid", "cluster.test")
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			serviceName := types.NamespacedName{Namespace: "default", Name: "myservice"}
+
+			sgList, err := c.buildELBSecurityGroupList(serviceName, "aid", test.extraSGsAnnotation)
+			assert.NoError(t, err, "buildELBSecurityGroupList failed")
+			extraSGs := sgList[1:]
+			assert.True(t, sets.NewString(test.expectedSGs...).Equal(sets.NewString(extraSGs...)),
+				"Security Groups expected=%q , returned=%q", test.expectedSGs, extraSGs)
+		})
 	}
 }

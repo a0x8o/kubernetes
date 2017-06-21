@@ -99,7 +99,7 @@ function config-ip-firewall {
   fi
 
   iptables -N KUBE-METADATA-SERVER
-  iptables -A FORWARD -p tcp -d 169.254.169.254 --dport 80 -j KUBE-METADATA-SERVER
+  iptables -I FORWARD -p tcp -d 169.254.169.254 --dport 80 -j KUBE-METADATA-SERVER
 
   if [[ -n "${KUBE_FIREWALL_METADATA_SERVER:-}" ]]; then
     iptables -A KUBE-METADATA-SERVER -j DROP
@@ -323,6 +323,18 @@ function create-master-pki {
   # < 1.6.
   ln -sf "${APISERVER_SERVER_KEY_PATH}" /etc/srv/kubernetes/server.key
   ln -sf "${APISERVER_SERVER_CERT_PATH}" /etc/srv/kubernetes/server.cert
+
+  AGGREGATOR_CA_KEY_PATH="${pki_dir}/aggr_ca.key"
+  echo "${AGGREGATOR_CA_KEY:-}" | base64 --decode > "${AGGREGATOR_CA_KEY_PATH}"
+
+  REQUESTHEADER_CA_CERT_PATH="${pki_dir}/aggr_ca.crt"
+  echo "${REQUESTHEADER_CA_CERT:-}" | base64 --decode > "${REQUESTHEADER_CA_CERT_PATH}"
+
+  PROXY_CLIENT_KEY_PATH="${pki_dir}/proxy_client.key"
+  echo "${PROXY_CLIENT_KEY:-}" | base64 --decode > "${PROXY_CLIENT_KEY_PATH}"
+
+  PROXY_CLIENT_CERT_PATH="${pki_dir}/proxy_client.crt"
+  echo "${PROXY_CLIENT_CERT:-}" | base64 --decode > "${PROXY_CLIENT_CERT_PATH}"
 }
 
 # After the first boot and on upgrade, these files exist on the master-pd
@@ -895,11 +907,7 @@ function start-kubelet {
   fi
   # Network plugin
   if [[ -n "${NETWORK_PROVIDER:-}" || -n "${NETWORK_POLICY_PROVIDER:-}" ]]; then
-    if [[ "${NETWORK_PROVIDER:-}" == "cni" || "${NETWORK_POLICY_PROVIDER:-}" == "calico" ]]; then
-      flags+=" --cni-bin-dir=/home/kubernetes/bin"
-    else
-      flags+=" --network-plugin-dir=/home/kubernetes/bin"
-    fi
+    flags+=" --cni-bin-dir=/home/kubernetes/bin"
     if [[ "${NETWORK_POLICY_PROVIDER:-}" == "calico" ]]; then
       # Calico uses CNI always.
       flags+=" --network-plugin=cni"
@@ -911,6 +919,10 @@ function start-kubelet {
   if [[ -n "${NON_MASQUERADE_CIDR:-}" ]]; then
     flags+=" --non-masquerade-cidr=${NON_MASQUERADE_CIDR}"
   fi
+  # FlexVolume plugin
+  if [[ -n "${VOLUME_PLUGIN_DIR:-}" ]]; then
+    flags+=" --volume-plugin-dir=${VOLUME_PLUGIN_DIR}"
+  fi
   if [[ "${ENABLE_MANIFEST_URL:-}" == "true" ]]; then
     flags+=" --manifest-url=${MANIFEST_URL}"
     flags+=" --manifest-url-header=${MANIFEST_URL_HEADER}"
@@ -921,6 +933,9 @@ function start-kubelet {
   if [[ -n "${NODE_LABELS:-}" ]]; then
     flags+=" --node-labels=${NODE_LABELS}"
   fi
+  if [[ -n "${NODE_TAINTS:-}" ]]; then
+    flags+=" --register-with-taints=${NODE_TAINTS}"
+  fi  
   if [[ -n "${EVICTION_HARD:-}" ]]; then
     flags+=" --eviction-hard=${EVICTION_HARD}"
   fi
@@ -1202,6 +1217,15 @@ function start-kube-apiserver {
   params+=" --secure-port=443"
   params+=" --tls-cert-file=${APISERVER_SERVER_CERT_PATH}"
   params+=" --tls-private-key-file=${APISERVER_SERVER_KEY_PATH}"
+  if [[ ! -z "${REQUESTHEADER_CA_CERT:-}" ]]; then
+    params+=" --requestheader-client-ca-file=${REQUESTHEADER_CA_CERT_PATH}"
+    params+=" --requestheader-allowed-names=aggregator"
+    params+=" --requestheader-extra-headers-prefix=X-Remote-Extra-"
+    params+=" --requestheader-group-headers=X-Remote-Group"
+    params+=" --requestheader-username-headers=X-Remote-User"
+    params+=" --proxy-client-cert-file=${PROXY_CLIENT_CERT_PATH}"
+    params+=" --proxy-client-key-file=${PROXY_CLIENT_KEY_PATH}"
+  fi
   params+=" --enable-aggregator-routing=true"
   if [[ -e "${APISERVER_CLIENT_CERT_PATH}" ]] && [[ -e "${APISERVER_CLIENT_KEY_PATH}" ]]; then
     params+=" --kubelet-client-certificate=${APISERVER_CLIENT_CERT_PATH}"
@@ -1374,6 +1398,12 @@ function start-kube-apiserver {
     container_env="\"env\":[{\"name\": \"KUBE_CACHE_MUTATION_DETECTOR\", \"value\": \"${ENABLE_CACHE_MUTATION_DETECTOR}\"}],"
   fi
 
+  if [[ -n "${ENCRYPTION_PROVIDER_CONFIG:-}" ]]; then
+    local encryption_provider_config_path="/etc/srv/kubernetes/encryption-provider-config.yml"
+    echo "${ENCRYPTION_PROVIDER_CONFIG}" | base64 --decode > "${encryption_provider_config_path}"
+    params+=" --experimental-encryption-provider-config=${encryption_provider_config_path}"
+  fi
+
   src_file="${src_dir}/kube-apiserver.manifest"
   remove-salt-config-comments "${src_file}"
   # Evaluate variables.
@@ -1525,7 +1555,7 @@ function start-cluster-autoscaler {
     local -r src_file="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/cluster-autoscaler.manifest"
     remove-salt-config-comments "${src_file}"
 
-    local params="${AUTOSCALER_MIG_CONFIG} ${CLOUD_CONFIG_OPT}"
+    local params="${AUTOSCALER_MIG_CONFIG} ${CLOUD_CONFIG_OPT} ${AUTOSCALER_EXPANDER_CONFIG:-}"
     sed -i -e "s@{{params}}@${params}@g" "${src_file}"
     sed -i -e "s@{{cloud_config_mount}}@${CLOUD_CONFIG_MOUNT}@g" "${src_file}"
     sed -i -e "s@{{cloud_config_volume}}@${CLOUD_CONFIG_VOLUME}@g" "${src_file}"
@@ -1660,13 +1690,20 @@ function start-kube-addons {
   if [[ "${NETWORK_POLICY_PROVIDER:-}" == "calico" ]]; then
     setup-addon-manifests "addons" "calico-policy-controller"
 
-    # Configure Calico based on cluster size and image type. 
+    # Configure Calico based on cluster size and image type.
     local -r ds_file="${dst_dir}/calico-policy-controller/calico-node-daemonset.yaml"
     local -r typha_dep_file="${dst_dir}/calico-policy-controller/typha-deployment.yaml"
     sed -i -e "s@__CALICO_CNI_DIR__@/home/kubernetes/bin@g" "${ds_file}"
     sed -i -e "s@__CALICO_NODE_CPU__@$(get-calico-node-cpu)@g" "${ds_file}"
     sed -i -e "s@__CALICO_TYPHA_CPU__@$(get-calico-typha-cpu)@g" "${typha_dep_file}"
     sed -i -e "s@__CALICO_TYPHA_REPLICAS__@$(get-calico-typha-replicas)@g" "${typha_dep_file}"
+  else
+    # If not configured to use Calico, the set the typha replica count to 0, but only if the 
+    # addon is present.
+    local -r typha_dep_file="${dst_dir}/calico-policy-controller/typha-deployment.yaml"
+    if [[ -e $typha_dep_file ]]; then
+      sed -i -e "s@__CALICO_TYPHA_REPLICAS__@0@g" "${typha_dep_file}"
+    fi
   fi
   if [[ "${ENABLE_DEFAULT_STORAGE_CLASS:-}" == "true" ]]; then
     setup-addon-manifests "addons" "storage-class/gce"
