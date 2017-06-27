@@ -23,11 +23,11 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/api/v1/service"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
@@ -1411,7 +1411,16 @@ var _ = framework.KubeDescribe("ESIPP [Slow]", func() {
 		jig := framework.NewServiceTestJig(cs, serviceName)
 		nodes := jig.GetNodes(framework.MaxNodesForEndpointsTests)
 
-		svc := jig.CreateOnlyLocalLoadBalancerService(namespace, serviceName, loadBalancerCreateTimeout, false, nil)
+		svc := jig.CreateOnlyLocalLoadBalancerService(namespace, serviceName, loadBalancerCreateTimeout, false,
+			func(svc *v1.Service) {
+				// Change service port to avoid collision with opened hostPorts
+				// in other tests that run in parallel.
+				if len(svc.Spec.Ports) != 0 {
+					svc.Spec.Ports[0].TargetPort = intstr.FromInt(int(svc.Spec.Ports[0].Port))
+					svc.Spec.Ports[0].Port = 8081
+				}
+
+			})
 		serviceLBNames = append(serviceLBNames, cloudprovider.GetLoadBalancerName(svc))
 		defer func() {
 			jig.ChangeServiceType(svc.Namespace, svc.Name, v1.ServiceTypeClusterIP, loadBalancerCreateTimeout)

@@ -30,12 +30,12 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/v1"
 	v1core "k8s.io/kubernetes/pkg/client/clientset_generated/clientset/typed/core/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
@@ -43,7 +43,7 @@ import (
 const (
 	gcePDDetachTimeout  = 10 * time.Minute
 	gcePDDetachPollTime = 10 * time.Second
-	nodeStatusTimeout   = 5 * time.Minute
+	nodeStatusTimeout   = 10 * time.Minute
 	nodeStatusPollTime  = 1 * time.Second
 	maxReadRetry        = 3
 )

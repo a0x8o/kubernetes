@@ -125,10 +125,6 @@ ENABLE_CLUSTER_MONITORING="${KUBE_ENABLE_CLUSTER_MONITORING:-influxdb}"
 # TODO(piosz): remove this in 1.8
 NODE_LABELS="${KUBE_NODE_LABELS:-beta.kubernetes.io/fluentd-ds-ready=true}"
 
-# To avoid running the DaemonSet on older version make sure the ip-masq-agent
-# only runs when the readiness label is set.
-NODE_LABELS="${NODE_LABELS},beta.kubernetes.io/masq-agent-ds-ready=true"
-
 # To avoid running Calico on a node that is not configured appropriately, 
 # label each Node so that the DaemonSet can run the Pods only on ready Nodes.
 if [[ ${NETWORK_POLICY_PROVIDER:-} == "calico" ]]; then
@@ -222,7 +218,7 @@ if [ ${ENABLE_IP_ALIASES} = true ]; then
   SERVICE_CLUSTER_IP_SUBNETWORK=${KUBE_GCE_SERVICE_CLUSTER_IP_SUBNETWORK:-${INSTANCE_PREFIX}-subnet-services}
   # NODE_IP_RANGE is used when ENABLE_IP_ALIASES=true. It is the primary range in
   # the subnet and is the range used for node instance IPs.
-  NODE_IP_RANGE="${NODE_IP_RANGE:-10.40.0.0/22}"
+  NODE_IP_RANGE="$(get-node-ip-range)"
   # Add to the provider custom variables.
   PROVIDER_VARS="${PROVIDER_VARS} ENABLE_IP_ALIASES"
 fi
@@ -246,13 +242,10 @@ OPENCONTRAIL_PUBLIC_SUBNET="${OPENCONTRAIL_PUBLIC_SUBNET:-10.1.0.0/16}"
 # Network Policy plugin specific settings.
 NETWORK_POLICY_PROVIDER="${NETWORK_POLICY_PROVIDER:-none}" # calico
 
-# Should the kubelet configure egress masquerade (old way) or let a daemonset do it?
-NON_MASQUERADE_CIDR="0.0.0.0/0"
-
 # How should the kubelet configure hairpin mode?
 HAIRPIN_MODE="${HAIRPIN_MODE:-promiscuous-bridge}" # promiscuous-bridge, hairpin-veth, none
 # Optional: if set to true, kube-up will configure the cluster to run e2e tests.
-E2E_STORAGE_TEST_ENVIRONMENT=${KUBE_E2E_STORAGE_TEST_ENVIRONMENT:-false}
+E2E_STORAGE_TEST_ENVIRONMENT="${KUBE_E2E_STORAGE_TEST_ENVIRONMENT:-false}"
 
 # Evict pods whenever compute resource availability on the nodes gets below a threshold.
 EVICTION_HARD="${EVICTION_HARD:-memory.available<250Mi,nodefs.available<10%,nodefs.inodesFree<5%}"
@@ -273,4 +266,6 @@ SOFTLOCKUP_PANIC="${SOFTLOCKUP_PANIC:-false}" # true, false
 # Indicates if the values (i.e. KUBE_USER and KUBE_PASSWORD for basic
 # authentication) in metadata should be treated as canonical, and therefore disk
 # copies ought to be recreated/clobbered.
-METADATA_CLOBBERS_CONFIG=${METADATA_CLOBBERS_CONFIG:-false}
+METADATA_CLOBBERS_CONFIG="${METADATA_CLOBBERS_CONFIG:-false}"
+
+ENABLE_BIG_CLUSTER_SUBNETS="${ENABLE_BIG_CLUSTER_SUBNETS:-false}"

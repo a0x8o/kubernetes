@@ -17,6 +17,7 @@ limitations under the License.
 package kuberuntime
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -33,11 +34,11 @@ import (
 	"github.com/armon/circbuf"
 	"github.com/golang/glog"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubetypes "k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/kubernetes/pkg/api/v1"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/v1alpha1/runtime"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/events"
@@ -46,6 +47,12 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
 	"k8s.io/kubernetes/pkg/util/selinux"
 	"k8s.io/kubernetes/pkg/util/tail"
+)
+
+var (
+	ErrCreateContainerConfig = errors.New("CreateContainerConfigError")
+	ErrCreateContainer       = errors.New("CreateContainerError")
+	ErrPostStartHook         = errors.New("PostStartHookError")
 )
 
 // recordContainerEvent should be used by the runtime manager for all container related events.
@@ -102,12 +109,12 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 	containerConfig, err := m.generateContainerConfig(container, pod, restartCount, podIP, imageRef)
 	if err != nil {
 		m.recordContainerEvent(pod, container, "", v1.EventTypeWarning, events.FailedToCreateContainer, "Error: %v", grpc.ErrorDesc(err))
-		return "Generate Container Config Failed", err
+		return grpc.ErrorDesc(err), ErrCreateContainerConfig
 	}
 	containerID, err := m.runtimeService.CreateContainer(podSandboxID, containerConfig, podSandboxConfig)
 	if err != nil {
 		m.recordContainerEvent(pod, container, containerID, v1.EventTypeWarning, events.FailedToCreateContainer, "Error: %v", grpc.ErrorDesc(err))
-		return "Create Container Failed", err
+		return grpc.ErrorDesc(err), ErrCreateContainer
 	}
 	m.recordContainerEvent(pod, container, containerID, v1.EventTypeNormal, events.CreatedContainer, "Created container")
 
@@ -122,7 +129,7 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 	err = m.runtimeService.StartContainer(containerID)
 	if err != nil {
 		m.recordContainerEvent(pod, container, containerID, v1.EventTypeWarning, events.FailedToStartContainer, "Error: %v", grpc.ErrorDesc(err))
-		return "Start Container Failed", err
+		return grpc.ErrorDesc(err), kubecontainer.ErrRunContainer
 	}
 	m.recordContainerEvent(pod, container, containerID, v1.EventTypeNormal, events.StartedContainer, "Started container")
 
@@ -149,7 +156,7 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 		if handlerErr != nil {
 			m.recordContainerEvent(pod, container, kubeContainerID.ID, v1.EventTypeWarning, events.FailedPostStartHook, msg)
 			m.killContainer(pod, kubeContainerID, container.Name, "FailedPostStartHook", nil)
-			return "PostStart Hook Failed", err
+			return msg, ErrPostStartHook
 		}
 	}
 

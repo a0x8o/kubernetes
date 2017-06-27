@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 
-	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset/fake"
 	corelisters "k8s.io/kubernetes/pkg/client/listers/core/v1"
 )
@@ -449,7 +449,7 @@ func TestStatefulPodControlDeleteFailure(t *testing.T) {
 		return true, nil, apierrors.NewInternalError(errors.New("API server down"))
 	})
 	if err := control.DeleteStatefulPod(set, pod); err == nil {
-		t.Error("Fialed to return error on failed delete")
+		t.Error("Failed to return error on failed delete")
 	}
 	events := collectEvents(recorder.Events)
 	if eventCount := len(events); eventCount != 1 {

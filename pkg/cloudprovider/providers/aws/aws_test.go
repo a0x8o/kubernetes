@@ -29,9 +29,9 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/golang/glog"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/kubernetes/pkg/api/v1"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -876,6 +876,18 @@ func TestIpPermissionExistsHandlesMultipleGroupIds(t *testing.T) {
 	}
 
 	equals = ipPermissionExists(&newIpPermission, &oldIpPermission, false)
+	if equals {
+		t.Errorf("Should have not been considered equal since first is not in the second array of groups")
+	}
+
+	// The first pair matches, but the second does not
+	newIpPermission2 := ec2.IpPermission{
+		UserIdGroupPairs: []*ec2.UserIdGroupPair{
+			{GroupId: aws.String("firstGroupId")},
+			{GroupId: aws.String("fourthGroupId")},
+		},
+	}
+	equals = ipPermissionExists(&newIpPermission2, &oldIpPermission, false)
 	if equals {
 		t.Errorf("Should have not been considered equal since first is not in the second array of groups")
 	}

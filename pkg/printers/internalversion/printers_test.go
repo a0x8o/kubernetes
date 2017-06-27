@@ -29,6 +29,7 @@ import (
 
 	"github.com/ghodss/yaml"
 
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -41,7 +42,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
-	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/apis/apps"
 	"k8s.io/kubernetes/pkg/apis/autoscaling"
 	"k8s.io/kubernetes/pkg/apis/batch"
@@ -814,6 +814,51 @@ func TestPrintNodeKernelVersion(t *testing.T) {
 		}
 		if !contains(strings.Fields(buffer.String()), test.kernelVersion) {
 			t.Fatalf("Expect printing node %s with kernel version %#v, got: %#v", test.node.Name, test.kernelVersion, buffer.String())
+		}
+	}
+}
+
+func TestPrintNodeContainerRuntimeVersion(t *testing.T) {
+	printer := printers.NewHumanReadablePrinter(nil, nil, printers.PrintOptions{
+		ColumnLabels: []string{},
+		Wide:         true,
+	})
+	AddHandlers(printer)
+
+	table := []struct {
+		node                    api.Node
+		containerRuntimeVersion string
+	}{
+		{
+			node: api.Node{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo1"},
+				Status: api.NodeStatus{
+					NodeInfo:  api.NodeSystemInfo{ContainerRuntimeVersion: "foo://1.2.3"},
+					Addresses: []api.NodeAddress{{Type: api.NodeExternalIP, Address: "1.1.1.1"}},
+				},
+			},
+			containerRuntimeVersion: "foo://1.2.3",
+		},
+		{
+			node: api.Node{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo2"},
+				Status: api.NodeStatus{
+					NodeInfo:  api.NodeSystemInfo{},
+					Addresses: []api.NodeAddress{{Type: api.NodeExternalIP, Address: "1.1.1.1"}},
+				},
+			},
+			containerRuntimeVersion: "<unknown>",
+		},
+	}
+
+	for _, test := range table {
+		buffer := &bytes.Buffer{}
+		err := printer.PrintObj(&test.node, buffer)
+		if err != nil {
+			t.Fatalf("An error occurred printing Node: %#v", err)
+		}
+		if !contains(strings.Fields(buffer.String()), test.containerRuntimeVersion) {
+			t.Fatalf("Expect printing node %s with kernel version %#v, got: %#v", test.node.Name, test.containerRuntimeVersion, buffer.String())
 		}
 	}
 }
@@ -1780,7 +1825,13 @@ func TestPrintDaemonSet(t *testing.T) {
 
 	buf := bytes.NewBuffer([]byte{})
 	for _, test := range tests {
-		printDaemonSet(&test.ds, buf, printers.PrintOptions{})
+		table, err := printers.NewTablePrinter().With(AddHandlers).PrintTable(&test.ds, printers.PrintOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := printers.PrintTable(table, buf, printers.PrintOptions{NoHeaders: true}); err != nil {
+			t.Fatal(err)
+		}
 		if !strings.HasPrefix(buf.String(), test.startsWith) {
 			t.Fatalf("Expected to start with %s but got %s", test.startsWith, buf.String())
 		}
@@ -1828,7 +1879,13 @@ func TestPrintJob(t *testing.T) {
 
 	buf := bytes.NewBuffer([]byte{})
 	for _, test := range tests {
-		printJob(&test.job, buf, printers.PrintOptions{})
+		table, err := printers.NewTablePrinter().With(AddHandlers).PrintTable(&test.job, printers.PrintOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := printers.PrintTable(table, buf, printers.PrintOptions{NoHeaders: true}); err != nil {
+			t.Fatal(err)
+		}
 		if buf.String() != test.expect {
 			t.Fatalf("Expected: %s, got: %s", test.expect, buf.String())
 		}
@@ -2289,17 +2346,17 @@ func TestPrintService(t *testing.T) {
 						{Protocol: "tcp",
 							Port: 2233},
 					},
-					ClusterIP: "0.0.0.0",
+					ClusterIP: "10.9.8.7",
 				},
 			},
-			"test1\t0.0.0.0\t<none>\t2233/tcp\t<unknown>\n",
+			"test1\tClusterIP\t10.9.8.7\t<none>\t2233/tcp\t<unknown>\n",
 		},
 		{
 			// Test name, cluster ip, port:nodePort with protocol
 			api.Service{
 				ObjectMeta: metav1.ObjectMeta{Name: "test2"},
 				Spec: api.ServiceSpec{
-					Type: api.ServiceTypeClusterIP,
+					Type: api.ServiceTypeNodePort,
 					Ports: []api.ServicePort{
 						{Protocol: "tcp",
 							Port:     8888,
@@ -2309,7 +2366,7 @@ func TestPrintService(t *testing.T) {
 					ClusterIP: "10.9.8.7",
 				},
 			},
-			"test2\t10.9.8.7\t<none>\t8888:9999/tcp\t<unknown>\n",
+			"test2\tNodePort\t10.9.8.7\t<none>\t8888:9999/tcp\t<unknown>\n",
 		},
 	}
 
@@ -2349,7 +2406,13 @@ func TestPrintPodDisruptionBudget(t *testing.T) {
 
 	buf := bytes.NewBuffer([]byte{})
 	for _, test := range tests {
-		printPodDisruptionBudget(&test.pdb, buf, printers.PrintOptions{})
+		table, err := printers.NewTablePrinter().With(AddHandlers).PrintTable(&test.pdb, printers.PrintOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := printers.PrintTable(table, buf, printers.PrintOptions{NoHeaders: true}); err != nil {
+			t.Fatal(err)
+		}
 		if buf.String() != test.expect {
 			t.Fatalf("Expected: %s, got: %s", test.expect, buf.String())
 		}
@@ -2470,4 +2533,72 @@ func TestPrintControllerRevision(t *testing.T) {
 
 func boolP(b bool) *bool {
 	return &b
+}
+
+func TestPrintReplicaSet(t *testing.T) {
+	tests := []struct {
+		replicaSet extensions.ReplicaSet
+		expect     string
+		wideExpect string
+	}{
+		{
+			extensions.ReplicaSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "test1",
+					CreationTimestamp: metav1.Time{Time: time.Now().Add(1.9e9)},
+				},
+				Spec: extensions.ReplicaSetSpec{
+					Replicas: 5,
+					Template: api.PodTemplateSpec{
+						Spec: api.PodSpec{
+							Containers: []api.Container{
+								{
+									Name:  "fake-container1",
+									Image: "fake-image1",
+								},
+								{
+									Name:  "fake-container2",
+									Image: "fake-image2",
+								},
+							},
+						},
+					},
+					Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}},
+				},
+				Status: extensions.ReplicaSetStatus{
+					Replicas:      5,
+					ReadyReplicas: 2,
+				},
+			},
+			"test1\t5\t5\t2\t0s\n",
+			"test1\t5\t5\t2\t0s\tfake-container1,fake-container2\tfake-image1,fake-image2\tfoo=bar\n",
+		},
+	}
+
+	buf := bytes.NewBuffer([]byte{})
+	for _, test := range tests {
+		table, err := printers.NewTablePrinter().With(AddHandlers).PrintTable(&test.replicaSet, printers.PrintOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := printers.PrintTable(table, buf, printers.PrintOptions{NoHeaders: true}); err != nil {
+			t.Fatal(err)
+		}
+		if buf.String() != test.expect {
+			t.Fatalf("Expected: %s, got: %s", test.expect, buf.String())
+		}
+		buf.Reset()
+
+		table, err = printers.NewTablePrinter().With(AddHandlers).PrintTable(&test.replicaSet, printers.PrintOptions{Wide: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := printers.PrintTable(table, buf, printers.PrintOptions{NoHeaders: true, Wide: true}); err != nil {
+			t.Fatal(err)
+		}
+		if buf.String() != test.wideExpect {
+			t.Fatalf("Expected: %s, got: %s", test.wideExpect, buf.String())
+		}
+		buf.Reset()
+	}
 }

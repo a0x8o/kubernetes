@@ -35,6 +35,10 @@ import (
 
 	"github.com/golang/glog"
 
+	batchv1 "k8s.io/api/batch/v1"
+	batchv2alpha1 "k8s.io/api/batch/v2alpha1"
+	"k8s.io/api/core/v1"
+	clientv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -43,13 +47,9 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
-	clientv1 "k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/api/v1/ref"
-	batchv1 "k8s.io/kubernetes/pkg/apis/batch/v1"
-	batchv2alpha1 "k8s.io/kubernetes/pkg/apis/batch/v2alpha1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/util/metrics"
 )
@@ -248,12 +248,6 @@ func syncOne(sj *batchv2alpha1.CronJob, js []batchv1.Job, now time.Time, jc jobC
 		// The CronJob is being deleted.
 		// Don't do anything other than updating status.
 		return
-	}
-
-	if err := adoptJobs(sj, js, jc); err != nil {
-		// This is fine. We will retry later.
-		// Adoption is only to advise other controllers. We don't rely on it.
-		glog.V(4).Infof("Unable to adopt Jobs for CronJob %v: %v", nameForLog, err)
 	}
 
 	if sj.Spec.Suspend != nil && *sj.Spec.Suspend {

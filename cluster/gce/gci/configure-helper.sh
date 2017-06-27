@@ -493,18 +493,18 @@ function create-master-audit-policy {
   # Known api groups
   local -r known_apis='
       - group: "" # core
-      - group: "admissionregistration.k8s.io/v1alpha1"
-      - group: "apps/v1beta1"
+      - group: "admissionregistration.k8s.io"
+      - group: "apps"
       - group: "authentication.k8s.io"
       - group: "authorization.k8s.io"
       - group: "autoscaling"
       - group: "batch"
-      - group: "certificates.k8s.io/v1beta1"
-      - group: "extensions/v1beta1"
-      - group: "networking.k8s.io/v1"
-      - group: "policy/v1beta1"
+      - group: "certificates.k8s.io"
+      - group: "extensions"
+      - group: "networking.k8s.io"
+      - group: "policy"
       - group: "rbac.authorization.k8s.io"
-      - group: "settings.k8s.io/v1alpha1"
+      - group: "settings.k8s.io"
       - group: "storage.k8s.io"'
 
   cat <<EOF >"${path}"
@@ -568,12 +568,14 @@ rules:
       - group: "" # core
         resources: ["events"]
 
-  # Secrets & ConfigMaps can contain sensitive & binary data,
+  # Secrets, ConfigMaps, and TokenReviews can contain sensitive & binary data,
   # so only log at the Metadata level.
   - level: Metadata
     resources:
       - group: "" # core
         resources: ["secrets", "configmaps"]
+      - group: authentication.k8s.io
+        resources: ["tokenreviews"]
   # Get repsonses can be large; skip them.
   - level: Request
     verbs: ["get", "list", "watch"]
@@ -878,7 +880,7 @@ function start-kubelet {
     flags+=" --port=${KUBELET_PORT}"
   fi
   if [[ "${KUBERNETES_MASTER:-}" == "true" ]]; then
-    flags+="${MASTER_KUBELET_TEST_ARGS:-}"
+    flags+=" ${MASTER_KUBELET_TEST_ARGS:-}"
     flags+=" --enable-debugging-handlers=false"
     flags+=" --hairpin-mode=none"
     if [[ "${REGISTER_MASTER_KUBELET:-false}" == "true" ]]; then
@@ -893,7 +895,7 @@ function start-kubelet {
       flags+=" --pod-cidr=${MASTER_IP_RANGE}"
     fi
   else # For nodes
-    flags+="${NODE_KUBELET_TEST_ARGS:-}"
+    flags+=" ${NODE_KUBELET_TEST_ARGS:-}"
     flags+=" --enable-debugging-handlers=true"
     flags+=" --bootstrap-kubeconfig=/var/lib/kubelet/bootstrap-kubeconfig"
     flags+=" --require-kubeconfig"
@@ -975,10 +977,11 @@ function start-node-problem-detector {
   echo "Start node problem detector"
   local -r npd_bin="${KUBE_HOME}/bin/node-problem-detector"
   local -r km_config="${KUBE_HOME}/node-problem-detector/config/kernel-monitor.json"
+  local -r dm_config="${KUBE_HOME}/node-problem-detector/config/docker-monitor.json"
   echo "Using node problem detector binary at ${npd_bin}"
   local flags="${NPD_TEST_LOG_LEVEL:-"--v=2"} ${NPD_TEST_ARGS:-}"
   flags+=" --logtostderr"
-  flags+=" --system-log-monitors=${km_config}"
+  flags+=" --system-log-monitors=${km_config},${dm_config}"
   flags+=" --apiserver-override=https://${KUBERNETES_MASTER_NAME}?inClusterConfig=false&auth=/var/lib/node-problem-detector/kubeconfig"
 
   # Write the systemd service file for node problem detector.
@@ -1708,7 +1711,7 @@ function start-kube-addons {
   if [[ "${ENABLE_DEFAULT_STORAGE_CLASS:-}" == "true" ]]; then
     setup-addon-manifests "addons" "storage-class/gce"
   fi
-  if [[ "${NON_MASQUERADE_CIDR:-}" == "0.0.0.0/0" ]]; then
+  if [[ "${ENABLE_IP_MASQ_AGENT:-}" == "true" ]]; then
     setup-addon-manifests "addons" "ip-masq-agent"
   fi
   if [[ "${ENABLE_METADATA_PROXY:-}" == "simple" ]]; then

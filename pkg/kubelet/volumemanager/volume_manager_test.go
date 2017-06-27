@@ -23,11 +23,11 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
 	utiltesting "k8s.io/client-go/util/testing"
-	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset/fake"
 	"k8s.io/kubernetes/pkg/kubelet/config"
@@ -61,10 +61,7 @@ func TestGetMountedVolumesForPodAndGetVolumesInUse(t *testing.T) {
 	node, pod, pv, claim := createObjects()
 	kubeClient := fake.NewSimpleClientset(node, pod, pv, claim)
 
-	manager, err := newTestVolumeManager(tmpDir, podManager, kubeClient)
-	if err != nil {
-		t.Fatalf("Failed to initialize volume manager: %v", err)
-	}
+	manager := newTestVolumeManager(tmpDir, podManager, kubeClient)
 
 	stopCh := runVolumeManager(manager)
 	defer close(stopCh)
@@ -150,11 +147,7 @@ func TestGetExtraSupplementalGroupsForPod(t *testing.T) {
 		}
 		kubeClient := fake.NewSimpleClientset(node, pod, pv, claim)
 
-		manager, err := newTestVolumeManager(tmpDir, podManager, kubeClient)
-		if err != nil {
-			t.Errorf("Failed to initialize volume manager: %v", err)
-			continue
-		}
+		manager := newTestVolumeManager(tmpDir, podManager, kubeClient)
 
 		stopCh := runVolumeManager(manager)
 		defer func() {
@@ -182,14 +175,14 @@ func TestGetExtraSupplementalGroupsForPod(t *testing.T) {
 	}
 }
 
-func newTestVolumeManager(tmpDir string, podManager pod.Manager, kubeClient clientset.Interface) (VolumeManager, error) {
+func newTestVolumeManager(tmpDir string, podManager pod.Manager, kubeClient clientset.Interface) VolumeManager {
 	plug := &volumetest.FakeVolumePlugin{PluginName: "fake", Host: nil}
 	fakeRecorder := &record.FakeRecorder{}
 	plugMgr := &volume.VolumePluginMgr{}
 	plugMgr.InitPlugins([]volume.VolumePlugin{plug}, volumetest.NewFakeVolumeHost(tmpDir, kubeClient, nil))
 	statusManager := status.NewManager(kubeClient, podManager, &statustest.FakePodDeletionSafetyProvider{})
 
-	vm, err := NewVolumeManager(
+	vm := NewVolumeManager(
 		true,
 		testHostname,
 		podManager,
@@ -203,7 +196,7 @@ func newTestVolumeManager(tmpDir string, podManager pod.Manager, kubeClient clie
 		false, /* experimentalCheckNodeCapabilitiesBeforeMount */
 		false /* keepTerminatedPodVolumes */)
 
-	return vm, err
+	return vm
 }
 
 // createObjects returns objects for making a fake clientset. The pv is

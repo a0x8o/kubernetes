@@ -59,6 +59,8 @@ spec:
   selector:
     matchLabels:
       k8s-app: kube-proxy
+  updateStrategy:
+    type: RollingUpdate
   template:
     metadata:
       labels:
@@ -96,7 +98,7 @@ spec:
           path: /run/xtables.lock
 `
 
-	KubeDNSVersion = "1.14.2"
+	KubeDNSVersion = "1.14.4"
 
 	KubeDNSDeployment = `
 

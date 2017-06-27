@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/api/core/v1"
+	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -33,8 +35,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/kubernetes/pkg/api/v1"
-	policyv1beta1 "k8s.io/kubernetes/pkg/apis/policy/v1beta1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/client/retry"
@@ -1325,4 +1325,27 @@ func DescribeSvc(ns string) {
 	desc, _ := RunKubectl(
 		"describe", "svc", fmt.Sprintf("--namespace=%v", ns))
 	Logf(desc)
+}
+
+func CreateServiceSpec(serviceName, externalName string, isHeadless bool, selector map[string]string) *v1.Service {
+	headlessService := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: serviceName,
+		},
+		Spec: v1.ServiceSpec{
+			Selector: selector,
+		},
+	}
+	if externalName != "" {
+		headlessService.Spec.Type = v1.ServiceTypeExternalName
+		headlessService.Spec.ExternalName = externalName
+	} else {
+		headlessService.Spec.Ports = []v1.ServicePort{
+			{Port: 80, Name: "http", Protocol: "TCP"},
+		}
+	}
+	if isHeadless {
+		headlessService.Spec.ClusterIP = "None"
+	}
+	return headlessService
 }
