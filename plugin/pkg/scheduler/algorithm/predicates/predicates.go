@@ -499,30 +499,15 @@ func (c *VolumeZoneChecker) predicate(pod *v1.Pod, meta interface{}, nodeInfo *s
 //
 // Result: CPU: 3, Memory: 3G
 func GetResourceRequest(pod *v1.Pod) *schedulercache.Resource {
-	result := schedulercache.Resource{}
+	result := &schedulercache.Resource{}
 	for _, container := range pod.Spec.Containers {
-		for rName, rQuantity := range container.Resources.Requests {
-			switch rName {
-			case v1.ResourceMemory:
-				result.Memory += rQuantity.Value()
-			case v1.ResourceCPU:
-				result.MilliCPU += rQuantity.MilliValue()
-			case v1.ResourceNvidiaGPU:
-				result.NvidiaGPU += rQuantity.Value()
-			case v1.ResourceStorageOverlay:
-				result.StorageOverlay += rQuantity.Value()
-			default:
-				if v1helper.IsOpaqueIntResourceName(rName) {
-					result.AddOpaque(rName, rQuantity.Value())
-				}
-			}
-		}
+		result.Add(container.Resources.Requests)
 	}
+
 	// Account for storage requested by emptydir volumes
 	// If the storage medium is memory, should exclude the size
 	for _, vol := range pod.Spec.Volumes {
 		if vol.EmptyDir != nil && vol.EmptyDir.Medium != v1.StorageMediumMemory {
-
 			result.StorageScratch += vol.EmptyDir.SizeLimit.Value()
 		}
 	}
@@ -557,7 +542,8 @@ func GetResourceRequest(pod *v1.Pod) *schedulercache.Resource {
 			}
 		}
 	}
-	return &result
+
+	return result
 }
 
 func podName(pod *v1.Pod) string {
@@ -893,11 +879,17 @@ func PodFitsHostPorts(pod *v1.Pod, meta interface{}, nodeInfo *schedulercache.No
 
 // search two arrays and return true if they have at least one common element; return false otherwise
 func haveSame(a1, a2 []string) bool {
-	for _, val1 := range a1 {
-		for _, val2 := range a2 {
-			if val1 == val2 {
-				return true
-			}
+	m := map[string]int{}
+
+	for _, val := range a1 {
+		m[val] = 1
+	}
+	for _, val := range a2 {
+		m[val] = m[val] + 1
+	}
+	for _, val := range m {
+		if val > 1 {
+			return true
 		}
 	}
 	return false
@@ -1247,15 +1239,26 @@ func (c *PodAffinityChecker) satisfiesPodsAffinityAntiAffinity(pod *v1.Pod, node
 
 // PodToleratesNodeTaints checks if a pod tolertaions can tolerate the node taints
 func PodToleratesNodeTaints(pod *v1.Pod, meta interface{}, nodeInfo *schedulercache.NodeInfo) (bool, []algorithm.PredicateFailureReason, error) {
+	return podToleratesNodeTaints(pod, nodeInfo, func(t *v1.Taint) bool {
+		// PodToleratesNodeTaints is only interested in NoSchedule and NoExecute taints.
+		return t.Effect == v1.TaintEffectNoSchedule || t.Effect == v1.TaintEffectNoExecute
+	})
+}
+
+// PodToleratesNodeNoExecuteTaints checks if a pod tolertaions can tolerate the node's NoExecute taints
+func PodToleratesNodeNoExecuteTaints(pod *v1.Pod, meta interface{}, nodeInfo *schedulercache.NodeInfo) (bool, []algorithm.PredicateFailureReason, error) {
+	return podToleratesNodeTaints(pod, nodeInfo, func(t *v1.Taint) bool {
+		return t.Effect == v1.TaintEffectNoExecute
+	})
+}
+
+func podToleratesNodeTaints(pod *v1.Pod, nodeInfo *schedulercache.NodeInfo, filter func(t *v1.Taint) bool) (bool, []algorithm.PredicateFailureReason, error) {
 	taints, err := nodeInfo.Taints()
 	if err != nil {
 		return false, nil, err
 	}
 
-	if v1helper.TolerationsTolerateTaintsWithFilter(pod.Spec.Tolerations, taints, func(t *v1.Taint) bool {
-		// PodToleratesNodeTaints is only interested in NoSchedule and NoExecute taints.
-		return t.Effect == v1.TaintEffectNoSchedule || t.Effect == v1.TaintEffectNoExecute
-	}) {
+	if v1helper.TolerationsTolerateTaintsWithFilter(pod.Spec.Tolerations, taints, filter) {
 		return true, nil, nil
 	}
 	return false, []algorithm.PredicateFailureReason{ErrTaintsTolerationsNotMatch}, nil

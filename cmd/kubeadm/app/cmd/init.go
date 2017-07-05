@@ -32,10 +32,10 @@ import (
 	kubeadmapiext "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha1"
 	"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/validation"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
-	kubemaster "k8s.io/kubernetes/cmd/kubeadm/app/master"
 	addonsphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/addons"
 	apiconfigphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/apiconfig"
 	certphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/certs"
+	controlplanephase "k8s.io/kubernetes/cmd/kubeadm/app/phases/controlplane"
 	kubeconfigphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/kubeconfig"
 	tokenphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/token"
 	"k8s.io/kubernetes/cmd/kubeadm/app/preflight"
@@ -84,7 +84,7 @@ func NewCmdInit(out io.Writer) *cobra.Command {
 
 			i, err := NewInit(cfgPath, internalcfg, skipPreFlight, skipTokenPrint)
 			kubeadmutil.CheckErr(err)
-			kubeadmutil.CheckErr(i.Validate())
+			kubeadmutil.CheckErr(i.Validate(cmd))
 			kubeadmutil.CheckErr(i.Run(out))
 		},
 	}
@@ -186,7 +186,10 @@ type Init struct {
 }
 
 // Validate validates configuration passed to "kubeadm init"
-func (i *Init) Validate() error {
+func (i *Init) Validate(cmd *cobra.Command) error {
+	if err := validation.ValidateMixedArguments(cmd.PersistentFlags()); err != nil {
+		return err
+	}
 	return validation.ValidateMasterConfiguration(i.cfg).ToAggregate()
 }
 
@@ -208,28 +211,18 @@ func (i *Init) Run(out io.Writer) error {
 	}
 
 	// PHASE 3: Bootstrap the control plane
-	if err := kubemaster.WriteStaticPodManifests(i.cfg); err != nil {
+	if err := controlplanephase.WriteStaticPodManifests(i.cfg); err != nil {
 		return err
 	}
 
 	adminKubeConfigPath := filepath.Join(kubeadmapi.GlobalEnvParams.KubernetesDir, kubeadmconstants.AdminKubeConfigFileName)
-	client, err := kubemaster.CreateClientAndWaitForAPI(adminKubeConfigPath)
+	client, err := kubeadmutil.CreateClientAndWaitForAPI(adminKubeConfigPath)
 	if err != nil {
 		return err
 	}
 
 	if err := apiconfigphase.UpdateMasterRoleLabelsAndTaints(client); err != nil {
 		return err
-	}
-
-	// Is deployment type self-hosted?
-	if i.cfg.SelfHosted {
-		// Temporary control plane is up, now we create our self hosted control
-		// plane components and remove the static manifests:
-		fmt.Println("[self-hosted] Creating self-hosted control plane...")
-		if err := kubemaster.CreateSelfHostedControlPlane(i.cfg, client); err != nil {
-			return err
-		}
 	}
 
 	// PHASE 4: Set up the bootstrap tokens
@@ -266,6 +259,16 @@ func (i *Init) Run(out io.Writer) error {
 
 	if err := addonsphase.CreateEssentialAddons(i.cfg, client); err != nil {
 		return err
+	}
+
+	// Is deployment type self-hosted?
+	if i.cfg.SelfHosted {
+		// Temporary control plane is up, now we create our self hosted control
+		// plane components and remove the static manifests:
+		fmt.Println("[self-hosted] Creating self-hosted control plane...")
+		if err := controlplanephase.CreateSelfHostedControlPlane(i.cfg, client); err != nil {
+			return err
+		}
 	}
 
 	ctx := map[string]string{
