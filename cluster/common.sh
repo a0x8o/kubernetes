@@ -575,6 +575,10 @@ function build-kube-master-certs {
 KUBEAPISERVER_CERT: $(yaml-quote ${KUBEAPISERVER_CERT_BASE64:-})
 KUBEAPISERVER_KEY: $(yaml-quote ${KUBEAPISERVER_KEY_BASE64:-})
 CA_KEY: $(yaml-quote ${CA_KEY_BASE64:-})
+AGGREGATOR_CA_KEY: $(yaml-quote ${AGGREGATOR_CA_KEY_BASE64:-})
+REQUESTHEADER_CA_CERT: $(yaml-quote ${REQUESTHEADER_CA_CERT_BASE64:-})
+PROXY_CLIENT_CERT: $(yaml-quote ${PROXY_CLIENT_CERT_BASE64:-})
+PROXY_CLIENT_KEY: $(yaml-quote ${PROXY_CLIENT_KEY_BASE64:-})
 EOF
 }
 
@@ -601,6 +605,7 @@ function build-kube-env {
 
   rm -f ${file}
   cat >$file <<EOF
+CLUSTER_NAME: $(yaml-quote ${CLUSTER_NAME})
 ENV_TIMESTAMP: $(yaml-quote $(date -u +%Y-%m-%dT%T%z))
 INSTANCE_PREFIX: $(yaml-quote ${INSTANCE_PREFIX})
 NODE_INSTANCE_PREFIX: $(yaml-quote ${NODE_INSTANCE_PREFIX})
@@ -660,7 +665,9 @@ ENABLE_DEFAULT_STORAGE_CLASS: $(yaml-quote ${ENABLE_DEFAULT_STORAGE_CLASS:-})
 ENABLE_APISERVER_BASIC_AUDIT: $(yaml-quote ${ENABLE_APISERVER_BASIC_AUDIT:-})
 ENABLE_APISERVER_ADVANCED_AUDIT: $(yaml-quote ${ENABLE_APISERVER_ADVANCED_AUDIT:-})
 ENABLE_CACHE_MUTATION_DETECTOR: $(yaml-quote ${ENABLE_CACHE_MUTATION_DETECTOR:-false})
+ENABLE_PATCH_CONVERSION_DETECTOR: $(yaml-quote ${ENABLE_PATCH_CONVERSION_DETECTOR:-false})
 ADVANCED_AUDIT_BACKEND: $(yaml-quote ${ADVANCED_AUDIT_BACKEND:-log})
+GCE_API_ENDPOINT: $(yaml-quote ${GCE_API_ENDPOINT:-})
 EOF
   if [ -n "${KUBELET_PORT:-}" ]; then
     cat >>$file <<EOF
@@ -692,6 +699,16 @@ EOF
   if [ -n "${KUBELET_TEST_ARGS:-}" ]; then
       cat >>$file <<EOF
 KUBELET_TEST_ARGS: $(yaml-quote ${KUBELET_TEST_ARGS})
+EOF
+  fi
+  if [ -n "${NODE_KUBELET_TEST_ARGS:-}" ]; then
+      cat >>$file <<EOF
+NODE_KUBELET_TEST_ARGS: $(yaml-quote ${NODE_KUBELET_TEST_ARGS})
+EOF
+  fi
+  if [ -n "${MASTER_KUBELET_TEST_ARGS:-}" ]; then
+      cat >>$file <<EOF
+MASTER_KUBELET_TEST_ARGS: $(yaml-quote ${MASTER_KUBELET_TEST_ARGS})
 EOF
   fi
   if [ -n "${KUBELET_TEST_LOG_LEVEL:-}" ]; then
@@ -729,6 +746,12 @@ EOF
 FEATURE_GATES: $(yaml-quote ${FEATURE_GATES})
 EOF
   fi
+  if [[ "${master}" == "true" && "${MASTER_OS_DISTRIBUTION}" == "gci" ]] ||
+     [[ "${master}" == "false" && "${NODE_OS_DISTRIBUTION}" == "gci" ]]; then
+    cat >>$file <<EOF
+VOLUME_PLUGIN_DIR: $(yaml-quote ${VOLUME_PLUGIN_DIR:-/home/kubernetes/flexvolume})
+EOF
+  fi
 
   if [ -n "${PROVIDER_VARS:-}" ]; then
     local var_name
@@ -736,7 +759,9 @@ EOF
 
     for var_name in ${PROVIDER_VARS}; do
       eval "local var_value=\$(yaml-quote \${${var_name}})"
-      echo "${var_name}: ${var_value}" >>$file
+      cat >>$file <<EOF
+${var_name}: ${var_value}
+EOF
     done
   fi
 
@@ -868,6 +893,7 @@ EOF
       cat >>$file <<EOF
 ENABLE_CLUSTER_AUTOSCALER: $(yaml-quote ${ENABLE_CLUSTER_AUTOSCALER})
 AUTOSCALER_MIG_CONFIG: $(yaml-quote ${AUTOSCALER_MIG_CONFIG})
+AUTOSCALER_EXPANDER_CONFIG: $(yaml-quote ${AUTOSCALER_EXPANDER_CONFIG})
 EOF
   fi
 
@@ -949,7 +975,9 @@ function create-certs {
 
   echo "Generating certs for alternate-names: ${sans}"
 
+  setup-easyrsa
   PRIMARY_CN="${primary_cn}" SANS="${sans}" generate-certs
+  AGGREGATOR_PRIMARY_CN="${primary_cn}" AGGREGATOR_SANS="${sans}" generate-aggregator-certs
 
   CERT_DIR="${KUBE_TEMP}/easy-rsa-master/easyrsa3"
   # By default, linux wraps base64 output every 76 cols, so we use 'tr -d' to remove whitespaces.
@@ -964,6 +992,34 @@ function create-certs {
   KUBECFG_KEY_BASE64=$(cat "${CERT_DIR}/pki/private/kubecfg.key" | base64 | tr -d '\r\n')
   KUBEAPISERVER_CERT_BASE64=$(cat "${CERT_DIR}/pki/issued/kube-apiserver.crt" | base64 | tr -d '\r\n')
   KUBEAPISERVER_KEY_BASE64=$(cat "${CERT_DIR}/pki/private/kube-apiserver.key" | base64 | tr -d '\r\n')
+
+  # Setting up an addition directory (beyond pki) as it is the simplest way to
+  # ensure we get a different CA pair to sign the proxy-client certs and which
+  # we can send CA public key to the user-apiserver to validate communication.
+  AGGREGATOR_CERT_DIR="${KUBE_TEMP}/easy-rsa-master/aggregator"
+  AGGREGATOR_CA_KEY_BASE64=$(cat "${AGGREGATOR_CERT_DIR}/pki/private/ca.key" | base64 | tr -d '\r\n')
+  REQUESTHEADER_CA_CERT_BASE64=$(cat "${AGGREGATOR_CERT_DIR}/pki/ca.crt" | base64 | tr -d '\r\n')
+  PROXY_CLIENT_CERT_BASE64=$(cat "${AGGREGATOR_CERT_DIR}/pki/issued/proxy-client.crt" | base64 | tr -d '\r\n')
+  PROXY_CLIENT_KEY_BASE64=$(cat "${AGGREGATOR_CERT_DIR}/pki/private/proxy-client.key" | base64 | tr -d '\r\n')
+}
+
+function setup-easyrsa {
+  local -r cert_create_debug_output=$(mktemp "${KUBE_TEMP}/cert_create_debug_output.XXX")
+  # Note: This was heavily cribbed from make-ca-cert.sh
+  (set -x
+    cd "${KUBE_TEMP}"
+    curl -L -O --connect-timeout 20 --retry 6 --retry-delay 2 https://storage.googleapis.com/kubernetes-release/easy-rsa/easy-rsa.tar.gz
+    tar xzf easy-rsa.tar.gz
+    mkdir easy-rsa-master/kubelet
+    cp -r easy-rsa-master/easyrsa3/* easy-rsa-master/kubelet
+    mkdir easy-rsa-master/aggregator
+    cp -r easy-rsa-master/easyrsa3/* easy-rsa-master/aggregator) &>${cert_create_debug_output} || {
+    # If there was an error in the subshell, just die.
+    # TODO(roberthbailey): add better error handling here
+    cat "${cert_create_debug_output}" >&2
+    echo "=== Failed to setup easy-rsa: Aborting ===" >&2
+    exit 2
+  }
 }
 
 # Runs the easy RSA commands to generate certificate files.
@@ -980,12 +1036,7 @@ function generate-certs {
   local -r cert_create_debug_output=$(mktemp "${KUBE_TEMP}/cert_create_debug_output.XXX")
   # Note: This was heavily cribbed from make-ca-cert.sh
   (set -x
-    cd "${KUBE_TEMP}"
-    curl -L -O --connect-timeout 20 --retry 6 --retry-delay 2 https://storage.googleapis.com/kubernetes-release/easy-rsa/easy-rsa.tar.gz
-    tar xzf easy-rsa.tar.gz
-    mkdir easy-rsa-master/kubelet
-    cp -r easy-rsa-master/easyrsa3/* easy-rsa-master/kubelet
-    cd easy-rsa-master/easyrsa3
+    cd "${KUBE_TEMP}/easy-rsa-master/easyrsa3"
     ./easyrsa init-pki
     # this puts the cert into pki/ca.crt and the key into pki/private/ca.key
     ./easyrsa --batch "--req-cn=${PRIMARY_CN}@$(date +%s)" build-ca nopass
@@ -1010,7 +1061,51 @@ function generate-certs {
     # If there was an error in the subshell, just die.
     # TODO(roberthbailey): add better error handling here
     cat "${cert_create_debug_output}" >&2
-    echo "=== Failed to generate certificates: Aborting ===" >&2
+    echo "=== Failed to generate master certificates: Aborting ===" >&2
+    exit 2
+  }
+}
+
+# Runs the easy RSA commands to generate aggregator certificate files.
+# The generated files are at ${KUBE_TEMP}/easy-rsa-master/aggregator
+#
+# Assumed vars
+#   KUBE_TEMP
+#   AGGREGATOR_MASTER_NAME
+#   AGGREGATOR_PRIMARY_CN: Primary canonical name
+#   AGGREGATOR_SANS: Subject alternate names
+#
+#
+function generate-aggregator-certs {
+  local -r cert_create_debug_output=$(mktemp "${KUBE_TEMP}/cert_create_debug_output.XXX")
+  # Note: This was heavily cribbed from make-ca-cert.sh
+  (set -x
+    cd "${KUBE_TEMP}/easy-rsa-master/aggregator"
+    ./easyrsa init-pki
+    # this puts the cert into pki/ca.crt and the key into pki/private/ca.key
+    ./easyrsa --batch "--req-cn=${AGGREGATOR_PRIMARY_CN}@$(date +%s)" build-ca nopass
+    ./easyrsa --subject-alt-name="${AGGREGATOR_SANS}" build-server-full "${AGGREGATOR_MASTER_NAME}" nopass
+    ./easyrsa build-client-full aggregator-apiserver nopass
+
+    kube::util::ensure-cfssl "${KUBE_TEMP}/cfssl"
+
+    # make the config for the signer
+    echo '{"signing":{"default":{"expiry":"43800h","usages":["signing","key encipherment","client auth"]}}}' > "ca-config.json"
+    # create the aggregator client cert with the correct groups
+    echo '{"CN":"aggregator","hosts":[""],"key":{"algo":"rsa","size":2048}}' | "${CFSSL_BIN}" gencert -ca=pki/ca.crt -ca-key=pki/private/ca.key -config=ca-config.json - | "${CFSSLJSON_BIN}" -bare proxy-client
+    mv "proxy-client-key.pem" "pki/private/proxy-client.key"
+    mv "proxy-client.pem" "pki/issued/proxy-client.crt"
+    rm -f "proxy-client.csr"
+
+    # Make a superuser client cert with subject "O=system:masters, CN=kubecfg"
+    ./easyrsa --dn-mode=org \
+      --req-cn=proxy-clientcfg --req-org=system:aggregator \
+      --req-c= --req-st= --req-city= --req-email= --req-ou= \
+      build-client-full proxy-clientcfg nopass) &>${cert_create_debug_output} || {
+    # If there was an error in the subshell, just die.
+    # TODO(roberthbailey): add better error handling here
+    cat "${cert_create_debug_output}" >&2
+    echo "=== Failed to generate aggregator certificates: Aborting ===" >&2
     exit 2
   }
 }
@@ -1168,6 +1263,10 @@ function parse-master-env() {
   KUBELET_KEY_BASE64=$(get-env-val "${master_env}" "KUBELET_KEY")
   MASTER_CERT_BASE64=$(get-env-val "${master_env}" "MASTER_CERT")
   MASTER_KEY_BASE64=$(get-env-val "${master_env}" "MASTER_KEY")
+  AGGREGATOR_CA_KEY_BASE64=$(get-env-val "${master_env}" "AGGREGATOR_CA_KEY")
+  REQUESTHEADER_CA_CERT_BASE64=$(get-env-val "${master_env}" "REQUESTHEADER_CA_CERT")
+  PROXY_CLIENT_CERT_BASE64=$(get-env-val "${master_env}" "PROXY_CLIENT_CERT")
+  PROXY_CLIENT_KEY_BASE64=$(get-env-val "${master_env}" "PROXY_CLIENT_KEY")
 }
 
 # Update or verify required gcloud components are installed

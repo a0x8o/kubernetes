@@ -25,11 +25,9 @@ import (
 
 	"github.com/golang/glog"
 
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
-	clientv1 "k8s.io/client-go/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
 	"k8s.io/kubernetes/pkg/kubelet/events"
 	evictionapi "k8s.io/kubernetes/pkg/kubelet/eviction/api"
 )
@@ -74,7 +72,7 @@ func (cm *containerManagerImpl) enforceNodeAllocatableCgroups() error {
 	}
 
 	// Using ObjectReference for events as the node maybe not cached; refer to #42701 for detail.
-	nodeRef := &clientv1.ObjectReference{
+	nodeRef := &v1.ObjectReference{
 		Kind:      "Node",
 		Name:      cm.nodeInfo.Name,
 		UID:       types.UID(cm.nodeInfo.Name),
@@ -184,17 +182,6 @@ func (cm *containerManagerImpl) getNodeAllocatableAbsolute() v1.ResourceList {
 // GetNodeAllocatable returns amount of compute or storage resource that have to be reserved on this node from scheduling.
 func (cm *containerManagerImpl) GetNodeAllocatableReservation() v1.ResourceList {
 	evictionReservation := hardEvictionReservation(cm.HardEvictionThresholds, cm.capacity)
-	if _, ok := cm.capacity[v1.ResourceStorage]; !ok {
-		if cm.cadvisorInterface != nil {
-			if rootfs, err := cm.cadvisorInterface.RootFsInfo(); err == nil {
-				for rName, rCap := range cadvisor.StorageScratchCapacityFromFsInfo(rootfs) {
-					cm.capacity[rName] = rCap
-				}
-			} else {
-				glog.Warning("Error getting rootfs info: %v", err)
-			}
-		}
-	}
 	result := make(v1.ResourceList)
 	for k := range cm.capacity {
 		value := resource.NewQuantity(0, resource.DecimalSI)
@@ -229,6 +216,10 @@ func hardEvictionReservation(thresholds []evictionapi.Threshold, capacity v1.Res
 			memoryCapacity := capacity[v1.ResourceMemory]
 			value := evictionapi.GetThresholdQuantity(threshold.Value, &memoryCapacity)
 			ret[v1.ResourceMemory] = *value
+		case evictionapi.SignalNodeFsAvailable:
+			storageCapacity := capacity[v1.ResourceStorageScratch]
+			value := evictionapi.GetThresholdQuantity(threshold.Value, &storageCapacity)
+			ret[v1.ResourceStorageScratch] = *value
 		}
 	}
 	return ret

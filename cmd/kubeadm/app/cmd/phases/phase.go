@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// NewCmdPhase returns the cobra command for the "kubeadm phase" command (currently alpha-gated)
 func NewCmdPhase(out io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "phase",
@@ -32,7 +33,11 @@ func NewCmdPhase(out io.Writer) *cobra.Command {
 
 	cmd.AddCommand(NewCmdKubeConfig(out))
 	cmd.AddCommand(NewCmdCerts())
-	cmd.AddCommand(NewCmdValidate())
+	cmd.AddCommand(NewCmdPreFlight())
+	cmd.AddCommand(NewCmdSelfhosting())
+	cmd.AddCommand(NewCmdMarkMaster())
+	cmd.AddCommand(NewCmdUploadConfig())
+	cmd.AddCommand(NewCmdBootstrapToken())
 
 	return cmd
 }
@@ -46,8 +51,27 @@ func subCmdRunE(name string) func(*cobra.Command, []string) error {
 	return func(_ *cobra.Command, args []string) error {
 		if len(args) < 1 {
 			return fmt.Errorf("missing subcommand; %q is not meant to be run on its own", name)
-		} else {
-			return fmt.Errorf("invalid subcommand: %q", args[0])
+		}
+
+		return fmt.Errorf("invalid subcommand: %q", args[0])
+	}
+}
+
+// validateExactArgNumber validates that the required top-level arguments are specified
+func validateExactArgNumber(args []string, supportedArgs []string) error {
+	validArgs := 0
+	// Disregard possible "" arguments; they are invalid
+	for _, arg := range args {
+		if len(arg) > 0 {
+			validArgs++
 		}
 	}
+
+	if validArgs < len(supportedArgs) {
+		return fmt.Errorf("missing one or more required arguments. Required arguments: %v", supportedArgs)
+	}
+	if validArgs > len(supportedArgs) {
+		return fmt.Errorf("too many arguments, only %d argument(s) supported: %v", validArgs, supportedArgs)
+	}
+	return nil
 }

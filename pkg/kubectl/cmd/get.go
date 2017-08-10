@@ -51,7 +51,7 @@ type GetOptions struct {
 }
 
 var (
-	get_long = templates.LongDesc(`
+	getLong = templates.LongDesc(`
 		Display one or many resources.
 
 		` + validResources + `
@@ -63,7 +63,7 @@ var (
 		By specifying the output as 'template' and providing a Go template as the value
 		of the --template flag, you can filter the attributes of the fetched resources.`)
 
-	get_example = templates.Examples(i18n.T(`
+	getExample = templates.Examples(i18n.T(`
 		# List all pods in ps output format.
 		kubectl get pods
 
@@ -115,8 +115,8 @@ func NewCmdGet(f cmdutil.Factory, out io.Writer, errOut io.Writer) *cobra.Comman
 	cmd := &cobra.Command{
 		Use:     "get [(-o|--output=)json|yaml|wide|custom-columns=...|custom-columns-file=...|go-template=...|go-template-file=...|jsonpath=...|jsonpath-file=...] (TYPE [NAME | -l label] | TYPE/NAME ...) [flags]",
 		Short:   i18n.T("Display one or many resources"),
-		Long:    get_long,
-		Example: get_example,
+		Long:    getLong,
+		Example: getExample,
 		Run: func(cmd *cobra.Command, args []string) {
 			err := RunGet(f, out, errOut, cmd, args, options)
 			cmdutil.CheckErr(err)
@@ -168,10 +168,11 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 	selector := cmdutil.GetFlagString(cmd, "selector")
 	allNamespaces := cmdutil.GetFlagBool(cmd, "all-namespaces")
 	showKind := cmdutil.GetFlagBool(cmd, "show-kind")
-	mapper, typer, err := f.UnstructuredObject()
+	builder, err := f.NewUnstructuredBuilder(true)
 	if err != nil {
 		return err
 	}
+
 	cmdNamespace, enforceNamespace, err := f.DefaultNamespace()
 	if err != nil {
 		return err
@@ -181,7 +182,7 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 		enforceNamespace = false
 	}
 
-	if len(args) == 0 && cmdutil.IsFilenameEmpty(options.Filenames) {
+	if len(args) == 0 && cmdutil.IsFilenameSliceEmpty(options.Filenames) {
 		fmt.Fprint(errOut, "You must specify the type of resource to get. ", validResources)
 
 		fullCmdName := cmd.Parent().CommandPath()
@@ -190,7 +191,7 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 			usageString = fmt.Sprintf("%s\nUse \"%s explain <resource>\" for a detailed description of that resource (e.g. %[2]s explain pods).", usageString, fullCmdName)
 		}
 
-		return cmdutil.UsageError(cmd, usageString)
+		return cmdutil.UsageErrorf(cmd, usageString)
 	}
 
 	export := cmdutil.GetFlagBool(cmd, "export")
@@ -201,7 +202,12 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 	// handle watch separately since we cannot watch multiple resource types
 	isWatch, isWatchOnly := cmdutil.GetFlagBool(cmd, "watch"), cmdutil.GetFlagBool(cmd, "watch-only")
 	if isWatch || isWatchOnly {
-		r := resource.NewBuilder(mapper, f.CategoryExpander(), typer, resource.ClientMapperFunc(f.UnstructuredClientForMapping), unstructured.UnstructuredJSONScheme).
+		builder, err := f.NewUnstructuredBuilder(true)
+		if err != nil {
+			return err
+		}
+
+		r := builder.
 			NamespaceParam(cmdNamespace).DefaultNamespace().AllNamespaces(allNamespaces).
 			FilenameParam(enforceNamespace, &options.FilenameOptions).
 			SelectorParam(selector).
@@ -210,7 +216,7 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 			SingleResourceType().
 			Latest().
 			Do()
-		err := r.Err()
+		err = r.Err()
 		if err != nil {
 			return err
 		}
@@ -226,7 +232,7 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 		}
 		info := infos[0]
 		mapping := info.ResourceMapping()
-		printer, err := f.PrinterForMapping(cmd, nil, mapping, allNamespaces)
+		printer, err := f.PrinterForMapping(cmd, false, nil, mapping, allNamespaces)
 		if err != nil {
 			return err
 		}
@@ -283,15 +289,14 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 					first = false
 					return false, nil
 				}
-				err := printer.PrintObj(e.Object, out)
-				return false, err
+				return false, printer.PrintObj(e.Object, out)
 			})
 			return err
 		})
 		return nil
 	}
 
-	r := resource.NewBuilder(mapper, f.CategoryExpander(), typer, resource.ClientMapperFunc(f.UnstructuredClientForMapping), unstructured.UnstructuredJSONScheme).
+	r := builder.
 		NamespaceParam(cmdNamespace).DefaultNamespace().AllNamespaces(allNamespaces).
 		FilenameParam(enforceNamespace, &options.FilenameOptions).
 		SelectorParam(selector).
@@ -306,7 +311,7 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 		return err
 	}
 
-	printer, err := f.PrinterForCommand(cmd, nil, printers.PrintOptions{})
+	printer, err := f.PrinterForCommand(cmd, false, nil, printers.PrintOptions{})
 	if err != nil {
 		return err
 	}
@@ -455,7 +460,7 @@ func RunGet(f cmdutil.Factory, out, errOut io.Writer, cmd *cobra.Command, args [
 				outputOpts, _ = outputOptsForMappingFromOpenAPI(f, cmdutil.GetOpenAPICacheDir(cmd), mapping)
 			}
 
-			printer, err = f.PrinterForMapping(cmd, outputOpts, mapping, allNamespaces)
+			printer, err = f.PrinterForMapping(cmd, false, outputOpts, mapping, allNamespaces)
 			if err != nil {
 				if !errs.Has(err.Error()) {
 					errs.Insert(err.Error())
@@ -561,13 +566,13 @@ func outputOptsForMappingFromOpenAPI(f cmdutil.Factory, openAPIcacheDir string, 
 		return nil, false
 	}
 	// Found openapi metadata for this resource
-	kind, found := api.LookupResource(mapping.GroupVersionKind)
-	if !found {
-		// Kind not found, return empty columns
+	schema := api.LookupResource(mapping.GroupVersionKind)
+	if schema == nil {
+		// Schema not found, return empty columns
 		return nil, false
 	}
 
-	columns, found := openapi.GetPrintColumns(kind.Extensions)
+	columns, found := openapi.GetPrintColumns(schema.GetExtensions())
 	if !found {
 		// Extension not found, return empty columns
 		return nil, false

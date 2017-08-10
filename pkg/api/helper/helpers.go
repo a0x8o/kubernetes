@@ -53,6 +53,9 @@ var Semantic = conversion.EqualitiesOrDie(
 		// Uninitialized quantities are equivalent to 0 quantities.
 		return a.Cmp(b) == 0
 	},
+	func(a, b metav1.MicroTime) bool {
+		return a.UTC() == b.UTC()
+	},
 	func(a, b metav1.Time) bool {
 		return a.UTC() == b.UTC()
 	},
@@ -517,21 +520,6 @@ func PodAnnotationsFromSysctls(sysctls []api.Sysctl) string {
 		kvs[i] = fmt.Sprintf("%s=%s", sysctls[i].Name, sysctls[i].Value)
 	}
 	return strings.Join(kvs, ",")
-}
-
-// GetAffinityFromPodAnnotations gets the json serialized affinity data from Pod.Annotations
-// and converts it to the Affinity type in api.
-// TODO: remove when alpha support for affinity is removed
-func GetAffinityFromPodAnnotations(annotations map[string]string) (*api.Affinity, error) {
-	if len(annotations) > 0 && annotations[api.AffinityAnnotationKey] != "" {
-		var affinity api.Affinity
-		err := json.Unmarshal([]byte(annotations[api.AffinityAnnotationKey]), &affinity)
-		if err != nil {
-			return nil, err
-		}
-		return &affinity, nil
-	}
-	return nil, nil
 }
 
 // GetPersistentVolumeClass returns StorageClassName.

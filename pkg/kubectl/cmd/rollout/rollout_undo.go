@@ -96,8 +96,8 @@ func NewCmdRolloutUndo(f cmdutil.Factory, out io.Writer) *cobra.Command {
 }
 
 func (o *UndoOptions) CompleteUndo(f cmdutil.Factory, cmd *cobra.Command, out io.Writer, args []string) error {
-	if len(args) == 0 && cmdutil.IsFilenameEmpty(o.Filenames) {
-		return cmdutil.UsageError(cmd, "Required resource not specified.")
+	if len(args) == 0 && cmdutil.IsFilenameSliceEmpty(o.Filenames) {
+		return cmdutil.UsageErrorf(cmd, "Required resource not specified.")
 	}
 
 	o.ToRevision = cmdutil.GetFlagInt64(cmd, "to-revision")
@@ -110,7 +110,7 @@ func (o *UndoOptions) CompleteUndo(f cmdutil.Factory, cmd *cobra.Command, out io
 		return err
 	}
 
-	r := resource.NewBuilder(o.Mapper, f.CategoryExpander(), o.Typer, resource.ClientMapperFunc(f.ClientForMapping), f.Decoder(true)).
+	r := f.NewBuilder(true).
 		NamespaceParam(cmdNamespace).DefaultNamespace().
 		FilenameParam(enforceNamespace, &o.FilenameOptions).
 		ResourceTypeOrNameArgs(true, args...).

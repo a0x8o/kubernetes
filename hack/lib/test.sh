@@ -286,6 +286,18 @@ kube::test::if_has_not_string() {
   fi
 }
 
+kube::test::if_empty_string() {
+  local match=$1
+  if [ -n "$match" ]; then
+    echo "$match is not empty"
+    caller
+    return 1
+  else
+    echo "Successful"
+    return 0
+  fi
+}
+
 # Returns true if the required resource is part of supported resources.
 # Expects env vars:
 #   SUPPORTED_RESOURCES: Array of all resources supported by the apiserver. "*"
@@ -315,7 +327,7 @@ kube::test::version::object_to_file() {
 kube::test::version::json_object_to_file() {
   flags=$1
   file=$2
-  kubectl version $flags --output json | sed -e s/'\"'/''/g -e s/'}'/''/g -e s/'{'/''/g -e s/'clientVersion:'/'clientVersion:,'/ -e s/'serverVersion:'/'serverVersion:,'/ | tr , '\n' > "${file}"
+  kubectl version $flags --output json | sed -e s/' '/''/g -e s/'\"'/''/g -e s/'}'/''/g -e s/'{'/''/g -e s/'clientVersion:'/'clientVersion:,'/ -e s/'serverVersion:'/'serverVersion:,'/ | tr , '\n' > "${file}"
 }
 
 kube::test::version::json_client_server_object_to_file() {

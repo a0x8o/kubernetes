@@ -197,7 +197,7 @@ func Example_printReplicationControllerWithNamespace() {
 		},
 	}
 	mapper, _ := f.Object()
-	err := f.PrintObject(cmd, mapper, ctrl, os.Stdout)
+	err := f.PrintObject(cmd, false, mapper, ctrl, os.Stdout)
 	if err != nil {
 		fmt.Printf("Unexpected error: %v", err)
 	}
@@ -252,13 +252,13 @@ func Example_printMultiContainersReplicationControllerWithWide() {
 		},
 	}
 	mapper, _ := f.Object()
-	err := f.PrintObject(cmd, mapper, ctrl, os.Stdout)
+	err := f.PrintObject(cmd, false, mapper, ctrl, os.Stdout)
 	if err != nil {
 		fmt.Printf("Unexpected error: %v", err)
 	}
 	// Output:
-	// NAME      DESIRED   CURRENT   READY     AGE       CONTAINER(S)   IMAGE(S)               SELECTOR
-	// foo       1         1         0         10y       foo,foo2       someimage,someimage2   foo=bar
+	// NAME      DESIRED   CURRENT   READY     AGE       CONTAINERS   IMAGES                 SELECTOR
+	// foo       1         1         0         10y       foo,foo2     someimage,someimage2   foo=bar
 }
 
 func Example_printReplicationController() {
@@ -306,7 +306,7 @@ func Example_printReplicationController() {
 		},
 	}
 	mapper, _ := f.Object()
-	err := f.PrintObject(cmd, mapper, ctrl, os.Stdout)
+	err := f.PrintObject(cmd, false, mapper, ctrl, os.Stdout)
 	if err != nil {
 		fmt.Printf("Unexpected error: %v", err)
 	}
@@ -349,7 +349,7 @@ func Example_printPodWithWideFormat() {
 		},
 	}
 	mapper, _ := f.Object()
-	err := f.PrintObject(cmd, mapper, pod, os.Stdout)
+	err := f.PrintObject(cmd, false, mapper, pod, os.Stdout)
 	if err != nil {
 		fmt.Printf("Unexpected error: %v", err)
 	}
@@ -395,7 +395,7 @@ func Example_printPodWithShowLabels() {
 		},
 	}
 	mapper, _ := f.Object()
-	err := f.PrintObject(cmd, mapper, pod, os.Stdout)
+	err := f.PrintObject(cmd, false, mapper, pod, os.Stdout)
 	if err != nil {
 		fmt.Printf("Unexpected error: %v", err)
 	}
@@ -519,7 +519,7 @@ func Example_printPodHideTerminated() {
 	}
 	for _, pod := range filteredPodList {
 		mapper, _ := f.Object()
-		err := f.PrintObject(cmd, mapper, pod, os.Stdout)
+		err := f.PrintObject(cmd, false, mapper, pod, os.Stdout)
 		if err != nil {
 			fmt.Printf("Unexpected error: %v", err)
 		}
@@ -547,7 +547,7 @@ func Example_printPodShowAll() {
 	cmd := NewCmdRun(f, os.Stdin, os.Stdout, os.Stderr)
 	podList := newAllPhasePodList()
 	mapper, _ := f.Object()
-	err := f.PrintObject(cmd, mapper, podList, os.Stdout)
+	err := f.PrintObject(cmd, false, mapper, podList, os.Stdout)
 	if err != nil {
 		fmt.Printf("Unexpected error: %v", err)
 	}
@@ -594,6 +594,7 @@ func Example_printServiceWithNamespacesAndLabels() {
 						"s": "magic",
 					},
 					ClusterIP: "10.1.1.1",
+					Type:      api.ServiceTypeClusterIP,
 				},
 				Status: api.ServiceStatus{},
 			},
@@ -615,6 +616,7 @@ func Example_printServiceWithNamespacesAndLabels() {
 						"s": "kazam",
 					},
 					ClusterIP: "10.1.1.2",
+					Type:      api.ServiceTypeClusterIP,
 				},
 				Status: api.ServiceStatus{},
 			}},
@@ -622,14 +624,14 @@ func Example_printServiceWithNamespacesAndLabels() {
 	ld := strings.NewLineDelimiter(os.Stdout, "|")
 	defer ld.Flush()
 	mapper, _ := f.Object()
-	err := f.PrintObject(cmd, mapper, svc, ld)
+	err := f.PrintObject(cmd, false, mapper, svc, ld)
 	if err != nil {
 		fmt.Printf("Unexpected error: %v", err)
 	}
 	// Output:
-	// |NAMESPACE   NAME      CLUSTER-IP   EXTERNAL-IP   PORT(S)           AGE       L1|
-	// |ns1         svc1      10.1.1.1     <unknown>     53/UDP,53/TCP     10y       value|
-	// |ns2         svc2      10.1.1.2     <unknown>     80/TCP,8080/TCP   10y       dolla-bill-yall|
+	// |NAMESPACE   NAME      TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)           AGE       L1|
+	// |ns1         svc1      ClusterIP   10.1.1.1     <none>        53/UDP,53/TCP     10y       value|
+	// |ns2         svc2      ClusterIP   10.1.1.2     <none>        80/TCP,8080/TCP   10y       dolla-bill-yall|
 	// ||
 }
 

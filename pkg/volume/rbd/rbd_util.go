@@ -34,16 +34,17 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/util/exec"
+	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/util/node"
 	"k8s.io/kubernetes/pkg/volume"
+	"k8s.io/utils/exec"
 )
 
 const (
 	imageWatcherStr = "watcher="
 	kubeLockMagic   = "kubelet_lock_magic_"
+	rbdCmdErr       = "executable file not found in $PATH"
 )
 
 // search /sys/bus for rbd device that matches given pool and image
@@ -102,6 +103,12 @@ type RBDUtil struct{}
 
 func (util *RBDUtil) MakeGlobalPDName(rbd rbd) string {
 	return makePDNameInternal(rbd.plugin.host, rbd.Pool, rbd.Image)
+}
+func rbdErrors(runErr, resultErr error) error {
+	if runErr.Error() == rbdCmdErr {
+		return fmt.Errorf("rbd: rbd cmd not found")
+	}
+	return resultErr
 }
 
 func (util *RBDUtil) rbdLock(b rbdMounter, lock bool) error {
@@ -269,7 +276,7 @@ func (util *RBDUtil) AttachDisk(b rbdMounter) error {
 
 		// fence off other mappers
 		if err = util.fencing(b); err != nil {
-			return fmt.Errorf("rbd: image %s is locked by other nodes", b.Image)
+			return rbdErrors(err, fmt.Errorf("rbd: failed to lock image %s (maybe locked by other nodes), error %v", b.Image, err))
 		}
 		// rbd lock remove needs ceph and image config
 		// but kubelet doesn't get them from apiserver during teardown
@@ -327,7 +334,7 @@ func (util *RBDUtil) DetachDisk(c rbdUnmounter, mntPath string) error {
 		// rbd unmap
 		_, err = c.plugin.execCommand("rbd", []string{"unmap", device})
 		if err != nil {
-			return fmt.Errorf("rbd: failed to unmap device %s:Error: %v", device, err)
+			return rbdErrors(err, fmt.Errorf("rbd: failed to unmap device %s:Error: %v", device, err))
 		}
 
 		// load ceph and image/pool info to remove fencing
@@ -355,9 +362,19 @@ func (util *RBDUtil) CreateImage(p *rbdVolumeProvisioner) (r *v1.RBDVolumeSource
 	// iterate all monitors until create succeeds.
 	for i := start; i < start+l; i++ {
 		mon := p.Mon[i%l]
-		glog.V(4).Infof("rbd: create %s size %s using mon %s, pool %s id %s key %s", p.rbdMounter.Image, volSz, mon, p.rbdMounter.Pool, p.rbdMounter.adminId, p.rbdMounter.adminSecret)
-		output, err = p.rbdMounter.plugin.execCommand("rbd",
-			[]string{"create", p.rbdMounter.Image, "--size", volSz, "--pool", p.rbdMounter.Pool, "--id", p.rbdMounter.adminId, "-m", mon, "--key=" + p.rbdMounter.adminSecret, "--image-format", "1"})
+		if p.rbdMounter.imageFormat == rbdImageFormat2 {
+			glog.V(4).Infof("rbd: create %s size %s format %s (features: %s) using mon %s, pool %s id %s key %s", p.rbdMounter.Image, volSz, p.rbdMounter.imageFormat, p.rbdMounter.imageFeatures, mon, p.rbdMounter.Pool, p.rbdMounter.adminId, p.rbdMounter.adminSecret)
+		} else {
+			glog.V(4).Infof("rbd: create %s size %s format %s using mon %s, pool %s id %s key %s", p.rbdMounter.Image, volSz, p.rbdMounter.imageFormat, mon, p.rbdMounter.Pool, p.rbdMounter.adminId, p.rbdMounter.adminSecret)
+		}
+		args := []string{"create", p.rbdMounter.Image, "--size", volSz, "--pool", p.rbdMounter.Pool, "--id", p.rbdMounter.adminId, "-m", mon, "--key=" + p.rbdMounter.adminSecret, "--image-format", p.rbdMounter.imageFormat}
+		if p.rbdMounter.imageFormat == rbdImageFormat2 {
+			// if no image features is provided, it results in empty string
+			// which disable all RBD image format 2 features as we expected
+			features := strings.Join(p.rbdMounter.imageFeatures, ",")
+			args = append(args, "--image-feature", features)
+		}
+		output, err = p.rbdMounter.plugin.execCommand("rbd", args)
 		if err == nil {
 			break
 		} else {
@@ -425,8 +442,12 @@ func (util *RBDUtil) rbdStatus(b *rbdMounter) (bool, error) {
 		output = string(cmd)
 
 		if err != nil {
-			// ignore error code, just checkout output for watcher string
-			glog.Warningf("failed to execute rbd status on mon %s", mon)
+			if err.Error() == rbdCmdErr {
+				glog.Errorf("rbd cmd not found")
+			} else {
+				// ignore error code, just checkout output for watcher string
+				glog.Warningf("failed to execute rbd status on mon %s", mon)
+			}
 		}
 
 		if strings.Contains(output, imageWatcherStr) {

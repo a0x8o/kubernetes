@@ -224,6 +224,11 @@ function create-master-auth {
   cat <<EOF >/etc/gce.conf
 [global]
 EOF
+  if [[ -n "${GCE_API_ENDPOINT:-}" ]]; then
+    cat <<EOF >>/etc/gce.conf
+api-endpoint = ${GCE_API_ENDPOINT}
+EOF
+  fi
   if [[ -n "${PROJECT_ID:-}" && -n "${TOKEN_URL:-}" && -n "${TOKEN_BODY:-}" && -n "${NODE_NETWORK:-}" ]]; then
     use_cloud_config="true"
     cat <<EOF >>/etc/gce.conf
@@ -232,6 +237,11 @@ token-body = ${TOKEN_BODY}
 project-id = ${PROJECT_ID}
 network-name = ${NODE_NETWORK}
 EOF
+    if [[ -n "${NETWORK_PROJECT_ID:-}" ]]; then
+      cat <<EOF >>/etc/gce.conf
+network-project-id = ${NETWORK_PROJECT_ID}
+EOF
+    fi
     if [[ -n "${NODE_SUBNETWORK:-}" ]]; then
       cat <<EOF >>/etc/gce.conf
 subnetwork-name = ${NODE_SUBNETWORK}
@@ -331,7 +341,13 @@ EOF
   fi
 }
 
-function create-kubelet-kubeconfig {
+# Arg 1: the address of the API server
+function create-kubelet-kubeconfig() {
+  local apiserver_address="${1}"
+  if [[ -z "${apiserver_address}" ]]; then
+    echo "Must provide API server address to create Kubelet kubeconfig file!"
+    exit 1
+  fi
   echo "Creating kubelet kubeconfig file"
   if [[ -z "${KUBELET_CA_CERT:-}" ]]; then
     KUBELET_CA_CERT="${CA_CERT}"
@@ -347,6 +363,7 @@ users:
 clusters:
 - name: local
   cluster:
+    server: ${apiserver_address}
     certificate-authority-data: ${KUBELET_CA_CERT}
 contexts:
 - context:
@@ -366,7 +383,7 @@ function create-master-kubelet-auth {
   # set in the environment.
   if [[ -n "${KUBELET_APISERVER:-}" && -n "${KUBELET_CERT:-}" && -n "${KUBELET_KEY:-}" ]]; then
     REGISTER_MASTER_KUBELET="true"
-    create-kubelet-kubeconfig
+    create-kubelet-kubeconfig "https://${KUBELET_APISERVER}"
   fi
 }
 
@@ -566,7 +583,7 @@ function start-kubelet {
     flags+=" --enable-debugging-handlers=false"
     flags+=" --hairpin-mode=none"
     if [[ "${REGISTER_MASTER_KUBELET:-false}" == "true" ]]; then
-      flags+=" --api-servers=https://${KUBELET_APISERVER}"
+      flags+=" --kubeconfig=/var/lib/kubelet/kubeconfig"
       flags+=" --register-schedulable=false"
     else
       # Standalone mode (not widely used?)
@@ -574,7 +591,7 @@ function start-kubelet {
     fi
   else # For nodes
     flags+=" --enable-debugging-handlers=true"
-    flags+=" --api-servers=https://${KUBERNETES_MASTER_NAME}"
+    flags+=" --kubeconfig=/var/lib/kubelet/kubeconfig"
     if [[ "${HAIRPIN_MODE:-}" == "promiscuous-bridge" ]] || \
        [[ "${HAIRPIN_MODE:-}" == "hairpin-veth" ]] || \
        [[ "${HAIRPIN_MODE:-}" == "none" ]]; then
@@ -583,11 +600,7 @@ function start-kubelet {
   fi
   # Network plugin
   if [[ -n "${NETWORK_PROVIDER:-}" ]]; then
-    if [[ "${NETWORK_PROVIDER:-}" == "cni" ]]; then
-      flags+=" --cni-bin-dir=/opt/kubernetes/bin"
-    else
-      flags+=" --network-plugin-dir=/opt/kubernetes/bin"
-    fi
+    flags+=" --cni-bin-dir=/opt/kubernetes/bin"
     flags+=" --network-plugin=${NETWORK_PROVIDER}"
   fi
   if [[ -n "${NON_MASQUERADE_CIDR:-}" ]]; then
@@ -602,6 +615,9 @@ function start-kubelet {
   fi
   if [[ -n "${NODE_LABELS:-}" ]]; then
     flags+=" --node-labels=${NODE_LABELS}"
+  fi
+  if [[ -n "${NODE_TAINTS:-}" ]]; then
+    flags+=" --register-with-taints=${NODE_TAINTS}"
   fi
   if [[ -n "${EVICTION_HARD:-}" ]]; then
     flags+=" --eviction-hard=${EVICTION_HARD}"
@@ -984,7 +1000,16 @@ function start-kube-apiserver {
 
   local container_env=""
   if [[ -n "${ENABLE_CACHE_MUTATION_DETECTOR:-}" ]]; then
-    container_env="\"env\":[{\"name\": \"KUBE_CACHE_MUTATION_DETECTOR\", \"value\": \"${ENABLE_CACHE_MUTATION_DETECTOR}\"}],"
+    container_env="\"name\": \"KUBE_CACHE_MUTATION_DETECTOR\", \"value\": \"${ENABLE_CACHE_MUTATION_DETECTOR}\""
+  fi
+  if [[ -n "${ENABLE_PATCH_CONVERSION_DETECTOR:-}" ]]; then
+    if [[ -n "${container_env}" ]]; then
+      container_env="${container_env}, "
+    fi
+    container_env="\"name\": \"KUBE_PATCH_CONVERSION_DETECTOR\", \"value\": \"${ENABLE_PATCH_CONVERSION_DETECTOR}\""
+  fi
+  if [[ -n "${container_env}" ]]; then
+    container_env="\"env\":[{${container_env}}],"
   fi
 
   src_file="${src_dir}/kube-apiserver.manifest"
@@ -1130,7 +1155,7 @@ function start-cluster-autoscaler {
     local -r src_file="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/cluster-autoscaler.manifest"
     remove-salt-config-comments "${src_file}"
 
-    local params="${AUTOSCALER_MIG_CONFIG} ${CLOUD_CONFIG_OPT}"
+    local params="${AUTOSCALER_MIG_CONFIG} ${CLOUD_CONFIG_OPT} ${AUTOSCALER_EXPANDER_CONFIG:---expander=price}"
     sed -i -e "s@{{params}}@${params}@g" "${src_file}"
     sed -i -e "s@{{cloud_config_mount}}@${CLOUD_CONFIG_MOUNT}@g" "${src_file}"
     sed -i -e "s@{{cloud_config_volume}}@${CLOUD_CONFIG_VOLUME}@g" "${src_file}"
@@ -1169,6 +1194,8 @@ function setup-addon-manifests {
 }
 
 # Prepares the manifests of k8s addons, and starts the addon manager.
+# Vars assumed:
+#   CLUSTER_NAME
 function start-kube-addons {
   echo "Prepare kube-addons manifests and start kube addon manager"
   local -r src_dir="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty"
@@ -1206,6 +1233,7 @@ function start-kube-addons {
       controller_yaml="${controller_yaml}/heapster-controller.yaml"
     fi
     remove-salt-config-comments "${controller_yaml}"
+    sed -i -e "s@{{ cluster_name }}@${CLUSTER_NAME}@g" "${controller_yaml}"
     sed -i -e "s@{{ *base_metrics_memory *}}@${base_metrics_memory}@g" "${controller_yaml}"
     sed -i -e "s@{{ *base_metrics_cpu *}}@${base_metrics_cpu}@g" "${controller_yaml}"
     sed -i -e "s@{{ *base_eventer_memory *}}@${base_eventer_memory}@g" "${controller_yaml}"
@@ -1261,13 +1289,20 @@ function start-kube-addons {
   if [[ "${NETWORK_POLICY_PROVIDER:-}" == "calico" ]]; then
     setup-addon-manifests "addons" "calico-policy-controller"
 
-    # Configure Calico based on cluster size and image type. 
+    # Configure Calico based on cluster size and image type.
     local -r ds_file="${dst_dir}/calico-policy-controller/calico-node-daemonset.yaml"
     local -r typha_dep_file="${dst_dir}/calico-policy-controller/typha-deployment.yaml"
     sed -i -e "s@__CALICO_CNI_DIR__@/opt/cni/bin@g" "${ds_file}"
     sed -i -e "s@__CALICO_NODE_CPU__@$(get-calico-node-cpu)@g" "${ds_file}"
     sed -i -e "s@__CALICO_TYPHA_CPU__@$(get-calico-typha-cpu)@g" "${typha_dep_file}"
     sed -i -e "s@__CALICO_TYPHA_REPLICAS__@$(get-calico-typha-replicas)@g" "${typha_dep_file}"
+  else
+    # If not configured to use Calico, the set the typha replica count to 0, but only if the
+    # addon is present.
+    local -r typha_dep_file="${dst_dir}/calico-policy-controller/typha-deployment.yaml"
+    if [[ -e $typha_dep_file ]]; then
+      sed -i -e "s@__CALICO_TYPHA_REPLICAS__@0@g" "${typha_dep_file}"
+    fi
   fi
   if [[ "${ENABLE_DEFAULT_STORAGE_CLASS:-}" == "true" ]]; then
     setup-addon-manifests "addons" "storage-class/gce"
@@ -1411,7 +1446,7 @@ if [[ "${KUBERNETES_MASTER:-}" == "true" ]]; then
   create-master-kubelet-auth
   create-master-etcd-auth
 else
-  create-kubelet-kubeconfig
+  create-kubelet-kubeconfig "https://${KUBERNETES_MASTER_NAME}"
   create-kubeproxy-kubeconfig
 fi
 

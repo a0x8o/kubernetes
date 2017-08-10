@@ -24,22 +24,23 @@ import (
 	"sort"
 	"syscall"
 
+	appsv1beta1 "k8s.io/api/apps/v1beta1"
+	"k8s.io/api/core/v1"
+	externalextensions "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/v1"
+	apiv1 "k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/apis/apps"
-	appsv1beta1 "k8s.io/kubernetes/pkg/apis/apps/v1beta1"
 	"k8s.io/kubernetes/pkg/apis/extensions"
-	externalextensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/controller/daemon"
 	deploymentutil "k8s.io/kubernetes/pkg/controller/deployment/util"
+	sliceutil "k8s.io/kubernetes/pkg/kubectl/util/slice"
 	printersinternal "k8s.io/kubernetes/pkg/printers/internalversion"
-	sliceutil "k8s.io/kubernetes/pkg/util/slice"
 )
 
 const (
@@ -56,7 +57,7 @@ func RollbackerFor(kind schema.GroupKind, c clientset.Interface) (Rollbacker, er
 	switch kind {
 	case extensions.Kind("Deployment"), apps.Kind("Deployment"):
 		return &DeploymentRollbacker{c}, nil
-	case extensions.Kind("DaemonSet"):
+	case extensions.Kind("DaemonSet"), apps.Kind("DaemonSet"):
 		return &DaemonSetRollbacker{c}, nil
 	}
 	return nil, fmt.Errorf("no rollbacker has been implemented for %q", kind)
@@ -150,8 +151,8 @@ func simpleDryRun(deployment *extensions.Deployment, c clientset.Interface, toRe
 	if err := api.Scheme.Convert(deployment, externalDeployment, nil); err != nil {
 		return "", fmt.Errorf("failed to convert deployment, %v", err)
 	}
-	versionedClient := versionedClientsetForDeployment(c)
-	_, allOldRSs, newRS, err := deploymentutil.GetAllReplicaSets(externalDeployment, versionedClient)
+	versionedExtensionsClient := versionedExtensionsClientV1beta1(c)
+	_, allOldRSs, newRS, err := deploymentutil.GetAllReplicaSets(externalDeployment, versionedExtensionsClient)
 	if err != nil {
 		return "", fmt.Errorf("failed to retrieve replica sets from deployment %s: %v", deployment.Name, err)
 	}
@@ -180,7 +181,7 @@ func simpleDryRun(deployment *extensions.Deployment, c clientset.Interface, toRe
 		}
 		buf := bytes.NewBuffer([]byte{})
 		internalTemplate := &api.PodTemplateSpec{}
-		if err := v1.Convert_v1_PodTemplateSpec_To_api_PodTemplateSpec(template, internalTemplate, nil); err != nil {
+		if err := apiv1.Convert_v1_PodTemplateSpec_To_api_PodTemplateSpec(template, internalTemplate, nil); err != nil {
 			return "", fmt.Errorf("failed to convert podtemplate, %v", err)
 		}
 		w := printersinternal.NewPrefixWriter(buf)
@@ -199,7 +200,7 @@ func simpleDryRun(deployment *extensions.Deployment, c clientset.Interface, toRe
 	buf := bytes.NewBuffer([]byte{})
 	buf.WriteString("\n")
 	internalTemplate := &api.PodTemplateSpec{}
-	if err := v1.Convert_v1_PodTemplateSpec_To_api_PodTemplateSpec(template, internalTemplate, nil); err != nil {
+	if err := apiv1.Convert_v1_PodTemplateSpec_To_api_PodTemplateSpec(template, internalTemplate, nil); err != nil {
 		return "", fmt.Errorf("failed to convert podtemplate, %v", err)
 	}
 	w := printersinternal.NewPrefixWriter(buf)
@@ -220,8 +221,9 @@ func (r *DaemonSetRollbacker) Rollback(obj runtime.Object, updatedAnnotations ma
 	if !ok {
 		return "", fmt.Errorf("passed object is not a DaemonSet: %#v", obj)
 	}
-	versionedClient := versionedClientsetForDaemonSet(r.c)
-	versionedDS, allHistory, err := controlledHistories(versionedClient, ds.Namespace, ds.Name)
+	versionedExtensionsClient := versionedExtensionsClientV1beta1(r.c)
+	versionedAppsClient := versionedAppsClientV1beta1(r.c)
+	versionedDS, allHistory, err := controlledHistories(versionedExtensionsClient, versionedAppsClient, ds.Namespace, ds.Name)
 	if err != nil {
 		return "", fmt.Errorf("unable to find history controlled by DaemonSet %s: %v", ds.Name, err)
 	}
@@ -257,7 +259,7 @@ func (r *DaemonSetRollbacker) Rollback(obj runtime.Object, updatedAnnotations ma
 		content := bytes.NewBuffer([]byte{})
 		w := printersinternal.NewPrefixWriter(content)
 		internalTemplate := &api.PodTemplateSpec{}
-		if err := v1.Convert_v1_PodTemplateSpec_To_api_PodTemplateSpec(&appliedDS.Spec.Template, internalTemplate, nil); err != nil {
+		if err := apiv1.Convert_v1_PodTemplateSpec_To_api_PodTemplateSpec(&appliedDS.Spec.Template, internalTemplate, nil); err != nil {
 			return "", fmt.Errorf("failed to convert podtemplate while printing: %v", err)
 		}
 		printersinternal.DescribePodTemplate(internalTemplate, w)
@@ -274,7 +276,7 @@ func (r *DaemonSetRollbacker) Rollback(obj runtime.Object, updatedAnnotations ma
 	}
 
 	// Restore revision
-	if _, err = versionedClient.ExtensionsV1beta1().DaemonSets(ds.Namespace).Patch(ds.Name, types.StrategicMergePatchType, toHistory.Data.Raw); err != nil {
+	if _, err = versionedExtensionsClient.DaemonSets(ds.Namespace).Patch(ds.Name, types.StrategicMergePatchType, toHistory.Data.Raw); err != nil {
 		return "", fmt.Errorf("failed restoring revision %d: %v", toRevision, err)
 	}
 

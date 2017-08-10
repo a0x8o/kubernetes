@@ -21,7 +21,10 @@ package cadvisor
 import (
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/golang/glog"
@@ -94,13 +97,21 @@ func containerLabels(c *cadvisorapi.ContainerInfo) map[string]string {
 }
 
 // New creates a cAdvisor and exports its API on the specified port if port > 0.
-func New(port uint, runtime string, rootPath string) (Interface, error) {
+func New(address string, port uint, runtime string, rootPath string) (Interface, error) {
 	sysFs := sysfs.NewRealSysFs()
 
 	// Create and start the cAdvisor container manager.
-	m, err := manager.New(memory.New(statsCacheDuration, nil), sysFs, maxHousekeepingInterval, allowDynamicHousekeeping, cadvisormetrics.MetricSet{cadvisormetrics.NetworkTcpUsageMetrics: struct{}{}}, http.DefaultClient)
+	m, err := manager.New(memory.New(statsCacheDuration, nil), sysFs, maxHousekeepingInterval, allowDynamicHousekeeping, cadvisormetrics.MetricSet{cadvisormetrics.NetworkTcpUsageMetrics: struct{}{}, cadvisormetrics.NetworkUdpUsageMetrics: struct{}{}}, http.DefaultClient)
 	if err != nil {
 		return nil, err
+	}
+
+	if _, err := os.Stat(rootPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("rootDirectory %q does not exist", rootPath)
+		} else {
+			return nil, fmt.Errorf("failed to Stat %q: %v", rootPath, err)
+		}
 	}
 
 	cadvisorClient := &cadvisorClient{
@@ -109,7 +120,7 @@ func New(port uint, runtime string, rootPath string) (Interface, error) {
 		Manager:  m,
 	}
 
-	err = cadvisorClient.exportHTTP(port)
+	err = cadvisorClient.exportHTTP(address, port)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +131,7 @@ func (cc *cadvisorClient) Start() error {
 	return cc.Manager.Start()
 }
 
-func (cc *cadvisorClient) exportHTTP(port uint) error {
+func (cc *cadvisorClient) exportHTTP(address string, port uint) error {
 	// Register the handlers regardless as this registers the prometheus
 	// collector properly.
 	mux := http.NewServeMux()
@@ -134,7 +145,7 @@ func (cc *cadvisorClient) exportHTTP(port uint) error {
 	// Only start the http server if port > 0
 	if port > 0 {
 		serv := &http.Server{
-			Addr:    fmt.Sprintf(":%d", port),
+			Addr:    net.JoinHostPort(address, strconv.Itoa(int(port))),
 			Handler: mux,
 		}
 
@@ -222,4 +233,17 @@ func (cc *cadvisorClient) getFsInfo(label string) (cadvisorapiv2.FsInfo, error) 
 
 func (cc *cadvisorClient) WatchEvents(request *events.Request) (*events.EventChannel, error) {
 	return cc.WatchForEvents(request)
+}
+
+// HasDedicatedImageFs returns true if the imagefs has a dedicated device.
+func (cc *cadvisorClient) HasDedicatedImageFs() (bool, error) {
+	imageFsInfo, err := cc.ImagesFsInfo()
+	if err != nil {
+		return false, err
+	}
+	rootFsInfo, err := cc.RootFsInfo()
+	if err != nil {
+		return false, err
+	}
+	return imageFsInfo.Device != rootFsInfo.Device, nil
 }

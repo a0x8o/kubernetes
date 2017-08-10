@@ -24,15 +24,16 @@ import (
 
 	"github.com/google/gofuzz"
 
-	apitesting "k8s.io/apimachinery/pkg/api/testing"
+	batchv2alpha1 "k8s.io/api/batch/v2alpha1"
+	apiv1 "k8s.io/api/core/v1"
+	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
+	roundtrip "k8s.io/apimachinery/pkg/api/testing/roundtrip"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/kubernetes/pkg/api"
-	apiv1 "k8s.io/kubernetes/pkg/api/v1"
-	batchv2alpha1 "k8s.io/kubernetes/pkg/apis/batch/v2alpha1"
-	extensionsv1beta1 "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
+	k8s_batchv2alpha1 "k8s.io/kubernetes/pkg/apis/batch/v2alpha1"
 )
 
 type orderedGroupVersionKinds []schema.GroupVersionKind
@@ -45,7 +46,7 @@ func (o orderedGroupVersionKinds) Less(i, j int) bool {
 
 func TestVerifyDefaulting(t *testing.T) {
 	job := &batchv2alpha1.JobTemplate{}
-	batchv2alpha1.SetObjectDefaults_JobTemplate(job)
+	k8s_batchv2alpha1.SetObjectDefaults_JobTemplate(job)
 	if job.Template.Spec.Template.Spec.DNSPolicy != apiv1.DNSClusterFirst {
 		t.Errorf("unexpected defaulting: %#v", job)
 	}
@@ -81,6 +82,8 @@ func TestDefaulting(t *testing.T) {
 		{Group: "", Version: "v1", Kind: "ServiceList"}:                                           {},
 		{Group: "apps", Version: "v1beta1", Kind: "StatefulSet"}:                                  {},
 		{Group: "apps", Version: "v1beta1", Kind: "StatefulSetList"}:                              {},
+		{Group: "apps", Version: "v1beta2", Kind: "StatefulSet"}:                                  {},
+		{Group: "apps", Version: "v1beta2", Kind: "StatefulSetList"}:                              {},
 		{Group: "autoscaling", Version: "v1", Kind: "HorizontalPodAutoscaler"}:                    {},
 		{Group: "autoscaling", Version: "v1", Kind: "HorizontalPodAutoscalerList"}:                {},
 		{Group: "autoscaling", Version: "v2alpha1", Kind: "HorizontalPodAutoscaler"}:              {},
@@ -92,8 +95,6 @@ func TestDefaulting(t *testing.T) {
 		{Group: "batch", Version: "v2alpha1", Kind: "Job"}:                                        {},
 		{Group: "batch", Version: "v2alpha1", Kind: "JobList"}:                                    {},
 		{Group: "batch", Version: "v2alpha1", Kind: "JobTemplate"}:                                {},
-		{Group: "batch", Version: "v2alpha1", Kind: "ScheduledJob"}:                               {},
-		{Group: "batch", Version: "v2alpha1", Kind: "ScheduledJobList"}:                           {},
 		{Group: "certificates.k8s.io", Version: "v1beta1", Kind: "CertificateSigningRequest"}:     {},
 		{Group: "certificates.k8s.io", Version: "v1beta1", Kind: "CertificateSigningRequestList"}: {},
 		{Group: "componentconfig", Version: "v1alpha1", Kind: "KubeProxyConfiguration"}:           {},
@@ -105,10 +106,16 @@ func TestDefaulting(t *testing.T) {
 		// {Group: "kubeadm.k8s.io", Version: "v1alpha1", Kind: "NodeConfiguration"}:                 {},
 		{Group: "extensions", Version: "v1beta1", Kind: "DaemonSet"}:                                                 {},
 		{Group: "extensions", Version: "v1beta1", Kind: "DaemonSetList"}:                                             {},
+		{Group: "apps", Version: "v1beta2", Kind: "DaemonSet"}:                                                       {},
+		{Group: "apps", Version: "v1beta2", Kind: "DaemonSetList"}:                                                   {},
 		{Group: "extensions", Version: "v1beta1", Kind: "Deployment"}:                                                {},
 		{Group: "extensions", Version: "v1beta1", Kind: "DeploymentList"}:                                            {},
 		{Group: "apps", Version: "v1beta1", Kind: "Deployment"}:                                                      {},
 		{Group: "apps", Version: "v1beta1", Kind: "DeploymentList"}:                                                  {},
+		{Group: "apps", Version: "v1beta2", Kind: "Deployment"}:                                                      {},
+		{Group: "apps", Version: "v1beta2", Kind: "DeploymentList"}:                                                  {},
+		{Group: "apps", Version: "v1beta2", Kind: "ReplicaSet"}:                                                      {},
+		{Group: "apps", Version: "v1beta2", Kind: "ReplicaSetList"}:                                                  {},
 		{Group: "extensions", Version: "v1beta1", Kind: "ReplicaSet"}:                                                {},
 		{Group: "extensions", Version: "v1beta1", Kind: "ReplicaSetList"}:                                            {},
 		{Group: "rbac.authorization.k8s.io", Version: "v1alpha1", Kind: "ClusterRoleBinding"}:                        {},
@@ -119,6 +126,10 @@ func TestDefaulting(t *testing.T) {
 		{Group: "rbac.authorization.k8s.io", Version: "v1beta1", Kind: "ClusterRoleBindingList"}:                     {},
 		{Group: "rbac.authorization.k8s.io", Version: "v1beta1", Kind: "RoleBinding"}:                                {},
 		{Group: "rbac.authorization.k8s.io", Version: "v1beta1", Kind: "RoleBindingList"}:                            {},
+		{Group: "rbac.authorization.k8s.io", Version: "v1", Kind: "ClusterRoleBinding"}:                              {},
+		{Group: "rbac.authorization.k8s.io", Version: "v1", Kind: "ClusterRoleBindingList"}:                          {},
+		{Group: "rbac.authorization.k8s.io", Version: "v1", Kind: "RoleBinding"}:                                     {},
+		{Group: "rbac.authorization.k8s.io", Version: "v1", Kind: "RoleBindingList"}:                                 {},
 		{Group: "settings.k8s.io", Version: "v1alpha1", Kind: "PodPreset"}:                                           {},
 		{Group: "settings.k8s.io", Version: "v1alpha1", Kind: "PodPresetList"}:                                       {},
 		{Group: "admissionregistration.k8s.io", Version: "v1alpha1", Kind: "InitializerConfiguration"}:               {},
@@ -162,7 +173,7 @@ func TestDefaulting(t *testing.T) {
 		iter := 0
 		changedOnce := false
 		for {
-			if iter > *apitesting.FuzzIters {
+			if iter > *roundtrip.FuzzIters {
 				if !expectedChanged || changedOnce {
 					break
 				}

@@ -22,20 +22,15 @@ import (
 	"regexp"
 	"strconv"
 
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/v1"
-	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
-	apps "k8s.io/kubernetes/pkg/apis/apps/v1beta1"
-	"k8s.io/kubernetes/pkg/controller"
-	"k8s.io/kubernetes/pkg/controller/history"
-
+	apps "k8s.io/api/apps/v1beta1"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
-
 	"k8s.io/client-go/kubernetes/scheme"
-
-	"github.com/golang/glog"
+	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
+	"k8s.io/kubernetes/pkg/controller"
+	"k8s.io/kubernetes/pkg/controller/history"
 )
 
 // maxUpdateRetries is the maximum number of retries used for update conflict resolution prior to failure
@@ -44,7 +39,7 @@ const maxUpdateRetries = 10
 // updateConflictError is the error used to indicate that the maximum number of retries against the API server have
 // been attempted and we need to back off
 var updateConflictError = fmt.Errorf("aborting update after %d attempts", maxUpdateRetries)
-var patchCodec = api.Codecs.LegacyCodec(apps.SchemeGroupVersion)
+var patchCodec = scheme.Codecs.LegacyCodec(apps.SchemeGroupVersion)
 
 // overlappingStatefulSets sorts a list of StatefulSets by creation timestamp, using their names as a tie breaker.
 // Generally used to tie break between StatefulSets that have overlapping selectors.
@@ -194,26 +189,9 @@ func updateIdentity(set *apps.StatefulSet, pod *v1.Pod) {
 	pod.Spec.Subdomain = set.Spec.ServiceName
 }
 
-// isRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady, and if the init
-// annotation has not explicitly disabled the Pod from being ready.
+// isRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
 func isRunningAndReady(pod *v1.Pod) bool {
-	if pod.Status.Phase != v1.PodRunning {
-		return false
-	}
-	podReady := podutil.IsPodReady(pod)
-	// User may have specified a pod readiness override through a debug annotation.
-	initialized, ok := pod.Annotations[apps.StatefulSetInitAnnotation]
-	if ok {
-		if initAnnotation, err := strconv.ParseBool(initialized); err != nil {
-			glog.V(4).Infof("Failed to parse %v annotation on pod %v: %v",
-				apps.StatefulSetInitAnnotation, pod.Name, err)
-		} else if !initAnnotation {
-			glog.V(4).Infof("StatefulSet pod %v waiting on annotation %v", pod.Name,
-				apps.StatefulSetInitAnnotation)
-			podReady = initAnnotation
-		}
-	}
-	return podReady
+	return pod.Status.Phase == v1.PodRunning && podutil.IsPodReady(pod)
 }
 
 // isCreated returns true if pod has been created and is maintained by the API server
@@ -333,11 +311,21 @@ func newRevision(set *apps.StatefulSet, revision int64) (*apps.ControllerRevisio
 	if err != nil {
 		return nil, err
 	}
-	return history.NewControllerRevision(set,
+	cr, err := history.NewControllerRevision(set,
 		controllerKind,
 		selector,
 		runtime.RawExtension{Raw: patch},
 		revision)
+	if err != nil {
+		return nil, err
+	}
+	if cr.ObjectMeta.Annotations == nil {
+		cr.ObjectMeta.Annotations = make(map[string]string)
+	}
+	for key, value := range set.Annotations {
+		cr.ObjectMeta.Annotations[key] = value
+	}
+	return cr, nil
 }
 
 // applyRevision returns a new StatefulSet constructed by restoring the state in revision to set. If the returned error

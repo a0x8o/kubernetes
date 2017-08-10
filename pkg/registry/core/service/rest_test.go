@@ -34,6 +34,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/helper"
 	"k8s.io/kubernetes/pkg/api/service"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/registry/core/service/ipallocator"
@@ -996,8 +997,10 @@ func TestServiceRegistryExternalTrafficHealthCheckNodePortAllocation(t *testing.
 	port := service.GetServiceHealthCheckNodePort(created_service)
 	if port == 0 {
 		t.Errorf("Failed to allocate health check node port and set the HealthCheckNodePort")
+	} else {
+		// Release the node port at the end of the test case.
+		storage.serviceNodePorts.Release(int(port))
 	}
-
 }
 
 // Validate allocation of a nodePort when ExternalTraffic beta annotation is set to OnlyLocal
@@ -1034,8 +1037,10 @@ func TestServiceRegistryExternalTrafficHealthCheckNodePortAllocationBeta(t *test
 	port := service.GetServiceHealthCheckNodePort(created_service)
 	if port == 0 {
 		t.Errorf("Failed to allocate health check node port and set the HealthCheckNodePort")
+	} else {
+		// Release the node port at the end of the test case.
+		storage.serviceNodePorts.Release(int(port))
 	}
-
 }
 
 // Validate using the user specified nodePort when ExternalTrafficPolicy is set to Local
@@ -1073,6 +1078,11 @@ func TestServiceRegistryExternalTrafficHealthCheckNodePortUserAllocation(t *test
 	}
 	if port != randomNodePort {
 		t.Errorf("Failed to allocate requested nodePort expected %d, got %d", randomNodePort, port)
+	}
+
+	if port != 0 {
+		// Release the node port at the end of the test case.
+		storage.serviceNodePorts.Release(int(port))
 	}
 }
 
@@ -1115,6 +1125,11 @@ func TestServiceRegistryExternalTrafficHealthCheckNodePortUserAllocationBeta(t *
 	}
 	if port != randomNodePort {
 		t.Errorf("Failed to allocate requested nodePort expected %d, got %d", randomNodePort, port)
+	}
+
+	if port != 0 {
+		// Release the node port at the end of the test case.
+		storage.serviceNodePorts.Release(int(port))
 	}
 }
 
@@ -1203,6 +1218,8 @@ func TestServiceRegistryExternalTrafficGlobal(t *testing.T) {
 	// Make sure the service does not have the health check node port allocated
 	port := service.GetServiceHealthCheckNodePort(created_service)
 	if port != 0 {
+		// Release the node port at the end of the test case.
+		storage.serviceNodePorts.Release(int(port))
 		t.Errorf("Unexpected allocation of health check node port: %v", port)
 	}
 }
@@ -1240,6 +1257,8 @@ func TestServiceRegistryExternalTrafficGlobalBeta(t *testing.T) {
 	// Make sure the service does not have the health check node port allocated
 	port := service.GetServiceHealthCheckNodePort(created_service)
 	if port != 0 {
+		// Release the node port at the end of the test case.
+		storage.serviceNodePorts.Release(int(port))
 		t.Errorf("Unexpected allocation of health check node port: %v", port)
 	}
 }
@@ -1273,6 +1292,457 @@ func TestServiceRegistryExternalTrafficAnnotationClusterIP(t *testing.T) {
 	// Make sure that ClusterIP services do not have the health check node port allocated
 	port := service.GetServiceHealthCheckNodePort(created_service)
 	if port != 0 {
+		// Release the node port at the end of the test case.
+		storage.serviceNodePorts.Release(int(port))
 		t.Errorf("Unexpected allocation of health check node port annotation %s", api.BetaAnnotationHealthCheckNodePort)
+	}
+}
+
+func TestInitClusterIP(t *testing.T) {
+	storage, _ := NewTestREST(t, nil)
+
+	testCases := []struct {
+		name            string
+		svc             *api.Service
+		expectClusterIP bool
+	}{
+		{
+			name: "Allocate new ClusterIP",
+			svc: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector:        map[string]string{"bar": "baz"},
+					SessionAffinity: api.ServiceAffinityNone,
+					Type:            api.ServiceTypeClusterIP,
+					Ports: []api.ServicePort{{
+						Port:       6502,
+						Protocol:   api.ProtocolTCP,
+						TargetPort: intstr.FromInt(6502),
+					}},
+				},
+			},
+			expectClusterIP: true,
+		},
+		{
+			name: "Allocate specified ClusterIP",
+			svc: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector:        map[string]string{"bar": "baz"},
+					SessionAffinity: api.ServiceAffinityNone,
+					Type:            api.ServiceTypeClusterIP,
+					ClusterIP:       "1.2.3.4",
+					Ports: []api.ServicePort{{
+						Port:       6502,
+						Protocol:   api.ProtocolTCP,
+						TargetPort: intstr.FromInt(6502),
+					}},
+				},
+			},
+			expectClusterIP: true,
+		},
+		{
+			name: "Shouldn't allocate ClusterIP",
+			svc: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector:        map[string]string{"bar": "baz"},
+					SessionAffinity: api.ServiceAffinityNone,
+					Type:            api.ServiceTypeClusterIP,
+					ClusterIP:       api.ClusterIPNone,
+					Ports: []api.ServicePort{{
+						Port:       6502,
+						Protocol:   api.ProtocolTCP,
+						TargetPort: intstr.FromInt(6502),
+					}},
+				},
+			},
+			expectClusterIP: false,
+		},
+	}
+
+	for _, test := range testCases {
+		hasAllocatedIP, err := storage.initClusterIP(test.svc)
+		if err != nil {
+			t.Errorf("%q: unexpected error: %v", test.name, err)
+		}
+
+		if hasAllocatedIP != test.expectClusterIP {
+			t.Errorf("%q: expected %v, but got %v", test.name, test.expectClusterIP, hasAllocatedIP)
+		}
+
+		if test.expectClusterIP {
+			if !storage.serviceIPs.Has(net.ParseIP(test.svc.Spec.ClusterIP)) {
+				t.Errorf("%q: unexpected ClusterIP %q, out of range", test.name, test.svc.Spec.ClusterIP)
+			}
+		}
+
+		if test.name == "Allocate specified ClusterIP" && test.svc.Spec.ClusterIP != "1.2.3.4" {
+			t.Errorf("%q: expected ClusterIP %q, but got %q", test.name, "1.2.3.4", test.svc.Spec.ClusterIP)
+		}
+
+		if hasAllocatedIP {
+			if helper.IsServiceIPSet(test.svc) {
+				storage.serviceIPs.Release(net.ParseIP(test.svc.Spec.ClusterIP))
+			}
+		}
+	}
+}
+
+func TestInitNodePorts(t *testing.T) {
+	storage, _ := NewTestREST(t, nil)
+	nodePortOp := portallocator.StartOperation(storage.serviceNodePorts)
+	defer nodePortOp.Finish()
+
+	testCases := []struct {
+		name                     string
+		service                  *api.Service
+		expectSpecifiedNodePorts []int
+	}{
+		{
+			name: "Service doesn't have specified NodePort",
+			service: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector: map[string]string{"bar": "baz"},
+					Type:     api.ServiceTypeNodePort,
+					Ports: []api.ServicePort{
+						{
+							Name:       "port-tcp",
+							Port:       53,
+							TargetPort: intstr.FromInt(6502),
+							Protocol:   api.ProtocolTCP,
+						},
+					},
+				},
+			},
+			expectSpecifiedNodePorts: []int{},
+		},
+		{
+			name: "Service has one specified NodePort",
+			service: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector: map[string]string{"bar": "baz"},
+					Type:     api.ServiceTypeNodePort,
+					Ports: []api.ServicePort{{
+						Name:       "port-tcp",
+						Port:       53,
+						TargetPort: intstr.FromInt(6502),
+						Protocol:   api.ProtocolTCP,
+						NodePort:   30053,
+					}},
+				},
+			},
+			expectSpecifiedNodePorts: []int{30053},
+		},
+		{
+			name: "Service has two same ports with different protocols and specifies same NodePorts",
+			service: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector: map[string]string{"bar": "baz"},
+					Type:     api.ServiceTypeNodePort,
+					Ports: []api.ServicePort{
+						{
+							Name:       "port-tcp",
+							Port:       53,
+							TargetPort: intstr.FromInt(6502),
+							Protocol:   api.ProtocolTCP,
+							NodePort:   30054,
+						},
+						{
+							Name:       "port-udp",
+							Port:       53,
+							TargetPort: intstr.FromInt(6502),
+							Protocol:   api.ProtocolUDP,
+							NodePort:   30054,
+						},
+					},
+				},
+			},
+			expectSpecifiedNodePorts: []int{30054, 30054},
+		},
+		{
+			name: "Service has two same ports with different protocols and specifies different NodePorts",
+			service: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector: map[string]string{"bar": "baz"},
+					Type:     api.ServiceTypeNodePort,
+					Ports: []api.ServicePort{
+						{
+							Name:       "port-tcp",
+							Port:       53,
+							TargetPort: intstr.FromInt(6502),
+							Protocol:   api.ProtocolTCP,
+							NodePort:   30055,
+						},
+						{
+							Name:       "port-udp",
+							Port:       53,
+							TargetPort: intstr.FromInt(6502),
+							Protocol:   api.ProtocolUDP,
+							NodePort:   30056,
+						},
+					},
+				},
+			},
+			expectSpecifiedNodePorts: []int{30055, 30056},
+		},
+		{
+			name: "Service has two different ports with different protocols and specifies different NodePorts",
+			service: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector: map[string]string{"bar": "baz"},
+					Type:     api.ServiceTypeNodePort,
+					Ports: []api.ServicePort{
+						{
+							Name:       "port-tcp",
+							Port:       53,
+							TargetPort: intstr.FromInt(6502),
+							Protocol:   api.ProtocolTCP,
+							NodePort:   30057,
+						},
+						{
+							Name:       "port-udp",
+							Port:       54,
+							TargetPort: intstr.FromInt(6502),
+							Protocol:   api.ProtocolUDP,
+							NodePort:   30058,
+						},
+					},
+				},
+			},
+			expectSpecifiedNodePorts: []int{30057, 30058},
+		},
+		{
+			name: "Service has two same ports with different protocols but only specifies one NodePort",
+			service: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector: map[string]string{"bar": "baz"},
+					Type:     api.ServiceTypeNodePort,
+					Ports: []api.ServicePort{
+						{
+							Name:       "port-tcp",
+							Port:       53,
+							TargetPort: intstr.FromInt(6502),
+							Protocol:   api.ProtocolTCP,
+							NodePort:   30059,
+						},
+						{
+							Name:       "port-udp",
+							Port:       53,
+							TargetPort: intstr.FromInt(6502),
+							Protocol:   api.ProtocolUDP,
+						},
+					},
+				},
+			},
+			expectSpecifiedNodePorts: []int{30059, 30059},
+		},
+	}
+
+	for _, test := range testCases {
+		err := storage.initNodePorts(test.service, nodePortOp)
+		if err != nil {
+			t.Errorf("%q: unexpected error: %v", test.name, err)
+			continue
+		}
+
+		serviceNodePorts := CollectServiceNodePorts(test.service)
+
+		if len(test.expectSpecifiedNodePorts) == 0 {
+			for _, nodePort := range serviceNodePorts {
+				if !storage.serviceNodePorts.Has(nodePort) {
+					t.Errorf("%q: unexpected NodePort %d, out of range", test.name, nodePort)
+				}
+			}
+		} else if !reflect.DeepEqual(serviceNodePorts, test.expectSpecifiedNodePorts) {
+			t.Errorf("%q: expected NodePorts %v, but got %v", test.name, test.expectSpecifiedNodePorts, serviceNodePorts)
+		}
+
+	}
+}
+
+func TestUpdateNodePorts(t *testing.T) {
+	storage, _ := NewTestREST(t, nil)
+	nodePortOp := portallocator.StartOperation(storage.serviceNodePorts)
+	defer nodePortOp.Finish()
+
+	testCases := []struct {
+		name                     string
+		oldService               *api.Service
+		newService               *api.Service
+		expectSpecifiedNodePorts []int
+	}{
+		{
+			name: "Old service and new service have the same NodePort",
+			oldService: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector:        map[string]string{"bar": "baz"},
+					SessionAffinity: api.ServiceAffinityNone,
+					Type:            api.ServiceTypeNodePort,
+					Ports: []api.ServicePort{{
+						Port:       6502,
+						Protocol:   api.ProtocolTCP,
+						TargetPort: intstr.FromInt(6502),
+						NodePort:   30053,
+					}},
+				},
+			},
+			newService: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector:        map[string]string{"bar": "baz"},
+					SessionAffinity: api.ServiceAffinityNone,
+					Type:            api.ServiceTypeNodePort,
+					Ports: []api.ServicePort{{
+						Port:       6502,
+						Protocol:   api.ProtocolTCP,
+						TargetPort: intstr.FromInt(6502),
+						NodePort:   30053,
+					}},
+				},
+			},
+			expectSpecifiedNodePorts: []int{30053},
+		},
+		{
+			name: "Old service has more NodePorts than new service has",
+			oldService: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector:        map[string]string{"bar": "baz"},
+					SessionAffinity: api.ServiceAffinityNone,
+					Type:            api.ServiceTypeNodePort,
+					Ports: []api.ServicePort{
+						{
+							Name:       "port-tcp",
+							Port:       53,
+							TargetPort: intstr.FromInt(6502),
+							Protocol:   api.ProtocolTCP,
+							NodePort:   30053,
+						},
+						{
+							Name:       "port-udp",
+							Port:       53,
+							TargetPort: intstr.FromInt(6502),
+							Protocol:   api.ProtocolUDP,
+							NodePort:   30053,
+						},
+					},
+				},
+			},
+			newService: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector:        map[string]string{"bar": "baz"},
+					SessionAffinity: api.ServiceAffinityNone,
+					Type:            api.ServiceTypeNodePort,
+					Ports: []api.ServicePort{
+						{
+							Name:       "port-tcp",
+							Port:       53,
+							TargetPort: intstr.FromInt(6502),
+							Protocol:   api.ProtocolTCP,
+							NodePort:   30053,
+						},
+					},
+				},
+			},
+			expectSpecifiedNodePorts: []int{30053},
+		},
+		{
+			name: "Change protocol of ServicePort without changing NodePort",
+			oldService: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector:        map[string]string{"bar": "baz"},
+					SessionAffinity: api.ServiceAffinityNone,
+					Type:            api.ServiceTypeNodePort,
+					Ports: []api.ServicePort{
+						{
+							Name:       "port-tcp",
+							Port:       53,
+							TargetPort: intstr.FromInt(6502),
+							Protocol:   api.ProtocolTCP,
+							NodePort:   30053,
+						},
+					},
+				},
+			},
+			newService: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector:        map[string]string{"bar": "baz"},
+					SessionAffinity: api.ServiceAffinityNone,
+					Type:            api.ServiceTypeNodePort,
+					Ports: []api.ServicePort{
+						{
+							Name:       "port-udp",
+							Port:       53,
+							TargetPort: intstr.FromInt(6502),
+							Protocol:   api.ProtocolUDP,
+							NodePort:   30053,
+						},
+					},
+				},
+			},
+			expectSpecifiedNodePorts: []int{30053},
+		},
+		{
+			name: "Should allocate NodePort when changing service type to NodePort",
+			oldService: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector:        map[string]string{"bar": "baz"},
+					SessionAffinity: api.ServiceAffinityNone,
+					Type:            api.ServiceTypeClusterIP,
+					Ports: []api.ServicePort{{
+						Port:       6502,
+						Protocol:   api.ProtocolTCP,
+						TargetPort: intstr.FromInt(6502),
+					}},
+				},
+			},
+			newService: &api.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: api.ServiceSpec{
+					Selector:        map[string]string{"bar": "baz"},
+					SessionAffinity: api.ServiceAffinityNone,
+					Type:            api.ServiceTypeNodePort,
+					Ports: []api.ServicePort{{
+						Port:       6502,
+						Protocol:   api.ProtocolTCP,
+						TargetPort: intstr.FromInt(6502),
+					}},
+				},
+			},
+			expectSpecifiedNodePorts: []int{},
+		},
+	}
+
+	for _, test := range testCases {
+		err := storage.updateNodePorts(test.oldService, test.newService, nodePortOp)
+		if err != nil {
+			t.Errorf("%q: unexpected error: %v", test.name, err)
+			continue
+		}
+
+		serviceNodePorts := CollectServiceNodePorts(test.newService)
+
+		if len(test.expectSpecifiedNodePorts) == 0 {
+			for _, nodePort := range serviceNodePorts {
+				if !storage.serviceNodePorts.Has(nodePort) {
+					t.Errorf("%q: unexpected NodePort %d, out of range", test.name, nodePort)
+				}
+			}
+		} else if !reflect.DeepEqual(serviceNodePorts, test.expectSpecifiedNodePorts) {
+			t.Errorf("%q: expected NodePorts %v, but got %v", test.name, test.expectSpecifiedNodePorts, serviceNodePorts)
+		}
+
 	}
 }

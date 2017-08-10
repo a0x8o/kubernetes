@@ -22,16 +22,15 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/helper"
-	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/capabilities"
 	"k8s.io/kubernetes/pkg/security/apparmor"
 )
@@ -39,12 +38,7 @@ import (
 const (
 	dnsLabelErrMsg          = "a DNS-1123 label must consist of"
 	dnsSubdomainLabelErrMsg = "a DNS-1123 subdomain"
-	labelErrMsg             = "a valid label must be an empty string or consist of"
-	lowerCaseLabelErrMsg    = "a valid label must consist of"
-	maxLengthErrMsg         = "must be no more than"
-	namePartErrMsg          = "name part must consist of"
-	nameErrMsg              = "a qualified name must consist of"
-	idErrMsg                = "a valid C identifier must"
+	envVarNameErrMsg        = "a valid environment variable name must consist of"
 )
 
 func testVolume(name string, namespace string, spec api.PersistentVolumeSpec) *api.PersistentVolume {
@@ -267,6 +261,34 @@ func TestValidatePersistentVolumes(t *testing.T) {
 					},
 					StorageClassName: "test-storage-class",
 				}),
+		},
+		"bad-hostpath-volume-backsteps": {
+			isExpectedFailure: true,
+			volume: testVolume("foo", "", api.PersistentVolumeSpec{
+				Capacity: api.ResourceList{
+					api.ResourceName(api.ResourceStorage): resource.MustParse("10G"),
+				},
+				AccessModes: []api.PersistentVolumeAccessMode{api.ReadWriteOnce},
+				PersistentVolumeSource: api.PersistentVolumeSource{
+					HostPath: &api.HostPathVolumeSource{Path: "/foo/.."},
+				},
+				StorageClassName: "backstep-hostpath",
+			}),
+		},
+		"bad-local-volume-backsteps": {
+			isExpectedFailure: true,
+			volume: testVolume("foo", "", api.PersistentVolumeSpec{
+				Capacity: api.ResourceList{
+					api.ResourceName(api.ResourceStorage): resource.MustParse("10G"),
+				},
+				AccessModes: []api.PersistentVolumeAccessMode{api.ReadWriteOnce},
+				PersistentVolumeSource: api.PersistentVolumeSource{
+					Local: &api.LocalVolumeSource{
+						Path: "/foo/..",
+					},
+				},
+				StorageClassName: "backstep-local",
+			}),
 		},
 	}
 
@@ -1101,6 +1123,20 @@ func TestValidateVolumes(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name: "invalid HostPath backsteps",
+			vol: api.Volume{
+				Name: "hostpath",
+				VolumeSource: api.VolumeSource{
+					HostPath: &api.HostPathVolumeSource{
+						Path: "/mnt/path/..",
+					},
+				},
+			},
+			errtype:   field.ErrorTypeInvalid,
+			errfield:  "path",
+			errdetail: "must not contain '..'",
 		},
 		// GcePersistentDisk
 		{
@@ -2534,12 +2570,32 @@ func TestValidateEnv(t *testing.T) {
 		{Name: "ABC", Value: "value"},
 		{Name: "AbC_123", Value: "value"},
 		{Name: "abc", Value: ""},
+		{Name: "a.b.c", Value: "value"},
+		{Name: "a-b-c", Value: "value"},
 		{
 			Name: "abc",
 			ValueFrom: &api.EnvVarSource{
 				FieldRef: &api.ObjectFieldSelector{
 					APIVersion: api.Registry.GroupOrDie(api.GroupName).GroupVersion.String(),
 					FieldPath:  "metadata.name",
+				},
+			},
+		},
+		{
+			Name: "abc",
+			ValueFrom: &api.EnvVarSource{
+				FieldRef: &api.ObjectFieldSelector{
+					APIVersion: api.Registry.GroupOrDie(api.GroupName).GroupVersion.String(),
+					FieldPath:  "metadata.namespace",
+				},
+			},
+		},
+		{
+			Name: "abc",
+			ValueFrom: &api.EnvVarSource{
+				FieldRef: &api.ObjectFieldSelector{
+					APIVersion: api.Registry.GroupOrDie(api.GroupName).GroupVersion.String(),
+					FieldPath:  "metadata.uid",
 				},
 			},
 		},
@@ -2603,7 +2659,7 @@ func TestValidateEnv(t *testing.T) {
 		},
 	}
 	if errs := ValidateEnv(successCase, field.NewPath("field")); len(errs) != 0 {
-		t.Errorf("expected success: %v", errs)
+		t.Errorf("expected success, got: %v", errs)
 	}
 
 	errorCases := []struct {
@@ -2617,9 +2673,24 @@ func TestValidateEnv(t *testing.T) {
 			expectedError: "[0].name: Required value",
 		},
 		{
-			name:          "name not a C identifier",
-			envs:          []api.EnvVar{{Name: "a.b.c"}},
-			expectedError: `[0].name: Invalid value: "a.b.c": ` + idErrMsg,
+			name:          "illegal character",
+			envs:          []api.EnvVar{{Name: "a!b"}},
+			expectedError: `[0].name: Invalid value: "a!b": ` + envVarNameErrMsg,
+		},
+		{
+			name:          "dot only",
+			envs:          []api.EnvVar{{Name: "."}},
+			expectedError: `[0].name: Invalid value: ".": must not be`,
+		},
+		{
+			name:          "double dots only",
+			envs:          []api.EnvVar{{Name: ".."}},
+			expectedError: `[0].name: Invalid value: "..": must not be`,
+		},
+		{
+			name:          "leading double dots",
+			envs:          []api.EnvVar{{Name: "..abc"}},
+			expectedError: `[0].name: Invalid value: "..abc": must not start with`,
 		},
 		{
 			name: "value and valueFrom specified",
@@ -2707,6 +2778,34 @@ func TestValidateEnv(t *testing.T) {
 			expectedError: `[0].valueFrom: Invalid value: "": may not have more than one field specified at a time`,
 		},
 		{
+			name: "valueFrom.secretKeyRef.name invalid",
+			envs: []api.EnvVar{{
+				Name: "abc",
+				ValueFrom: &api.EnvVarSource{
+					SecretKeyRef: &api.SecretKeySelector{
+						LocalObjectReference: api.LocalObjectReference{
+							Name: "$%^&*#",
+						},
+						Key: "a-key",
+					},
+				},
+			}},
+		},
+		{
+			name: "valueFrom.configMapKeyRef.name invalid",
+			envs: []api.EnvVar{{
+				Name: "abc",
+				ValueFrom: &api.EnvVarSource{
+					ConfigMapKeyRef: &api.ConfigMapKeySelector{
+						LocalObjectReference: api.LocalObjectReference{
+							Name: "$%^&*#",
+						},
+						Key: "some-key",
+					},
+				},
+			}},
+		},
+		{
 			name: "missing FieldPath on ObjectFieldSelector",
 			envs: []api.EnvVar{{
 				Name: "abc",
@@ -2754,7 +2853,7 @@ func TestValidateEnv(t *testing.T) {
 					},
 				},
 			}},
-			expectedError: `[0].valueFrom.fieldRef.fieldPath: Unsupported value: "metadata.labels": supported values: metadata.name, metadata.namespace, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP`,
+			expectedError: `[0].valueFrom.fieldRef.fieldPath: Unsupported value: "metadata.labels": supported values: metadata.name, metadata.namespace, metadata.uid, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP`,
 		},
 		{
 			name: "invalid fieldPath annotations",
@@ -2767,7 +2866,7 @@ func TestValidateEnv(t *testing.T) {
 					},
 				},
 			}},
-			expectedError: `[0].valueFrom.fieldRef.fieldPath: Unsupported value: "metadata.annotations": supported values: metadata.name, metadata.namespace, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP`,
+			expectedError: `[0].valueFrom.fieldRef.fieldPath: Unsupported value: "metadata.annotations": supported values: metadata.name, metadata.namespace, metadata.uid, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP`,
 		},
 		{
 			name: "unsupported fieldPath",
@@ -2780,7 +2879,7 @@ func TestValidateEnv(t *testing.T) {
 					},
 				},
 			}},
-			expectedError: `valueFrom.fieldRef.fieldPath: Unsupported value: "status.phase": supported values: metadata.name, metadata.namespace, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP`,
+			expectedError: `valueFrom.fieldRef.fieldPath: Unsupported value: "status.phase": supported values: metadata.name, metadata.namespace, metadata.uid, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP`,
 		},
 	}
 	for _, tc := range errorCases {
@@ -2811,12 +2910,24 @@ func TestValidateEnvFrom(t *testing.T) {
 			},
 		},
 		{
+			Prefix: "a.b",
+			ConfigMapRef: &api.ConfigMapEnvSource{
+				LocalObjectReference: api.LocalObjectReference{Name: "abc"},
+			},
+		},
+		{
 			SecretRef: &api.SecretEnvSource{
 				LocalObjectReference: api.LocalObjectReference{Name: "abc"},
 			},
 		},
 		{
 			Prefix: "pre_",
+			SecretRef: &api.SecretEnvSource{
+				LocalObjectReference: api.LocalObjectReference{Name: "abc"},
+			},
+		},
+		{
+			Prefix: "a.b",
 			SecretRef: &api.SecretEnvSource{
 				LocalObjectReference: api.LocalObjectReference{Name: "abc"},
 			},
@@ -2855,12 +2966,12 @@ func TestValidateEnvFrom(t *testing.T) {
 			name: "invalid prefix",
 			envs: []api.EnvFromSource{
 				{
-					Prefix: "a.b",
+					Prefix: "a!b",
 					ConfigMapRef: &api.ConfigMapEnvSource{
 						LocalObjectReference: api.LocalObjectReference{Name: "abc"}},
 				},
 			},
-			expectedError: `field[0].prefix: Invalid value: "a.b": ` + idErrMsg,
+			expectedError: `field[0].prefix: Invalid value: "a!b": ` + envVarNameErrMsg,
 		},
 		{
 			name: "zero-length name",
@@ -2886,12 +2997,12 @@ func TestValidateEnvFrom(t *testing.T) {
 			name: "invalid prefix",
 			envs: []api.EnvFromSource{
 				{
-					Prefix: "a.b",
+					Prefix: "a!b",
 					SecretRef: &api.SecretEnvSource{
 						LocalObjectReference: api.LocalObjectReference{Name: "abc"}},
 				},
 			},
-			expectedError: `field[0].prefix: Invalid value: "a.b": ` + idErrMsg,
+			expectedError: `field[0].prefix: Invalid value: "a!b": ` + envVarNameErrMsg,
 		},
 		{
 			name: "no refs",
@@ -2911,6 +3022,26 @@ func TestValidateEnvFrom(t *testing.T) {
 				},
 			},
 			expectedError: "field: Invalid value: \"\": may not have more than one field specified at a time",
+		},
+		{
+			name: "invalid secret ref name",
+			envs: []api.EnvFromSource{
+				{
+					SecretRef: &api.SecretEnvSource{
+						LocalObjectReference: api.LocalObjectReference{Name: "$%^&*#"}},
+				},
+			},
+			expectedError: "field[0].secretRef.name: Invalid value: \"$%^&*#\": " + dnsSubdomainLabelErrMsg,
+		},
+		{
+			name: "invalid config ref name",
+			envs: []api.EnvFromSource{
+				{
+					ConfigMapRef: &api.ConfigMapEnvSource{
+						LocalObjectReference: api.LocalObjectReference{Name: "$%^&*#"}},
+				},
+			},
+			expectedError: "field[0].configMapRef.name: Invalid value: \"$%^&*#\": " + dnsSubdomainLabelErrMsg,
 		},
 	}
 	for _, tc := range errorCases {
@@ -2938,7 +3069,6 @@ func TestValidateVolumeMounts(t *testing.T) {
 		{Name: "abc-123", MountPath: "/bab", SubPath: "baz"},
 		{Name: "abc-123", MountPath: "/bac", SubPath: ".baz"},
 		{Name: "abc-123", MountPath: "/bad", SubPath: "..baz"},
-		{Name: "abc", MountPath: "c:/foo/bar"},
 	}
 	if errs := ValidateVolumeMounts(successCase, volumes, field.NewPath("field")); len(errs) != 0 {
 		t.Errorf("expected success: %v", errs)
@@ -2948,6 +3078,7 @@ func TestValidateVolumeMounts(t *testing.T) {
 		"empty name":          {{Name: "", MountPath: "/foo"}},
 		"name not found":      {{Name: "", MountPath: "/foo"}},
 		"empty mountpath":     {{Name: "abc", MountPath: ""}},
+		"relative mountpath":  {{Name: "abc", MountPath: "bar"}},
 		"mountpath collision": {{Name: "foo", MountPath: "/path/a"}, {Name: "bar", MountPath: "/path/a"}},
 		"absolute subpath":    {{Name: "abc", MountPath: "/bar", SubPath: "/baz"}},
 		"subpath in ..":       {{Name: "abc", MountPath: "/bar", SubPath: "../baz"}},
@@ -3226,6 +3357,21 @@ func TestValidateContainers(t *testing.T) {
 			ImagePullPolicy:          "IfNotPresent",
 			TerminationMessagePolicy: "File",
 		},
+		{
+			Name:                     "env-from-source",
+			Image:                    "image",
+			ImagePullPolicy:          "IfNotPresent",
+			TerminationMessagePolicy: "File",
+			EnvFrom: []api.EnvFromSource{
+				{
+					ConfigMapRef: &api.ConfigMapEnvSource{
+						LocalObjectReference: api.LocalObjectReference{
+							Name: "test",
+						},
+					},
+				},
+			},
+		},
 		{Name: "abc-1234", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File", SecurityContext: fakeValidSecurityContext(true)},
 	}
 	if errs := validateContainers(successCase, volumes, field.NewPath("field")); len(errs) != 0 {
@@ -3252,7 +3398,7 @@ func TestValidateContainers(t *testing.T) {
 				ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"},
 		},
 		"invalid env var name": {
-			{Name: "abc", Image: "image", Env: []api.EnvVar{{Name: "ev.1"}}, ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"},
+			{Name: "abc", Image: "image", Env: []api.EnvVar{{Name: "ev!1"}}, ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"},
 		},
 		"unknown volume name": {
 			{Name: "abc", Image: "image", VolumeMounts: []api.VolumeMount{{Name: "anything", MountPath: "/foo"}},
@@ -3456,6 +3602,23 @@ func TestValidateContainers(t *testing.T) {
 				TerminationMessagePolicy: "File",
 			},
 		},
+		"Invalid env from": {
+			{
+				Name:                     "env-from-source",
+				Image:                    "image",
+				ImagePullPolicy:          "IfNotPresent",
+				TerminationMessagePolicy: "File",
+				EnvFrom: []api.EnvFromSource{
+					{
+						ConfigMapRef: &api.ConfigMapEnvSource{
+							LocalObjectReference: api.LocalObjectReference{
+								Name: "$%^&*#",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	for k, v := range errorCases {
 		if errs := validateContainers(v, volumes, field.NewPath("field")); len(errs) == 0 {
@@ -3505,11 +3668,29 @@ func TestValidatePodSpec(t *testing.T) {
 	activeDeadlineSeconds := int64(30)
 	activeDeadlineSecondsMax := int64(math.MaxInt32)
 
-	minUserID := types.UnixUserID(0)
-	maxUserID := types.UnixUserID(2147483647)
-	minGroupID := types.UnixGroupID(0)
-	maxGroupID := types.UnixGroupID(2147483647)
+	minUserID := int64(0)
+	maxUserID := int64(2147483647)
+	minGroupID := int64(0)
+	maxGroupID := int64(2147483647)
 
+	priorityEnabled := utilfeature.DefaultFeatureGate.Enabled("PodPriority")
+	defer func() {
+		var err error
+		// restoring the old value
+		if priorityEnabled {
+			err = utilfeature.DefaultFeatureGate.Set("PodPriority=true")
+		} else {
+			err = utilfeature.DefaultFeatureGate.Set("PodPriority=false")
+		}
+		if err != nil {
+			t.Errorf("Failed to restore feature gate for PodPriority: %v", err)
+		}
+	}()
+	err := utilfeature.DefaultFeatureGate.Set("PodPriority=true")
+	if err != nil {
+		t.Errorf("Failed to enable feature gate for PodPriority: %v", err)
+		return
+	}
 	successCases := []api.PodSpec{
 		{ // Populate basic fields, leave defaults for most.
 			Volumes:       []api.Volume{{Name: "vol", VolumeSource: api.VolumeSource{EmptyDir: &api.EmptyDirVolumeSource{}}}},
@@ -3563,7 +3744,7 @@ func TestValidatePodSpec(t *testing.T) {
 		{ // Populate RunAsUser SupplementalGroups FSGroup with minID 0
 			Containers: []api.Container{{Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
 			SecurityContext: &api.PodSecurityContext{
-				SupplementalGroups: []types.UnixGroupID{minGroupID},
+				SupplementalGroups: []int64{minGroupID},
 				RunAsUser:          &minUserID,
 				FSGroup:            &minGroupID,
 			},
@@ -3573,7 +3754,7 @@ func TestValidatePodSpec(t *testing.T) {
 		{ // Populate RunAsUser SupplementalGroups FSGroup with maxID 2147483647
 			Containers: []api.Container{{Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
 			SecurityContext: &api.PodSecurityContext{
-				SupplementalGroups: []types.UnixGroupID{maxGroupID},
+				SupplementalGroups: []int64{maxGroupID},
 				RunAsUser:          &maxUserID,
 				FSGroup:            &maxGroupID,
 			},
@@ -3618,6 +3799,13 @@ func TestValidatePodSpec(t *testing.T) {
 			RestartPolicy: api.RestartPolicyAlways,
 			DNSPolicy:     api.DNSClusterFirst,
 		},
+		{ // Populate PriorityClassName.
+			Volumes:           []api.Volume{{Name: "vol", VolumeSource: api.VolumeSource{EmptyDir: &api.EmptyDirVolumeSource{}}}},
+			Containers:        []api.Container{{Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
+			RestartPolicy:     api.RestartPolicyAlways,
+			DNSPolicy:         api.DNSClusterFirst,
+			PriorityClassName: "valid-name",
+		},
 	}
 	for i := range successCases {
 		if errs := ValidatePodSpec(&successCases[i], field.NewPath("field")); len(errs) != 0 {
@@ -3628,10 +3816,10 @@ func TestValidatePodSpec(t *testing.T) {
 	activeDeadlineSeconds = int64(0)
 	activeDeadlineSecondsTooLarge := int64(math.MaxInt32 + 1)
 
-	minUserID = types.UnixUserID(-1)
-	maxUserID = types.UnixUserID(2147483648)
-	minGroupID = types.UnixGroupID(-1)
-	maxGroupID = types.UnixGroupID(2147483648)
+	minUserID = int64(-1)
+	maxUserID = int64(2147483648)
+	minGroupID = int64(-1)
+	maxGroupID = int64(2147483648)
 
 	failureCases := map[string]api.PodSpec{
 		"bad volume": {
@@ -3705,7 +3893,7 @@ func TestValidatePodSpec(t *testing.T) {
 			Containers: []api.Container{{Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
 			SecurityContext: &api.PodSecurityContext{
 				HostNetwork:        false,
-				SupplementalGroups: []types.UnixGroupID{maxGroupID, 1234},
+				SupplementalGroups: []int64{maxGroupID, 1234},
 			},
 			RestartPolicy: api.RestartPolicyAlways,
 			DNSPolicy:     api.DNSClusterFirst,
@@ -3714,7 +3902,7 @@ func TestValidatePodSpec(t *testing.T) {
 			Containers: []api.Container{{Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
 			SecurityContext: &api.PodSecurityContext{
 				HostNetwork:        false,
-				SupplementalGroups: []types.UnixGroupID{minGroupID, 1234},
+				SupplementalGroups: []int64{minGroupID, 1234},
 			},
 			RestartPolicy: api.RestartPolicyAlways,
 			DNSPolicy:     api.DNSClusterFirst,
@@ -3788,10 +3976,45 @@ func TestValidatePodSpec(t *testing.T) {
 			RestartPolicy: api.RestartPolicyAlways,
 			DNSPolicy:     api.DNSClusterFirst,
 		},
+		"bad PriorityClassName": {
+			Volumes:           []api.Volume{{Name: "vol", VolumeSource: api.VolumeSource{EmptyDir: &api.EmptyDirVolumeSource{}}}},
+			Containers:        []api.Container{{Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
+			RestartPolicy:     api.RestartPolicyAlways,
+			DNSPolicy:         api.DNSClusterFirst,
+			PriorityClassName: "InvalidName",
+		},
 	}
 	for k, v := range failureCases {
 		if errs := ValidatePodSpec(&v, field.NewPath("field")); len(errs) == 0 {
 			t.Errorf("expected failure for %q", k)
+		}
+	}
+
+	err = utilfeature.DefaultFeatureGate.Set("PodPriority=false")
+	if err != nil {
+		t.Errorf("Failed to disable feature gate for PodPriority: %v", err)
+		return
+	}
+	priority := int32(100)
+	featuregatedCases := map[string]api.PodSpec{
+		"set PriorityClassName": {
+			Volumes:           []api.Volume{{Name: "vol", VolumeSource: api.VolumeSource{EmptyDir: &api.EmptyDirVolumeSource{}}}},
+			Containers:        []api.Container{{Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
+			RestartPolicy:     api.RestartPolicyAlways,
+			DNSPolicy:         api.DNSClusterFirst,
+			PriorityClassName: "valid-name",
+		},
+		"set Priority": {
+			Volumes:       []api.Volume{{Name: "vol", VolumeSource: api.VolumeSource{EmptyDir: &api.EmptyDirVolumeSource{}}}},
+			Containers:    []api.Container{{Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
+			RestartPolicy: api.RestartPolicyAlways,
+			DNSPolicy:     api.DNSClusterFirst,
+			Priority:      &priority,
+		},
+	}
+	for k, v := range featuregatedCases {
+		if errs := ValidatePodSpec(&v, field.NewPath("field")); len(errs) == 0 {
+			t.Errorf("expected failure due to gated feature: %q", k)
 		}
 	}
 }
@@ -4923,124 +5146,6 @@ func TestValidatePod(t *testing.T) {
 	}
 }
 
-func TestValidatePodWithDisabledAffinityInAnnotations(t *testing.T) {
-	validPodSpec := func(affinity *api.Affinity) api.PodSpec {
-		spec := api.PodSpec{
-			Containers:    []api.Container{{Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File"}},
-			RestartPolicy: api.RestartPolicyAlways,
-			DNSPolicy:     api.DNSClusterFirst,
-		}
-		if affinity != nil {
-			spec.Affinity = affinity
-		}
-		return spec
-	}
-
-	utilfeature.DefaultFeatureGate.Set("AffinityInAnnotations=False")
-	errorCases := []api.Pod{
-		{
-			ObjectMeta: metav1.ObjectMeta{Name: "123", Namespace: "ns"},
-			Spec: validPodSpec(&api.Affinity{
-				PodAffinity: &api.PodAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: []api.PodAffinityTerm{
-						{
-							LabelSelector: &metav1.LabelSelector{
-								MatchExpressions: []metav1.LabelSelectorRequirement{
-									{
-										Key:      "key2",
-										Operator: metav1.LabelSelectorOpIn,
-										Values:   []string{"value1", "value2"},
-									},
-								},
-							},
-							TopologyKey: "",
-							Namespaces:  []string{"ns"},
-						},
-					},
-				},
-			}),
-		},
-		{
-			ObjectMeta: metav1.ObjectMeta{Name: "123", Namespace: "ns"},
-			Spec: validPodSpec(&api.Affinity{
-				PodAffinity: &api.PodAffinity{
-					PreferredDuringSchedulingIgnoredDuringExecution: []api.WeightedPodAffinityTerm{
-						{
-							Weight: 10,
-							PodAffinityTerm: api.PodAffinityTerm{
-								LabelSelector: &metav1.LabelSelector{
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      "key2",
-											Operator: metav1.LabelSelectorOpNotIn,
-											Values:   []string{"value1", "value2"},
-										},
-									},
-								},
-								Namespaces:  []string{"ns"},
-								TopologyKey: "",
-							},
-						},
-					},
-				},
-			}),
-		},
-		{
-			ObjectMeta: metav1.ObjectMeta{Name: "123", Namespace: "ns"},
-			Spec: validPodSpec(&api.Affinity{
-				PodAntiAffinity: &api.PodAntiAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: []api.PodAffinityTerm{
-						{
-							LabelSelector: &metav1.LabelSelector{
-								MatchExpressions: []metav1.LabelSelectorRequirement{
-									{
-										Key:      "key2",
-										Operator: metav1.LabelSelectorOpIn,
-										Values:   []string{"value1", "value2"},
-									},
-								},
-							},
-							TopologyKey: "",
-							Namespaces:  []string{"ns"},
-						},
-					},
-				},
-			}),
-		},
-		{
-			ObjectMeta: metav1.ObjectMeta{Name: "123", Namespace: "ns"},
-			Spec: validPodSpec(&api.Affinity{
-				PodAntiAffinity: &api.PodAntiAffinity{
-					PreferredDuringSchedulingIgnoredDuringExecution: []api.WeightedPodAffinityTerm{
-						{
-							Weight: 10,
-							PodAffinityTerm: api.PodAffinityTerm{
-								LabelSelector: &metav1.LabelSelector{
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      "key2",
-											Operator: metav1.LabelSelectorOpNotIn,
-											Values:   []string{"value1", "value2"},
-										},
-									},
-								},
-								Namespaces:  []string{"ns"},
-								TopologyKey: "",
-							},
-						},
-					},
-				},
-			}),
-		},
-	}
-
-	for _, v := range errorCases {
-		if errs := ValidatePod(&v); len(errs) == 0 {
-			t.Errorf("expected failure for %v", errs)
-		}
-	}
-}
-
 func TestValidatePodUpdate(t *testing.T) {
 	var (
 		activeDeadlineSecondsZero     = int64(0)
@@ -5660,6 +5765,50 @@ func TestValidatePodUpdate(t *testing.T) {
 			"metadata.annotations[kubernetes.io/config.mirror]",
 			"changed mirror pod annotation",
 		},
+		{
+			api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: api.PodSpec{
+					NodeName:          "node1",
+					PriorityClassName: "bar-priority",
+				},
+			},
+			api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: api.PodSpec{
+					NodeName:          "node1",
+					PriorityClassName: "foo-priority",
+				},
+			},
+			"spec: Forbidden: pod updates",
+			"changed priority class name",
+		},
+		{
+			api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: api.PodSpec{
+					NodeName:          "node1",
+					PriorityClassName: "",
+				},
+			},
+			api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: api.PodSpec{
+					NodeName:          "node1",
+					PriorityClassName: "foo-priority",
+				},
+			},
+			"spec: Forbidden: pod updates",
+			"removed priority class name",
+		},
 	}
 
 	for _, test := range tests {
@@ -6056,6 +6205,60 @@ func TestValidateService(t *testing.T) {
 				s.Spec.Type = api.ServiceTypeNodePort
 				s.Spec.Ports = append(s.Spec.Ports, api.ServicePort{Name: "q", Port: 1, Protocol: "TCP", NodePort: 1, TargetPort: intstr.FromInt(1)})
 				s.Spec.Ports = append(s.Spec.Ports, api.ServicePort{Name: "r", Port: 2, Protocol: "UDP", NodePort: 1, TargetPort: intstr.FromInt(2)})
+			},
+			numErrs: 0,
+		},
+		{
+			name: "invalid duplicate ports (with same protocol)",
+			tweakSvc: func(s *api.Service) {
+				s.Spec.Type = api.ServiceTypeClusterIP
+				s.Spec.Ports = append(s.Spec.Ports, api.ServicePort{Name: "q", Port: 12345, Protocol: "TCP", TargetPort: intstr.FromInt(8080)})
+				s.Spec.Ports = append(s.Spec.Ports, api.ServicePort{Name: "r", Port: 12345, Protocol: "TCP", TargetPort: intstr.FromInt(80)})
+			},
+			numErrs: 1,
+		},
+		{
+			name: "valid duplicate ports (with different protocols)",
+			tweakSvc: func(s *api.Service) {
+				s.Spec.Type = api.ServiceTypeClusterIP
+				s.Spec.Ports = append(s.Spec.Ports, api.ServicePort{Name: "q", Port: 12345, Protocol: "TCP", TargetPort: intstr.FromInt(8080)})
+				s.Spec.Ports = append(s.Spec.Ports, api.ServicePort{Name: "r", Port: 12345, Protocol: "UDP", TargetPort: intstr.FromInt(80)})
+			},
+			numErrs: 0,
+		},
+		{
+			name: "invalid duplicate targetports (number with same protocol)",
+			tweakSvc: func(s *api.Service) {
+				s.Spec.Type = api.ServiceTypeClusterIP
+				s.Spec.Ports = append(s.Spec.Ports, api.ServicePort{Name: "q", Port: 1, Protocol: "TCP", TargetPort: intstr.FromInt(8080)})
+				s.Spec.Ports = append(s.Spec.Ports, api.ServicePort{Name: "r", Port: 2, Protocol: "TCP", TargetPort: intstr.FromInt(8080)})
+			},
+			numErrs: 1,
+		},
+		{
+			name: "invalid duplicate targetports (name with same protocol)",
+			tweakSvc: func(s *api.Service) {
+				s.Spec.Type = api.ServiceTypeClusterIP
+				s.Spec.Ports = append(s.Spec.Ports, api.ServicePort{Name: "q", Port: 1, Protocol: "TCP", TargetPort: intstr.FromString("http")})
+				s.Spec.Ports = append(s.Spec.Ports, api.ServicePort{Name: "r", Port: 2, Protocol: "TCP", TargetPort: intstr.FromString("http")})
+			},
+			numErrs: 1,
+		},
+		{
+			name: "valid duplicate targetports (number with different protocols)",
+			tweakSvc: func(s *api.Service) {
+				s.Spec.Type = api.ServiceTypeClusterIP
+				s.Spec.Ports = append(s.Spec.Ports, api.ServicePort{Name: "q", Port: 1, Protocol: "TCP", TargetPort: intstr.FromInt(8080)})
+				s.Spec.Ports = append(s.Spec.Ports, api.ServicePort{Name: "r", Port: 2, Protocol: "UDP", TargetPort: intstr.FromInt(8080)})
+			},
+			numErrs: 0,
+		},
+		{
+			name: "valid duplicate targetports (name with different protocols)",
+			tweakSvc: func(s *api.Service) {
+				s.Spec.Type = api.ServiceTypeClusterIP
+				s.Spec.Ports = append(s.Spec.Ports, api.ServicePort{Name: "q", Port: 1, Protocol: "TCP", TargetPort: intstr.FromString("http")})
+				s.Spec.Ports = append(s.Spec.Ports, api.ServicePort{Name: "r", Port: 2, Protocol: "UDP", TargetPort: intstr.FromString("http")})
 			},
 			numErrs: 0,
 		},
@@ -7814,7 +8017,7 @@ func TestValidateServiceUpdate(t *testing.T) {
 				oldSvc.Spec.Type = api.ServiceTypeLoadBalancer
 				oldSvc.Spec.LoadBalancerSourceRanges = []string{"10.0.0.0/8"}
 				newSvc.Spec.Type = api.ServiceTypeLoadBalancer
-				newSvc.Spec.LoadBalancerSourceRanges = []string{"10.180.0.0/16"}
+				newSvc.Spec.LoadBalancerSourceRanges = []string{"10.100.0.0/16"}
 			},
 			numErrs: 0,
 		},
@@ -9141,19 +9344,10 @@ func TestValidateBasicAuthSecret(t *testing.T) {
 
 	var (
 		missingBasicAuthUsernamePasswordKeys = validBasicAuthSecret()
-		// invalidBasicAuthUsernamePasswordKey  = validBasicAuthSecret()
-		// emptyBasicAuthUsernameKey            = validBasicAuthSecret()
-		// emptyBasicAuthPasswordKey            = validBasicAuthSecret()
 	)
 
 	delete(missingBasicAuthUsernamePasswordKeys.Data, api.BasicAuthUsernameKey)
 	delete(missingBasicAuthUsernamePasswordKeys.Data, api.BasicAuthPasswordKey)
-
-	// invalidBasicAuthUsernamePasswordKey.Data[api.BasicAuthUsernameKey] = []byte("bad")
-	// invalidBasicAuthUsernamePasswordKey.Data[api.BasicAuthPasswordKey] = []byte("bad")
-
-	// emptyBasicAuthUsernameKey.Data[api.BasicAuthUsernameKey] = []byte("")
-	// emptyBasicAuthPasswordKey.Data[api.BasicAuthPasswordKey] = []byte("")
 
 	tests := map[string]struct {
 		secret api.Secret
@@ -9161,9 +9355,6 @@ func TestValidateBasicAuthSecret(t *testing.T) {
 	}{
 		"valid": {validBasicAuthSecret(), true},
 		"missing username and password": {missingBasicAuthUsernamePasswordKeys, false},
-		// "invalid username and password": {invalidBasicAuthUsernamePasswordKey, false},
-		// "empty username":   {emptyBasicAuthUsernameKey, false},
-		// "empty password":   {emptyBasicAuthPasswordKey, false},
 	}
 
 	for name, tc := range tests {
@@ -9238,6 +9429,14 @@ func TestValidateEndpoints(t *testing.T) {
 				},
 			},
 		},
+		"empty ports": {
+			ObjectMeta: metav1.ObjectMeta{Name: "mysvc", Namespace: "namespace"},
+			Subsets: []api.EndpointSubset{
+				{
+					Addresses: []api.EndpointAddress{{IP: "10.10.3.3"}},
+				},
+			},
+		},
 	}
 
 	for k, v := range successCases {
@@ -9275,17 +9474,6 @@ func TestValidateEndpoints(t *testing.T) {
 				Subsets: []api.EndpointSubset{
 					{
 						Ports: []api.EndpointPort{{Name: "a", Port: 93, Protocol: "TCP"}},
-					},
-				},
-			},
-			errorType: "FieldValueRequired",
-		},
-		"empty ports": {
-			endpoints: api.Endpoints{
-				ObjectMeta: metav1.ObjectMeta{Name: "mysvc", Namespace: "namespace"},
-				Subsets: []api.EndpointSubset{
-					{
-						Addresses: []api.EndpointAddress{{IP: "10.10.3.3"}},
 					},
 				},
 			},
@@ -9475,7 +9663,7 @@ func TestValidateTLSSecret(t *testing.T) {
 
 func TestValidateSecurityContext(t *testing.T) {
 	priv := false
-	runAsUser := types.UnixUserID(1)
+	runAsUser := int64(1)
 	fullValidSC := func() *api.SecurityContext {
 		return &api.SecurityContext{
 			Privileged: &priv,
@@ -9527,7 +9715,7 @@ func TestValidateSecurityContext(t *testing.T) {
 	privRequestWithGlobalDeny.Privileged = &requestPrivileged
 
 	negativeRunAsUser := fullValidSC()
-	negativeUser := types.UnixUserID(-1)
+	negativeUser := int64(-1)
 	negativeRunAsUser.RunAsUser = &negativeUser
 
 	errorCases := map[string]struct {

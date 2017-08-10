@@ -20,7 +20,6 @@ import (
 	"os"
 
 	"github.com/golang/glog"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/volume"
 )
@@ -29,13 +28,13 @@ import (
 type diskManager interface {
 	MakeGlobalPDName(disk fcDisk) string
 	// Attaches the disk to the kubelet's host machine.
-	AttachDisk(b fcDiskMounter) error
+	AttachDisk(b fcDiskMounter) (string, error)
 	// Detaches the disk from the kubelet's host machine.
-	DetachDisk(disk fcDiskUnmounter, mntPath string) error
+	DetachDisk(disk fcDiskUnmounter, devName string) error
 }
 
 // utility to mount a disk based filesystem
-func diskSetUp(manager diskManager, b fcDiskMounter, volPath string, mounter mount.Interface, fsGroup *types.UnixGroupID) error {
+func diskSetUp(manager diskManager, b fcDiskMounter, volPath string, mounter mount.Interface, fsGroup *int64) error {
 	globalPDPath := manager.MakeGlobalPDName(*b.fcDisk)
 	// TODO: handle failed mounts here.
 	noMnt, err := mounter.IsLikelyNotMountPoint(volPath)
@@ -47,11 +46,6 @@ func diskSetUp(manager diskManager, b fcDiskMounter, volPath string, mounter mou
 	if !noMnt {
 		return nil
 	}
-	if err := manager.AttachDisk(b); err != nil {
-		glog.Errorf("failed to attach disk")
-		return err
-	}
-
 	if err := os.MkdirAll(volPath, 0750); err != nil {
 		glog.Errorf("failed to mkdir:%s", volPath)
 		return err
@@ -85,23 +79,9 @@ func diskTearDown(manager diskManager, c fcDiskUnmounter, volPath string, mounte
 		return os.Remove(volPath)
 	}
 
-	refs, err := mount.GetMountRefs(mounter, volPath)
-	if err != nil {
-		glog.Errorf("failed to get reference count %s", volPath)
-		return err
-	}
 	if err := mounter.Unmount(volPath); err != nil {
 		glog.Errorf("failed to unmount %s", volPath)
 		return err
-	}
-	// If len(refs) is 1, then all bind mounts have been removed, and the
-	// remaining reference is the global mount. It is safe to detach.
-	if len(refs) == 1 {
-		mntPath := refs[0]
-		if err := manager.DetachDisk(c, mntPath); err != nil {
-			glog.Errorf("failed to detach disk from %s", mntPath)
-			return err
-		}
 	}
 
 	noMnt, mntErr := mounter.IsLikelyNotMountPoint(volPath)

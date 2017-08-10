@@ -9271,8 +9271,8 @@
      {
       "type": "v1.Binding",
       "method": "POST",
-      "summary": "create binding of a Binding",
-      "nickname": "createNamespacedBindingBinding",
+      "summary": "create binding of a Pod",
+      "nickname": "createNamespacedPodBinding",
       "parameters": [
        {
         "type": "string",
@@ -9332,8 +9332,8 @@
      {
       "type": "v1beta1.Eviction",
       "method": "POST",
-      "summary": "create eviction of an Eviction",
-      "nickname": "createNamespacedEvictionEviction",
+      "summary": "create eviction of a Pod",
+      "nickname": "createNamespacedPodEviction",
       "parameters": [
        {
         "type": "string",
@@ -12234,8 +12234,8 @@
      {
       "type": "v1.Scale",
       "method": "GET",
-      "summary": "read scale of the specified Scale",
-      "nickname": "readNamespacedScaleScale",
+      "summary": "read scale of the specified ReplicationController",
+      "nickname": "readNamespacedReplicationControllerScale",
       "parameters": [
        {
         "type": "string",
@@ -12281,8 +12281,8 @@
      {
       "type": "v1.Scale",
       "method": "PUT",
-      "summary": "replace scale of the specified Scale",
-      "nickname": "replaceNamespacedScaleScale",
+      "summary": "replace scale of the specified ReplicationController",
+      "nickname": "replaceNamespacedReplicationControllerScale",
       "parameters": [
        {
         "type": "string",
@@ -12336,8 +12336,8 @@
      {
       "type": "v1.Scale",
       "method": "PATCH",
-      "summary": "partially update scale of the specified Scale",
-      "nickname": "patchNamespacedScaleScale",
+      "summary": "partially update scale of the specified ReplicationController",
+      "nickname": "patchNamespacedReplicationControllerScale",
       "parameters": [
        {
         "type": "string",
@@ -17580,7 +17580,7 @@
      "retryAfterSeconds": {
       "type": "integer",
       "format": "int32",
-      "description": "If specified, the time in seconds before the operation should be retried."
+      "description": "If specified, the time in seconds before the operation should be retried. Some errors may indicate the client must take an alternate action - for those errors this field may indicate how long to wait before taking the alternate action."
      }
     }
    },
@@ -18318,6 +18318,10 @@
        "$ref": "v1.Taint"
       },
       "description": "If specified, the node's taints."
+     },
+     "configSource": {
+      "$ref": "v1.NodeConfigSource",
+      "description": "If specified, the source to get node configuration from The DynamicKubeletConfig feature gate must be enabled for the Kubelet to use this field"
      }
     }
    },
@@ -18344,6 +18348,23 @@
      "timeAdded": {
       "type": "string",
       "description": "TimeAdded represents the time at which the taint was added. It is only written for NoExecute taints."
+     }
+    }
+   },
+   "v1.NodeConfigSource": {
+    "id": "v1.NodeConfigSource",
+    "description": "NodeConfigSource specifies a source of node configuration. Exactly one subfield (excluding metadata) must be non-nil.",
+    "properties": {
+     "kind": {
+      "type": "string",
+      "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds"
+     },
+     "apiVersion": {
+      "type": "string",
+      "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources"
+     },
+     "configMapRef": {
+      "$ref": "v1.ObjectReference"
      }
     }
    },
@@ -18502,11 +18523,11 @@
     "properties": {
      "machineID": {
       "type": "string",
-      "description": "MachineID reported by the node. For unique machine identification in the cluster this field is prefered. Learn more from man(5) machine-id: http://man7.org/linux/man-pages/man5/machine-id.5.html"
+      "description": "MachineID reported by the node. For unique machine identification in the cluster this field is preferred. Learn more from man(5) machine-id: http://man7.org/linux/man-pages/man5/machine-id.5.html"
      },
      "systemUUID": {
       "type": "string",
-      "description": "SystemUUID reported by the node. For unique machine identification MachineID is prefered. This field is specific to Red Hat hosts https://access.redhat.com/documentation/en-US/Red_Hat_Subscription_Management/1/html/RHSM/getting-system-uuid.html"
+      "description": "SystemUUID reported by the node. For unique machine identification MachineID is preferred. This field is specific to Red Hat hosts https://access.redhat.com/documentation/en-US/Red_Hat_Subscription_Management/1/html/RHSM/getting-system-uuid.html"
      },
      "bootID": {
       "type": "string",
@@ -19696,12 +19717,21 @@
       },
       "description": "If specified, the pod's tolerations."
      },
-     "hostMappings": {
+     "hostAliases": {
       "type": "array",
       "items": {
        "$ref": "v1.HostAlias"
       },
       "description": "HostAliases is an optional list of hosts and IPs that will be injected into the pod's hosts file if specified. This is only valid for non-hostNetwork pods."
+     },
+     "priorityClassName": {
+      "type": "string",
+      "description": "If specified, indicates the pod's priority. \"SYSTEM\" is a special keyword which indicates the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default."
+     },
+     "priority": {
+      "type": "integer",
+      "format": "int32",
+      "description": "The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority."
      }
     }
    },
@@ -20623,7 +20653,8 @@
       "description": "The SELinux context to be applied to the container. If unspecified, the container runtime will allocate a random SELinux context for each container.  May also be set in PodSecurityContext.  If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence."
      },
      "runAsUser": {
-      "$ref": "types.UnixUserID",
+      "type": "integer",
+      "format": "int64",
       "description": "The UID to run the entrypoint of the container process. Defaults to user specified in image metadata if unspecified. May also be set in PodSecurityContext.  If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence."
      },
      "runAsNonRoot": {
@@ -20633,6 +20664,10 @@
      "readOnlyRootFilesystem": {
       "type": "boolean",
       "description": "Whether this container has a read-only root filesystem. Default is false."
+     },
+     "allowPrivilegeEscalation": {
+      "type": "boolean",
+      "description": "AllowPrivilegeEscalation controls whether a process can gain more privileges than it's parent process. This bool directly controls if the no_new_privs flag will be set on the container process. AllowPrivilegeEscalation is true always when the container is: 1) run as Privileged 2) has CAP_SYS_ADMIN"
      }
     }
    },
@@ -20682,10 +20717,6 @@
      }
     }
    },
-   "types.UnixUserID": {
-    "id": "types.UnixUserID",
-    "properties": {}
-   },
    "v1.PodSecurityContext": {
     "id": "v1.PodSecurityContext",
     "description": "PodSecurityContext holds pod-level security attributes and common container settings. Some fields are also present in container.securityContext.  Field values of container.securityContext take precedence over field values of PodSecurityContext.",
@@ -20695,7 +20726,8 @@
       "description": "The SELinux context to be applied to all containers. If unspecified, the container runtime will allocate a random SELinux context for each container.  May also be set in SecurityContext.  If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence for that container."
      },
      "runAsUser": {
-      "$ref": "types.UnixUserID",
+      "type": "integer",
+      "format": "int64",
       "description": "The UID to run the entrypoint of the container process. Defaults to user specified in image metadata if unspecified. May also be set in SecurityContext.  If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence for that container."
      },
      "runAsNonRoot": {
@@ -20705,19 +20737,16 @@
      "supplementalGroups": {
       "type": "array",
       "items": {
-       "$ref": "types.UnixGroupID"
+       "type": "integer"
       },
       "description": "A list of groups applied to the first process run in each container, in addition to the container's primary GID.  If unspecified, no groups will be added to any container."
      },
      "fsGroup": {
-      "$ref": "types.UnixGroupID",
+      "type": "integer",
+      "format": "int64",
       "description": "A special supplemental group that applies to all containers in a pod. Some volume types allow the Kubelet to change the ownership of that volume to be owned by the pod:\n\n1. The owning GID will be the FSGroup 2. The setgid bit is set (new files created in the volume will be owned by FSGroup) 3. The permission bits are OR'd with rw-rw "
      }
     }
-   },
-   "types.UnixGroupID": {
-    "id": "types.UnixGroupID",
-    "properties": {}
    },
    "v1.Affinity": {
     "id": "v1.Affinity",
@@ -20950,7 +20979,7 @@
       "items": {
        "type": "string"
       },
-      "description": "Hostnames for the the above IP address."
+      "description": "Hostnames for the above IP address."
      }
     }
    },
@@ -20975,7 +21004,7 @@
      },
      "reason": {
       "type": "string",
-      "description": "A brief CamelCase message indicating details about why the pod is in this state. e.g. 'OutOfDisk'"
+      "description": "A brief CamelCase message indicating details about why the pod is in this state. e.g. 'Evicted'"
      },
      "hostIP": {
       "type": "string",
@@ -21782,6 +21811,10 @@
       "type": "integer",
       "format": "int32",
       "description": "healthCheckNodePort specifies the healthcheck nodePort for the service. If not specified, HealthCheckNodePort is created by the service api backend with the allocated nodePort. Will use user-specified nodePort value if specified by the client. Only effects when Type is set to LoadBalancer and ExternalTrafficPolicy is set to Local."
+     },
+     "publishNotReadyAddresses": {
+      "type": "boolean",
+      "description": "publishNotReadyAddresses, when set to true, indicates that DNS implementations must publish the notReadyAddresses of subsets for the Endpoints associated with the Service. The default value is false. The primary use case for setting this field is to use a StatefulSet's Headless Service to propagate SRV records for its Pods without respect to their readiness for purpose of peer discovery. This field will replace the service.alpha.kubernetes.io/tolerate-unready-endpoints when that annotation is deprecated and all clients have been converted to use this field."
      }
     }
    },

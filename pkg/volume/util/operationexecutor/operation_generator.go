@@ -21,13 +21,13 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/features"
 	kevents "k8s.io/kubernetes/pkg/kubelet/events"
 	"k8s.io/kubernetes/pkg/util/mount"
@@ -115,6 +115,10 @@ func (og *operationGenerator) GenerateVolumesAreAttachedFunc(
 	volumeSpecMap := make(map[*volume.Spec]v1.UniqueVolumeName)
 	// Iterate each volume spec and put them into a map index by the pluginName
 	for _, volumeAttached := range attachedVolumes {
+		if volumeAttached.VolumeSpec == nil {
+			glog.Errorf("VerifyVolumesAreAttached.GenerateVolumesAreAttachedFunc: nil spec for volume %s", volumeAttached.VolumeName)
+			continue
+		}
 		volumePlugin, err :=
 			og.volumePluginMgr.FindPluginBySpec(volumeAttached.VolumeSpec)
 		if err != nil || volumePlugin == nil {
@@ -392,7 +396,7 @@ func (og *operationGenerator) GenerateMountVolumeFunc(
 		volumeAttacher, _ = attachableVolumePlugin.NewAttacher()
 	}
 
-	var fsGroup *types.UnixGroupID
+	var fsGroup *int64
 	if volumeToMount.Pod.Spec.SecurityContext != nil &&
 		volumeToMount.Pod.Spec.SecurityContext.FSGroup != nil {
 		fsGroup = volumeToMount.Pod.Spec.SecurityContext.FSGroup

@@ -13,12 +13,26 @@ go_test(
     srcs = ["validation_test.go"],
     library = ":go_default_library",
     tags = ["automanaged"],
-    deps = ["//vendor/k8s.io/apimachinery/pkg/types:go_default_library"],
 )
 
 go_library(
     name = "go_default_library",
     srcs = ["validation.go"],
     tags = ["automanaged"],
-    deps = ["//vendor/k8s.io/apimachinery/pkg/types:go_default_library"],
+)
+
+filegroup(
+    name = "package-srcs",
+    srcs = glob(["**"]),
+    tags = ["automanaged"],
+    visibility = ["//visibility:private"],
+)
+
+filegroup(
+    name = "all-srcs",
+    srcs = [
+        ":package-srcs",
+        "//staging/src/k8s.io/apimachinery/pkg/util/validation/field:all-srcs",
+    ],
+    tags = ["automanaged"],
 )

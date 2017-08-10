@@ -21,18 +21,23 @@ import (
 	dstrings "strings"
 
 	"github.com/golang/glog"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	"k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
-	"k8s.io/kubernetes/pkg/util/exec"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/util/strings"
 	"k8s.io/kubernetes/pkg/volume"
 	volutil "k8s.io/kubernetes/pkg/volume/util"
 	"k8s.io/kubernetes/pkg/volume/util/volumehelper"
+	"k8s.io/utils/exec"
+)
+
+var (
+	supportedFeatures = sets.NewString("layering")
 )
 
 // This is the primary entrypoint for volume plugins.
@@ -51,9 +56,19 @@ var _ volume.DeletableVolumePlugin = &rbdPlugin{}
 var _ volume.ProvisionableVolumePlugin = &rbdPlugin{}
 
 const (
-	rbdPluginName = "kubernetes.io/rbd"
-	secretKeyName = "key" // key name used in secret
+	rbdPluginName                  = "kubernetes.io/rbd"
+	secretKeyName                  = "key" // key name used in secret
+	rbdImageFormat1                = "1"
+	rbdImageFormat2                = "2"
+	rbdDefaultAdminId              = "admin"
+	rbdDefaultAdminSecretNamespace = "default"
+	rbdDefaultPool                 = "rbd"
+	rbdDefaultUserId               = rbdDefaultAdminId
 )
+
+func getPath(uid types.UID, volName string, host volume.VolumeHost) string {
+	return host.GetPodVolumeDir(uid, strings.EscapeQualifiedNameForDisk(rbdPluginName), volName)
+}
 
 func (plugin *rbdPlugin) Init(host volume.VolumeHost) error {
 	plugin.host = host
@@ -137,14 +152,15 @@ func (plugin *rbdPlugin) newMounterInternal(spec *volume.Spec, podUID types.UID,
 
 	return &rbdMounter{
 		rbd: &rbd{
-			podUID:   podUID,
-			volName:  spec.Name(),
-			Image:    source.RBDImage,
-			Pool:     pool,
-			ReadOnly: readOnly,
-			manager:  manager,
-			mounter:  &mount.SafeFormatAndMount{Interface: mounter, Runner: exec.New()},
-			plugin:   plugin,
+			podUID:          podUID,
+			volName:         spec.Name(),
+			Image:           source.RBDImage,
+			Pool:            pool,
+			ReadOnly:        readOnly,
+			manager:         manager,
+			mounter:         &mount.SafeFormatAndMount{Interface: mounter, Runner: exec.New()},
+			plugin:          plugin,
+			MetricsProvider: volume.NewMetricsStatFS(getPath(podUID, spec.Name(), plugin.host)),
 		},
 		Mon:          source.CephMonitors,
 		Id:           id,
@@ -164,11 +180,12 @@ func (plugin *rbdPlugin) newUnmounterInternal(volName string, podUID types.UID, 
 	return &rbdUnmounter{
 		rbdMounter: &rbdMounter{
 			rbd: &rbd{
-				podUID:  podUID,
-				volName: volName,
-				manager: manager,
-				mounter: &mount.SafeFormatAndMount{Interface: mounter, Runner: exec.New()},
-				plugin:  plugin,
+				podUID:          podUID,
+				volName:         volName,
+				manager:         manager,
+				mounter:         &mount.SafeFormatAndMount{Interface: mounter, Runner: exec.New()},
+				plugin:          plugin,
+				MetricsProvider: volume.NewMetricsStatFS(getPath(podUID, volName, plugin.host)),
 			},
 			Mon: make([]string, 0),
 		},
@@ -196,7 +213,7 @@ func (plugin *rbdPlugin) NewDeleter(spec *volume.Spec) (volume.Deleter, error) {
 		return nil, err
 	}
 	adminSecretName := ""
-	adminSecretNamespace := "default"
+	adminSecretNamespace := rbdDefaultAdminSecretNamespace
 	admin := ""
 
 	for k, v := range class.Parameters {
@@ -210,6 +227,9 @@ func (plugin *rbdPlugin) NewDeleter(spec *volume.Spec) (volume.Deleter, error) {
 		}
 	}
 
+	if admin == "" {
+		admin = rbdDefaultAdminId
+	}
 	secret, err := parsePVSecret(adminSecretNamespace, adminSecretName, plugin.host.GetKubeClient())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get admin secret from [%q/%q]: %v", adminSecretNamespace, adminSecretName, err)
@@ -264,9 +284,11 @@ func (r *rbdVolumeProvisioner) Provision() (*v1.PersistentVolume, error) {
 	}
 	var err error
 	adminSecretName := ""
-	adminSecretNamespace := "default"
+	adminSecretNamespace := rbdDefaultAdminSecretNamespace
 	secretName := ""
 	secret := ""
+	imageFormat := rbdImageFormat1
+	fstype := ""
 
 	for k, v := range r.options.Parameters {
 		switch dstrings.ToLower(k) {
@@ -287,11 +309,29 @@ func (r *rbdVolumeProvisioner) Provision() (*v1.PersistentVolume, error) {
 			r.Pool = v
 		case "usersecretname":
 			secretName = v
+		case "imageformat":
+			imageFormat = v
+		case "imagefeatures":
+			arr := dstrings.Split(v, ",")
+			for _, f := range arr {
+				if !supportedFeatures.Has(f) {
+					return nil, fmt.Errorf("invalid feature %q for volume plugin %s, supported features are: %v", f, r.plugin.GetPluginName(), supportedFeatures)
+				} else {
+					r.imageFeatures = append(r.imageFeatures, f)
+				}
+			}
+		case volume.VolumeParameterFSType:
+			fstype = v
 		default:
 			return nil, fmt.Errorf("invalid option %q for volume plugin %s", k, r.plugin.GetPluginName())
 		}
 	}
 	// sanity check
+	if imageFormat != rbdImageFormat1 && imageFormat != rbdImageFormat2 {
+		return nil, fmt.Errorf("invalid ceph imageformat %s, expecting %s or %s",
+			imageFormat, rbdImageFormat1, rbdImageFormat2)
+	}
+	r.imageFormat = imageFormat
 	if adminSecretName == "" {
 		return nil, fmt.Errorf("missing Ceph admin secret name")
 	}
@@ -306,10 +346,10 @@ func (r *rbdVolumeProvisioner) Provision() (*v1.PersistentVolume, error) {
 		return nil, fmt.Errorf("missing user secret name")
 	}
 	if r.adminId == "" {
-		r.adminId = "admin"
+		r.adminId = rbdDefaultAdminId
 	}
 	if r.Pool == "" {
-		r.Pool = "rbd"
+		r.Pool = rbdDefaultPool
 	}
 	if r.Id == "" {
 		r.Id = r.adminId
@@ -329,6 +369,7 @@ func (r *rbdVolumeProvisioner) Provision() (*v1.PersistentVolume, error) {
 	rbd.SecretRef = new(v1.LocalObjectReference)
 	rbd.SecretRef.Name = secretName
 	rbd.RadosUser = r.Id
+	rbd.FSType = fstype
 	pv.Spec.PersistentVolumeSource.RBD = rbd
 	pv.Spec.PersistentVolumeReclaimPolicy = r.options.PersistentVolumeReclaimPolicy
 	pv.Spec.AccessModes = r.options.PVC.Spec.AccessModes
@@ -346,8 +387,7 @@ type rbdVolumeDeleter struct {
 }
 
 func (r *rbdVolumeDeleter) GetPath() string {
-	name := rbdPluginName
-	return r.plugin.host.GetPodVolumeDir(r.podUID, strings.EscapeQualifiedNameForDisk(name), r.volName)
+	return getPath(r.podUID, r.volName, r.plugin.host)
 }
 
 func (r *rbdVolumeDeleter) Delete() error {
@@ -364,26 +404,27 @@ type rbd struct {
 	mounter  *mount.SafeFormatAndMount
 	// Utility interface that provides API calls to the provider to attach/detach disks.
 	manager diskManager
-	volume.MetricsNil
+	volume.MetricsProvider
 }
 
 func (rbd *rbd) GetPath() string {
-	name := rbdPluginName
 	// safe to use PodVolumeDir now: volume teardown occurs before pod is cleaned up
-	return rbd.plugin.host.GetPodVolumeDir(rbd.podUID, strings.EscapeQualifiedNameForDisk(name), rbd.volName)
+	return getPath(rbd.podUID, rbd.volName, rbd.plugin.host)
 }
 
 type rbdMounter struct {
 	*rbd
 	// capitalized so they can be exported in persistRBD()
-	Mon          []string
-	Id           string
-	Keyring      string
-	Secret       string
-	fsType       string
-	adminSecret  string
-	adminId      string
-	mountOptions []string
+	Mon           []string
+	Id            string
+	Keyring       string
+	Secret        string
+	fsType        string
+	adminSecret   string
+	adminId       string
+	mountOptions  []string
+	imageFormat   string
+	imageFeatures []string
 }
 
 var _ volume.Mounter = &rbdMounter{}
@@ -403,11 +444,11 @@ func (b *rbdMounter) CanMount() error {
 	return nil
 }
 
-func (b *rbdMounter) SetUp(fsGroup *types.UnixGroupID) error {
+func (b *rbdMounter) SetUp(fsGroup *int64) error {
 	return b.SetUpAt(b.GetPath(), fsGroup)
 }
 
-func (b *rbdMounter) SetUpAt(dir string, fsGroup *types.UnixGroupID) error {
+func (b *rbdMounter) SetUpAt(dir string, fsGroup *int64) error {
 	// diskSetUp checks mountpoints and prevent repeated calls
 	glog.V(4).Infof("rbd: attempting to SetUp and mount %s", dir)
 	err := diskSetUp(b.manager, *b, dir, b.mounter, fsGroup)

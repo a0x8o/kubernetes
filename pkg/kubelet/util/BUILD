@@ -8,6 +8,14 @@ load(
     "go_test",
 )
 
+go_test(
+    name = "go_default_test",
+    srcs = ["util_test.go"],
+    library = ":go_default_library",
+    tags = ["automanaged"],
+    deps = ["//vendor/github.com/stretchr/testify/assert:go_default_library"],
+)
+
 go_library(
     name = "go_default_library",
     srcs = [
@@ -18,16 +26,9 @@ go_library(
     tags = ["automanaged"],
     deps = [
         "//vendor/github.com/golang/glog:go_default_library",
+        "//vendor/golang.org/x/sys/unix:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
     ],
-)
-
-go_test(
-    name = "go_default_test",
-    srcs = ["util_test.go"],
-    library = ":go_default_library",
-    tags = ["automanaged"],
-    deps = ["//vendor/github.com/stretchr/testify/assert:go_default_library"],
 )
 
 filegroup(

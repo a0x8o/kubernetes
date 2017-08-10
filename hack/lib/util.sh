@@ -205,6 +205,7 @@ kube::util::gen-docs() {
   mkdir -p "${dest}/docs/admin/"
   "${genkubedocs}" "${dest}/docs/admin/" "kube-apiserver"
   "${genkubedocs}" "${dest}/docs/admin/" "kube-controller-manager"
+  "${genkubedocs}" "${dest}/docs/admin/" "cloud-controller-manager"
   "${genkubedocs}" "${dest}/docs/admin/" "kube-proxy"
   "${genkubedocs}" "${dest}/docs/admin/" "kube-scheduler"
   "${genkubedocs}" "${dest}/docs/admin/" "kubelet"
@@ -214,10 +215,12 @@ kube::util::gen-docs() {
   # to generate. The actual binary for running federation is hyperkube.
   "${genfeddocs}" "${dest}/docs/admin/" "federation-apiserver"
   "${genfeddocs}" "${dest}/docs/admin/" "federation-controller-manager"
+  "${genfeddocs}" "${dest}/docs/admin/" "kubefed"
 
   mkdir -p "${dest}/docs/man/man1/"
   "${genman}" "${dest}/docs/man/man1/" "kube-apiserver"
   "${genman}" "${dest}/docs/man/man1/" "kube-controller-manager"
+  "${genman}" "${dest}/docs/man/man1/" "cloud-controller-manager"
   "${genman}" "${dest}/docs/man/man1/" "kube-proxy"
   "${genman}" "${dest}/docs/man/man1/" "kube-scheduler"
   "${genman}" "${dest}/docs/man/man1/" "kubelet"
@@ -313,7 +316,27 @@ kube::util::analytics-link() {
 # * Special handling for groups suffixed with ".k8s.io": foo.k8s.io/v1 -> apis/foo/v1
 # * Very special handling for when both group and version are "": / -> api
 kube::util::group-version-to-pkg-path() {
+  staging_apis=(
+  $(
+    pushd ${KUBE_ROOT}/staging/src/k8s.io/api > /dev/null
+      find . -name types.go | xargs -n1 dirname | sed "s|\./||g" | sort
+    popd > /dev/null
+  )
+  )
+
   local group_version="$1"
+
+  if [[ " ${staging_apis[@]} " =~ " ${group_version/.*k8s.io/} " ]]; then
+    echo "vendor/k8s.io/api/${group_version/.*k8s.io/}"
+    return
+  fi
+
+  # "v1" is the API GroupVersion 
+  if [[ "${group_version}" == "v1" ]]; then
+    echo "vendor/k8s.io/api/core/v1"
+    return
+  fi
+
   # Special cases first.
   # TODO(lavalamp): Simplify this by moving pkg/api/v1 and splitting pkg/api,
   # moving the results to pkg/apis/api.
@@ -321,9 +344,6 @@ kube::util::group-version-to-pkg-path() {
     # both group and version are "", this occurs when we generate deep copies for internal objects of the legacy v1 API.
     __internal)
       echo "pkg/api"
-      ;;
-    v1)
-      echo "pkg/api/v1"
       ;;
     federation/v1beta1)
       echo "federation/apis/federation/v1beta1"
@@ -476,7 +496,7 @@ kube::util::ensure_clean_working_dir() {
 # Ensure that the given godep version is installed and in the path
 kube::util::ensure_godep_version() {
   GODEP_VERSION=${1:-"v79"}
-  if [[ "$(godep version)" == *"godep ${GODEP_VERSION}"* ]]; then
+  if [[ "$(godep version 2>/dev/null)" == *"godep ${GODEP_VERSION}"* ]]; then
     return
   fi
 
@@ -485,13 +505,54 @@ kube::util::ensure_godep_version() {
 
   GOPATH="${KUBE_TEMP}/go" go get -d -u github.com/tools/godep 2>/dev/null
   pushd "${KUBE_TEMP}/go/src/github.com/tools/godep" >/dev/null
-    git checkout "${GODEP_VERSION}"
+    git checkout -q "${GODEP_VERSION}"
     GOPATH="${KUBE_TEMP}/go" go install .
   popd >/dev/null
 
   PATH="${KUBE_TEMP}/go/bin:${PATH}"
   hash -r # force bash to clear PATH cache
   godep version
+}
+
+# Ensure that none of the staging repos is checked out in the GOPATH because this
+# easily confused godep.
+kube::util::ensure_no_staging_repos_in_gopath() {
+  kube::util::ensure_single_dir_gopath
+  local error=0
+  for repo in $(ls ${KUBE_ROOT}/staging/src/k8s.io); do
+    if [ -e "${GOPATH}/src/k8s.io/${repo}" ]; then
+      echo "k8s.io/${repo} exists in GOPATH. Remove before running godep-save.sh." 1>&2
+      error=1
+    fi
+  done
+  if [ "${error}" = "1" ]; then
+    exit 1
+  fi
+}
+
+# Installs the specified go package at a particular commit.
+kube::util::go_install_from_commit() {
+  local -r pkg=$1
+  local -r commit=$2
+
+  kube::util::ensure-temp-dir
+  mkdir -p "${KUBE_TEMP}/go/src"
+  GOPATH="${KUBE_TEMP}/go" go get -d -u "${pkg}" 2>/dev/null
+  (
+    cd "${KUBE_TEMP}/go/src/${pkg}"
+    git checkout -q "${commit}"
+    GOPATH="${KUBE_TEMP}/go" go install "${pkg}"
+  )
+  PATH="${KUBE_TEMP}/go/bin:${PATH}"
+  hash -r # force bash to clear PATH cache
+}
+
+# Checks that the GOPATH is simple, i.e. consists only of one directory, not multiple.
+kube::util::ensure_single_dir_gopath() {
+  if [[ "${GOPATH}" == *:* ]]; then
+    echo "GOPATH must consist of a single directory." 1>&2
+    exit 1
+  fi
 }
 
 # Checks whether there are any files matching pattern $2 changed between the
@@ -762,6 +823,18 @@ function kube::util::ensure-cfssl {
       exit 1
     fi
   popd > /dev/null
+}
+
+# kube::util::ensure_dockerized
+# Confirms that the script is being run inside a kube-build image
+#
+function kube::util::ensure_dockerized {
+  if [[ -f /kube-build-image ]]; then
+    return 0
+  else
+    echo "ERROR: This script is designed to be run inside a kube-build container"
+    exit 1
+  fi
 }
 
 # Some useful colors.

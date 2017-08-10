@@ -23,8 +23,8 @@ import (
 	"reflect"
 	"testing"
 
+	api "k8s.io/api/core/v1"
 	utiltesting "k8s.io/client-go/util/testing"
-	api "k8s.io/kubernetes/pkg/api/v1"
 )
 
 var (
@@ -115,10 +115,10 @@ func TestUtilApplyConfigDefaults(t *testing.T) {
 	if data[confKey.system] != "sio" {
 		t.Error("Unexpected system value")
 	}
-	if data[confKey.protectionDomain] != "default" {
+	if data[confKey.protectionDomain] != "" {
 		t.Error("Unexpected protection domain value")
 	}
-	if data[confKey.storagePool] != "default" {
+	if data[confKey.storagePool] != "" {
 		t.Error("Unexpected storage pool value")
 	}
 	if data[confKey.volumeName] != "sio-vol" {

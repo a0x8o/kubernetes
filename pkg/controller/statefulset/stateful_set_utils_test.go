@@ -28,9 +28,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"k8s.io/kubernetes/pkg/api/v1"
+	apps "k8s.io/api/apps/v1beta1"
+	"k8s.io/api/core/v1"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
-	apps "k8s.io/kubernetes/pkg/apis/apps/v1beta1"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/history"
 )
@@ -213,25 +213,10 @@ func TestIsRunningAndReady(t *testing.T) {
 	if !isRunningAndReady(pod) {
 		t.Error("Pod should be running and ready")
 	}
-	pod.Annotations[apps.StatefulSetInitAnnotation] = "true"
-	if !isRunningAndReady(pod) {
-		t.Error("isRunningAndReady does not respected init annotation set to true")
-	}
-	pod.Annotations[apps.StatefulSetInitAnnotation] = "false"
-	if isRunningAndReady(pod) {
-		t.Error("isRunningAndReady does not respected init annotation set to false")
-	}
-	pod.Annotations[apps.StatefulSetInitAnnotation] = "blah"
-	if !isRunningAndReady(pod) {
-		t.Error("isRunningAndReady does not erroneous init annotation")
-	}
 }
 
 func TestAscendingOrdinal(t *testing.T) {
 	set := newStatefulSet(10)
-	for i := 0; i < 10; i++ {
-
-	}
 	pods := make([]*v1.Pod, 10)
 	perm := rand.Perm(10)
 	for i, v := range perm {
@@ -295,6 +280,12 @@ func TestCreateApplyRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	set.Spec.Template.Spec.Containers[0].Name = "foo"
+	if set.Annotations == nil {
+		set.Annotations = make(map[string]string)
+	}
+	key := "foo"
+	expectedValue := "bar"
+	set.Annotations[key] = expectedValue
 	restoredSet, err := applyRevision(set, revision)
 	if err != nil {
 		t.Fatal(err)
@@ -305,6 +296,13 @@ func TestCreateApplyRevision(t *testing.T) {
 	}
 	if !history.EqualRevision(revision, restoredRevision) {
 		t.Errorf("wanted %v got %v", string(revision.Data.Raw), string(restoredRevision.Data.Raw))
+	}
+	value, ok := restoredRevision.Annotations[key]
+	if !ok {
+		t.Errorf("missing annotation %s", key)
+	}
+	if value != expectedValue {
+		t.Errorf("for annotation %s wanted %s got %s", key, expectedValue, value)
 	}
 }
 

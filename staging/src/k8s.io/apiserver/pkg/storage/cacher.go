@@ -196,6 +196,7 @@ type Cacher struct {
 func NewCacherFromConfig(config CacherConfig) *Cacher {
 	watchCache := newWatchCache(config.CacheCapacity, config.KeyFunc, config.GetAttrsFunc)
 	listerWatcher := newCacherListerWatcher(config.Storage, config.ResourcePrefix, config.NewListFunc)
+	reflectorName := "storage/cacher.go:" + config.ResourcePrefix
 
 	// Give this error when it is constructed rather than when you get the
 	// first watch item, because it's much easier to track down that way.
@@ -212,7 +213,7 @@ func NewCacherFromConfig(config CacherConfig) *Cacher {
 		copier:      config.Copier,
 		objectType:  reflect.TypeOf(config.Type),
 		watchCache:  watchCache,
-		reflector:   cache.NewReflector(listerWatcher, config.Type, watchCache, 0),
+		reflector:   cache.NewNamedReflector(reflectorName, listerWatcher, config.Type, watchCache, 0),
 		versioner:   config.Versioner,
 		triggerFunc: config.TriggerPublisherFunc,
 		watcherIdx:  0,
@@ -368,6 +369,12 @@ func (c *Cacher) Get(ctx context.Context, key string, resourceVersion string, ob
 		return err
 	}
 
+	if getRV == 0 && !c.ready.check() {
+		// If Cacher is not yet initialized and we don't require any specific
+		// minimal resource version, simply forward the request to storage.
+		return c.storage.Get(ctx, key, resourceVersion, objPtr, ignoreNotFound)
+	}
+
 	// Do not create a trace - it's not for free and there are tons
 	// of Get requests. We can add it if it will be really needed.
 	c.ready.wait()
@@ -411,6 +418,12 @@ func (c *Cacher) GetToList(ctx context.Context, key string, resourceVersion stri
 	listRV, err := ParseListResourceVersion(resourceVersion)
 	if err != nil {
 		return err
+	}
+
+	if listRV == 0 && !c.ready.check() {
+		// If Cacher is not yet initialized and we don't require any specific
+		// minimal resource version, simply forward the request to storage.
+		return c.storage.GetToList(ctx, key, resourceVersion, pred, listObj)
 	}
 
 	trace := utiltrace.New(fmt.Sprintf("cacher %v: List", c.objectType.String()))
@@ -467,6 +480,12 @@ func (c *Cacher) List(ctx context.Context, key string, resourceVersion string, p
 	listRV, err := ParseListResourceVersion(resourceVersion)
 	if err != nil {
 		return err
+	}
+
+	if listRV == 0 && !c.ready.check() {
+		// If Cacher is not yet initialized and we don't require any specific
+		// minimal resource version, simply forward the request to storage.
+		return c.storage.List(ctx, key, resourceVersion, pred, listObj)
 	}
 
 	trace := utiltrace.New(fmt.Sprintf("cacher %v: List", c.objectType.String()))
@@ -639,6 +658,11 @@ func forgetWatcher(c *Cacher, index int, triggerValue string, triggerSupported b
 		if lock {
 			c.Lock()
 			defer c.Unlock()
+		} else {
+			// false is currently passed only if we are forcing watcher to close due
+			// to its unresponsiveness and blocking other watchers.
+			// TODO: Get this information in cleaner way.
+			glog.V(1).Infof("Forcing watcher close due to unresponsiveness: %v", c.objectType.String())
 		}
 		// It's possible that the watcher is already not in the structure (e.g. in case of
 		// simulaneous Stop() and terminateAllWatchers(), but it doesn't break anything.
@@ -958,6 +982,14 @@ func (r *ready) wait() {
 		r.c.Wait()
 	}
 	r.c.L.Unlock()
+}
+
+// TODO: Make check() function more sophisticated, in particular
+// allow it to behave as "waitWithTimeout".
+func (r *ready) check() bool {
+	r.c.L.Lock()
+	defer r.c.L.Unlock()
+	return r.ok
 }
 
 func (r *ready) set(ok bool) {

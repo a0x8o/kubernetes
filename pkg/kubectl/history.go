@@ -22,24 +22,26 @@ import (
 	"io"
 	"text/tabwriter"
 
+	appsv1beta1 "k8s.io/api/apps/v1beta1"
+	"k8s.io/api/core/v1"
+	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
+	clientappsv1beta1 "k8s.io/client-go/kubernetes/typed/apps/v1beta1"
+	clientextensionsv1beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/v1"
+	apiv1 "k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/apis/apps"
-	appsv1beta1 "k8s.io/kubernetes/pkg/apis/apps/v1beta1"
 	"k8s.io/kubernetes/pkg/apis/extensions"
-	extensionsv1beta1 "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
-	externalclientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/controller"
 	deploymentutil "k8s.io/kubernetes/pkg/controller/deployment/util"
+	sliceutil "k8s.io/kubernetes/pkg/kubectl/util/slice"
 	printersinternal "k8s.io/kubernetes/pkg/printers/internalversion"
-	sliceutil "k8s.io/kubernetes/pkg/util/slice"
 )
 
 const (
@@ -57,7 +59,7 @@ func HistoryViewerFor(kind schema.GroupKind, c clientset.Interface) (HistoryView
 		return &DeploymentHistoryViewer{c}, nil
 	case apps.Kind("StatefulSet"):
 		return &StatefulSetHistoryViewer{c}, nil
-	case extensions.Kind("DaemonSet"):
+	case extensions.Kind("DaemonSet"), apps.Kind("DaemonSet"):
 		return &DaemonSetHistoryViewer{c}, nil
 	}
 	return nil, fmt.Errorf("no history viewer has been implemented for %q", kind)
@@ -70,12 +72,12 @@ type DeploymentHistoryViewer struct {
 // ViewHistory returns a revision-to-replicaset map as the revision history of a deployment
 // TODO: this should be a describer
 func (h *DeploymentHistoryViewer) ViewHistory(namespace, name string, revision int64) (string, error) {
-	versionedClient := versionedClientsetForDeployment(h.c)
-	deployment, err := versionedClient.Extensions().Deployments(namespace).Get(name, metav1.GetOptions{})
+	versionedExtensionsClient := versionedExtensionsClientV1beta1(h.c)
+	deployment, err := versionedExtensionsClient.Deployments(namespace).Get(name, metav1.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to retrieve deployment %s: %v", name, err)
 	}
-	_, allOldRSs, newRS, err := deploymentutil.GetAllReplicaSets(deployment, versionedClient)
+	_, allOldRSs, newRS, err := deploymentutil.GetAllReplicaSets(deployment, versionedExtensionsClient)
 	if err != nil {
 		return "", fmt.Errorf("failed to retrieve replica sets from deployment %s: %v", name, err)
 	}
@@ -137,7 +139,7 @@ func (h *DeploymentHistoryViewer) ViewHistory(namespace, name string, revision i
 func printTemplate(template *v1.PodTemplateSpec) (string, error) {
 	buf := bytes.NewBuffer([]byte{})
 	internalTemplate := &api.PodTemplateSpec{}
-	if err := v1.Convert_v1_PodTemplateSpec_To_api_PodTemplateSpec(template, internalTemplate, nil); err != nil {
+	if err := apiv1.Convert_v1_PodTemplateSpec_To_api_PodTemplateSpec(template, internalTemplate, nil); err != nil {
 		return "", fmt.Errorf("failed to convert podtemplate, %v", err)
 	}
 	w := printersinternal.NewPrefixWriter(buf)
@@ -152,8 +154,9 @@ type DaemonSetHistoryViewer struct {
 // ViewHistory returns a revision-to-history map as the revision history of a deployment
 // TODO: this should be a describer
 func (h *DaemonSetHistoryViewer) ViewHistory(namespace, name string, revision int64) (string, error) {
-	versionedClient := versionedClientsetForDaemonSet(h.c)
-	ds, allHistory, err := controlledHistories(versionedClient, namespace, name)
+	versionedExtensionsClient := versionedExtensionsClientV1beta1(h.c)
+	versionedAppsClient := versionedAppsClientV1beta1(h.c)
+	ds, allHistory, err := controlledHistories(versionedExtensionsClient, versionedAppsClient, namespace, name)
 	if err != nil {
 		return "", fmt.Errorf("unable to find history controlled by DaemonSet %s: %v", name, err)
 	}
@@ -255,8 +258,8 @@ func (h *StatefulSetHistoryViewer) ViewHistory(namespace, name string, revision 
 }
 
 // controlledHistories returns all ControllerRevisions controlled by the given DaemonSet
-func controlledHistories(c externalclientset.Interface, namespace, name string) (*extensionsv1beta1.DaemonSet, []*appsv1beta1.ControllerRevision, error) {
-	ds, err := c.ExtensionsV1beta1().DaemonSets(namespace).Get(name, metav1.GetOptions{})
+func controlledHistories(extensions clientextensionsv1beta1.ExtensionsV1beta1Interface, apps clientappsv1beta1.AppsV1beta1Interface, namespace, name string) (*extensionsv1beta1.DaemonSet, []*appsv1beta1.ControllerRevision, error) {
+	ds, err := extensions.DaemonSets(namespace).Get(name, metav1.GetOptions{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to retrieve DaemonSet %s: %v", name, err)
 	}
@@ -265,7 +268,7 @@ func controlledHistories(c externalclientset.Interface, namespace, name string) 
 	if err != nil {
 		return nil, nil, err
 	}
-	historyList, err := c.AppsV1beta1().ControllerRevisions(ds.Namespace).List(metav1.ListOptions{LabelSelector: selector.String()})
+	historyList, err := apps.ControllerRevisions(ds.Namespace).List(metav1.ListOptions{LabelSelector: selector.String()})
 	if err != nil {
 		return nil, nil, err
 	}

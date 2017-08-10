@@ -33,7 +33,55 @@ function get-master-size {
   if [[ "${NUM_NODES}" -gt "500" ]]; then
     suggested_master_size=32
   fi
+  if [[ "${NUM_NODES}" -gt "3000" ]]; then
+    suggested_master_size=64
+  fi
   echo "${suggested_master_size}"
+}
+
+# Vars assumed:
+#   NUM_NODES
+function get-master-root-disk-size() {
+  local suggested_master_root_disk_size="20GB"
+  if [[ "${NUM_NODES}" -gt "1000" ]]; then
+    suggested_master_root_disk_size="50GB"
+  fi
+  if [[ "${NUM_NODES}" -gt "2000" ]]; then
+    suggested_master_root_disk_size="100GB"
+  fi
+  echo "${suggested_master_root_disk_size}"
+}
+
+# Vars assumed:
+#   NUM_NODES
+function get-master-disk-size() {
+  local suggested_master_disk_size="20GB"
+  if [[ "${NUM_NODES}" -gt "1000" ]]; then
+    suggested_master_disk_size="100GB"
+  fi
+  if [[ "${NUM_NODES}" -gt "2000" ]]; then
+    suggested_master_disk_size="200GB"
+  fi
+  echo "${suggested_master_disk_size}"
+}
+
+function get-node-ip-range {
+  if [[ -n "${NODE_IP_RANGE:-}" ]]; then
+    >&2 echo "Using user provided NODE_IP_RANGE: ${NODE_IP_RANGE}"
+    echo "${NODE_IP_RANGE}"
+    return
+  fi
+  local suggested_range="10.40.0.0/22"
+  if [[ "${NUM_NODES}" -gt 1000 ]]; then
+    suggested_range="10.40.0.0/21"
+  fi
+  if [[ "${NUM_NODES}" -gt 2000 ]]; then
+    suggested_range="10.40.0.0/20"
+  fi
+  if [[ "${NUM_NODES}" -gt 4000 ]]; then
+    suggested_range="10.40.0.0/19"
+  fi
+  echo "${suggested_range}"
 }
 
 if [[ "${FEDERATION:-}" == true ]]; then

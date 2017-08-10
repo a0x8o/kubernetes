@@ -23,8 +23,10 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/go-openapi/loads"
-	"github.com/go-openapi/spec"
+	"gopkg.in/yaml.v2"
+
+	"github.com/googleapis/gnostic/OpenAPIv2"
+	"github.com/googleapis/gnostic/compiler"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -36,7 +38,7 @@ var _ = Describe("When reading openAPIData", func() {
 	var err error
 	var client *fakeOpenAPIClient
 	var instance *openapi.CachingOpenAPIClient
-	var expectedData *openapi.Resources
+	var expectedData openapi.Resources
 
 	BeforeEach(func() {
 		tmpDir, err = ioutil.TempDir("", "openapi_cache_test")
@@ -59,7 +61,7 @@ var _ = Describe("When reading openAPIData", func() {
 		By("getting the live openapi spec from the server")
 		result, err := instance.OpenAPIData()
 		Expect(err).To(BeNil())
-		expectEqual(result, expectedData)
+		Expect(result).To(Equal(expectedData))
 		Expect(client.calls).To(Equal(1))
 
 		By("writing the live openapi spec to a local cache file")
@@ -81,13 +83,13 @@ var _ = Describe("When reading openAPIData", func() {
 		// First call should use the client
 		result, err := instance.OpenAPIData()
 		Expect(err).To(BeNil())
-		expectEqual(result, expectedData)
+		Expect(result).To(Equal(expectedData))
 		Expect(client.calls).To(Equal(1))
 
 		// Second call shouldn't use the client
 		result, err = instance.OpenAPIData()
 		Expect(err).To(BeNil())
-		expectEqual(result, expectedData)
+		Expect(result).To(Equal(expectedData))
 		Expect(client.calls).To(Equal(1))
 
 		names, err := getFilenames(tmpDir)
@@ -151,7 +153,7 @@ var _ = Describe("Reading openAPIData", func() {
 			By("getting the live openapi schema")
 			result, err := instance.OpenAPIData()
 			Expect(err).To(BeNil())
-			expectEqual(result, expectedData)
+			Expect(result).To(Equal(expectedData))
 			Expect(client.calls).To(Equal(1))
 
 			files, err := ioutil.ReadDir(tmpDir)
@@ -179,7 +181,7 @@ var _ = Describe("Reading openAPIData", func() {
 			By("getting the live openapi schema")
 			result, err := instance.OpenAPIData()
 			Expect(err).To(BeNil())
-			expectEqual(result, expectedData)
+			Expect(result).To(Equal(expectedData))
 			Expect(client.calls).To(Equal(1))
 
 			files, err := ioutil.ReadDir(tmpDir)
@@ -202,25 +204,12 @@ func getFilenames(path string) ([]string, error) {
 	return result, nil
 }
 
-func expectEqual(a *openapi.Resources, b *openapi.Resources) {
-	Expect(a.NameToDefinition).To(HaveLen(len(b.NameToDefinition)))
-	for k, v := range a.NameToDefinition {
-		Expect(v).To(Equal(b.NameToDefinition[k]),
-			fmt.Sprintf("Names for GVK do not match %v", k))
-	}
-	Expect(a.GroupVersionKindToName).To(HaveLen(len(b.GroupVersionKindToName)))
-	for k, v := range a.GroupVersionKindToName {
-		Expect(v).To(Equal(b.GroupVersionKindToName[k]),
-			fmt.Sprintf("Values for name do not match %v", k))
-	}
-}
-
 type fakeOpenAPIClient struct {
 	calls int
 	err   error
 }
 
-func (f *fakeOpenAPIClient) OpenAPISchema() (*spec.Swagger, error) {
+func (f *fakeOpenAPIClient) OpenAPISchema() (*openapi_v2.Document, error) {
 	f.calls = f.calls + 1
 
 	if f.err != nil {
@@ -235,11 +224,11 @@ var data apiData
 
 type apiData struct {
 	sync.Once
-	data *spec.Swagger
+	data *openapi_v2.Document
 	err  error
 }
 
-func (d *apiData) OpenAPISchema() (*spec.Swagger, error) {
+func (d *apiData) OpenAPISchema() (*openapi_v2.Document, error) {
 	d.Do(func() {
 		// Get the path to the swagger.json file
 		wd, err := os.Getwd()
@@ -261,14 +250,19 @@ func (d *apiData) OpenAPISchema() (*spec.Swagger, error) {
 			d.err = err
 			return
 		}
-		// Load the openapi document
-		doc, err := loads.Spec(specpath)
+		spec, err := ioutil.ReadFile(specpath)
 		if err != nil {
 			d.err = err
 			return
 		}
-
-		d.data = doc.Spec()
+		var info yaml.MapSlice
+		err = yaml.Unmarshal(spec, &info)
+		if err != nil {
+			d.err = err
+			return
+		}
+		d.data, d.err = openapi_v2.NewDocument(info, compiler.NewContext("$root", nil))
 	})
+
 	return d.data, d.err
 }

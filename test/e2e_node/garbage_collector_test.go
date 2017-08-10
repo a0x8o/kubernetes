@@ -22,8 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/kubelet/dockershim/libdocker"
 	"k8s.io/kubernetes/test/e2e/framework"
 
@@ -32,8 +32,6 @@ import (
 )
 
 const (
-	defaultDockerEndpoint = "unix:///var/run/docker.sock"
-
 	//TODO (dashpole): Once dynamic config is possible, test different values for maxPerPodContainer and maxContainers
 	// Currently using default values for maxPerPodContainer and maxTotalContainers
 	maxPerPodContainer = 1

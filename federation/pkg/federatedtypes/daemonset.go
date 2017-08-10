@@ -19,16 +19,16 @@ package federatedtypes
 import (
 	"reflect"
 
+	"k8s.io/api/core/v1"
+	extensionsv1 "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	pkgruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
+	kubeclientset "k8s.io/client-go/kubernetes"
+	restclient "k8s.io/client-go/rest"
 	federationclientset "k8s.io/kubernetes/federation/client/clientset_generated/federation_clientset"
 	"k8s.io/kubernetes/federation/pkg/federation-controller/util"
-	"k8s.io/kubernetes/pkg/api/v1"
-	extensionsv1 "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
-	kubeclientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 )
 
 const (
@@ -44,7 +44,7 @@ type DaemonSetAdapter struct {
 	client federationclientset.Interface
 }
 
-func NewDaemonSetAdapter(client federationclientset.Interface) FederatedTypeAdapter {
+func NewDaemonSetAdapter(client federationclientset.Interface, config *restclient.Config, adapterSpecificArgs map[string]interface{}) FederatedTypeAdapter {
 	return &DaemonSetAdapter{client: client}
 }
 
@@ -72,37 +72,12 @@ func (a *DaemonSetAdapter) Copy(obj pkgruntime.Object) pkgruntime.Object {
 func (a *DaemonSetAdapter) Equivalent(obj1, obj2 pkgruntime.Object) bool {
 	daemonset1 := obj1.(*extensionsv1.DaemonSet)
 	daemonset2 := obj2.(*extensionsv1.DaemonSet)
-
-	// Kubernetes daemonset controller writes a daemonset's hash to
-	// the object label as an optimization to avoid recomputing it every
-	// time. Adding a new label to the object that the federation is
-	// unaware of causes problems because federated controllers compare
-	// the objects in federation and their equivalents in clusters and
-	// try to reconcile them. This leads to a constant fight between the
-	// federated daemonset controller and the cluster controllers, and
-	// they never reach a stable state.
-	//
-	// Ideally, cluster components should not update an object's spec or
-	// metadata in a way federation cannot replicate. They can update an
-	// object's status though. Therefore, this daemonset hash should
-	// be a field in daemonset's status, not a label in object meta.
-	// @janetkuo says that this label is only a short term solution. In
-	// the near future, they are going to replace it with revision numbers
-	// in daemonset status. We can then rip this bandaid out.
-	//
-	// We are deleting the keys here and that should be fine since we are
-	// working on object copies. Also, propagating the deleted labels
-	// should also be fine because we don't support daemonset rolling
-	// update in federation yet.
-	delete(daemonset1.ObjectMeta.Labels, extensionsv1.DefaultDaemonSetUniqueLabelKey)
-	delete(daemonset2.ObjectMeta.Labels, extensionsv1.DefaultDaemonSetUniqueLabelKey)
-
 	return util.ObjectMetaEquivalent(daemonset1.ObjectMeta, daemonset2.ObjectMeta) && reflect.DeepEqual(daemonset1.Spec, daemonset2.Spec)
 }
 
-func (a *DaemonSetAdapter) NamespacedName(obj pkgruntime.Object) types.NamespacedName {
+func (a *DaemonSetAdapter) QualifiedName(obj pkgruntime.Object) QualifiedName {
 	daemonset := obj.(*extensionsv1.DaemonSet)
-	return types.NamespacedName{Namespace: daemonset.Namespace, Name: daemonset.Name}
+	return QualifiedName{Namespace: daemonset.Namespace, Name: daemonset.Name}
 }
 
 func (a *DaemonSetAdapter) ObjectMeta(obj pkgruntime.Object) *metav1.ObjectMeta {
@@ -114,12 +89,12 @@ func (a *DaemonSetAdapter) FedCreate(obj pkgruntime.Object) (pkgruntime.Object, 
 	return a.client.Extensions().DaemonSets(daemonset.Namespace).Create(daemonset)
 }
 
-func (a *DaemonSetAdapter) FedDelete(namespacedName types.NamespacedName, options *metav1.DeleteOptions) error {
-	return a.client.Extensions().DaemonSets(namespacedName.Namespace).Delete(namespacedName.Name, options)
+func (a *DaemonSetAdapter) FedDelete(qualifiedName QualifiedName, options *metav1.DeleteOptions) error {
+	return a.client.Extensions().DaemonSets(qualifiedName.Namespace).Delete(qualifiedName.Name, options)
 }
 
-func (a *DaemonSetAdapter) FedGet(namespacedName types.NamespacedName) (pkgruntime.Object, error) {
-	return a.client.Extensions().DaemonSets(namespacedName.Namespace).Get(namespacedName.Name, metav1.GetOptions{})
+func (a *DaemonSetAdapter) FedGet(qualifiedName QualifiedName) (pkgruntime.Object, error) {
+	return a.client.Extensions().DaemonSets(qualifiedName.Namespace).Get(qualifiedName.Name, metav1.GetOptions{})
 }
 
 func (a *DaemonSetAdapter) FedList(namespace string, options metav1.ListOptions) (pkgruntime.Object, error) {
@@ -140,12 +115,12 @@ func (a *DaemonSetAdapter) ClusterCreate(client kubeclientset.Interface, obj pkg
 	return client.Extensions().DaemonSets(daemonset.Namespace).Create(daemonset)
 }
 
-func (a *DaemonSetAdapter) ClusterDelete(client kubeclientset.Interface, nsName types.NamespacedName, options *metav1.DeleteOptions) error {
-	return client.Extensions().DaemonSets(nsName.Namespace).Delete(nsName.Name, options)
+func (a *DaemonSetAdapter) ClusterDelete(client kubeclientset.Interface, qualifiedName QualifiedName, options *metav1.DeleteOptions) error {
+	return client.Extensions().DaemonSets(qualifiedName.Namespace).Delete(qualifiedName.Name, options)
 }
 
-func (a *DaemonSetAdapter) ClusterGet(client kubeclientset.Interface, namespacedName types.NamespacedName) (pkgruntime.Object, error) {
-	return client.Extensions().DaemonSets(namespacedName.Namespace).Get(namespacedName.Name, metav1.GetOptions{})
+func (a *DaemonSetAdapter) ClusterGet(client kubeclientset.Interface, qualifiedName QualifiedName) (pkgruntime.Object, error) {
+	return client.Extensions().DaemonSets(qualifiedName.Namespace).Get(qualifiedName.Name, metav1.GetOptions{})
 }
 
 func (a *DaemonSetAdapter) ClusterList(client kubeclientset.Interface, namespace string, options metav1.ListOptions) (pkgruntime.Object, error) {

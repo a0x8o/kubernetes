@@ -15,7 +15,19 @@ go_library(
         "nodename.go",
         "patch.go",
         "uid.go",
-        "unix_user_id.go",
     ],
+    tags = ["automanaged"],
+)
+
+filegroup(
+    name = "package-srcs",
+    srcs = glob(["**"]),
+    tags = ["automanaged"],
+    visibility = ["//visibility:private"],
+)
+
+filegroup(
+    name = "all-srcs",
+    srcs = [":package-srcs"],
     tags = ["automanaged"],
 )

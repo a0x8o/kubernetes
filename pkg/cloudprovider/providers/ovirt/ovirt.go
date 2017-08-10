@@ -31,8 +31,8 @@ import (
 
 	"gopkg.in/gcfg.v1"
 
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
 )
@@ -132,6 +132,11 @@ func (v *OVirtCloud) ProviderName() string {
 // ScrubDNS filters DNS settings for pods.
 func (v *OVirtCloud) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []string) {
 	return nameservers, searches
+}
+
+// HasClusterID returns true if the cluster has a clusterID
+func (v *OVirtCloud) HasClusterID() bool {
+	return true
 }
 
 // LoadBalancer returns an implementation of LoadBalancer for oVirt cloud

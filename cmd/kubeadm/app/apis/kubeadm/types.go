@@ -17,17 +17,13 @@ limitations under the License.
 package kubeadm
 
 import (
+	"fmt"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type EnvParams struct {
-	KubernetesDir    string
-	HyperkubeImage   string
-	RepositoryPrefix string
-	EtcdImage        string
-}
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type MasterConfiguration struct {
 	metav1.TypeMeta
@@ -37,15 +33,11 @@ type MasterConfiguration struct {
 	Networking         Networking
 	KubernetesVersion  string
 	CloudProvider      string
+	NodeName           string
 	AuthorizationModes []string
 
 	Token    string
 	TokenTTL time.Duration
-
-	// SelfHosted enables an alpha deployment type where the apiserver, scheduler, and
-	// controller manager are managed by Kubernetes itself. This option is likely to
-	// become the default in the future.
-	SelfHosted bool
 
 	APIServerExtraArgs         map[string]string
 	ControllerManagerExtraArgs map[string]string
@@ -55,6 +47,14 @@ type MasterConfiguration struct {
 	APIServerCertSANs []string
 	// CertificatesDir specifies where to store or look for all required certificates
 	CertificatesDir string
+
+	// ImageRepository what container registry to pull control plane images from
+	ImageRepository string
+	// UnifiedControlPlaneImage specifies if a specific container image should be used for all control plane components
+	UnifiedControlPlaneImage string
+
+	// FeatureFlags enabled by the user
+	FeatureFlags map[string]bool
 }
 
 type API struct {
@@ -83,7 +83,11 @@ type Etcd struct {
 	KeyFile   string
 	DataDir   string
 	ExtraArgs map[string]string
+	// Image specifies which container image to use for running etcd. If empty, automatically populated by kubeadm using the image repository and default etcd version
+	Image string
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type NodeConfiguration struct {
 	metav1.TypeMeta
@@ -93,6 +97,11 @@ type NodeConfiguration struct {
 	DiscoveryToken string
 	// Currently we only pay attention to one api server but hope to support >1 in the future
 	DiscoveryTokenAPIServers []string
+	NodeName                 string
 	TLSBootstrapToken        string
 	Token                    string
+}
+
+func (cfg *MasterConfiguration) GetMasterEndpoint() string {
+	return fmt.Sprintf("https://%s:%d", cfg.API.AdvertiseAddress, cfg.API.BindPort)
 }

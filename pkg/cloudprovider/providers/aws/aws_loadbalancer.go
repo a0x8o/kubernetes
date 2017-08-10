@@ -26,6 +26,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/elb"
 	"github.com/golang/glog"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
@@ -138,7 +139,7 @@ func (c *Cloud) ensureLoadBalancer(namespacedName types.NamespacedName, loadBala
 				glog.V(2).Info("Detaching load balancer from removed subnets")
 				_, err := c.elb.DetachLoadBalancerFromSubnets(request)
 				if err != nil {
-					return nil, fmt.Errorf("error detaching AWS loadbalancer from subnets: %v", err)
+					return nil, fmt.Errorf("error detaching AWS loadbalancer from subnets: %q", err)
 				}
 				dirty = true
 			}
@@ -150,7 +151,7 @@ func (c *Cloud) ensureLoadBalancer(namespacedName types.NamespacedName, loadBala
 				glog.V(2).Info("Attaching load balancer to added subnets")
 				_, err := c.elb.AttachLoadBalancerToSubnets(request)
 				if err != nil {
-					return nil, fmt.Errorf("error attaching AWS loadbalancer to subnets: %v", err)
+					return nil, fmt.Errorf("error attaching AWS loadbalancer to subnets: %q", err)
 				}
 				dirty = true
 			}
@@ -169,7 +170,7 @@ func (c *Cloud) ensureLoadBalancer(namespacedName types.NamespacedName, loadBala
 				glog.V(2).Info("Applying updated security groups to load balancer")
 				_, err := c.elb.ApplySecurityGroupsToLoadBalancer(request)
 				if err != nil {
-					return nil, fmt.Errorf("error applying AWS loadbalancer security groups: %v", err)
+					return nil, fmt.Errorf("error applying AWS loadbalancer security groups: %q", err)
 				}
 				dirty = true
 			}
@@ -229,7 +230,7 @@ func (c *Cloud) ensureLoadBalancer(namespacedName types.NamespacedName, loadBala
 				glog.V(2).Info("Deleting removed load balancer listeners")
 				_, err := c.elb.DeleteLoadBalancerListeners(request)
 				if err != nil {
-					return nil, fmt.Errorf("error deleting AWS loadbalancer listeners: %v", err)
+					return nil, fmt.Errorf("error deleting AWS loadbalancer listeners: %q", err)
 				}
 				dirty = true
 			}
@@ -241,7 +242,7 @@ func (c *Cloud) ensureLoadBalancer(namespacedName types.NamespacedName, loadBala
 				glog.V(2).Info("Creating added load balancer listeners")
 				_, err := c.elb.CreateLoadBalancerListeners(request)
 				if err != nil {
-					return nil, fmt.Errorf("error creating AWS loadbalancer listeners: %v", err)
+					return nil, fmt.Errorf("error creating AWS loadbalancer listeners: %q", err)
 				}
 				dirty = true
 			}
@@ -338,7 +339,7 @@ func (c *Cloud) ensureLoadBalancer(namespacedName types.NamespacedName, loadBala
 			modifyAttributesRequest.LoadBalancerAttributes = loadBalancerAttributes
 			_, err = c.elb.ModifyLoadBalancerAttributes(modifyAttributesRequest)
 			if err != nil {
-				return nil, fmt.Errorf("Unable to update load balancer attributes during attribute sync: %v", err)
+				return nil, fmt.Errorf("Unable to update load balancer attributes during attribute sync: %q", err)
 			}
 			dirty = true
 		}
@@ -410,17 +411,17 @@ func (c *Cloud) ensureLoadBalancerHealthCheck(loadBalancer *elb.LoadBalancerDesc
 
 	_, err := c.elb.ConfigureHealthCheck(request)
 	if err != nil {
-		return fmt.Errorf("error configuring load-balancer health-check for %q: %v", name, err)
+		return fmt.Errorf("error configuring load-balancer health-check for %q: %q", name, err)
 	}
 
 	return nil
 }
 
 // Makes sure that exactly the specified hosts are registered as instances with the load balancer
-func (c *Cloud) ensureLoadBalancerInstances(loadBalancerName string, lbInstances []*elb.Instance, instances []*ec2.Instance) error {
+func (c *Cloud) ensureLoadBalancerInstances(loadBalancerName string, lbInstances []*elb.Instance, instanceIDs map[awsInstanceID]*ec2.Instance) error {
 	expected := sets.NewString()
-	for _, instance := range instances {
-		expected.Insert(orEmpty(instance.InstanceId))
+	for id := range instanceIDs {
+		expected.Insert(string(id))
 	}
 
 	actual := sets.NewString()
@@ -485,7 +486,7 @@ func (c *Cloud) createProxyProtocolPolicy(loadBalancerName string) error {
 	glog.V(2).Info("Creating proxy protocol policy on load balancer")
 	_, err := c.elb.CreateLoadBalancerPolicy(request)
 	if err != nil {
-		return fmt.Errorf("error creating proxy protocol policy on load balancer: %v", err)
+		return fmt.Errorf("error creating proxy protocol policy on load balancer: %q", err)
 	}
 
 	return nil
@@ -504,7 +505,7 @@ func (c *Cloud) setBackendPolicies(loadBalancerName string, instancePort int64, 
 	}
 	_, err := c.elb.SetLoadBalancerPoliciesForBackendServer(request)
 	if err != nil {
-		return fmt.Errorf("error adjusting AWS loadbalancer backend policies: %v", err)
+		return fmt.Errorf("error adjusting AWS loadbalancer backend policies: %q", err)
 	}
 
 	return nil
@@ -518,4 +519,26 @@ func proxyProtocolEnabled(backend *elb.BackendServerDescription) bool {
 	}
 
 	return false
+}
+
+// findInstancesForELB gets the EC2 instances corresponding to the Nodes, for setting up an ELB
+// We ignore Nodes (with a log message) where the instanceid cannot be determined from the provider,
+// and we ignore instances which are not found
+func (c *Cloud) findInstancesForELB(nodes []*v1.Node) (map[awsInstanceID]*ec2.Instance, error) {
+	// Map to instance ids ignoring Nodes where we cannot find the id (but logging)
+	instanceIDs := mapToAWSInstanceIDsTolerant(nodes)
+
+	cacheCriteria := cacheCriteria{
+		// MaxAge not required, because we only care about security groups, which should not change
+		HasInstances: instanceIDs, // Refresh if any of the instance ids are missing
+	}
+	snapshot, err := c.instanceCache.describeAllInstancesCached(cacheCriteria)
+	if err != nil {
+		return nil, err
+	}
+
+	instances := snapshot.FindInstances(instanceIDs)
+	// We ignore instances that cannot be found
+
+	return instances, nil
 }

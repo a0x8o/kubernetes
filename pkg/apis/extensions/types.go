@@ -31,7 +31,6 @@ package extensions
 import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/kubernetes/pkg/api"
 )
@@ -61,8 +60,9 @@ type ScaleStatus struct {
 	Selector *metav1.LabelSelector
 }
 
-// +genclient=true
-// +noMethods=true
+// +genclient
+// +genclient:noVerbs
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // represents a scaling request for a resource.
 type Scale struct {
@@ -79,6 +79,8 @@ type Scale struct {
 	// +optional
 	Status ScaleStatus
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Dummy definition
 type ReplicationControllerDummy struct {
@@ -108,8 +110,9 @@ type CustomMetricCurrentStatusList struct {
 	Items []CustomMetricCurrentStatus
 }
 
-// +genclient=true
-// +nonNamespaced=true
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // A ThirdPartyResource is a generic representation of a resource, it is used by add-ons and plugins to add new resource
 // types to the API.  It consists of one or more Versions of the api.
@@ -127,6 +130,8 @@ type ThirdPartyResource struct {
 	// Versions are versions for this third party object
 	Versions []APIVersion
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type ThirdPartyResourceList struct {
 	metav1.TypeMeta
@@ -146,6 +151,8 @@ type APIVersion struct {
 	Name string
 }
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // An internal object, used for versioned storage in etcd.  Not exposed to the end user.
 type ThirdPartyResourceData struct {
 	metav1.TypeMeta
@@ -158,7 +165,8 @@ type ThirdPartyResourceData struct {
 	Data []byte
 }
 
-// +genclient=true
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type Deployment struct {
 	metav1.TypeMeta
@@ -208,6 +216,7 @@ type DeploymentSpec struct {
 	// +optional
 	Paused bool
 
+	// DEPRECATED.
 	// The config this deployment is rolling back to. Will be cleared after rollback is done.
 	// +optional
 	RollbackTo *RollbackConfig
@@ -222,6 +231,9 @@ type DeploymentSpec struct {
 	ProgressDeadlineSeconds *int32
 }
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// DEPRECATED.
 // DeploymentRollback stores the information required to rollback a deployment.
 type DeploymentRollback struct {
 	metav1.TypeMeta
@@ -234,6 +246,7 @@ type DeploymentRollback struct {
 	RollbackTo RollbackConfig
 }
 
+// DEPRECATED.
 type RollbackConfig struct {
 	// The revision to rollback to. If set to 0, rollback to the last revision.
 	// +optional
@@ -367,6 +380,8 @@ type DeploymentCondition struct {
 	// A human readable message indicating details about the transition.
 	Message string
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type DeploymentList struct {
 	metav1.TypeMeta
@@ -507,7 +522,8 @@ type DaemonSetStatus struct {
 	CollisionCount *int64
 }
 
-// +genclient=true
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // DaemonSet represents the configuration of a daemon set.
 type DaemonSet struct {
@@ -537,12 +553,9 @@ const (
 	// to daemon set pods to distinguish between old and new pod templates
 	// during DaemonSet template update.
 	DaemonSetTemplateGenerationKey string = "pod-template-generation"
-
-	// DefaultDaemonSetUniqueLabelKey is the default label key that is added
-	// to existing DaemonSet pods to distinguish between old and new
-	// DaemonSet pods during DaemonSet template updates.
-	DefaultDaemonSetUniqueLabelKey string = "daemonset-controller-hash"
 )
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // DaemonSetList is a collection of daemon sets.
 type DaemonSetList struct {
@@ -556,6 +569,8 @@ type DaemonSetList struct {
 	Items []DaemonSet
 }
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 type ThirdPartyResourceDataList struct {
 	metav1.TypeMeta
 	// Standard list metadata
@@ -566,7 +581,8 @@ type ThirdPartyResourceDataList struct {
 	Items []ThirdPartyResourceData
 }
 
-// +genclient=true
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Ingress is a collection of rules that allow inbound connections to reach the
 // endpoints defined by a backend. An Ingress can be configured to give services
@@ -589,6 +605,8 @@ type Ingress struct {
 	// +optional
 	Status IngressStatus
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // IngressList is a collection of Ingress.
 type IngressList struct {
@@ -732,7 +750,8 @@ type IngressBackend struct {
 	ServicePort intstr.IntOrString
 }
 
-// +genclient=true
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ReplicaSet represents the configuration of a replica set.
 type ReplicaSet struct {
@@ -749,6 +768,8 @@ type ReplicaSet struct {
 	// +optional
 	Status ReplicaSetStatus
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ReplicaSetList is a collection of ReplicaSets.
 type ReplicaSetList struct {
@@ -838,8 +859,9 @@ type ReplicaSetCondition struct {
 	Message string
 }
 
-// +genclient=true
-// +nonNamespaced=true
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // PodSecurityPolicy governs the ability to make requests that affect the SecurityContext
 // that will be applied to a pod and container.
@@ -903,10 +925,14 @@ type PodSecurityPolicySpec struct {
 	// will not be forced to.
 	// +optional
 	ReadOnlyRootFilesystem bool
-	// AllowedHostPaths is a white list of allowed host path prefixes. Empty indicates that all
-	// host paths may be used.
+	// DefaultAllowPrivilegeEscalation controls the default setting for whether a
+	// process can gain more privileges than its parent process.
 	// +optional
-	AllowedHostPaths []string
+	DefaultAllowPrivilegeEscalation *bool
+	// AllowPrivilegeEscalation determines if a pod can request to allow
+	// privilege escalation.
+	// +optional
+	AllowPrivilegeEscalation bool
 }
 
 // HostPortRange defines a range of host ports that will be enabled by a policy
@@ -985,17 +1011,17 @@ type RunAsUserStrategyOptions struct {
 // UserIDRange provides a min/max of an allowed range of UserIDs.
 type UserIDRange struct {
 	// Min is the start of the range, inclusive.
-	Min types.UnixUserID
+	Min int64
 	// Max is the end of the range, inclusive.
-	Max types.UnixUserID
+	Max int64
 }
 
 // GroupIDRange provides a min/max of an allowed range of GroupIDs.
 type GroupIDRange struct {
 	// Min is the start of the range, inclusive.
-	Min types.UnixGroupID
+	Min int64
 	// Max is the end of the range, inclusive.
-	Max types.UnixGroupID
+	Max int64
 }
 
 // RunAsUserStrategy denotes strategy types for generating RunAsUser values for a
@@ -1055,6 +1081,8 @@ const (
 	SupplementalGroupsStrategyRunAsAny SupplementalGroupsStrategyType = "RunAsAny"
 )
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // PodSecurityPolicyList is a list of PodSecurityPolicy objects.
 type PodSecurityPolicyList struct {
 	metav1.TypeMeta
@@ -1064,7 +1092,8 @@ type PodSecurityPolicyList struct {
 	Items []PodSecurityPolicy
 }
 
-// +genclient=true
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NetworkPolicy describes what network traffic is allowed for a set of Pods
 type NetworkPolicy struct {
@@ -1146,6 +1175,8 @@ type NetworkPolicyPeer struct {
 	// +optional
 	NamespaceSelector *metav1.LabelSelector
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NetworkPolicyList is a list of NetworkPolicy objects.
 type NetworkPolicyList struct {

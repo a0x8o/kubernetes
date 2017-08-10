@@ -22,6 +22,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 type MasterConfiguration struct {
 	metav1.TypeMeta `json:",inline"`
 
@@ -30,15 +32,11 @@ type MasterConfiguration struct {
 	Networking         Networking `json:"networking"`
 	KubernetesVersion  string     `json:"kubernetesVersion"`
 	CloudProvider      string     `json:"cloudProvider"`
+	NodeName           string     `json:"nodeName"`
 	AuthorizationModes []string   `json:"authorizationModes"`
 
 	Token    string        `json:"token"`
 	TokenTTL time.Duration `json:"tokenTTL"`
-
-	// SelfHosted enables an alpha deployment type where the apiserver, scheduler, and
-	// controller manager are managed by Kubernetes itself. This option is likely to
-	// become the default in the future.
-	SelfHosted bool `json:"selfHosted"`
 
 	APIServerExtraArgs         map[string]string `json:"apiServerExtraArgs"`
 	ControllerManagerExtraArgs map[string]string `json:"controllerManagerExtraArgs"`
@@ -48,6 +46,14 @@ type MasterConfiguration struct {
 	APIServerCertSANs []string `json:"apiServerCertSANs"`
 	// CertificatesDir specifies where to store or look for all required certificates
 	CertificatesDir string `json:"certificatesDir"`
+
+	// ImageRepository what container registry to pull control plane images from
+	ImageRepository string `json:"imageRepository"`
+	// UnifiedControlPlaneImage specifies if a specific container image should be used for all control plane components
+	UnifiedControlPlaneImage string `json:"unifiedControlPlaneImage"`
+
+	// FeatureFlags enabled by the user
+	FeatureFlags map[string]bool `json:"featureFlags"`
 }
 
 type API struct {
@@ -76,7 +82,11 @@ type Etcd struct {
 	KeyFile   string            `json:"keyFile"`
 	DataDir   string            `json:"dataDir"`
 	ExtraArgs map[string]string `json:"extraArgs"`
+	// Image specifies which container image to use for running etcd. If empty, automatically populated by kubeadm using the image repository and default etcd version
+	Image string `json:"image"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type NodeConfiguration struct {
 	metav1.TypeMeta `json:",inline"`
@@ -85,6 +95,7 @@ type NodeConfiguration struct {
 	DiscoveryFile            string   `json:"discoveryFile"`
 	DiscoveryToken           string   `json:"discoveryToken"`
 	DiscoveryTokenAPIServers []string `json:"discoveryTokenAPIServers"`
+	NodeName                 string   `json:"nodeName"`
 	TLSBootstrapToken        string   `json:"tlsBootstrapToken"`
 	Token                    string   `json:"token"`
 }

@@ -39,10 +39,10 @@ import (
 	"gopkg.in/gcfg.v1"
 
 	"github.com/golang/glog"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	netutil "k8s.io/apimachinery/pkg/util/net"
 	certutil "k8s.io/client-go/util/cert"
-	"k8s.io/kubernetes/pkg/api/v1"
 	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
@@ -75,10 +75,10 @@ type LoadBalancer struct {
 }
 
 type LoadBalancerOpts struct {
-	LBVersion            string     `gcfg:"lb-version"` // overrides autodetection. v1 or v2
-	SubnetId             string     `gcfg:"subnet-id"`  // required
-	FloatingNetworkId    string     `gcfg:"floating-network-id"`
-	LBMethod             string     `gcfg:"lb-method"`
+	LBVersion            string     `gcfg:"lb-version"`          // overrides autodetection. v1 or v2
+	SubnetId             string     `gcfg:"subnet-id"`           // required
+	FloatingNetworkId    string     `gcfg:"floating-network-id"` // If specified, will create floating ip for loadbalancer, or do not create floating ip.
+	LBMethod             string     `gcfg:"lb-method"`           // default to ROUND_ROBIN.
 	CreateMonitor        bool       `gcfg:"create-monitor"`
 	MonitorDelay         MyDuration `gcfg:"monitor-delay"`
 	MonitorTimeout       MyDuration `gcfg:"monitor-timeout"`
@@ -216,6 +216,41 @@ func readInstanceID() (string, error) {
 	return md.Uuid, nil
 }
 
+// check opts for OpenStack
+func checkOpenStackOpts(openstackOpts *OpenStack) error {
+	lbOpts := openstackOpts.lbOpts
+
+	// subnet-id is required
+	if len(lbOpts.SubnetId) == 0 {
+		glog.Warningf("subnet-id not set in cloud provider config. " +
+			"OpenStack Load balancer will not work.")
+	}
+
+	// if need to create health monitor for Neutron LB,
+	// monitor-delay, monitor-timeout and monitor-max-retries should be set.
+	emptyDuration := MyDuration{}
+	if lbOpts.CreateMonitor {
+		if lbOpts.MonitorDelay == emptyDuration {
+			return fmt.Errorf("monitor-delay not set in cloud provider config")
+		}
+		if lbOpts.MonitorTimeout == emptyDuration {
+			return fmt.Errorf("monitor-timeout not set in cloud provider config")
+		}
+		if lbOpts.MonitorMaxRetries == uint(0) {
+			return fmt.Errorf("monitor-max-retries not set in cloud provider config")
+		}
+	}
+
+	// if enable ManageSecurityGroups, node-security-group should be set.
+	if lbOpts.ManageSecurityGroups {
+		if len(lbOpts.NodeSecurityGroupID) == 0 {
+			return fmt.Errorf("node-security-group not set in cloud provider config")
+		}
+	}
+
+	return nil
+}
+
 func newOpenStack(cfg Config) (*OpenStack, error) {
 	provider, err := openstack.NewClient(cfg.Global.AuthUrl)
 	if err != nil {
@@ -246,18 +281,17 @@ func newOpenStack(cfg Config) (*OpenStack, error) {
 		return nil, err
 	}
 
-	id, err := readInstanceID()
-	if err != nil {
-		return nil, err
+	os := OpenStack{
+		provider:  provider,
+		region:    cfg.Global.Region,
+		lbOpts:    cfg.LoadBalancer,
+		bsOpts:    cfg.BlockStorage,
+		routeOpts: cfg.Route,
 	}
 
-	os := OpenStack{
-		provider:        provider,
-		region:          cfg.Global.Region,
-		lbOpts:          cfg.LoadBalancer,
-		bsOpts:          cfg.BlockStorage,
-		routeOpts:       cfg.Route,
-		localInstanceID: id,
+	err = checkOpenStackOpts(&os)
+	if err != nil {
+		return nil, err
 	}
 
 	return &os, nil
@@ -422,6 +456,11 @@ func (os *OpenStack) ProviderName() string {
 // ScrubDNS filters DNS settings for pods.
 func (os *OpenStack) ScrubDNS(nameServers, searches []string) ([]string, []string) {
 	return nameServers, searches
+}
+
+// HasClusterID returns true if the cluster has a clusterID
+func (os *OpenStack) HasClusterID() bool {
+	return true
 }
 
 func (os *OpenStack) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
@@ -618,8 +657,10 @@ func (os *OpenStack) volumeService(forceVersion string) (volumeService, error) {
 		if autodetectedVersion := doBsApiVersionAutodetect(availableApiVersions); autodetectedVersion != "" {
 			return os.volumeService(autodetectedVersion)
 		} else {
-			// Nothing suitable found, failed autodetection
-			return nil, errors.New("BS API version autodetection failed.")
+			// Nothing suitable found, failed autodetection, just exit with appropriate message
+			err_txt := "BlockStorage API version autodetection failed. " +
+				"Please set it explicitly in cloud.conf in section [BlockStorage] with key `bs-version`"
+			return nil, errors.New(err_txt)
 		}
 
 	default:
