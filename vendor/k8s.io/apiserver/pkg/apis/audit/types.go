@@ -27,6 +27,13 @@ const (
 	// Header to hold the audit ID as the request is propagated through the serving hierarchy. The
 	// Audit-ID header should be set by the first server to receive the request (e.g. the federation
 	// server or kube-aggregator).
+	//
+	// Audit ID is also returned to client by http response header.
+	// It's not guaranteed Audit-Id http header is sent for all requests. When kube-apiserver didn't
+	// audit the events according to the audit policy, no Audit-ID is returned. Also, for request to
+	// pods/exec, pods/attach, pods/proxy, kube-apiserver works like a proxy and redirect the request
+	// to kubelet node, users will only get http headers sent from kubelet node, so no Audit-ID is
+	// sent when users run command like "kubectl exec" or "kubectl attach".
 	HeaderAuditID = "Audit-ID"
 )
 
@@ -64,6 +71,8 @@ const (
 	// The stage for events generated when a panic occured.
 	StagePanic = "Panic"
 )
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Event captures all the information that can be included in an API audit log.
 type Event struct {
@@ -118,6 +127,8 @@ type Event struct {
 	ResponseObject *runtime.Unknown
 }
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // EventList is a list of audit Events.
 type EventList struct {
 	metav1.TypeMeta
@@ -126,6 +137,8 @@ type EventList struct {
 
 	Items []Event
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Policy defines the configuration of audit logging, and the rules for how different request
 // categories are logged.
@@ -141,6 +154,8 @@ type Policy struct {
 	// PolicyRules are strictly ordered.
 	Rules []PolicyRule
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // PolicyList is a list of audit Policies.
 type PolicyList struct {

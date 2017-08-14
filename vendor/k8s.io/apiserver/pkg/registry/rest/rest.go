@@ -86,7 +86,9 @@ type Lister interface {
 	List(ctx genericapirequest.Context, options *metainternalversion.ListOptions) (runtime.Object, error)
 }
 
-// Exporter is an object that knows how to strip a RESTful resource for export
+// Exporter is an object that knows how to strip a RESTful resource for export. A store should implement this interface
+// if export is generally supported for that type. Errors can still be returned during the actual Export when certain
+// instances of the type are not exportable.
 type Exporter interface {
 	// Export an object.  Fields that are not user specified (e.g. Status, ObjectMeta.ResourceVersion) are stripped out
 	// Returns the stripped object.  If 'exact' is true, fields that are specific to the cluster (e.g. namespace) are
@@ -319,6 +321,8 @@ type StorageMetadata interface {
 	ProducesObject(verb string) interface{}
 }
 
+// +k8s:deepcopy-gen=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // ConnectRequest is an object passed to admission control for Connect operations
 type ConnectRequest struct {
 	// Name is the name of the object on which the connect request was made

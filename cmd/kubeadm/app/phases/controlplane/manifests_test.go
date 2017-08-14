@@ -26,9 +26,9 @@ import (
 	"testing"
 
 	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/pkg/util/version"
@@ -46,10 +46,9 @@ func TestWriteStaticPodManifests(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpdir)
 
-	// set up tmp GlobalEnvParams values for testing
-	oldEnv := kubeadmapi.GlobalEnvParams
-	kubeadmapi.GlobalEnvParams.KubernetesDir = fmt.Sprintf("%s/etc/kubernetes", tmpdir)
-	defer func() { kubeadmapi.GlobalEnvParams = oldEnv }()
+	// set up tmp KubernetesDir for testing
+	kubeadmconstants.KubernetesDir = fmt.Sprintf("%s/etc/kubernetes", tmpdir)
+	defer func() { kubeadmconstants.KubernetesDir = "/etc/kubernetes" }()
 
 	var tests = []struct {
 		cfg                  *kubeadmapi.MasterConfiguration
@@ -57,21 +56,25 @@ func TestWriteStaticPodManifests(t *testing.T) {
 		expectedAPIProbePort int32
 	}{
 		{
-			cfg:       &kubeadmapi.MasterConfiguration{},
-			expectErr: true,
+			cfg: &kubeadmapi.MasterConfiguration{
+				KubernetesVersion: "v1.7.0",
+			},
+			expectErr: false,
 		},
 		{
 			cfg: &kubeadmapi.MasterConfiguration{
 				API: kubeadmapi.API{
 					BindPort: 443,
 				},
+				KubernetesVersion: "v1.7.0",
 			},
-			expectErr:            true,
+			expectErr:            false,
 			expectedAPIProbePort: 443,
 		},
 	}
 	for _, rt := range tests {
-		actual := WriteStaticPodManifests(rt.cfg)
+
+		actual := WriteStaticPodManifests(rt.cfg, version.MustParseSemantic(rt.cfg.KubernetesVersion), fmt.Sprintf("%s/etc/kubernetes/manifests", tmpdir))
 		if (actual == nil) && rt.expectErr {
 			t.Error("expected an error from WriteStaticPodManifests but got none")
 			continue
@@ -86,7 +89,7 @@ func TestWriteStaticPodManifests(t *testing.T) {
 
 		// Below is dead code.
 		if rt.expectedAPIProbePort != 0 {
-			manifest, err := os.Open(filepath.Join(kubeadmapi.GlobalEnvParams.KubernetesDir, kubeadmconstants.ManifestsSubDirName, "kube-apiserver.yaml"))
+			manifest, err := os.Open(filepath.Join(kubeadmconstants.KubernetesDir, kubeadmconstants.ManifestsSubDirName, "kube-apiserver.yaml"))
 			if err != nil {
 				t.Errorf("WriteStaticPodManifests: %v", err)
 				continue
@@ -123,282 +126,6 @@ func TestWriteStaticPodManifests(t *testing.T) {
 			if rt.expectedAPIProbePort != port {
 				t.Errorf("WriteStaticPodManifests: apiserver pod liveness probe port was: %v, wanted %v", port, rt.expectedAPIProbePort)
 			}
-		}
-	}
-}
-
-func TestNewVolume(t *testing.T) {
-	var tests = []struct {
-		name     string
-		path     string
-		expected v1.Volume
-	}{
-		{
-			name: "foo",
-			path: "/etc/foo",
-			expected: v1.Volume{
-				Name: "foo",
-				VolumeSource: v1.VolumeSource{
-					HostPath: &v1.HostPathVolumeSource{Path: "/etc/foo"},
-				}},
-		},
-	}
-
-	for _, rt := range tests {
-		actual := newVolume(rt.name, rt.path)
-		if actual.Name != rt.expected.Name {
-			t.Errorf(
-				"failed newVolume:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.Name,
-				actual.Name,
-			)
-		}
-		if actual.VolumeSource.HostPath.Path != rt.expected.VolumeSource.HostPath.Path {
-			t.Errorf(
-				"failed newVolume:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.VolumeSource.HostPath.Path,
-				actual.VolumeSource.HostPath.Path,
-			)
-		}
-	}
-}
-
-func TestNewVolumeMount(t *testing.T) {
-	var tests = []struct {
-		name     string
-		path     string
-		expected v1.VolumeMount
-	}{
-		{
-			name: "foo",
-			path: "/etc/foo",
-			expected: v1.VolumeMount{
-				Name:      "foo",
-				MountPath: "/etc/foo",
-			},
-		},
-	}
-
-	for _, rt := range tests {
-		actual := newVolumeMount(rt.name, rt.path)
-		if actual.Name != rt.expected.Name {
-			t.Errorf(
-				"failed newVolumeMount:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.Name,
-				actual.Name,
-			)
-		}
-		if actual.MountPath != rt.expected.MountPath {
-			t.Errorf(
-				"failed newVolumeMount:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.MountPath,
-				actual.MountPath,
-			)
-		}
-	}
-}
-
-func TestEtcdVolume(t *testing.T) {
-	var tests = []struct {
-		cfg      *kubeadmapi.MasterConfiguration
-		expected v1.Volume
-	}{
-		{
-			cfg: &kubeadmapi.MasterConfiguration{
-				Etcd: kubeadmapi.Etcd{DataDir: etcdDataDir},
-			},
-			expected: v1.Volume{
-				Name: "etcd",
-				VolumeSource: v1.VolumeSource{
-					HostPath: &v1.HostPathVolumeSource{Path: etcdDataDir},
-				}},
-		},
-	}
-
-	for _, rt := range tests {
-		actual := etcdVolume(rt.cfg)
-		if actual.Name != rt.expected.Name {
-			t.Errorf(
-				"failed etcdVolume:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.Name,
-				actual.Name,
-			)
-		}
-		if actual.VolumeSource.HostPath.Path != rt.expected.VolumeSource.HostPath.Path {
-			t.Errorf(
-				"failed etcdVolume:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.VolumeSource.HostPath.Path,
-				actual.VolumeSource.HostPath.Path,
-			)
-		}
-	}
-}
-
-func TestEtcdVolumeMount(t *testing.T) {
-	var tests = []struct {
-		expected v1.VolumeMount
-	}{
-		{
-			expected: v1.VolumeMount{
-				Name:      "etcd",
-				MountPath: etcdDataDir,
-			},
-		},
-	}
-
-	for _, rt := range tests {
-		actual := etcdVolumeMount(etcdDataDir)
-		if actual.Name != rt.expected.Name {
-			t.Errorf(
-				"failed etcdVolumeMount:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.Name,
-				actual.Name,
-			)
-		}
-		if actual.MountPath != rt.expected.MountPath {
-			t.Errorf(
-				"failed etcdVolumeMount:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.MountPath,
-				actual.MountPath,
-			)
-		}
-	}
-}
-
-func TestCertsVolume(t *testing.T) {
-	var tests = []struct {
-		cfg      *kubeadmapi.MasterConfiguration
-		expected v1.Volume
-	}{
-		{
-			cfg: &kubeadmapi.MasterConfiguration{},
-			expected: v1.Volume{
-				Name: "certs",
-				VolumeSource: v1.VolumeSource{
-					HostPath: &v1.HostPathVolumeSource{
-						Path: "/etc/ssl/certs"},
-				}},
-		},
-	}
-
-	for _, rt := range tests {
-		actual := certsVolume(rt.cfg)
-		if actual.Name != rt.expected.Name {
-			t.Errorf(
-				"failed certsVolume:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.Name,
-				actual.Name,
-			)
-		}
-		if actual.VolumeSource.HostPath.Path != rt.expected.VolumeSource.HostPath.Path {
-			t.Errorf(
-				"failed certsVolume:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.VolumeSource.HostPath.Path,
-				actual.VolumeSource.HostPath.Path,
-			)
-		}
-	}
-}
-
-func TestCertsVolumeMount(t *testing.T) {
-	var tests = []struct {
-		expected v1.VolumeMount
-	}{
-		{
-			expected: v1.VolumeMount{
-				Name:      "certs",
-				MountPath: "/etc/ssl/certs",
-			},
-		},
-	}
-
-	for _, rt := range tests {
-		actual := certsVolumeMount()
-		if actual.Name != rt.expected.Name {
-			t.Errorf(
-				"failed certsVolumeMount:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.Name,
-				actual.Name,
-			)
-		}
-		if actual.MountPath != rt.expected.MountPath {
-			t.Errorf(
-				"failed certsVolumeMount:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.MountPath,
-				actual.MountPath,
-			)
-		}
-	}
-}
-
-func TestK8sVolume(t *testing.T) {
-	var tests = []struct {
-		expected v1.Volume
-	}{
-		{
-			expected: v1.Volume{
-				Name: "k8s",
-				VolumeSource: v1.VolumeSource{
-					HostPath: &v1.HostPathVolumeSource{
-						Path: kubeadmapi.GlobalEnvParams.KubernetesDir},
-				}},
-		},
-	}
-
-	for _, rt := range tests {
-		actual := k8sVolume()
-		if actual.Name != rt.expected.Name {
-			t.Errorf(
-				"failed k8sVolume:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.Name,
-				actual.Name,
-			)
-		}
-		if actual.VolumeSource.HostPath.Path != rt.expected.VolumeSource.HostPath.Path {
-			t.Errorf(
-				"failed k8sVolume:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.VolumeSource.HostPath.Path,
-				actual.VolumeSource.HostPath.Path,
-			)
-		}
-	}
-}
-
-func TestK8sVolumeMount(t *testing.T) {
-	var tests = []struct {
-		expected v1.VolumeMount
-	}{
-		{
-			expected: v1.VolumeMount{
-				Name:      "k8s",
-				MountPath: kubeadmapi.GlobalEnvParams.KubernetesDir,
-				ReadOnly:  true,
-			},
-		},
-	}
-
-	for _, rt := range tests {
-		actual := k8sVolumeMount()
-		if actual.Name != rt.expected.Name {
-			t.Errorf(
-				"failed k8sVolumeMount:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.Name,
-				actual.Name,
-			)
-		}
-		if actual.MountPath != rt.expected.MountPath {
-			t.Errorf(
-				"failed k8sVolumeMount:\n\texpected: %s\n\t  actual: %s",
-				rt.expected.MountPath,
-				actual.MountPath,
-			)
-		}
-		if actual.ReadOnly != rt.expected.ReadOnly {
-			t.Errorf(
-				"failed k8sVolumeMount:\n\texpected: %t\n\t  actual: %t",
-				rt.expected.ReadOnly,
-				actual.ReadOnly,
-			)
 		}
 	}
 }
@@ -457,22 +184,43 @@ func TestComponentProbe(t *testing.T) {
 
 func TestComponentPod(t *testing.T) {
 	var tests = []struct {
-		n string
+		name     string
+		expected v1.Pod
 	}{
 		{
-			n: "foo",
+			name: "foo",
+			expected: v1.Pod{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Pod",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "foo",
+					Namespace:   "kube-system",
+					Annotations: map[string]string{"scheduler.alpha.kubernetes.io/critical-pod": ""},
+					Labels:      map[string]string{"component": "foo", "tier": "control-plane"},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name: "foo",
+						},
+					},
+					HostNetwork: true,
+					Volumes:     []v1.Volume{},
+				},
+			},
 		},
 	}
 
 	for _, rt := range tests {
-		c := v1.Container{Name: rt.n}
-		v := v1.Volume{}
-		actual := componentPod(c, v)
-		if actual.ObjectMeta.Name != rt.n {
+		c := v1.Container{Name: rt.name}
+		actual := componentPod(c, []v1.Volume{})
+		if !reflect.DeepEqual(rt.expected, actual) {
 			t.Errorf(
-				"failed componentPod:\n\texpected: %s\n\t  actual: %s",
-				rt.n,
-				actual.ObjectMeta.Name,
+				"failed componentPod:\n\texpected: %v\n\t  actual: %v",
+				rt.expected,
+				actual,
 			)
 		}
 	}
@@ -485,8 +233,8 @@ func TestGetAPIServerCommand(t *testing.T) {
 	}{
 		{
 			cfg: &kubeadmapi.MasterConfiguration{
-				API:               kubeadm.API{BindPort: 123, AdvertiseAddress: "1.2.3.4"},
-				Networking:        kubeadm.Networking{ServiceSubnet: "bar"},
+				API:               kubeadmapi.API{BindPort: 123, AdvertiseAddress: "1.2.3.4"},
+				Networking:        kubeadmapi.Networking{ServiceSubnet: "bar"},
 				CertificatesDir:   testCertsDir,
 				KubernetesVersion: "v1.7.0",
 			},
@@ -519,8 +267,8 @@ func TestGetAPIServerCommand(t *testing.T) {
 		},
 		{
 			cfg: &kubeadmapi.MasterConfiguration{
-				API:               kubeadm.API{BindPort: 123, AdvertiseAddress: "4.3.2.1"},
-				Networking:        kubeadm.Networking{ServiceSubnet: "bar"},
+				API:               kubeadmapi.API{BindPort: 123, AdvertiseAddress: "4.3.2.1"},
+				Networking:        kubeadmapi.Networking{ServiceSubnet: "bar"},
 				CertificatesDir:   testCertsDir,
 				KubernetesVersion: "v1.7.1",
 			},
@@ -553,9 +301,9 @@ func TestGetAPIServerCommand(t *testing.T) {
 		},
 		{
 			cfg: &kubeadmapi.MasterConfiguration{
-				API:               kubeadm.API{BindPort: 123, AdvertiseAddress: "4.3.2.1"},
-				Networking:        kubeadm.Networking{ServiceSubnet: "bar"},
-				Etcd:              kubeadm.Etcd{CertFile: "fiz", KeyFile: "faz"},
+				API:               kubeadmapi.API{BindPort: 123, AdvertiseAddress: "4.3.2.1"},
+				Networking:        kubeadmapi.Networking{ServiceSubnet: "bar"},
+				Etcd:              kubeadmapi.Etcd{CertFile: "fiz", KeyFile: "faz"},
 				CertificatesDir:   testCertsDir,
 				KubernetesVersion: "v1.7.2",
 			},
@@ -590,9 +338,9 @@ func TestGetAPIServerCommand(t *testing.T) {
 		},
 		{
 			cfg: &kubeadmapi.MasterConfiguration{
-				API:               kubeadm.API{BindPort: 123, AdvertiseAddress: "4.3.2.1"},
-				Networking:        kubeadm.Networking{ServiceSubnet: "bar"},
-				Etcd:              kubeadm.Etcd{CertFile: "fiz", KeyFile: "faz"},
+				API:               kubeadmapi.API{BindPort: 123, AdvertiseAddress: "4.3.2.1"},
+				Networking:        kubeadmapi.Networking{ServiceSubnet: "bar"},
+				Etcd:              kubeadmapi.Etcd{CertFile: "fiz", KeyFile: "faz"},
 				CertificatesDir:   testCertsDir,
 				KubernetesVersion: "v1.7.3",
 			},
@@ -627,9 +375,9 @@ func TestGetAPIServerCommand(t *testing.T) {
 		},
 		{
 			cfg: &kubeadmapi.MasterConfiguration{
-				API:               kubeadm.API{BindPort: 123, AdvertiseAddress: "2001:db8::1"},
-				Networking:        kubeadm.Networking{ServiceSubnet: "bar"},
-				Etcd:              kubeadm.Etcd{CertFile: "fiz", KeyFile: "faz"},
+				API:               kubeadmapi.API{BindPort: 123, AdvertiseAddress: "2001:db8::1"},
+				Networking:        kubeadmapi.Networking{ServiceSubnet: "bar"},
+				Etcd:              kubeadmapi.Etcd{CertFile: "fiz", KeyFile: "faz"},
 				CertificatesDir:   testCertsDir,
 				KubernetesVersion: "v1.7.0",
 			},
@@ -665,7 +413,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 	}
 
 	for _, rt := range tests {
-		actual := getAPIServerCommand(rt.cfg, false, version.MustParseSemantic(rt.cfg.KubernetesVersion))
+		actual := getAPIServerCommand(rt.cfg, version.MustParseSemantic(rt.cfg.KubernetesVersion))
 		sort.Strings(actual)
 		sort.Strings(rt.expected)
 		if !reflect.DeepEqual(actual, rt.expected) {
@@ -688,7 +436,7 @@ func TestGetControllerManagerCommand(t *testing.T) {
 				"kube-controller-manager",
 				"--address=127.0.0.1",
 				"--leader-elect=true",
-				"--kubeconfig=" + kubeadmapi.GlobalEnvParams.KubernetesDir + "/controller-manager.conf",
+				"--kubeconfig=" + kubeadmconstants.KubernetesDir + "/controller-manager.conf",
 				"--root-ca-file=" + testCertsDir + "/ca.crt",
 				"--service-account-private-key-file=" + testCertsDir + "/sa.key",
 				"--cluster-signing-cert-file=" + testCertsDir + "/ca.crt",
@@ -707,7 +455,7 @@ func TestGetControllerManagerCommand(t *testing.T) {
 				"kube-controller-manager",
 				"--address=127.0.0.1",
 				"--leader-elect=true",
-				"--kubeconfig=" + kubeadmapi.GlobalEnvParams.KubernetesDir + "/controller-manager.conf",
+				"--kubeconfig=" + kubeadmconstants.KubernetesDir + "/controller-manager.conf",
 				"--root-ca-file=" + testCertsDir + "/ca.crt",
 				"--service-account-private-key-file=" + testCertsDir + "/sa.key",
 				"--cluster-signing-cert-file=" + testCertsDir + "/ca.crt",
@@ -719,7 +467,7 @@ func TestGetControllerManagerCommand(t *testing.T) {
 		},
 		{
 			cfg: &kubeadmapi.MasterConfiguration{
-				Networking:        kubeadm.Networking{PodSubnet: "bar"},
+				Networking:        kubeadmapi.Networking{PodSubnet: "bar"},
 				CertificatesDir:   testCertsDir,
 				KubernetesVersion: "v1.7.0",
 			},
@@ -727,7 +475,7 @@ func TestGetControllerManagerCommand(t *testing.T) {
 				"kube-controller-manager",
 				"--address=127.0.0.1",
 				"--leader-elect=true",
-				"--kubeconfig=" + kubeadmapi.GlobalEnvParams.KubernetesDir + "/controller-manager.conf",
+				"--kubeconfig=" + kubeadmconstants.KubernetesDir + "/controller-manager.conf",
 				"--root-ca-file=" + testCertsDir + "/ca.crt",
 				"--service-account-private-key-file=" + testCertsDir + "/sa.key",
 				"--cluster-signing-cert-file=" + testCertsDir + "/ca.crt",
@@ -741,7 +489,7 @@ func TestGetControllerManagerCommand(t *testing.T) {
 	}
 
 	for _, rt := range tests {
-		actual := getControllerManagerCommand(rt.cfg, false, version.MustParseSemantic(rt.cfg.KubernetesVersion))
+		actual := getControllerManagerCommand(rt.cfg, version.MustParseSemantic(rt.cfg.KubernetesVersion))
 		sort.Strings(actual)
 		sort.Strings(rt.expected)
 		if !reflect.DeepEqual(actual, rt.expected) {
@@ -817,13 +565,13 @@ func TestGetSchedulerCommand(t *testing.T) {
 				"kube-scheduler",
 				"--address=127.0.0.1",
 				"--leader-elect=true",
-				"--kubeconfig=" + kubeadmapi.GlobalEnvParams.KubernetesDir + "/scheduler.conf",
+				"--kubeconfig=" + kubeadmconstants.KubernetesDir + "/scheduler.conf",
 			},
 		},
 	}
 
 	for _, rt := range tests {
-		actual := getSchedulerCommand(rt.cfg, false)
+		actual := getSchedulerCommand(rt.cfg)
 		sort.Strings(actual)
 		sort.Strings(rt.expected)
 		if !reflect.DeepEqual(actual, rt.expected) {

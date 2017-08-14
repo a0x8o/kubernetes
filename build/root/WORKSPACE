@@ -1,15 +1,25 @@
 http_archive(
     name = "io_bazel_rules_go",
-    sha256 = "a1596c14c799d5a1b5f49ca28fa948414c2242110d69ef324d6ed160ec890dbf",
-    strip_prefix = "rules_go-03c634753160632c00f506afeafc819fbea4c422",
-    urls = ["https://github.com/bazelbuild/rules_go/archive/03c634753160632c00f506afeafc819fbea4c422.tar.gz"],
+    sha256 = "f9cc31e9d66dad1154de3c214158916411040e2c2614e4fbc2bab67330e95f82",
+    strip_prefix = "rules_go-82483596ec203eb9c1849937636f4cbed83733eb",
+    urls = ["https://github.com/bazelbuild/rules_go/archive/82483596ec203eb9c1849937636f4cbed83733eb.tar.gz"],
 )
 
 http_archive(
     name = "io_kubernetes_build",
-    sha256 = "a9fb7027f060b868cdbd235a0de0971b557b9d26f9c89e422feb80f48d8c0e90",
-    strip_prefix = "repo-infra-9dedd5f4093884c133ad5ea73695b28338b954ab",
-    urls = ["https://github.com/kubernetes/repo-infra/archive/9dedd5f4093884c133ad5ea73695b28338b954ab.tar.gz"],
+    sha256 = "5ba54d17d582ec099ba65d4e409e318e209216b15be819c922a5baae3f4d4283",
+    strip_prefix = "repo-infra-e9d1a126ef355ff5d38e20612c889b07728225a4",
+    urls = ["https://github.com/kubernetes/repo-infra/archive/e9d1a126ef355ff5d38e20612c889b07728225a4.tar.gz"],
+)
+
+ETCD_VERSION = "3.0.17"
+
+new_http_archive(
+    name = "com_coreos_etcd",
+    build_file = "third_party/etcd.BUILD",
+    sha256 = "274c46a7f8d26f7ae99d6880610f54933cbcf7f3beafa19236c52eb5df8c7a0b",
+    strip_prefix = "etcd-v%s-linux-amd64" % ETCD_VERSION,
+    urls = ["https://github.com/coreos/etcd/releases/download/v%s/etcd-v%s-linux-amd64.tar.gz" % (ETCD_VERSION, ETCD_VERSION)],
 )
 
 # This contains a patch to not prepend ./ to tarfiles produced by pkg_tar.
@@ -24,9 +34,9 @@ http_archive(
 
 http_archive(
     name = "io_bazel_rules_docker",
-    sha256 = "bbf0ea808ab6c599307b321f360aef2e6a31da4a35aaf14eca305c9878cca0b3",
-    strip_prefix = "rules_docker-d0cf5ea34a6f900370b91227b95e9f0a13722c70",
-    urls = ["https://github.com/bazelbuild/rules_docker/archive/d0cf5ea34a6f900370b91227b95e9f0a13722c70.tar.gz"],
+    sha256 = "40d780165c0b9fbb3ddca858df7347381af0e87e430c74863e4ce9d6f6441023",
+    strip_prefix = "rules_docker-8359263f35227a3634ea023ff4ae163189eb4b26",
+    urls = ["https://github.com/bazelbuild/rules_docker/archive/8359263f35227a3634ea023ff4ae163189eb4b26.tar.gz"],
 )
 
 load("@io_bazel_rules_go//go:def.bzl", "go_repositories")

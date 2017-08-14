@@ -576,9 +576,13 @@ function create-node-template() {
 
   local local_ssds=""
   if [[ ! -z ${NODE_LOCAL_SSDS+x} ]]; then
+    # The NODE_LOCAL_SSDS check below fixes issue #49171
+    # Some versions of seq will count down from 1 if "seq 0" is specified
+    if [[ ${NODE_LOCAL_SSDS} -ge 1 ]]; then
       for i in $(seq ${NODE_LOCAL_SSDS}); do
-          local_ssds="$local_ssds--local-ssd=interface=SCSI "
+        local_ssds="$local_ssds--local-ssd=interface=SCSI "
       done
+    fi
   fi
 
   local network=$(make-gcloud-network-argument \
@@ -945,35 +949,11 @@ function delete-subnetworks() {
   fi
 }
 
-# Assumes:
-#   NUM_NODES
-# Sets:
-#   MASTER_ROOT_DISK_SIZE
-function get-master-root-disk-size() {
-  if [[ "${NUM_NODES}" -le "1000" ]]; then
-    export MASTER_ROOT_DISK_SIZE="20"
-  else
-    export MASTER_ROOT_DISK_SIZE="50"
-  fi
-}
-
-# Assumes:
-#   NUM_NODES
-# Sets:
-#   MASTER_DISK_SIZE
-function get-master-disk-size() {
-  if [[ "${NUM_NODES}" -le "1000" ]]; then
-    export MASTER_DISK_SIZE="20GB"
-  else
-    export MASTER_DISK_SIZE="100GB"
-  fi
-}
-
-
 # Generates SSL certificates for etcd cluster. Uses cfssl program.
 #
 # Assumed vars:
 #   KUBE_TEMP: temporary directory
+#   NUM_NODES: #nodes in the cluster
 #
 # Args:
 #  $1: host name
@@ -1014,7 +994,6 @@ function create-master() {
 
   # We have to make sure the disk is created before creating the master VM, so
   # run this in the foreground.
-  get-master-disk-size
   gcloud compute disks create "${MASTER_NAME}-pd" \
     --project "${PROJECT}" \
     --zone "${ZONE}" \
@@ -1066,10 +1045,13 @@ function create-master() {
   create-certs "${MASTER_RESERVED_IP}"
   create-etcd-certs ${MASTER_NAME}
 
-  # Sets MASTER_ROOT_DISK_SIZE that is used by create-master-instance
-  get-master-root-disk-size
-
-  create-master-instance "${MASTER_RESERVED_IP}" &
+  if [[ "${NUM_NODES}" -ge "50" ]]; then
+    # We block on master creation for large clusters to avoid doing too much
+    # unnecessary work in case master start-up fails (like creation of nodes).
+    create-master-instance "${MASTER_RESERVED_IP}"
+  else
+    create-master-instance "${MASTER_RESERVED_IP}" &
+  fi
 }
 
 # Adds master replica to etcd cluster.
@@ -1127,15 +1109,11 @@ function replicate-master() {
 
   # We have to make sure the disk is created before creating the master VM, so
   # run this in the foreground.
-  get-master-disk-size
   gcloud compute disks create "${REPLICA_NAME}-pd" \
     --project "${PROJECT}" \
     --zone "${ZONE}" \
     --type "${MASTER_DISK_TYPE}" \
     --size "${MASTER_DISK_SIZE}"
-
-  # Sets MASTER_ROOT_DISK_SIZE that is used by create-master-instance
-  get-master-root-disk-size
 
   local existing_master_replicas="$(get-all-replica-names)"
   replicate-master-instance "${EXISTING_MASTER_ZONE}" "${EXISTING_MASTER_NAME}" "${existing_master_replicas}"
@@ -2064,8 +2042,7 @@ function test-setup() {
   detect-project
 
   if [[ ${MULTIZONE:-} == "true" && -n ${E2E_ZONES:-} ]]; then
-    for KUBE_GCE_ZONE in ${E2E_ZONES}
-    do
+    for KUBE_GCE_ZONE in ${E2E_ZONES}; do
       KUBE_GCE_ZONE="${KUBE_GCE_ZONE}" KUBE_USE_EXISTING_MASTER="${KUBE_USE_EXISTING_MASTER:-}" "${KUBE_ROOT}/cluster/kube-up.sh"
       KUBE_USE_EXISTING_MASTER="true" # For subsequent zones we use the existing master
     done
@@ -2121,15 +2098,14 @@ function test-teardown() {
     "${NODE_TAG}-${INSTANCE_PREFIX}-http-alt" \
     "${NODE_TAG}-${INSTANCE_PREFIX}-nodeports"
   if [[ ${MULTIZONE:-} == "true" && -n ${E2E_ZONES:-} ]]; then
-      local zones=( ${E2E_ZONES} )
-      # tear them down in reverse order, finally tearing down the master too.
-      for ((zone_num=${#zones[@]}-1; zone_num>0; zone_num--))
-      do
-	  KUBE_GCE_ZONE="${zones[zone_num]}" KUBE_USE_EXISTING_MASTER="true" "${KUBE_ROOT}/cluster/kube-down.sh"
-      done
-      KUBE_GCE_ZONE="${zones[0]}" KUBE_USE_EXISTING_MASTER="false" "${KUBE_ROOT}/cluster/kube-down.sh"
+    local zones=( ${E2E_ZONES} )
+    # tear them down in reverse order, finally tearing down the master too.
+    for ((zone_num=${#zones[@]}-1; zone_num>0; zone_num--)); do
+      KUBE_GCE_ZONE="${zones[zone_num]}" KUBE_USE_EXISTING_MASTER="true" "${KUBE_ROOT}/cluster/kube-down.sh"
+    done
+    KUBE_GCE_ZONE="${zones[0]}" KUBE_USE_EXISTING_MASTER="false" "${KUBE_ROOT}/cluster/kube-down.sh"
   else
-      "${KUBE_ROOT}/cluster/kube-down.sh"
+    "${KUBE_ROOT}/cluster/kube-down.sh"
   fi
 }
 

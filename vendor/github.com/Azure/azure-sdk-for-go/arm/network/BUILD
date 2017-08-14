@@ -1,7 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
-
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -11,6 +9,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "applicationgateways.go",
+        "bgpservicecommunities.go",
         "client.go",
         "expressroutecircuitauthorizations.go",
         "expressroutecircuitpeerings.go",
@@ -20,7 +19,10 @@ go_library(
         "loadbalancers.go",
         "localnetworkgateways.go",
         "models.go",
+        "packetcaptures.go",
         "publicipaddresses.go",
+        "routefilterrules.go",
+        "routefilters.go",
         "routes.go",
         "routetables.go",
         "securitygroups.go",
@@ -32,11 +34,12 @@ go_library(
         "virtualnetworkgateways.go",
         "virtualnetworkpeerings.go",
         "virtualnetworks.go",
+        "watchers.go",
     ],
-    tags = ["automanaged"],
     deps = [
         "//vendor/github.com/Azure/go-autorest/autorest:go_default_library",
         "//vendor/github.com/Azure/go-autorest/autorest/azure:go_default_library",
+        "//vendor/github.com/Azure/go-autorest/autorest/date:go_default_library",
         "//vendor/github.com/Azure/go-autorest/autorest/to:go_default_library",
         "//vendor/github.com/Azure/go-autorest/autorest/validation:go_default_library",
     ],

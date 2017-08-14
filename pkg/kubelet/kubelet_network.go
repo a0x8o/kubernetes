@@ -31,17 +31,17 @@ import (
 )
 
 const (
-	// the mark-for-masquerade chain
+	// KubeMarkMasqChain is the mark-for-masquerade chain
 	// TODO: clean up this logic in kube-proxy
 	KubeMarkMasqChain utiliptables.Chain = "KUBE-MARK-MASQ"
 
-	// the mark-for-drop chain
+	// KubeMarkDropChain is the mark-for-drop chain
 	KubeMarkDropChain utiliptables.Chain = "KUBE-MARK-DROP"
 
-	// kubernetes postrouting rules
+	// KubePostroutingChain is kubernetes postrouting rules
 	KubePostroutingChain utiliptables.Chain = "KUBE-POSTROUTING"
 
-	// kubernetes firewall rules
+	// KubeFirewallChain is kubernetes firewall rules
 	KubeFirewallChain utiliptables.Chain = "KUBE-FIREWALL"
 )
 
@@ -95,10 +95,6 @@ func omitDuplicates(kl *Kubelet, pod *v1.Pod, combinedSearch []string) []string 
 		if _, exists := uniqueDomains[dnsDomain]; !exists {
 			combinedSearch[len(uniqueDomains)] = dnsDomain
 			uniqueDomains[dnsDomain] = true
-		} else {
-			log := fmt.Sprintf("Found and omitted duplicated dns domain in host search line: '%s' during merging with cluster dns domains", dnsDomain)
-			kl.recorder.Event(pod, v1.EventTypeWarning, "DNSSearchForming", log)
-			glog.Error(log)
 		}
 	}
 	return combinedSearch[:len(uniqueDomains)]

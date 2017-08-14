@@ -26,6 +26,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubectl"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
 	"k8s.io/kubernetes/pkg/printers"
+	printersinternal "k8s.io/kubernetes/pkg/printers/internalversion"
 
 	"github.com/spf13/cobra"
 )
@@ -126,6 +127,13 @@ func PrinterForCommand(cmd *cobra.Command, outputOpts *printers.OutputOptions, m
 		return nil, err
 	}
 
+	// we try to convert to HumanReadablePrinter, if return ok, it must be no generic
+	// we execute AddHandlers() here before maybeWrapSortingPrinter so that we don't
+	// need to convert to delegatePrinter again then invoke AddHandlers()
+	if humanReadablePrinter, ok := printer.(*printers.HumanReadablePrinter); ok {
+		printersinternal.AddHandlers(humanReadablePrinter)
+	}
+
 	return maybeWrapSortingPrinter(cmd, printer), nil
 }
 
@@ -160,8 +168,10 @@ func extractOutputOptions(cmd *cobra.Command) *printers.OutputOptions {
 	// templates are logically optional for specifying a format.
 	// TODO once https://github.com/kubernetes/kubernetes/issues/12668 is fixed, this should fall back to GetFlagString
 	var templateFile string
-	if flags.Lookup("template") != nil {
-		templateFile = GetFlagString(cmd, "template")
+	if flag := flags.Lookup("template"); flag != nil {
+		if flag.Value.Type() == "string" {
+			templateFile = GetFlagString(cmd, "template")
+		}
 	}
 	if len(outputFormat) == 0 && len(templateFile) != 0 {
 		outputFormat = "template"

@@ -1,7 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
-
 filegroup(
     name = "package-srcs",
     srcs = glob(["**"]),
@@ -24,6 +22,7 @@ filegroup(
         "//cmd/genyaml:all-srcs",
         "//cmd/gke-certificates-controller:all-srcs",
         "//cmd/hyperkube:all-srcs",
+        "//cmd/importverifier:all-srcs",
         "//cmd/kube-apiserver:all-srcs",
         "//cmd/kube-controller-manager:all-srcs",
         "//cmd/kube-proxy:all-srcs",
@@ -31,16 +30,6 @@ filegroup(
         "//cmd/kubectl:all-srcs",
         "//cmd/kubelet:all-srcs",
         "//cmd/kubemark:all-srcs",
-        "//cmd/libs/go2idl/client-gen:all-srcs",
-        "//cmd/libs/go2idl/conversion-gen:all-srcs",
-        "//cmd/libs/go2idl/deepcopy-gen:all-srcs",
-        "//cmd/libs/go2idl/defaulter-gen:all-srcs",
-        "//cmd/libs/go2idl/go-to-protobuf:all-srcs",
-        "//cmd/libs/go2idl/import-boss:all-srcs",
-        "//cmd/libs/go2idl/informer-gen:all-srcs",
-        "//cmd/libs/go2idl/lister-gen:all-srcs",
-        "//cmd/libs/go2idl/openapi-gen:all-srcs",
-        "//cmd/libs/go2idl/set-gen:all-srcs",
         "//cmd/linkcheck:all-srcs",
         "//cmd/mungedocs:all-srcs",
     ],

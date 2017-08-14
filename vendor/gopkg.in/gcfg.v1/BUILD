@@ -1,7 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
-
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -11,15 +9,17 @@ go_library(
     name = "go_default_library",
     srcs = [
         "doc.go",
+        "errors.go",
+        "go1_0.go",
         "go1_2.go",
         "read.go",
         "set.go",
     ],
-    tags = ["automanaged"],
     deps = [
         "//vendor/gopkg.in/gcfg.v1/scanner:go_default_library",
         "//vendor/gopkg.in/gcfg.v1/token:go_default_library",
         "//vendor/gopkg.in/gcfg.v1/types:go_default_library",
+        "//vendor/gopkg.in/warnings.v0:go_default_library",
     ],
 )
 

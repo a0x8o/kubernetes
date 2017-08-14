@@ -32,7 +32,6 @@ import (
 
 type BuiltInAuthenticationOptions struct {
 	Anonymous       *AnonymousAuthenticationOptions
-	AnyToken        *AnyTokenAuthenticationOptions
 	BootstrapToken  *BootstrapTokenAuthenticationOptions
 	ClientCert      *genericoptions.ClientCertAuthenticationOptions
 	Keystone        *KeystoneAuthenticationOptions
@@ -42,10 +41,9 @@ type BuiltInAuthenticationOptions struct {
 	ServiceAccounts *ServiceAccountAuthenticationOptions
 	TokenFile       *TokenFileAuthenticationOptions
 	WebHook         *WebHookAuthenticationOptions
-}
 
-type AnyTokenAuthenticationOptions struct {
-	Allow bool
+	TokenSuccessCacheTTL time.Duration
+	TokenFailureCacheTTL time.Duration
 }
 
 type AnonymousAuthenticationOptions struct {
@@ -88,13 +86,15 @@ type WebHookAuthenticationOptions struct {
 }
 
 func NewBuiltInAuthenticationOptions() *BuiltInAuthenticationOptions {
-	return &BuiltInAuthenticationOptions{}
+	return &BuiltInAuthenticationOptions{
+		TokenSuccessCacheTTL: 10 * time.Second,
+		TokenFailureCacheTTL: 0 * time.Second,
+	}
 }
 
 func (s *BuiltInAuthenticationOptions) WithAll() *BuiltInAuthenticationOptions {
 	return s.
 		WithAnyonymous().
-		WithAnyToken().
 		WithBootstrapToken().
 		WithClientCert().
 		WithKeystone().
@@ -108,11 +108,6 @@ func (s *BuiltInAuthenticationOptions) WithAll() *BuiltInAuthenticationOptions {
 
 func (s *BuiltInAuthenticationOptions) WithAnyonymous() *BuiltInAuthenticationOptions {
 	s.Anonymous = &AnonymousAuthenticationOptions{Allow: true}
-	return s
-}
-
-func (s *BuiltInAuthenticationOptions) WithAnyToken() *BuiltInAuthenticationOptions {
-	s.AnyToken = &AnyTokenAuthenticationOptions{}
 	return s
 }
 
@@ -180,13 +175,6 @@ func (s *BuiltInAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
 			"Enables anonymous requests to the secure port of the API server. "+
 			"Requests that are not rejected by another authentication method are treated as anonymous requests. "+
 			"Anonymous requests have a username of system:anonymous, and a group name of system:unauthenticated.")
-	}
-
-	if s.AnyToken != nil {
-		fs.BoolVar(&s.AnyToken.Allow, "insecure-allow-any-token", s.AnyToken.Allow, ""+
-			"If set, your server will be INSECURE.  Any token will be allowed and user information will be parsed "+
-			"from the token as `username/group1,group2`")
-
 	}
 
 	if s.BootstrapToken != nil {
@@ -268,14 +256,13 @@ func (s *BuiltInAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
 }
 
 func (s *BuiltInAuthenticationOptions) ToAuthenticationConfig() authenticator.AuthenticatorConfig {
-	ret := authenticator.AuthenticatorConfig{}
+	ret := authenticator.AuthenticatorConfig{
+		TokenSuccessCacheTTL: s.TokenSuccessCacheTTL,
+		TokenFailureCacheTTL: s.TokenFailureCacheTTL,
+	}
 
 	if s.Anonymous != nil {
 		ret.Anonymous = s.Anonymous.Allow
-	}
-
-	if s.AnyToken != nil {
-		ret.AnyToken = s.AnyToken.Allow
 	}
 
 	if s.BootstrapToken != nil {
@@ -319,6 +306,15 @@ func (s *BuiltInAuthenticationOptions) ToAuthenticationConfig() authenticator.Au
 	if s.WebHook != nil {
 		ret.WebhookTokenAuthnConfigFile = s.WebHook.ConfigFile
 		ret.WebhookTokenAuthnCacheTTL = s.WebHook.CacheTTL
+
+		if len(s.WebHook.ConfigFile) > 0 && s.WebHook.CacheTTL > 0 {
+			if s.TokenSuccessCacheTTL > 0 && s.WebHook.CacheTTL < s.TokenSuccessCacheTTL {
+				glog.Warningf("the webhook cache ttl of %s is shorter than the overall cache ttl of %s for successful token authentication attempts.", s.WebHook.CacheTTL, s.TokenSuccessCacheTTL)
+			}
+			if s.TokenFailureCacheTTL > 0 && s.WebHook.CacheTTL < s.TokenFailureCacheTTL {
+				glog.Warningf("the webhook cache ttl of %s is shorter than the overall cache ttl of %s for failed token authentication attempts.", s.WebHook.CacheTTL, s.TokenFailureCacheTTL)
+			}
+		}
 	}
 
 	return ret

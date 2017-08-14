@@ -18,6 +18,8 @@ package wardle
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // FlunderList is a list of Flunder objects.
 type FlunderList struct {
 	metav1.TypeMeta
@@ -32,7 +34,8 @@ type FlunderSpec struct {
 type FlunderStatus struct {
 }
 
-// +genclient=true
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type Flunder struct {
 	metav1.TypeMeta
@@ -42,8 +45,9 @@ type Flunder struct {
 	Status FlunderStatus
 }
 
-// +genclient=true
-// +nonNamespaced=true
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type Fischer struct {
 	metav1.TypeMeta
@@ -53,8 +57,8 @@ type Fischer struct {
 	DisallowedFlunders []string
 }
 
-// +genclient=true
-// +nonNamespaced=true
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // FischerList is a list of Fischer objects.
 type FischerList struct {

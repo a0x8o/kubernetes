@@ -78,6 +78,29 @@ func TestValidateAuthorizationModes(t *testing.T) {
 	}
 }
 
+func TestValidateNodeName(t *testing.T) {
+	var tests = []struct {
+		s        string
+		f        *field.Path
+		expected bool
+	}{
+		{"", nil, false},                 // ok if not provided
+		{"1234", nil, true},              // supported
+		{"valid-nodename", nil, true},    // supported
+		{"INVALID-NODENAME", nil, false}, // Upper cases is invalid
+	}
+	for _, rt := range tests {
+		actual := ValidateNodeName(rt.s, rt.f)
+		if (len(actual) == 0) != rt.expected {
+			t.Errorf(
+				"failed ValidateNodeName:\n\texpected: %t\n\t  actual: %t",
+				rt.expected,
+				(len(actual) == 0),
+			)
+		}
+	}
+}
+
 func TestValidateCloudProvider(t *testing.T) {
 	var tests = []struct {
 		s        string
@@ -177,6 +200,7 @@ func TestValidateIPNetFromString(t *testing.T) {
 }
 
 func TestValidateMasterConfiguration(t *testing.T) {
+	nodename := "valid-nodename"
 	var tests = []struct {
 		s        *kubeadm.MasterConfiguration
 		expected bool
@@ -189,6 +213,7 @@ func TestValidateMasterConfiguration(t *testing.T) {
 				DNSDomain:     "cluster.local",
 			},
 			CertificatesDir: "/some/cert/dir",
+			NodeName:        nodename,
 		}, false},
 		{&kubeadm.MasterConfiguration{
 			AuthorizationModes: []string{"Node", "RBAC"},
@@ -198,6 +223,7 @@ func TestValidateMasterConfiguration(t *testing.T) {
 			},
 			CertificatesDir: "/some/other/cert/dir",
 			Token:           "abcdef.0123456789abcdef",
+			NodeName:        nodename,
 		}, true},
 		{&kubeadm.MasterConfiguration{
 			AuthorizationModes: []string{"Node", "RBAC"},
@@ -206,6 +232,7 @@ func TestValidateMasterConfiguration(t *testing.T) {
 				DNSDomain:     "cluster.local",
 			},
 			CertificatesDir: "/some/cert/dir",
+			NodeName:        nodename,
 		}, false},
 		{&kubeadm.MasterConfiguration{
 			AuthorizationModes: []string{"Node", "RBAC"},
@@ -215,6 +242,7 @@ func TestValidateMasterConfiguration(t *testing.T) {
 			},
 			CertificatesDir: "/some/other/cert/dir",
 			Token:           "abcdef.0123456789abcdef",
+			NodeName:        nodename,
 		}, true},
 	}
 	for _, rt := range tests {
@@ -258,25 +286,28 @@ func TestValidateMixedArguments(t *testing.T) {
 		args     []string
 		expected bool
 	}{
+		// Expected to succeed, --config is mixed with skip-* flags only or no other flags
 		{[]string{"--foo=bar"}, true},
 		{[]string{"--config=hello"}, true},
-		{[]string{"--foo=bar", "--config=hello"}, false},
+		{[]string{"--config=hello", "--skip-preflight-checks=true"}, true},
+		{[]string{"--config=hello", "--skip-token-print=true"}, true},
+		{[]string{"--config=hello", "--skip-preflight-checks", "--skip-token-print"}, true},
+		// Expected to fail, --config is mixed with the --foo flag
+		{[]string{"--config=hello", "--skip-preflight-checks", "--foo=bar"}, false},
+		{[]string{"--config=hello", "--foo=bar"}, false},
 	}
 
 	var cfgPath string
-	var skipPreFlight bool
 
 	for _, rt := range tests {
 		f := pflag.NewFlagSet("test", pflag.ContinueOnError)
 		if f.Parsed() {
 			t.Error("f.Parse() = true before Parse")
 		}
-		f.String("foo", "", "string value")
+		f.String("foo", "", "flag bound to config object")
+		f.Bool("skip-preflight-checks", false, "flag not bound to config object")
+		f.Bool("skip-token-print", false, "flag not bound to config object")
 		f.StringVar(&cfgPath, "config", cfgPath, "Path to kubeadm config file")
-		f.BoolVar(
-			&skipPreFlight, "skip-preflight-checks", skipPreFlight,
-			"Skip preflight checks normally run before modifying the system",
-		)
 		if err := f.Parse(rt.args); err != nil {
 			t.Fatal(err)
 		}
@@ -284,9 +315,34 @@ func TestValidateMixedArguments(t *testing.T) {
 		actual := ValidateMixedArguments(f)
 		if (actual == nil) != rt.expected {
 			t.Errorf(
-				"failed ValidateMixedArguments:\n\texpected: %t\n\t  actual: %t",
+				"failed ValidateMixedArguments:\n\texpected: %t\n\t  actual: %t testdata: %v",
 				rt.expected,
 				(actual == nil),
+				rt.args,
+			)
+		}
+	}
+}
+
+func TestValidateFeatureFlags(t *testing.T) {
+	type featureFlag map[string]bool
+	var tests = []struct {
+		featureFlags featureFlag
+		expected     bool
+	}{
+		{featureFlag{"SelfHosting": true}, true},
+		{featureFlag{"SelfHosting": false}, true},
+		{featureFlag{"StoreCertsInSecrets": true}, true},
+		{featureFlag{"StoreCertsInSecrets": false}, true},
+		{featureFlag{"Foo": true}, false},
+	}
+	for _, rt := range tests {
+		actual := ValidateFeatureFlags(rt.featureFlags, nil)
+		if (len(actual) == 0) != rt.expected {
+			t.Errorf(
+				"failed featureFlags:\n\texpected: %t\n\t  actual: %t",
+				rt.expected,
+				(len(actual) == 0),
 			)
 		}
 	}

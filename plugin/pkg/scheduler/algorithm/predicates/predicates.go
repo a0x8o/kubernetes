@@ -30,10 +30,10 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/util/workqueue"
 	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
 	v1qos "k8s.io/kubernetes/pkg/api/v1/helper/qos"
-	corelisters "k8s.io/kubernetes/pkg/client/listers/core/v1"
 	"k8s.io/kubernetes/pkg/features"
 	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
@@ -44,7 +44,7 @@ import (
 	"k8s.io/metrics/pkg/client/clientset_generated/clientset"
 )
 
-// predicatePrecomputations: Helper types/variables...
+// PredicateMetadataModifier: Helper types/variables...
 type PredicateMetadataModifier func(pm *predicateMetadata)
 
 var predicatePrecomputeRegisterLock sync.Mutex
@@ -56,7 +56,7 @@ func RegisterPredicatePrecomputation(predicateName string, precomp PredicateMeta
 	predicatePrecomputations[predicateName] = precomp
 }
 
-// Other types for predicate functions...
+// NodeInfo: Other types for predicate functions...
 type NodeInfo interface {
 	GetNodeInfo(nodeID string) (*v1.Node, error)
 }
@@ -377,7 +377,7 @@ type VolumeZoneChecker struct {
 	pvcInfo PersistentVolumeClaimInfo
 }
 
-// VolumeZonePredicate evaluates if a pod can fit due to the volumes it requests, given
+// NewVolumeZonePredicate evaluates if a pod can fit due to the volumes it requests, given
 // that some volumes may have zone scheduling constraints.  The requirement is that any
 // volume zone-labels must match the equivalent zone-labels on the node.  It is OK for
 // the node to have more zone-label constraints (for example, a hypothetical replicated
@@ -474,10 +474,10 @@ func (c *VolumeZoneChecker) predicate(pod *v1.Pod, meta interface{}, nodeInfo *s
 	return true, nil, nil
 }
 
-// Returns a *schedulercache.Resource that covers the largest width in each
-// resource dimension. Because init-containers run sequentially, we collect the
-// max in each dimension iteratively. In contrast, we sum the resource vectors
-// for regular containers since they run simultaneously.
+// GetResourceRequest returns a *schedulercache.Resource that covers the largest
+// width in each resource dimension. Because init-containers run sequentially, we collect
+// the max in each dimension iteratively. In contrast, we sum the resource vectors for
+// regular containers since they run simultaneously.
 //
 // Example:
 //
@@ -1189,7 +1189,7 @@ func (c *PodAffinityChecker) satisfiesPodsAffinityAntiAffinity(pod *v1.Pod, node
 	for _, term := range getPodAffinityTerms(affinity.PodAffinity) {
 		termMatches, matchingPodExists, err := c.anyPodMatchesPodAffinityTerm(pod, allPods, node, &term)
 		if err != nil {
-			glog.Errorf("Cannot schedule pod %+v onto node %v,because of PodAffinityTerm %v, err: %v",
+			glog.Errorf("Cannot schedule pod %+v onto node %v, because of PodAffinityTerm %v, err: %v",
 				podName(pod), node.Name, term, err)
 			return false
 		}
@@ -1198,8 +1198,8 @@ func (c *PodAffinityChecker) satisfiesPodsAffinityAntiAffinity(pod *v1.Pod, node
 			// no other such pods, then disregard the requirement. This is necessary to
 			// not block forever because the first pod of the collection can't be scheduled.
 			if matchingPodExists {
-				glog.V(10).Infof("Cannot schedule pod %+v onto node %v,because of PodAffinityTerm %v, err: %v",
-					podName(pod), node.Name, term, err)
+				glog.V(10).Infof("Cannot schedule pod %+v onto node %v, because of PodAffinityTerm %v",
+					podName(pod), node.Name, term)
 				return false
 			}
 			namespaces := priorityutil.GetNamespacesFromPodAffinityTerm(pod, &term)
@@ -1211,8 +1211,8 @@ func (c *PodAffinityChecker) satisfiesPodsAffinityAntiAffinity(pod *v1.Pod, node
 			}
 			match := priorityutil.PodMatchesTermsNamespaceAndSelector(pod, namespaces, selector)
 			if !match {
-				glog.V(10).Infof("Cannot schedule pod %+v onto node %v,because of PodAffinityTerm %v, err: %v",
-					podName(pod), node.Name, term, err)
+				glog.V(10).Infof("Cannot schedule pod %+v onto node %v, because of PodAffinityTerm %v",
+					podName(pod), node.Name, term)
 				return false
 			}
 		}
@@ -1222,7 +1222,7 @@ func (c *PodAffinityChecker) satisfiesPodsAffinityAntiAffinity(pod *v1.Pod, node
 	for _, term := range getPodAntiAffinityTerms(affinity.PodAntiAffinity) {
 		termMatches, _, err := c.anyPodMatchesPodAffinityTerm(pod, allPods, node, &term)
 		if err != nil || termMatches {
-			glog.V(10).Infof("Cannot schedule pod %+v onto node %v,because of PodAntiAffinityTerm %v, err: %v",
+			glog.V(10).Infof("Cannot schedule pod %+v onto node %v, because of PodAntiAffinityTerm %v, err: %v",
 				podName(pod), node.Name, term, err)
 			return false
 		}
@@ -1231,7 +1231,7 @@ func (c *PodAffinityChecker) satisfiesPodsAffinityAntiAffinity(pod *v1.Pod, node
 	if glog.V(10) {
 		// We explicitly don't do glog.V(10).Infof() to avoid computing all the parameters if this is
 		// not logged. There is visible performance gain from it.
-		glog.Infof("Schedule Pod %+v on Node %+v is allowed, pod afinnity/anti-affinity constraints satisfied.",
+		glog.Infof("Schedule Pod %+v on Node %+v is allowed, pod affinity/anti-affinity constraints satisfied.",
 			podName(pod), node.Name)
 	}
 	return true
@@ -1301,13 +1301,44 @@ func CheckNodeDiskPressurePredicate(pod *v1.Pod, meta interface{}, nodeInfo *sch
 	return true, nil, nil
 }
 
+// CheckNodeConditionPredicate checks if a pod can be scheduled on a node reporting out of disk,
+// network unavailable and not ready condition. Only node conditions are accounted in this predicate.
+func CheckNodeConditionPredicate(pod *v1.Pod, meta interface{}, nodeInfo *schedulercache.NodeInfo) (bool, []algorithm.PredicateFailureReason, error) {
+	reasons := []algorithm.PredicateFailureReason{}
+
+	if nodeInfo == nil || nodeInfo.Node() == nil {
+		return false, []algorithm.PredicateFailureReason{ErrNodeUnknownCondition}, nil
+	}
+
+	node := nodeInfo.Node()
+	for _, cond := range node.Status.Conditions {
+		// We consider the node for scheduling only when its:
+		// - NodeReady condition status is ConditionTrue,
+		// - NodeOutOfDisk condition status is ConditionFalse,
+		// - NodeNetworkUnavailable condition status is ConditionFalse.
+		if cond.Type == v1.NodeReady && cond.Status != v1.ConditionTrue {
+			reasons = append(reasons, ErrNodeNotReady)
+		} else if cond.Type == v1.NodeOutOfDisk && cond.Status != v1.ConditionFalse {
+			reasons = append(reasons, ErrNodeOutOfDisk)
+		} else if cond.Type == v1.NodeNetworkUnavailable && cond.Status != v1.ConditionFalse {
+			reasons = append(reasons, ErrNodeNetworkUnavailable)
+		}
+	}
+
+	if node.Spec.Unschedulable {
+		reasons = append(reasons, ErrNodeUnschedulable)
+	}
+
+	return len(reasons) == 0, reasons, nil
+}
+
 type VolumeNodeChecker struct {
 	pvInfo  PersistentVolumeInfo
 	pvcInfo PersistentVolumeClaimInfo
 	client  clientset.Interface
 }
 
-// VolumeNodeChecker evaluates if a pod can fit due to the volumes it requests, given
+// NewVolumeNodePredicate evaluates if a pod can fit due to the volumes it requests, given
 // that some volumes have node topology constraints, particularly when using Local PVs.
 // The requirement is that any pod that uses a PVC that is bound to a PV with topology constraints
 // must be scheduled to a node that satisfies the PV's topology labels.

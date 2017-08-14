@@ -22,6 +22,7 @@ import shutil
 import socket
 import string
 import json
+import ipaddress
 
 import charms.leadership
 
@@ -322,7 +323,28 @@ def idle_status(kube_api, kube_control):
         msg = 'WARN: cannot change service-cidr, still using ' + service_cidr()
         hookenv.status_set('active', msg)
     else:
-        hookenv.status_set('active', 'Kubernetes master running.')
+        # All services should be up and running at this point. Double-check...
+        failing_services = master_services_down()
+        if len(failing_services) == 0:
+            hookenv.status_set('active', 'Kubernetes master running.')
+        else:
+            msg = 'Stopped services: {}'.format(','.join(failing_services))
+            hookenv.status_set('blocked', msg)
+
+
+def master_services_down():
+    """Ensure master services are up and running.
+
+    Return: list of failing services"""
+    services = ['kube-apiserver',
+                'kube-controller-manager',
+                'kube-scheduler']
+    failing_services = []
+    for service in services:
+        daemon = 'snap.{}.daemon'.format(service)
+        if not host.service_running(daemon):
+            failing_services.append(service)
+    return failing_services
 
 
 @when('etcd.available', 'tls_client.server.certificate.saved',
@@ -397,17 +419,14 @@ def send_tokens(kube_control):
 
 @when_not('kube-control.connected')
 def missing_kube_control():
-    """Inform the operator they need to add the kube-control relation.
+    """Inform the operator master is waiting for a relation to workers.
 
     If deploying via bundle this won't happen, but if operator is upgrading a
     a charm in a deployment that pre-dates the kube-control relation, it'll be
     missing.
 
     """
-    hookenv.status_set(
-        'blocked',
-        'Relate {}:kube-control kubernetes-worker:kube-control'.format(
-            hookenv.service_name()))
+    hookenv.status_set('blocked', 'Waiting for workers.')
 
 
 @when('kube-api-endpoint.available')
@@ -783,18 +802,18 @@ def create_kubeconfig(kubeconfig, server, ca, key=None, certificate=None,
 
 def get_dns_ip():
     '''Get an IP address for the DNS server on the provided cidr.'''
-    # Remove the range from the cidr.
-    ip = service_cidr().split('/')[0]
-    # Take the last octet off the IP address and replace it with 10.
-    return '.'.join(ip.split('.')[0:-1]) + '.10'
+    interface = ipaddress.IPv4Interface(service_cidr())
+    # Add .10 at the end of the network
+    ip = interface.network.network_address + 10
+    return ip.exploded
 
 
 def get_kubernetes_service_ip():
     '''Get the IP address for the kubernetes service based on the cidr.'''
-    # Remove the range from the cidr.
-    ip = service_cidr().split('/')[0]
-    # Remove the last octet and replace it with 1.
-    return '.'.join(ip.split('.')[0:-1]) + '.1'
+    interface = ipaddress.IPv4Interface(service_cidr())
+    # Add .1 at the end of the network
+    ip = interface.network.network_address + 1
+    return ip.exploded
 
 
 def handle_etcd_relation(reldata):

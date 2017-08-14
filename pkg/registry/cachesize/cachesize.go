@@ -51,6 +51,7 @@ const (
 	Pods                       Resource = "pods"
 	PodSecurityPolicies        Resource = "podsecuritypolicies"
 	PodTemplates               Resource = "podtemplates"
+	PriorityClasses            Resource = "priorityclasses"
 	Replicasets                Resource = "replicasets"
 	ResourceQuotas             Resource = "resourcequotas"
 	CronJobs                   Resource = "cronjobs"
@@ -102,6 +103,10 @@ func SetWatchCacheSizes(cacheSizes []string) {
 		size, err := strconv.Atoi(tokens[1])
 		if err != nil {
 			glog.Errorf("invalid size of watch cache capabilities: %s", c)
+			continue
+		}
+		if size < 0 {
+			glog.Errorf("watch cache size cannot be negative: %s", c)
 			continue
 		}
 

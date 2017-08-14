@@ -18,14 +18,18 @@ package options
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/spf13/pflag"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/registry/generic"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/server"
+	"k8s.io/apiserver/pkg/server/healthz"
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
+	"k8s.io/apiserver/pkg/storage/etcd3/preflight"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
 )
 
@@ -47,6 +51,12 @@ type EtcdOptions struct {
 	DefaultWatchCacheSize int
 }
 
+var storageTypes = sets.NewString(
+	storagebackend.StorageTypeUnset,
+	storagebackend.StorageTypeETCD2,
+	storagebackend.StorageTypeETCD3,
+)
+
 func NewEtcdOptions(backendConfig *storagebackend.Config) *EtcdOptions {
 	return &EtcdOptions{
 		StorageConfig:           *backendConfig,
@@ -62,6 +72,10 @@ func (s *EtcdOptions) Validate() []error {
 	allErrors := []error{}
 	if len(s.StorageConfig.ServerList) == 0 {
 		allErrors = append(allErrors, fmt.Errorf("--etcd-servers must be specified"))
+	}
+
+	if !storageTypes.Has(s.StorageConfig.Type) {
+		allErrors = append(allErrors, fmt.Errorf("--storage-backend invalid, must be 'etcd3' or 'etcd2'. If not specified, it will default to 'etcd3'"))
 	}
 
 	return allErrors
@@ -116,13 +130,28 @@ func (s *EtcdOptions) AddFlags(fs *pflag.FlagSet) {
 }
 
 func (s *EtcdOptions) ApplyTo(c *server.Config) error {
+	s.addEtcdHealthEndpoint(c)
 	c.RESTOptionsGetter = &SimpleRestOptionsFactory{Options: *s}
 	return nil
 }
 
 func (s *EtcdOptions) ApplyWithStorageFactoryTo(factory serverstorage.StorageFactory, c *server.Config) error {
+	s.addEtcdHealthEndpoint(c)
 	c.RESTOptionsGetter = &storageFactoryRestOptionsFactory{Options: *s, StorageFactory: factory}
 	return nil
+}
+
+func (s *EtcdOptions) addEtcdHealthEndpoint(c *server.Config) {
+	c.HealthzChecks = append(c.HealthzChecks, healthz.NamedCheck("etcd", func(r *http.Request) error {
+		done, err := preflight.EtcdConnection{ServerList: s.StorageConfig.ServerList}.CheckEtcdServers()
+		if !done {
+			return fmt.Errorf("etcd failed")
+		}
+		if err != nil {
+			return err
+		}
+		return nil
+	}))
 }
 
 type SimpleRestOptionsFactory struct {

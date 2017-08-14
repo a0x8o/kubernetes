@@ -29,8 +29,10 @@ import (
 	"k8s.io/client-go/tools/record"
 
 	"k8s.io/api/core/v1"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset/fake"
-	corelisters "k8s.io/kubernetes/pkg/client/listers/core/v1"
+	"k8s.io/client-go/kubernetes/fake"
+	corelisters "k8s.io/client-go/listers/core/v1"
+	_ "k8s.io/kubernetes/pkg/api/install"
+	_ "k8s.io/kubernetes/pkg/apis/apps/install"
 )
 
 func TestStatefulPodControlCreatesPods(t *testing.T) {
@@ -280,7 +282,7 @@ func TestStatefulPodControlUpdatesPodStorage(t *testing.T) {
 	pvcLister := corelisters.NewPersistentVolumeClaimLister(pvcIndexer)
 	control := NewRealStatefulPodControl(fakeClient, nil, nil, pvcLister, recorder)
 	pvcs := getPersistentVolumeClaims(set, pod)
-	volumes := make([]v1.Volume, len(pod.Spec.Volumes))
+	volumes := make([]v1.Volume, 0, len(pod.Spec.Volumes))
 	for i := range pod.Spec.Volumes {
 		if _, contains := pvcs[pod.Spec.Volumes[i].Name]; !contains {
 			volumes = append(volumes, pod.Spec.Volumes[i])
@@ -327,7 +329,7 @@ func TestStatefulPodControlUpdatePodStorageFailure(t *testing.T) {
 	pvcLister := corelisters.NewPersistentVolumeClaimLister(pvcIndexer)
 	control := NewRealStatefulPodControl(fakeClient, nil, nil, pvcLister, recorder)
 	pvcs := getPersistentVolumeClaims(set, pod)
-	volumes := make([]v1.Volume, len(pod.Spec.Volumes))
+	volumes := make([]v1.Volume, 0, len(pod.Spec.Volumes))
 	for i := range pod.Spec.Volumes {
 		if _, contains := pvcs[pod.Spec.Volumes[i].Name]; !contains {
 			volumes = append(volumes, pod.Spec.Volumes[i])

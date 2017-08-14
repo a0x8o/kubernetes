@@ -27,8 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
-	apiservice "k8s.io/kubernetes/pkg/api/v1/service"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	gcecloud "k8s.io/kubernetes/pkg/cloudprovider/providers/gce"
 
@@ -87,7 +86,7 @@ func ConstructHealthCheckFirewallForLBService(clusterID string, svc *v1.Service,
 	fw.SourceRanges = gcecloud.LoadBalancerSrcRanges()
 	healthCheckPort := gcecloud.GetNodesHealthCheckPort()
 	if !isNodesHealthCheck {
-		healthCheckPort = apiservice.GetServiceHealthCheckNodePort(svc)
+		healthCheckPort = svc.Spec.HealthCheckNodePort
 	}
 	fw.Allowed = []*compute.FirewallAllowed{
 		{
@@ -122,6 +121,16 @@ func SetInstanceTags(cloudConfig CloudConfig, instanceName, zone string, tags []
 	}
 	Logf("Sent request to set tags %v on instance: %v", tags, instanceName)
 	return resTags.Items
+}
+
+// GetNodeTags gets k8s node tag from one of the nodes
+func GetNodeTags(c clientset.Interface, cloudConfig CloudConfig) []string {
+	nodes := GetReadySchedulableNodesOrDie(c)
+	if len(nodes.Items) == 0 {
+		Logf("GetNodeTags: Found 0 node.")
+		return []string{}
+	}
+	return GetInstanceTags(cloudConfig, nodes.Items[0].Name).Items
 }
 
 // GetInstancePrefix returns the INSTANCE_PREFIX env we set for e2e cluster.

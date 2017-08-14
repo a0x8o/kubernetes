@@ -16,12 +16,10 @@ reviewers:
 - mikedanese
 - liggitt
 - nikhiljindal
-- bprashanth
 - gmarek
 - erictune
 - pmorie
 - sttts
-- kargakis
 - dchen1107
 - saad-ali
 - luxas
@@ -29,7 +27,7 @@ reviewers:
 - justinsb
 - pwittrock
 - ncdc
-- timstclair
+- tallclair
 - yifan-gu
 - eparis
 - mwielgus

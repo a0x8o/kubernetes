@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	cadvisorapiv2 "github.com/google/cadvisor/info/v2"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/cgroups/fs"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -42,7 +43,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
 	cmutil "k8s.io/kubernetes/pkg/kubelet/cm/util"
 	"k8s.io/kubernetes/pkg/kubelet/qos"
-	"k8s.io/kubernetes/pkg/util"
+	utilfile "k8s.io/kubernetes/pkg/util/file"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/util/oom"
 	"k8s.io/kubernetes/pkg/util/procfs"
@@ -162,11 +163,11 @@ func validateSystemRequirements(mountUtil mount.Interface) (features, error) {
 
 	// Check if cpu quota is available.
 	// CPU cgroup is required and so it expected to be mounted at this point.
-	periodExists, err := util.FileExists(path.Join(cpuMountPoint, "cpu.cfs_period_us"))
+	periodExists, err := utilfile.FileExists(path.Join(cpuMountPoint, "cpu.cfs_period_us"))
 	if err != nil {
 		glog.Errorf("failed to detect if CPU cgroup cpu.cfs_period_us is available - %v", err)
 	}
-	quotaExists, err := util.FileExists(path.Join(cpuMountPoint, "cpu.cfs_quota_us"))
+	quotaExists, err := utilfile.FileExists(path.Join(cpuMountPoint, "cpu.cfs_quota_us"))
 	if err != nil {
 		glog.Errorf("failed to detect if CPU cgroup cpu.cfs_quota_us is available - %v", err)
 	}
@@ -203,45 +204,23 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 		return nil, err
 	}
 
-	// TODO(#34726:1.8.0): Remove the opt-in for failing when swap is enabled.
-	//     Running with swap enabled should be considered an error, but in order to maintain legacy
-	//     behavior we have to require an opt-in to this error for a period of time.
-
-	// If there is more than one line (table headers) in /proc/swaps, swap is enabled and we should error out.
+	// Running with swap enabled should be considered an error, but in order to maintain legacy
+	// behavior we have to require an opt-in to this error for a period of time.
+	// If there is more than one line (table headers) in /proc/swaps, swap is enabled and we should
+	// error out unless --fail-swap-on is set to false.
 	if len(buf) > 1 {
 		if failSwapOn {
-			return nil, fmt.Errorf("Running with swap on is not supported, please disable swap! /proc/swaps contained: %v", buf)
+			return nil, fmt.Errorf("Running with swap on is not supported, please disable swap! or set --fail-swap-on flag to false. /proc/swaps contained: %v", buf)
 		}
-		glog.Warningf("Running with swap on is not supported, please disable swap! " +
-			"This will be a fatal error by default starting in K8s v1.6! " +
-			"In the meantime, you can opt-in to making this a fatal error by enabling --experimental-fail-swap-on.")
 	}
 	var capacity = v1.ResourceList{}
 	// It is safe to invoke `MachineInfo` on cAdvisor before logically initializing cAdvisor here because
 	// machine info is computed and cached once as part of cAdvisor object creation.
+	// But `RootFsInfo` and `ImagesFsInfo` are not available at this moment so they will be called later during manager starts
 	if info, err := cadvisorInterface.MachineInfo(); err == nil {
 		capacity = cadvisor.CapacityFromMachineInfo(info)
 	} else {
 		return nil, err
-	}
-	rootfs, err := cadvisorInterface.RootFsInfo()
-	if err != nil {
-		capacity[v1.ResourceStorageScratch] = resource.MustParse("0Gi")
-	} else {
-		for rName, rCap := range cadvisor.StorageScratchCapacityFromFsInfo(rootfs) {
-			capacity[rName] = rCap
-		}
-	}
-
-	if hasDedicatedImageFs, _ := cadvisorInterface.HasDedicatedImageFs(); hasDedicatedImageFs {
-		imagesfs, err := cadvisorInterface.ImagesFsInfo()
-		if err != nil {
-			glog.Errorf("Failed to get Image filesystem information: %v", err)
-		} else {
-			for rName, rCap := range cadvisor.StorageOverlayCapacityFromFsInfo(imagesfs) {
-				capacity[rName] = rCap
-			}
-		}
 	}
 
 	cgroupRoot := nodeConfig.CgroupRoot
@@ -551,6 +530,44 @@ func (cm *containerManagerImpl) Start(node *v1.Node, activePods ActivePodsFunc) 
 		}, 5*time.Minute, wait.NeverStop)
 	}
 
+	// Local storage filesystem information from `RootFsInfo` and `ImagesFsInfo` is available at a later time
+	// depending on the time when cadvisor manager updates container stats. Therefore use a go routine to keep
+	// retrieving the information until it is available.
+	stopChan := make(chan struct{})
+	go wait.Until(func() {
+		if err := cm.setFsCapacity(); err != nil {
+			glog.Errorf("[ContainerManager]: %v", err)
+			return
+		}
+		close(stopChan)
+	}, time.Second, stopChan)
+	return nil
+}
+
+func (cm *containerManagerImpl) setFsCapacity() error {
+	rootfs, err := cm.cadvisorInterface.RootFsInfo()
+	if err != nil {
+		return fmt.Errorf("Fail to get rootfs information %v", err)
+	}
+	hasDedicatedImageFs, _ := cm.cadvisorInterface.HasDedicatedImageFs()
+	var imagesfs cadvisorapiv2.FsInfo
+	if hasDedicatedImageFs {
+		imagesfs, err = cm.cadvisorInterface.ImagesFsInfo()
+		if err != nil {
+			return fmt.Errorf("Fail to get imagefs information %v", err)
+		}
+	}
+
+	cm.Lock()
+	for rName, rCap := range cadvisor.StorageScratchCapacityFromFsInfo(rootfs) {
+		cm.capacity[rName] = rCap
+	}
+	if hasDedicatedImageFs {
+		for rName, rCap := range cadvisor.StorageOverlayCapacityFromFsInfo(imagesfs) {
+			cm.capacity[rName] = rCap
+		}
+	}
+	cm.Unlock()
 	return nil
 }
 
@@ -809,6 +826,8 @@ func getDockerAPIVersion(cadvisor cadvisor.Interface) *utilversion.Version {
 	return dockerAPIVersion
 }
 
-func (m *containerManagerImpl) GetCapacity() v1.ResourceList {
-	return m.capacity
+func (cm *containerManagerImpl) GetCapacity() v1.ResourceList {
+	cm.RLock()
+	defer cm.RUnlock()
+	return cm.capacity
 }

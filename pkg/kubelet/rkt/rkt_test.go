@@ -23,11 +23,13 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
 	appcschema "github.com/appc/spec/schema"
 	appctypes "github.com/appc/spec/schema/types"
+	"github.com/coreos/go-systemd/unit"
 	rktapi "github.com/coreos/rkt/api/v1alpha"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -45,8 +47,8 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/network/kubenet"
 	nettest "k8s.io/kubernetes/pkg/kubelet/network/testing"
 	"k8s.io/kubernetes/pkg/kubelet/types"
-	utilexec "k8s.io/kubernetes/pkg/util/exec"
-	"strings"
+	"k8s.io/utils/exec"
+	fakeexec "k8s.io/utils/exec/testing"
 )
 
 func mustMarshalPodManifest(man *appcschema.PodManifest) []byte {
@@ -936,6 +938,7 @@ func baseImageManifest(t *testing.T) *appcschema.ImageManifest {
 func baseAppWithRootUserGroup(t *testing.T) *appctypes.App {
 	app := baseApp(t)
 	app.User, app.Group = "0", "0"
+	app.Isolators = append(app.Isolators)
 	return app
 }
 
@@ -1414,8 +1417,8 @@ func TestGenerateRunCommand(t *testing.T) {
 			HostName:    tt.hostName,
 			Err:         tt.err,
 		}
-		rkt.execer = &utilexec.FakeExec{CommandScript: []utilexec.FakeCommandAction{func(cmd string, args ...string) utilexec.Cmd {
-			return utilexec.InitFakeCmd(&utilexec.FakeCmd{}, cmd, args...)
+		rkt.execer = &fakeexec.FakeExec{CommandScript: []fakeexec.FakeCommandAction{func(cmd string, args ...string) exec.Cmd {
+			return fakeexec.InitFakeCmd(&fakeexec.FakeCmd{}, cmd, args...)
 		}}}
 
 		// a command should be created of this form, but the returned command shouldn't be called (asserted by having no expectations on it)
@@ -2072,6 +2075,56 @@ func TestGetPodSystemdServiceFiles(t *testing.T) {
 		for _, f := range serviceFiles {
 			assert.Contains(t, tt.expected, f.Name(), fmt.Sprintf("Test case #%d", i))
 
+		}
+	}
+}
+
+func TestSetupSystemdCustomFields(t *testing.T) {
+	testCases := []struct {
+		unitOpts       []*unit.UnitOption
+		podAnnotations map[string]string
+		expectedValues []string
+		raiseErr       bool
+	}{
+		// without annotation
+		{
+			[]*unit.UnitOption{
+				{Section: "Service", Name: "ExecStart", Value: "/bin/true"},
+			},
+			map[string]string{},
+			[]string{"/bin/true"},
+			false,
+		},
+		// with valid annotation for LimitNOFile
+		{
+			[]*unit.UnitOption{
+				{Section: "Service", Name: "ExecStart", Value: "/bin/true"},
+			},
+			map[string]string{k8sRktLimitNoFileAnno: "1024"},
+			[]string{"/bin/true", "1024"},
+			false,
+		},
+		// with invalid annotation for LimitNOFile
+		{
+			[]*unit.UnitOption{
+				{Section: "Service", Name: "ExecStart", Value: "/bin/true"},
+			},
+			map[string]string{k8sRktLimitNoFileAnno: "-1"},
+			[]string{"/bin/true"},
+			true,
+		},
+	}
+
+	for i, tt := range testCases {
+		raiseErr := false
+		newUnitsOpts, err := setupSystemdCustomFields(tt.podAnnotations, tt.unitOpts)
+		if err != nil {
+			raiseErr = true
+		}
+		assert.Equal(t, tt.raiseErr, raiseErr, fmt.Sprintf("Test case #%d", i))
+		for _, opt := range newUnitsOpts {
+			assert.Equal(t, "Service", opt.Section, fmt.Sprintf("Test case #%d", i))
+			assert.Contains(t, tt.expectedValues, opt.Value, fmt.Sprintf("Test case #%d", i))
 		}
 	}
 }

@@ -49,6 +49,7 @@ package_group(
     packages = [
         "//test/e2e",
         "//test/e2e/framework",
+        "//test/e2e/kubectl",
         "//test/e2e/workload",
         "//test/integration/etcd",
         "//test/integration/framework",
@@ -59,6 +60,7 @@ package_group(
 package_group(
     name = "FEDERATION_BAD",
     packages = [
+        "//federation/cmd/genfeddocs",
         "//federation/cmd/kubefed/app",
         "//federation/pkg/kubefed",
         "//federation/pkg/kubefed/init",
@@ -358,6 +360,7 @@ package_group(
     packages = [
         "//pkg/kubectl",
         "//pkg/kubectl/cmd",
+        "//pkg/kubectl/proxy",
     ],
 )
 
