@@ -28,78 +28,8 @@ import (
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 )
 
-func TestNewVolume(t *testing.T) {
-	var tests = []struct {
-		name     string
-		path     string
-		expected v1.Volume
-	}{
-		{
-			name: "foo",
-			path: "/etc/foo",
-			expected: v1.Volume{
-				Name: "foo",
-				VolumeSource: v1.VolumeSource{
-					HostPath: &v1.HostPathVolumeSource{Path: "/etc/foo"},
-				},
-			},
-		},
-	}
-
-	for _, rt := range tests {
-		actual := newVolume(rt.name, rt.path)
-		if !reflect.DeepEqual(actual, rt.expected) {
-			t.Errorf(
-				"failed newVolume:\n\texpected: %v\n\t  actual: %v",
-				rt.expected,
-				actual,
-			)
-		}
-	}
-}
-
-func TestNewVolumeMount(t *testing.T) {
-	var tests = []struct {
-		name     string
-		path     string
-		ro       bool
-		expected v1.VolumeMount
-	}{
-		{
-			name: "foo",
-			path: "/etc/foo",
-			ro:   false,
-			expected: v1.VolumeMount{
-				Name:      "foo",
-				MountPath: "/etc/foo",
-				ReadOnly:  false,
-			},
-		},
-		{
-			name: "bar",
-			path: "/etc/foo/bar",
-			ro:   true,
-			expected: v1.VolumeMount{
-				Name:      "bar",
-				MountPath: "/etc/foo/bar",
-				ReadOnly:  true,
-			},
-		},
-	}
-
-	for _, rt := range tests {
-		actual := newVolumeMount(rt.name, rt.path, rt.ro)
-		if !reflect.DeepEqual(actual, rt.expected) {
-			t.Errorf(
-				"failed newVolumeMount:\n\texpected: %v\n\t  actual: %v",
-				rt.expected,
-				actual,
-			)
-		}
-	}
-}
-
 func TestGetEtcdCertVolumes(t *testing.T) {
+	hostPathDirectoryOrCreate := v1.HostPathDirectoryOrCreate
 	var tests = []struct {
 		ca, cert, key string
 		vol           []v1.Volume
@@ -138,7 +68,10 @@ func TestGetEtcdCertVolumes(t *testing.T) {
 				{
 					Name: "etcd-certs-0",
 					VolumeSource: v1.VolumeSource{
-						HostPath: &v1.HostPathVolumeSource{Path: "/var/lib/certs/etcd"},
+						HostPath: &v1.HostPathVolumeSource{
+							Path: "/var/lib/certs/etcd",
+							Type: &hostPathDirectoryOrCreate,
+						},
 					},
 				},
 			},
@@ -159,13 +92,19 @@ func TestGetEtcdCertVolumes(t *testing.T) {
 				{
 					Name: "etcd-certs-0",
 					VolumeSource: v1.VolumeSource{
-						HostPath: &v1.HostPathVolumeSource{Path: "/etc/certs/etcd"},
+						HostPath: &v1.HostPathVolumeSource{
+							Path: "/etc/certs/etcd",
+							Type: &hostPathDirectoryOrCreate,
+						},
 					},
 				},
 				{
 					Name: "etcd-certs-1",
 					VolumeSource: v1.VolumeSource{
-						HostPath: &v1.HostPathVolumeSource{Path: "/var/lib/certs/etcd"},
+						HostPath: &v1.HostPathVolumeSource{
+							Path: "/var/lib/certs/etcd",
+							Type: &hostPathDirectoryOrCreate,
+						},
 					},
 				},
 			},
@@ -191,19 +130,28 @@ func TestGetEtcdCertVolumes(t *testing.T) {
 				{
 					Name: "etcd-certs-0",
 					VolumeSource: v1.VolumeSource{
-						HostPath: &v1.HostPathVolumeSource{Path: "/etc/certs/etcd"},
+						HostPath: &v1.HostPathVolumeSource{
+							Path: "/etc/certs/etcd",
+							Type: &hostPathDirectoryOrCreate,
+						},
 					},
 				},
 				{
 					Name: "etcd-certs-1",
 					VolumeSource: v1.VolumeSource{
-						HostPath: &v1.HostPathVolumeSource{Path: "/var/lib/certs/etcd"},
+						HostPath: &v1.HostPathVolumeSource{
+							Path: "/var/lib/certs/etcd",
+							Type: &hostPathDirectoryOrCreate,
+						},
 					},
 				},
 				{
 					Name: "etcd-certs-2",
 					VolumeSource: v1.VolumeSource{
-						HostPath: &v1.HostPathVolumeSource{Path: "/var/lib/certs/private"},
+						HostPath: &v1.HostPathVolumeSource{
+							Path: "/var/lib/certs/private",
+							Type: &hostPathDirectoryOrCreate,
+						},
 					},
 				},
 			},
@@ -234,7 +182,10 @@ func TestGetEtcdCertVolumes(t *testing.T) {
 				{
 					Name: "etcd-certs-0",
 					VolumeSource: v1.VolumeSource{
-						HostPath: &v1.HostPathVolumeSource{Path: "/etc/certs/etcd"},
+						HostPath: &v1.HostPathVolumeSource{
+							Path: "/etc/certs/etcd",
+							Type: &hostPathDirectoryOrCreate,
+						},
 					},
 				},
 			},
@@ -255,7 +206,10 @@ func TestGetEtcdCertVolumes(t *testing.T) {
 				{
 					Name: "etcd-certs-0",
 					VolumeSource: v1.VolumeSource{
-						HostPath: &v1.HostPathVolumeSource{Path: "/etc/certs/etcd"},
+						HostPath: &v1.HostPathVolumeSource{
+							Path: "/etc/certs/etcd",
+							Type: &hostPathDirectoryOrCreate,
+						},
 					},
 				},
 			},
@@ -293,6 +247,8 @@ func TestGetEtcdCertVolumes(t *testing.T) {
 }
 
 func TestGetHostPathVolumesForTheControlPlane(t *testing.T) {
+	hostPathDirectoryOrCreate := v1.HostPathDirectoryOrCreate
+	hostPathFileOrCreate := v1.HostPathFileOrCreate
 	var tests = []struct {
 		cfg      *kubeadmapi.MasterConfiguration
 		vol      map[string][]v1.Volume
@@ -309,13 +265,19 @@ func TestGetHostPathVolumesForTheControlPlane(t *testing.T) {
 					{
 						Name: "k8s-certs",
 						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{Path: testCertsDir},
+							HostPath: &v1.HostPathVolumeSource{
+								Path: testCertsDir,
+								Type: &hostPathDirectoryOrCreate,
+							},
 						},
 					},
 					{
 						Name: "ca-certs",
 						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{Path: "/etc/ssl/certs"},
+							HostPath: &v1.HostPathVolumeSource{
+								Path: "/etc/ssl/certs",
+								Type: &hostPathDirectoryOrCreate,
+							},
 						},
 					},
 				},
@@ -323,19 +285,37 @@ func TestGetHostPathVolumesForTheControlPlane(t *testing.T) {
 					{
 						Name: "k8s-certs",
 						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{Path: testCertsDir},
+							HostPath: &v1.HostPathVolumeSource{
+								Path: testCertsDir,
+								Type: &hostPathDirectoryOrCreate,
+							},
 						},
 					},
 					{
 						Name: "ca-certs",
 						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{Path: "/etc/ssl/certs"},
+							HostPath: &v1.HostPathVolumeSource{
+								Path: "/etc/ssl/certs",
+								Type: &hostPathDirectoryOrCreate,
+							},
 						},
 					},
 					{
 						Name: "kubeconfig",
 						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{Path: "/etc/kubernetes/controller-manager.conf"},
+							HostPath: &v1.HostPathVolumeSource{
+								Path: "/etc/kubernetes/controller-manager.conf",
+								Type: &hostPathFileOrCreate,
+							},
+						},
+					},
+					{
+						Name: "flexvolume-dir",
+						VolumeSource: v1.VolumeSource{
+							HostPath: &v1.HostPathVolumeSource{
+								Path: "/usr/libexec/kubernetes/kubelet-plugins/volume/exec",
+								Type: &hostPathDirectoryOrCreate,
+							},
 						},
 					},
 				},
@@ -343,7 +323,10 @@ func TestGetHostPathVolumesForTheControlPlane(t *testing.T) {
 					{
 						Name: "kubeconfig",
 						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{Path: "/etc/kubernetes/scheduler.conf"},
+							HostPath: &v1.HostPathVolumeSource{
+								Path: "/etc/kubernetes/scheduler.conf",
+								Type: &hostPathFileOrCreate,
+							},
 						},
 					},
 				},
@@ -377,6 +360,11 @@ func TestGetHostPathVolumesForTheControlPlane(t *testing.T) {
 						MountPath: "/etc/kubernetes/controller-manager.conf",
 						ReadOnly:  true,
 					},
+					{
+						Name:      "flexvolume-dir",
+						MountPath: "/usr/libexec/kubernetes/kubelet-plugins/volume/exec",
+						ReadOnly:  false,
+					},
 				},
 				kubeadmconstants.KubeScheduler: {
 					{
@@ -403,25 +391,37 @@ func TestGetHostPathVolumesForTheControlPlane(t *testing.T) {
 					{
 						Name: "k8s-certs",
 						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{Path: testCertsDir},
+							HostPath: &v1.HostPathVolumeSource{
+								Path: testCertsDir,
+								Type: &hostPathDirectoryOrCreate,
+							},
 						},
 					},
 					{
 						Name: "ca-certs",
 						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{Path: "/etc/ssl/certs"},
+							HostPath: &v1.HostPathVolumeSource{
+								Path: "/etc/ssl/certs",
+								Type: &hostPathDirectoryOrCreate,
+							},
 						},
 					},
 					{
 						Name: "etcd-certs-0",
 						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{Path: "/etc/certs/etcd"},
+							HostPath: &v1.HostPathVolumeSource{
+								Path: "/etc/certs/etcd",
+								Type: &hostPathDirectoryOrCreate,
+							},
 						},
 					},
 					{
 						Name: "etcd-certs-1",
 						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{Path: "/var/lib/certs/etcd"},
+							HostPath: &v1.HostPathVolumeSource{
+								Path: "/var/lib/certs/etcd",
+								Type: &hostPathDirectoryOrCreate,
+							},
 						},
 					},
 				},
@@ -429,19 +429,37 @@ func TestGetHostPathVolumesForTheControlPlane(t *testing.T) {
 					{
 						Name: "k8s-certs",
 						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{Path: testCertsDir},
+							HostPath: &v1.HostPathVolumeSource{
+								Path: testCertsDir,
+								Type: &hostPathDirectoryOrCreate,
+							},
 						},
 					},
 					{
 						Name: "ca-certs",
 						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{Path: "/etc/ssl/certs"},
+							HostPath: &v1.HostPathVolumeSource{
+								Path: "/etc/ssl/certs",
+								Type: &hostPathDirectoryOrCreate,
+							},
 						},
 					},
 					{
 						Name: "kubeconfig",
 						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{Path: "/etc/kubernetes/controller-manager.conf"},
+							HostPath: &v1.HostPathVolumeSource{
+								Path: "/etc/kubernetes/controller-manager.conf",
+								Type: &hostPathFileOrCreate,
+							},
+						},
+					},
+					{
+						Name: "flexvolume-dir",
+						VolumeSource: v1.VolumeSource{
+							HostPath: &v1.HostPathVolumeSource{
+								Path: "/usr/libexec/kubernetes/kubelet-plugins/volume/exec",
+								Type: &hostPathDirectoryOrCreate,
+							},
 						},
 					},
 				},
@@ -449,7 +467,10 @@ func TestGetHostPathVolumesForTheControlPlane(t *testing.T) {
 					{
 						Name: "kubeconfig",
 						VolumeSource: v1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{Path: "/etc/kubernetes/scheduler.conf"},
+							HostPath: &v1.HostPathVolumeSource{
+								Path: "/etc/kubernetes/scheduler.conf",
+								Type: &hostPathFileOrCreate,
+							},
 						},
 					},
 				},
@@ -492,6 +513,11 @@ func TestGetHostPathVolumesForTheControlPlane(t *testing.T) {
 						Name:      "kubeconfig",
 						MountPath: "/etc/kubernetes/controller-manager.conf",
 						ReadOnly:  true,
+					},
+					{
+						Name:      "flexvolume-dir",
+						MountPath: "/usr/libexec/kubernetes/kubelet-plugins/volume/exec",
+						ReadOnly:  false,
 					},
 				},
 				kubeadmconstants.KubeScheduler: {

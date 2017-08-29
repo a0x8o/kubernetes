@@ -41,9 +41,11 @@ IMAGE_NGINX="gcr.io/google-containers/nginx:1.7.9"
 IMAGE_DEPLOYMENT_R1="gcr.io/google-containers/nginx:test-cmd"  # deployment-revision1.yaml
 IMAGE_DEPLOYMENT_R2="$IMAGE_NGINX"  # deployment-revision2.yaml
 IMAGE_PERL="gcr.io/google-containers/perl"
-IMAGE_DAEMONSET_R1="gcr.io/google-containers/pause:2.0"
+IMAGE_PAUSE_V2="gcr.io/google-containers/pause:2.0"
 IMAGE_DAEMONSET_R2="gcr.io/google-containers/pause:latest"
 IMAGE_DAEMONSET_R2_2="gcr.io/google-containers/nginx:test-cmd"  # rollingupdate-daemonset-rv2.yaml
+IMAGE_STATEFULSET_R1="gcr.io/google_containers/nginx-slim:0.7"
+IMAGE_STATEFULSET_R2="gcr.io/google_containers/nginx-slim:0.8"
 
 # Expose kubectl directly for readability
 PATH="${KUBE_OUTPUT_HOSTBIN}":$PATH
@@ -172,6 +174,9 @@ function cleanup()
 
   kube::etcd::cleanup
   rm -rf "${KUBE_TEMP}"
+
+  local junit_dir="${KUBE_JUNIT_REPORT_DIR:-/tmp/junit-results}"
+  echo "junit report dir:" ${junit_dir}
 
   kube::log::status "Clean up complete"
 }
@@ -687,7 +692,7 @@ run_pod_tests() {
   kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" 'valid-pod:'
 
   ## Patch can modify a local object
-  kubectl patch --local -f pkg/api/validation/testdata/v1/validPod.yaml --patch='{"spec": {"restartPolicy":"Never"}}' -o jsonpath='{.spec.restartPolicy}' | grep -q "Never"
+  kubectl patch --local -f pkg/kubectl/validation/testdata/v1/validPod.yaml --patch='{"spec": {"restartPolicy":"Never"}}' -o jsonpath='{.spec.restartPolicy}' | grep -q "Never"
 
   ## Patch pod can change image
   # Command
@@ -925,6 +930,30 @@ run_kubectl_apply_tests() {
   [[ "$(kubectl get pods test-pod -o yaml "${kube_flags[@]}" | grep kubectl.kubernetes.io/last-applied-configuration)" ]]
   # Clean up
   kubectl delete pods test-pod "${kube_flags[@]}"
+
+
+  ## kubectl apply should be able to clear defaulted fields.
+  # Pre-Condition: no deployment exists
+  kube::test::get_object_assert deployments "{{range.items}}{{$id_field}}:{{end}}" ''
+  # Command: apply a deployment "test-deployment-retainkeys" (doesn't exist) should create this deployment
+  kubectl apply -f hack/testdata/retainKeys/deployment/deployment-before.yaml "${kube_flags[@]}"
+  # Post-Condition: deployment "test-deployment-retainkeys" created
+  kube::test::get_object_assert deployments "{{range.items}}{{$id_field}}{{end}}" 'test-deployment-retainkeys'
+  # Post-Condition: deployment "test-deployment-retainkeys" has defaulted fields
+  [[ "$(kubectl get deployments test-deployment-retainkeys -o yaml "${kube_flags[@]}" | grep RollingUpdate)" ]]
+  [[ "$(kubectl get deployments test-deployment-retainkeys -o yaml "${kube_flags[@]}" | grep maxSurge)" ]]
+  [[ "$(kubectl get deployments test-deployment-retainkeys -o yaml "${kube_flags[@]}" | grep maxUnavailable)" ]]
+  [[ "$(kubectl get deployments test-deployment-retainkeys -o yaml "${kube_flags[@]}" | grep emptyDir)" ]]
+  # Command: apply a deployment "test-deployment-retainkeys" should clear
+  # defaulted fields and successfully update the deployment
+  [[ "$(kubectl apply -f hack/testdata/retainKeys/deployment/deployment-after.yaml "${kube_flags[@]}")" ]]
+  # Post-Condition: deployment "test-deployment-retainkeys" has updated fields
+  [[ "$(kubectl get deployments test-deployment-retainkeys -o yaml "${kube_flags[@]}" | grep Recreate)" ]]
+  ! [[ "$(kubectl get deployments test-deployment-retainkeys -o yaml "${kube_flags[@]}" | grep RollingUpdate)" ]]
+  [[ "$(kubectl get deployments test-deployment-retainkeys -o yaml "${kube_flags[@]}" | grep hostPath)" ]]
+  ! [[ "$(kubectl get deployments test-deployment-retainkeys -o yaml "${kube_flags[@]}" | grep emptyDir)" ]]
+  # Clean up
+  kubectl delete deployments test-deployment-retainkeys "${kube_flags[@]}"
 
 
   ## kubectl apply -f with label selector should only apply matching objects
@@ -1184,7 +1213,7 @@ run_kubectl_run_tests() {
 
   create_and_use_new_namespace
   kube::log::status "Testing kubectl run"
-  ## kubectl run should create deployments or jobs
+  ## kubectl run should create deployments, jobs or cronjob
   # Pre-Condition: no Job exists
   kube::test::get_object_assert jobs "{{range.items}}{{$id_field}}:{{end}}" ''
   # Command
@@ -1197,6 +1226,7 @@ run_kubectl_run_tests() {
   kubectl delete jobs pi "${kube_flags[@]}"
   # Post-condition: no pods exist.
   kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" ''
+
   # Pre-Condition: no Deployment exists
   kube::test::get_object_assert deployment "{{range.items}}{{$id_field}}:{{end}}" ''
   # Command
@@ -1218,30 +1248,16 @@ run_kubectl_run_tests() {
   # Clean up
   kubectl delete deployment nginx-apps "${kube_flags[@]}"
 
-  set +o nounset
-  set +o errexit
-}
-
-run_kubectl_using_deprecated_commands_test() {
-  set -o nounset
-  set -o errexit
-
-  create_and_use_new_namespace
-  kube::log::status "Testing kubectl using deprecated commands"
-  ## `kubectl run-container` should function identical to `kubectl run`, but it
-  ## should also print a deprecation warning.
-  # Pre-Condition: no Job exists
-  kube::test::get_object_assert jobs "{{range.items}}{{$id_field}}:{{end}}" ''
-  # Command
-  output_message=$(kubectl 2>&1 run-container pi --generator=job/v1 "--image=$IMAGE_PERL" --restart=OnFailure -- perl -Mbignum=bpi -wle 'print bpi(15)' "${kube_flags[@]}")
-  # Ensure that the user is warned their command is deprecated.
-  kube::test::if_has_string "${output_message}" 'deprecated'
-  # Post-Condition: Job "pi" is created
-  kube::test::get_object_assert jobs "{{range.items}}{{$id_field}}:{{end}}" 'pi:'
-  # Clean up
-  kubectl delete jobs pi "${kube_flags[@]}"
-  # Post-condition: no pods exist.
-  kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" ''
+  # TODO: enable batch/v1beta1 by default before 1.8 release, after issues
+  # with CronJobs existing in multiple versions at once is solved
+  # # Pre-Condition: no Job exists
+  # kube::test::get_object_assert cronjobs "{{range.items}}{{$id_field}}:{{end}}" ''
+  # # Command
+  # kubectl run pi --schedule="*/5 * * * *" --generator=cronjob/v1beta1 "--image=$IMAGE_PERL" --restart=OnFailure -- perl -Mbignum=bpi -wle 'print bpi(20)' "${kube_flags[@]}"
+  # # Post-Condition: CronJob "pi" is created
+  # kube::test::get_object_assert cronjobs "{{range.items}}{{$id_field}}:{{end}}" 'pi:'
+  # # Clean up
+  # kubectl delete cronjobs pi "${kube_flags[@]}"
 
   set +o nounset
   set +o errexit
@@ -1872,7 +1888,7 @@ run_recursive_resources_tests() {
   # Create a deployment (revision 1)
   kubectl create -f hack/testdata/deployment-revision1.yaml "${kube_flags[@]}"
   kube::test::get_object_assert deployment "{{range.items}}{{$id_field}}:{{end}}" 'nginx:'
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
   # Command
   output_message=$(kubectl convert --local -f hack/testdata/deployment-revision1.yaml --output-version=apps/v1beta1 -o go-template='{{ .apiVersion }}' "${kube_flags[@]}")
   echo $output_message
@@ -1995,11 +2011,11 @@ run_recursive_resources_tests() {
   # Create deployments (revision 1) recursively from directory of YAML files
   ! kubectl create -f hack/testdata/recursive/deployment --recursive "${kube_flags[@]}"
   kube::test::get_object_assert deployment "{{range.items}}{{$id_field}}:{{end}}" 'nginx0-deployment:nginx1-deployment:'
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_NGINX}:${IMAGE_NGINX}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_NGINX}:${IMAGE_NGINX}:"
   ## Rollback the deployments to revision 1 recursively
   output_message=$(! kubectl rollout undo -f hack/testdata/recursive/deployment --recursive --to-revision=1 2>&1 "${kube_flags[@]}")
   # Post-condition: nginx0 & nginx1 should be a no-op, and since nginx2 is malformed, it should error
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_NGINX}:${IMAGE_NGINX}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_NGINX}:${IMAGE_NGINX}:"
   kube::test::if_has_string "${output_message}" "Object 'Kind' is missing"
   ## Pause the deployments recursively
   PRESERVE_ERR_FILE=true
@@ -2634,8 +2650,8 @@ run_rc_tests() {
   # Create a deployment
   kubectl create -f hack/testdata/deployment-multicontainer-resources.yaml "${kube_flags[@]}"
   kube::test::get_object_assert deployment "{{range.items}}{{$id_field}}:{{end}}" 'nginx-deployment-resources:'
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_second_image_field}}:{{end}}" "${IMAGE_PERL}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field1}}:{{end}}" "${IMAGE_PERL}:"
   # Set the deployment's cpu limits
   kubectl set resources deployment nginx-deployment-resources --limits=cpu=100m "${kube_flags[@]}"
   kube::test::get_object_assert deployment "{{range.items}}{{(index .spec.template.spec.containers 0).resources.limits.cpu}}:{{end}}" "100m:"
@@ -2766,27 +2782,27 @@ run_deployment_tests() {
   # Create a deployment (revision 1)
   kubectl create -f hack/testdata/deployment-revision1.yaml "${kube_flags[@]}"
   kube::test::get_object_assert deployment "{{range.items}}{{$id_field}}:{{end}}" 'nginx:'
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
   # Rollback to revision 1 - should be no-op
   kubectl rollout undo deployment nginx --to-revision=1 "${kube_flags[@]}"
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
   # Update the deployment (revision 2)
   kubectl apply -f hack/testdata/deployment-revision2.yaml "${kube_flags[@]}"
-  kube::test::get_object_assert deployment.extensions "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R2}:"
+  kube::test::get_object_assert deployment.extensions "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R2}:"
   # Rollback to revision 1 with dry-run - should be no-op
   kubectl rollout undo deployment nginx --dry-run=true "${kube_flags[@]}" | grep "test-cmd"
-  kube::test::get_object_assert deployment.extensions "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R2}:"
+  kube::test::get_object_assert deployment.extensions "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R2}:"
   # Rollback to revision 1
   kubectl rollout undo deployment nginx --to-revision=1 "${kube_flags[@]}"
   sleep 1
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
   # Rollback to revision 1000000 - should be no-op
   kubectl rollout undo deployment nginx --to-revision=1000000 "${kube_flags[@]}"
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
   # Rollback to last revision
   kubectl rollout undo deployment nginx "${kube_flags[@]}"
   sleep 1
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R2}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R2}:"
   # Pause the deployment
   kubectl-with-retry rollout pause deployment nginx "${kube_flags[@]}"
   # A paused deployment cannot be rolled back
@@ -2812,30 +2828,35 @@ run_deployment_tests() {
   # Create a deployment
   kubectl create -f hack/testdata/deployment-multicontainer.yaml "${kube_flags[@]}"
   kube::test::get_object_assert deployment "{{range.items}}{{$id_field}}:{{end}}" 'nginx-deployment:'
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_second_image_field}}:{{end}}" "${IMAGE_PERL}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field1}}:{{end}}" "${IMAGE_PERL}:"
   # Set the deployment's image
   kubectl set image deployment nginx-deployment nginx="${IMAGE_DEPLOYMENT_R2}" "${kube_flags[@]}"
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R2}:"
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_second_image_field}}:{{end}}" "${IMAGE_PERL}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R2}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field1}}:{{end}}" "${IMAGE_PERL}:"
   # Set non-existing container should fail
   ! kubectl set image deployment nginx-deployment redis=redis "${kube_flags[@]}"
   # Set image of deployments without specifying name
   kubectl set image deployments --all nginx="${IMAGE_DEPLOYMENT_R1}" "${kube_flags[@]}"
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_second_image_field}}:{{end}}" "${IMAGE_PERL}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field1}}:{{end}}" "${IMAGE_PERL}:"
   # Set image of a deployment specified by file
   kubectl set image -f hack/testdata/deployment-multicontainer.yaml nginx="${IMAGE_DEPLOYMENT_R2}" "${kube_flags[@]}"
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R2}:"
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_second_image_field}}:{{end}}" "${IMAGE_PERL}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R2}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field1}}:{{end}}" "${IMAGE_PERL}:"
   # Set image of a local file without talking to the server
   kubectl set image -f hack/testdata/deployment-multicontainer.yaml nginx="${IMAGE_DEPLOYMENT_R1}" "${kube_flags[@]}" --local -o yaml
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R2}:"
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_second_image_field}}:{{end}}" "${IMAGE_PERL}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R2}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field1}}:{{end}}" "${IMAGE_PERL}:"
   # Set image of all containers of the deployment
   kubectl set image deployment nginx-deployment "*"="${IMAGE_DEPLOYMENT_R1}" "${kube_flags[@]}"
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
-  kube::test::get_object_assert deployment "{{range.items}}{{$deployment_second_image_field}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field1}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
+  # Set image of all containners of the deployment again when image not change
+  kubectl set image deployment nginx-deployment "*"="${IMAGE_DEPLOYMENT_R1}" "${kube_flags[@]}"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
+  kube::test::get_object_assert deployment "{{range.items}}{{$image_field1}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
+
   # Clean up
   kubectl delete deployment nginx-deployment "${kube_flags[@]}"
 
@@ -3013,38 +3034,90 @@ run_daemonset_history_tests() {
   # Command
   # Create a DaemonSet (revision 1)
   kubectl apply -f hack/testdata/rollingupdate-daemonset.yaml --record "${kube_flags[@]}"
-  kube::test::get_object_assert controllerrevisions "{{range.items}}{{$annotations_field}}:{{end}}" ".*rollingupdate-daemonset.yaml --record.*"
+  kube::test::wait_object_assert controllerrevisions "{{range.items}}{{$annotations_field}}:{{end}}" ".*rollingupdate-daemonset.yaml --record.*"
   # Rollback to revision 1 - should be no-op
   kubectl rollout undo daemonset --to-revision=1 "${kube_flags[@]}"
-  kube::test::get_object_assert daemonset "{{range.items}}{{$daemonset_image_field0}}:{{end}}" "${IMAGE_DAEMONSET_R1}:"
+  kube::test::get_object_assert daemonset "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_PAUSE_V2}:"
   kube::test::get_object_assert daemonset "{{range.items}}{{$container_len}}{{end}}" "1"
   # Update the DaemonSet (revision 2)
   kubectl apply -f hack/testdata/rollingupdate-daemonset-rv2.yaml --record "${kube_flags[@]}"
-  kube::test::wait_object_assert daemonset "{{range.items}}{{$daemonset_image_field0}}:{{end}}" "${IMAGE_DAEMONSET_R2}:"
-  kube::test::wait_object_assert daemonset "{{range.items}}{{$daemonset_image_field1}}:{{end}}" "${IMAGE_DAEMONSET_R2_2}:"
+  kube::test::wait_object_assert daemonset "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DAEMONSET_R2}:"
+  kube::test::wait_object_assert daemonset "{{range.items}}{{$image_field1}}:{{end}}" "${IMAGE_DAEMONSET_R2_2}:"
   kube::test::get_object_assert daemonset "{{range.items}}{{$container_len}}{{end}}" "2"
   kube::test::wait_object_assert controllerrevisions "{{range.items}}{{$annotations_field}}:{{end}}" ".*rollingupdate-daemonset-rv2.yaml --record.*"
   # Rollback to revision 1 with dry-run - should be no-op
   kubectl rollout undo daemonset --dry-run=true "${kube_flags[@]}"
-  kube::test::get_object_assert daemonset "{{range.items}}{{$daemonset_image_field0}}:{{end}}" "${IMAGE_DAEMONSET_R2}:"
-  kube::test::get_object_assert daemonset "{{range.items}}{{$daemonset_image_field1}}:{{end}}" "${IMAGE_DAEMONSET_R2_2}:"
+  kube::test::get_object_assert daemonset "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DAEMONSET_R2}:"
+  kube::test::get_object_assert daemonset "{{range.items}}{{$image_field1}}:{{end}}" "${IMAGE_DAEMONSET_R2_2}:"
   kube::test::get_object_assert daemonset "{{range.items}}{{$container_len}}{{end}}" "2"
   # Rollback to revision 1
   kubectl rollout undo daemonset --to-revision=1 "${kube_flags[@]}"
-  kube::test::wait_object_assert daemonset "{{range.items}}{{$daemonset_image_field0}}:{{end}}" "${IMAGE_DAEMONSET_R1}:"
+  kube::test::wait_object_assert daemonset "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_PAUSE_V2}:"
   kube::test::get_object_assert daemonset "{{range.items}}{{$container_len}}{{end}}" "1"
   # Rollback to revision 1000000 - should fail
   output_message=$(! kubectl rollout undo daemonset --to-revision=1000000 "${kube_flags[@]}" 2>&1)
   kube::test::if_has_string "${output_message}" "unable to find specified revision"
-  kube::test::get_object_assert daemonset "{{range.items}}{{$daemonset_image_field0}}:{{end}}" "${IMAGE_DAEMONSET_R1}:"
+  kube::test::get_object_assert daemonset "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_PAUSE_V2}:"
   kube::test::get_object_assert daemonset "{{range.items}}{{$container_len}}{{end}}" "1"
   # Rollback to last revision
   kubectl rollout undo daemonset "${kube_flags[@]}"
-  kube::test::wait_object_assert daemonset "{{range.items}}{{$daemonset_image_field0}}:{{end}}" "${IMAGE_DAEMONSET_R2}:"
-  kube::test::wait_object_assert daemonset "{{range.items}}{{$daemonset_image_field1}}:{{end}}" "${IMAGE_DAEMONSET_R2_2}:"
+  kube::test::wait_object_assert daemonset "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DAEMONSET_R2}:"
+  kube::test::wait_object_assert daemonset "{{range.items}}{{$image_field1}}:{{end}}" "${IMAGE_DAEMONSET_R2_2}:"
   kube::test::get_object_assert daemonset "{{range.items}}{{$container_len}}{{end}}" "2"
   # Clean up
   kubectl delete -f hack/testdata/rollingupdate-daemonset.yaml "${kube_flags[@]}"
+
+  set +o nounset
+  set +o errexit
+}
+
+run_statefulset_history_tests() {
+  set -o nounset
+  set -o errexit
+
+  create_and_use_new_namespace
+  kube::log::status "Testing kubectl(v1:statefulsets, v1:controllerrevisions)"
+
+  ### Test rolling back a StatefulSet
+  # Pre-condition: no statefulset or its pods exists
+  kube::test::get_object_assert statefulset "{{range.items}}{{$id_field}}:{{end}}" ''
+  # Command
+  # Create a StatefulSet (revision 1)
+  kubectl apply -f hack/testdata/rollingupdate-statefulset.yaml --record "${kube_flags[@]}"
+  kube::test::wait_object_assert controllerrevisions "{{range.items}}{{$annotations_field}}:{{end}}" ".*rollingupdate-statefulset.yaml --record.*"
+  # Rollback to revision 1 - should be no-op
+  kubectl rollout undo statefulset --to-revision=1 "${kube_flags[@]}"
+  kube::test::get_object_assert statefulset "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_STATEFULSET_R1}:"
+  kube::test::get_object_assert statefulset "{{range.items}}{{$container_len}}{{end}}" "1"
+  # Update the statefulset (revision 2)
+  kubectl apply -f hack/testdata/rollingupdate-statefulset-rv2.yaml --record "${kube_flags[@]}"
+  kube::test::wait_object_assert statefulset "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_STATEFULSET_R2}:"
+  kube::test::wait_object_assert statefulset "{{range.items}}{{$image_field1}}:{{end}}" "${IMAGE_PAUSE_V2}:"
+  kube::test::get_object_assert statefulset "{{range.items}}{{$container_len}}{{end}}" "2"
+  kube::test::wait_object_assert controllerrevisions "{{range.items}}{{$annotations_field}}:{{end}}" ".*rollingupdate-statefulset-rv2.yaml --record.*"
+  # Rollback to revision 1 with dry-run - should be no-op
+  kubectl rollout undo statefulset --dry-run=true "${kube_flags[@]}"
+  kube::test::get_object_assert statefulset "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_STATEFULSET_R2}:"
+  kube::test::get_object_assert statefulset "{{range.items}}{{$image_field1}}:{{end}}" "${IMAGE_PAUSE_V2}:"
+  kube::test::get_object_assert statefulset "{{range.items}}{{$container_len}}{{end}}" "2"
+  # Rollback to revision 1
+  kubectl rollout undo statefulset --to-revision=1 "${kube_flags[@]}"
+  kube::test::wait_object_assert statefulset "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_STATEFULSET_R1}:"
+  kube::test::get_object_assert statefulset "{{range.items}}{{$container_len}}{{end}}" "1"
+  # Rollback to revision 1000000 - should fail
+  output_message=$(! kubectl rollout undo statefulset --to-revision=1000000 "${kube_flags[@]}" 2>&1)
+  kube::test::if_has_string "${output_message}" "unable to find specified revision"
+  kube::test::get_object_assert statefulset "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_STATEFULSET_R1}:"
+  kube::test::get_object_assert statefulset "{{range.items}}{{$container_len}}{{end}}" "1"
+  # Rollback to last revision
+  kubectl rollout undo statefulset "${kube_flags[@]}"
+  kube::test::wait_object_assert statefulset "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_STATEFULSET_R2}:"
+  kube::test::wait_object_assert statefulset "{{range.items}}{{$image_field1}}:{{end}}" "${IMAGE_PAUSE_V2}:"
+  kube::test::get_object_assert statefulset "{{range.items}}{{$container_len}}{{end}}" "2"
+  # Clean up - delete newest configuration
+  kubectl delete -f hack/testdata/rollingupdate-statefulset-rv2.yaml "${kube_flags[@]}"
+  # Post-condition: no pods from statefulset controller
+  wait-for-pods-with-label "app=nginx-statefulset" ""
 
   set +o nounset
   set +o errexit
@@ -3627,7 +3700,7 @@ run_stateful_set_tests() {
   # Pre-condition: no statefulset exists
   kube::test::get_object_assert statefulset "{{range.items}}{{$id_field}}:{{end}}" ''
   # Command: create statefulset
-  kubectl create -f hack/testdata/nginx-statefulset.yaml "${kube_flags[@]}"
+  kubectl create -f hack/testdata/rollingupdate-statefulset.yaml "${kube_flags[@]}"
 
   ### Scale statefulset test with current-replicas and replicas
   # Pre-condition: 0 replicas
@@ -3644,7 +3717,7 @@ run_stateful_set_tests() {
   wait-for-pods-with-label "app=nginx-statefulset" "nginx-0"
 
   ### Clean up
-  kubectl delete -f hack/testdata/nginx-statefulset.yaml "${kube_flags[@]}"
+  kubectl delete -f hack/testdata/rollingupdate-statefulset.yaml "${kube_flags[@]}"
   # Post-condition: no pods from statefulset controller
   wait-for-pods-with-label "app=nginx-statefulset" ""
 
@@ -3940,6 +4013,38 @@ run_kubectl_sort_by_tests() {
   # Post-condition: valid-pod doesn't exist
   kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" ''
 
+  ### sort-by should works by sorting by name
+  # Create three PODs
+  # Pre-condition: no POD exists
+  kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" ''
+  # Command
+  kubectl create "${kube_flags[@]}" -f hack/testdata/sorted-pods/sorted-pod1.yaml
+  # Post-condition: sorted-pod1 is created
+  kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" 'sorted-pod1:'
+  # Command
+  kubectl create "${kube_flags[@]}" -f hack/testdata/sorted-pods/sorted-pod2.yaml
+  # Post-condition: sorted-pod1 is created
+  kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" 'sorted-pod1:sorted-pod2:'
+  # Command
+  kubectl create "${kube_flags[@]}" -f hack/testdata/sorted-pods/sorted-pod3.yaml
+  # Post-condition: sorted-pod1 is created
+  kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" 'sorted-pod1:sorted-pod2:sorted-pod3:'
+
+  # Check output of sort-by '{metadata.name}'
+  output_message=$(kubectl get pods --sort-by="{metadata.name}")
+  kube::test::if_sort_by_has_correct_order "${output_message}" "sorted-pod1:sorted-pod2:sorted-pod3:"
+
+  # Check output of sort-by '{metadata.labels.name}'
+  output_message=$(kubectl get pods --sort-by="{metadata.labels.name}")
+  kube::test::if_sort_by_has_correct_order "${output_message}" "sorted-pod3:sorted-pod2:sorted-pod1:"
+
+  ### Clean up
+  # Pre-condition: valid-pod exists
+  kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" 'sorted-pod1:sorted-pod2:sorted-pod3:'
+  # Command
+  kubectl delete "${kube_flags[@]}" pod --grace-period=0 --force --all
+  # Post-condition: valid-pod doesn't exist
+  kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" ''
 
   set +o nounset
   set +o errexit
@@ -4197,15 +4302,13 @@ runTests() {
   deployment_replicas=".spec.replicas"
   secret_data=".data"
   secret_type=".type"
-  deployment_image_field="(index .spec.template.spec.containers 0).image"
-  deployment_second_image_field="(index .spec.template.spec.containers 1).image"
   change_cause_annotation='.*kubernetes.io/change-cause.*'
   pdb_min_available=".spec.minAvailable"
   pdb_max_unavailable=".spec.maxUnavailable"
   template_generation_field=".spec.templateGeneration"
   container_len="(len .spec.template.spec.containers)"
-  daemonset_image_field0="(index .spec.template.spec.containers 0).image"
-  daemonset_image_field1="(index .spec.template.spec.containers 1).image"
+  image_field0="(index .spec.template.spec.containers 0).image"
+  image_field1="(index .spec.template.spec.containers 1).image"
 
   # Make sure "default" namespace exists.
   if kube::test::if_supports_resource "${namespaces}" ; then
@@ -4299,7 +4402,6 @@ runTests() {
     # run for federation apiserver as well.
     record_command run_kubectl_apply_tests
     record_command run_kubectl_run_tests
-    record_command run_kubectl_using_deprecated_commands_test
     record_command run_kubectl_create_filter_tests
   fi
 
@@ -4412,7 +4514,6 @@ runTests() {
     record_command run_service_tests
   fi
 
-
   ##################
   # DaemonSets     #
   ##################
@@ -4450,15 +4551,16 @@ runTests() {
     record_command run_rs_tests
   fi
 
-
   #################
   # Stateful Sets #
   #################
 
   if kube::test::if_supports_resource "${statefulsets}" ; then
     record_command run_stateful_set_tests
+    if kube::test::if_supports_resource "${controllerrevisions}"; then
+      record_command run_statefulset_history_tests
+    fi
   fi
-
 
   ######################
   # Lists              #

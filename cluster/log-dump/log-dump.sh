@@ -30,6 +30,7 @@ readonly logexporter_namespace="${3:-logexporter}"
 # check for a function named log_dump_custom_get_instances. If it's
 # defined, we assume the function can me called with one argument, the
 # role, which is either "master" or "node".
+echo "Checking for custom logdump instances, if any"
 if [[ $(type -t log_dump_custom_get_instances) == "function" ]]; then
   readonly use_custom_instance_list=yes
 else
@@ -56,14 +57,17 @@ readonly max_scp_processes=25
 
 # This template spits out the external IPs and images for each node in the cluster in a format like so:
 # 52.32.7.85 gcr.io/google_containers/kube-apiserver:1355c18c32d7bef16125120bce194fad gcr.io/google_containers/kube-controller-manager:46365cdd8d28b8207950c3c21d1f3900 [...]
+echo "Obtaining IPs and images for cluster nodes"
 readonly ips_and_images='{range .items[*]}{@.status.addresses[?(@.type == "ExternalIP")].address} {@.status.images[*].names[*]}{"\n"}{end}'
 
 function setup() {
   if [[ -z "${use_custom_instance_list}" ]]; then
     KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
     : ${KUBE_CONFIG_FILE:="config-test.sh"}
+    echo "Sourcing kube-util.sh"
     source "${KUBE_ROOT}/cluster/kube-util.sh"
-    detect-project &> /dev/null
+    echo "Detecting project"
+    detect-project 2>&1
   elif [[ -z "${LOG_DUMP_SSH_KEY:-}" ]]; then
     echo "LOG_DUMP_SSH_KEY not set, but required when using log_dump_custom_get_instances"
     exit 1
@@ -121,12 +125,15 @@ function copy-logs-from-node() {
 # Save logs for node $1 into directory $2. Pass in any non-common files in $3.
 # Pass in any non-common systemd services in $4.
 # $3 and $4 should be a space-separated list of files.
+# Set $5 to true to indicate it is on master. Default to false.
 # This function shouldn't ever trigger errexit
 function save-logs() {
     local -r node_name="${1}"
     local -r dir="${2}"
     local files="${3}"
     local opt_systemd_services="${4:-""}"
+    local on_master="${5:-"false"}"
+
     if [[ -n "${use_custom_instance_list}" ]]; then
       if [[ -n "${LOG_DUMP_SAVE_LOGS:-}" ]]; then
         files="${files} ${LOG_DUMP_SAVE_LOGS:-}"
@@ -147,8 +154,13 @@ function save-logs() {
     local -r services=( ${systemd_services} ${opt_systemd_services} ${LOG_DUMP_SAVE_SERVICES:-} )
 
     if log-dump-ssh "${node_name}" "command -v journalctl" &> /dev/null; then
-        log-dump-ssh "${node_name}" "sudo journalctl --output=short-precise -u kube-node-installation.service" > "${dir}/kube-node-installation.log" || true
-        log-dump-ssh "${node_name}" "sudo journalctl --output=short-precise -u kube-node-configuration.service" > "${dir}/kube-node-configuration.log" || true
+        if [[ "${on_master}" == "true" ]]; then
+          log-dump-ssh "${node_name}" "sudo journalctl --output=short-precise -u kube-master-installation.service" > "${dir}/kube-master-installation.log" || true
+          log-dump-ssh "${node_name}" "sudo journalctl --output=short-precise -u kube-master-configuration.service" > "${dir}/kube-master-configuration.log" || true
+        else
+          log-dump-ssh "${node_name}" "sudo journalctl --output=short-precise -u kube-node-installation.service" > "${dir}/kube-node-installation.log" || true
+          log-dump-ssh "${node_name}" "sudo journalctl --output=short-precise -u kube-node-configuration.service" > "${dir}/kube-node-configuration.log" || true
+        fi
         log-dump-ssh "${node_name}" "sudo journalctl --output=short-precise -k" > "${dir}/kern.log" || true
 
         for svc in "${services[@]}"; do
@@ -189,7 +201,7 @@ function dump_masters() {
   for master_name in "${master_names[@]}"; do
     master_dir="${report_dir}/${master_name}"
     mkdir -p "${master_dir}"
-    save-logs "${master_name}" "${master_dir}" "${master_logfiles}" &
+    save-logs "${master_name}" "${master_dir}" "${master_logfiles}" "" "true" &
 
     # We don't want to run more than ${max_scp_processes} at a time, so
     # wait once we hit that many nodes. This isn't ideal, since one might

@@ -1,7 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
-
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -14,7 +12,6 @@ go_library(
         "active_deadline.go",
         "doc.go",
         "kubelet.go",
-        "kubelet_cadvisor.go",
         "kubelet_getters.go",
         "kubelet_network.go",
         "kubelet_node_status.go",
@@ -31,7 +28,6 @@ go_library(
         "util.go",
         "volume_host.go",
     ],
-    tags = ["automanaged"],
     deps = [
         "//cmd/kubelet/app/options:go_default_library",
         "//pkg/api:go_default_library",
@@ -41,14 +37,14 @@ go_library(
         "//pkg/api/v1/pod:go_default_library",
         "//pkg/api/v1/resource:go_default_library",
         "//pkg/api/v1/validation:go_default_library",
-        "//pkg/apis/componentconfig:go_default_library",
-        "//pkg/apis/componentconfig/v1alpha1:go_default_library",
         "//pkg/capabilities:go_default_library",
         "//pkg/cloudprovider:go_default_library",
         "//pkg/features:go_default_library",
         "//pkg/fieldpath:go_default_library",
         "//pkg/kubelet/apis:go_default_library",
         "//pkg/kubelet/apis/cri:go_default_library",
+        "//pkg/kubelet/apis/kubeletconfig:go_default_library",
+        "//pkg/kubelet/apis/kubeletconfig/v1alpha1:go_default_library",
         "//pkg/kubelet/cadvisor:go_default_library",
         "//pkg/kubelet/certificate:go_default_library",
         "//pkg/kubelet/cm:go_default_library",
@@ -82,6 +78,7 @@ go_library(
         "//pkg/kubelet/server/remotecommand:go_default_library",
         "//pkg/kubelet/server/stats:go_default_library",
         "//pkg/kubelet/server/streaming:go_default_library",
+        "//pkg/kubelet/stats:go_default_library",
         "//pkg/kubelet/status:go_default_library",
         "//pkg/kubelet/sysctl:go_default_library",
         "//pkg/kubelet/types:go_default_library",
@@ -148,7 +145,6 @@ go_test(
     name = "go_default_test",
     srcs = [
         "active_deadline_test.go",
-        "kubelet_cadvisor_test.go",
         "kubelet_getters_test.go",
         "kubelet_network_test.go",
         "kubelet_node_status_test.go",
@@ -162,14 +158,19 @@ go_test(
         "pod_workers_test.go",
         "reason_cache_test.go",
         "runonce_test.go",
-    ],
+    ] + select({
+        "@io_bazel_rules_go//go/platform:windows_amd64": [
+            "kubelet_pods_windows_test.go",
+        ],
+        "//conditions:default": [],
+    }),
     library = ":go_default_library",
-    tags = ["automanaged"],
     deps = [
         "//pkg/api:go_default_library",
         "//pkg/api/install:go_default_library",
-        "//pkg/apis/componentconfig:go_default_library",
         "//pkg/capabilities:go_default_library",
+        "//pkg/kubelet/apis:go_default_library",
+        "//pkg/kubelet/apis/kubeletconfig:go_default_library",
         "//pkg/kubelet/cadvisor/testing:go_default_library",
         "//pkg/kubelet/cm:go_default_library",
         "//pkg/kubelet/config:go_default_library",
@@ -191,6 +192,7 @@ go_test(
         "//pkg/kubelet/server/portforward:go_default_library",
         "//pkg/kubelet/server/remotecommand:go_default_library",
         "//pkg/kubelet/server/stats:go_default_library",
+        "//pkg/kubelet/stats:go_default_library",
         "//pkg/kubelet/status:go_default_library",
         "//pkg/kubelet/status/testing:go_default_library",
         "//pkg/kubelet/types:go_default_library",
@@ -273,6 +275,7 @@ filegroup(
         "//pkg/kubelet/rktshim:all-srcs",
         "//pkg/kubelet/secret:all-srcs",
         "//pkg/kubelet/server:all-srcs",
+        "//pkg/kubelet/stats:all-srcs",
         "//pkg/kubelet/status:all-srcs",
         "//pkg/kubelet/sysctl:all-srcs",
         "//pkg/kubelet/types:all-srcs",

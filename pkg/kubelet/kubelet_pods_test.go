@@ -20,7 +20,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
+	"path/filepath"
 	"sort"
 	"testing"
 
@@ -179,7 +182,143 @@ func TestMakeMounts(t *testing.T) {
 	}
 }
 
-func TestHostsFileContent(t *testing.T) {
+func TestNodeHostsFileContent(t *testing.T) {
+	testCases := []struct {
+		hostsFileName            string
+		hostAliases              []v1.HostAlias
+		rawHostsFileContent      string
+		expectedHostsFileContent string
+	}{
+		{
+			"hosts_test_file1",
+			[]v1.HostAlias{},
+			`# hosts file for testing.
+127.0.0.1	localhost
+::1	localhost ip6-localhost ip6-loopback
+fe00::0	ip6-localnet
+fe00::0	ip6-mcastprefix
+fe00::1	ip6-allnodes
+fe00::2	ip6-allrouters
+123.45.67.89	some.domain
+`,
+			`# hosts file for testing.
+127.0.0.1	localhost
+::1	localhost ip6-localhost ip6-loopback
+fe00::0	ip6-localnet
+fe00::0	ip6-mcastprefix
+fe00::1	ip6-allnodes
+fe00::2	ip6-allrouters
+123.45.67.89	some.domain
+`,
+		},
+		{
+			"hosts_test_file2",
+			[]v1.HostAlias{},
+			`# another hosts file for testing.
+127.0.0.1	localhost
+::1	localhost ip6-localhost ip6-loopback
+fe00::0	ip6-localnet
+fe00::0	ip6-mcastprefix
+fe00::1	ip6-allnodes
+fe00::2	ip6-allrouters
+12.34.56.78	another.domain
+`,
+			`# another hosts file for testing.
+127.0.0.1	localhost
+::1	localhost ip6-localhost ip6-loopback
+fe00::0	ip6-localnet
+fe00::0	ip6-mcastprefix
+fe00::1	ip6-allnodes
+fe00::2	ip6-allrouters
+12.34.56.78	another.domain
+`,
+		},
+		{
+			"hosts_test_file1_with_host_aliases",
+			[]v1.HostAlias{
+				{IP: "123.45.67.89", Hostnames: []string{"foo", "bar", "baz"}},
+			},
+			`# hosts file for testing.
+127.0.0.1	localhost
+::1	localhost ip6-localhost ip6-loopback
+fe00::0	ip6-localnet
+fe00::0	ip6-mcastprefix
+fe00::1	ip6-allnodes
+fe00::2	ip6-allrouters
+123.45.67.89	some.domain
+`,
+			`# hosts file for testing.
+127.0.0.1	localhost
+::1	localhost ip6-localhost ip6-loopback
+fe00::0	ip6-localnet
+fe00::0	ip6-mcastprefix
+fe00::1	ip6-allnodes
+fe00::2	ip6-allrouters
+123.45.67.89	some.domain
+
+# Entries added by HostAliases.
+123.45.67.89	foo
+123.45.67.89	bar
+123.45.67.89	baz
+`,
+		},
+		{
+			"hosts_test_file2_with_host_aliases",
+			[]v1.HostAlias{
+				{IP: "123.45.67.89", Hostnames: []string{"foo", "bar", "baz"}},
+				{IP: "456.78.90.123", Hostnames: []string{"park", "doo", "boo"}},
+			},
+			`# another hosts file for testing.
+127.0.0.1	localhost
+::1	localhost ip6-localhost ip6-loopback
+fe00::0	ip6-localnet
+fe00::0	ip6-mcastprefix
+fe00::1	ip6-allnodes
+fe00::2	ip6-allrouters
+12.34.56.78	another.domain
+`,
+			`# another hosts file for testing.
+127.0.0.1	localhost
+::1	localhost ip6-localhost ip6-loopback
+fe00::0	ip6-localnet
+fe00::0	ip6-mcastprefix
+fe00::1	ip6-allnodes
+fe00::2	ip6-allrouters
+12.34.56.78	another.domain
+
+# Entries added by HostAliases.
+123.45.67.89	foo
+123.45.67.89	bar
+123.45.67.89	baz
+456.78.90.123	park
+456.78.90.123	doo
+456.78.90.123	boo
+`,
+		},
+	}
+
+	for _, testCase := range testCases {
+		tmpdir, err := writeHostsFile(testCase.hostsFileName, testCase.rawHostsFileContent)
+		require.NoError(t, err, "could not create a temp hosts file")
+		defer os.RemoveAll(tmpdir)
+
+		actualContent, fileReadErr := nodeHostsFileContent(filepath.Join(tmpdir, testCase.hostsFileName), testCase.hostAliases)
+		require.NoError(t, fileReadErr, "could not create read hosts file")
+		assert.Equal(t, testCase.expectedHostsFileContent, string(actualContent), "hosts file content not expected")
+	}
+}
+
+// writeHostsFile will write a hosts file into a temporary dir, and return that dir.
+// Caller is responsible for deleting the dir and its contents.
+func writeHostsFile(filename string, cfg string) (string, error) {
+	tmpdir, err := ioutil.TempDir("", "kubelet=kubelet_pods_test.go=")
+	if err != nil {
+		return "", err
+	}
+	return tmpdir, ioutil.WriteFile(filepath.Join(tmpdir, filename), []byte(cfg), 0644)
+}
+
+func TestManagedHostsFileContent(t *testing.T) {
 	testCases := []struct {
 		hostIP          string
 		hostName        string
@@ -232,6 +371,8 @@ fe00::0	ip6-mcastprefix
 fe00::1	ip6-allnodes
 fe00::2	ip6-allrouters
 203.0.113.1	podFoo.domainFoo	podFoo
+
+# Entries added by HostAliases.
 123.45.67.89	foo
 123.45.67.89	bar
 123.45.67.89	baz
@@ -253,6 +394,8 @@ fe00::0	ip6-mcastprefix
 fe00::1	ip6-allnodes
 fe00::2	ip6-allrouters
 203.0.113.1	podFoo.domainFoo	podFoo
+
+# Entries added by HostAliases.
 123.45.67.89	foo
 123.45.67.89	bar
 123.45.67.89	baz
@@ -264,8 +407,8 @@ fe00::2	ip6-allrouters
 	}
 
 	for _, testCase := range testCases {
-		actualContent := string(hostsFileContent(testCase.hostIP, testCase.hostName, testCase.hostDomainName, testCase.hostAliases))
-		assert.Equal(t, testCase.expectedContent, actualContent, "hosts file content not expected")
+		actualContent := managedHostsFileContent(testCase.hostIP, testCase.hostName, testCase.hostDomainName, testCase.hostAliases)
+		assert.Equal(t, testCase.expectedContent, string(actualContent), "hosts file content not expected")
 	}
 }
 

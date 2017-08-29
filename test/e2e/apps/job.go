@@ -24,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	batchinternal "k8s.io/kubernetes/pkg/apis/batch"
-	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/kubectl"
 	"k8s.io/kubernetes/test/e2e/framework"
 
@@ -40,7 +39,7 @@ var _ = SIGDescribe("Job", func() {
 	// Simplest case: all pods succeed promptly
 	It("should run a job to completion when tasks succeed", func() {
 		By("Creating a job")
-		job := framework.NewTestJob("succeed", "all-succeed", v1.RestartPolicyNever, parallelism, completions)
+		job := framework.NewTestJob("succeed", "all-succeed", v1.RestartPolicyNever, parallelism, completions, nil)
 		job, err := framework.CreateJob(f.ClientSet, f.Namespace.Name, job)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -59,7 +58,7 @@ var _ = SIGDescribe("Job", func() {
 		// up to 5 minutes between restarts, making test timeouts
 		// due to successive failures too likely with a reasonable
 		// test timeout.
-		job := framework.NewTestJob("failOnce", "fail-once-local", v1.RestartPolicyOnFailure, parallelism, completions)
+		job := framework.NewTestJob("failOnce", "fail-once-local", v1.RestartPolicyOnFailure, parallelism, completions, nil)
 		job, err := framework.CreateJob(f.ClientSet, f.Namespace.Name, job)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -77,7 +76,7 @@ var _ = SIGDescribe("Job", func() {
 		// Worst case analysis: 15 failures, each taking 1 minute to
 		// run due to some slowness, 1 in 2^15 chance of happening,
 		// causing test flake.  Should be very rare.
-		job := framework.NewTestJob("randomlySucceedOrFail", "rand-non-local", v1.RestartPolicyNever, parallelism, completions)
+		job := framework.NewTestJob("randomlySucceedOrFail", "rand-non-local", v1.RestartPolicyNever, parallelism, completions, nil)
 		job, err := framework.CreateJob(f.ClientSet, f.Namespace.Name, job)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -86,9 +85,20 @@ var _ = SIGDescribe("Job", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
+	It("should exceed active deadline", func() {
+		By("Creating a job")
+		var activeDeadlineSeconds int64 = 1
+		job := framework.NewTestJob("notTerminate", "exceed-active-deadline", v1.RestartPolicyNever, parallelism, completions, &activeDeadlineSeconds)
+		job, err := framework.CreateJob(f.ClientSet, f.Namespace.Name, job)
+		Expect(err).NotTo(HaveOccurred())
+		By("Ensuring job past active deadline")
+		err = framework.WaitForJobFailure(f.ClientSet, f.Namespace.Name, job.Name, time.Duration(activeDeadlineSeconds+10)*time.Second, "DeadlineExceeded")
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	It("should delete a job", func() {
 		By("Creating a job")
-		job := framework.NewTestJob("notTerminate", "foo", v1.RestartPolicyNever, parallelism, completions)
+		job := framework.NewTestJob("notTerminate", "foo", v1.RestartPolicyNever, parallelism, completions, nil)
 		job, err := framework.CreateJob(f.ClientSet, f.Namespace.Name, job)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -111,7 +121,7 @@ var _ = SIGDescribe("Job", func() {
 
 	It("should adopt matching orphans and release non-matching pods", func() {
 		By("Creating a job")
-		job := framework.NewTestJob("notTerminate", "adopt-release", v1.RestartPolicyNever, parallelism, completions)
+		job := framework.NewTestJob("notTerminate", "adopt-release", v1.RestartPolicyNever, parallelism, completions, nil)
 		// Replace job with the one returned from Create() so it has the UID.
 		// Save Kind since it won't be populated in the returned job.
 		kind := job.Kind
@@ -135,7 +145,7 @@ var _ = SIGDescribe("Job", func() {
 		By("Checking that the Job readopts the Pod")
 		Expect(framework.WaitForPodCondition(f.ClientSet, pod.Namespace, pod.Name, "adopted", framework.JobTimeout,
 			func(pod *v1.Pod) (bool, error) {
-				controllerRef := controller.GetControllerOf(pod)
+				controllerRef := metav1.GetControllerOf(pod)
 				if controllerRef == nil {
 					return false, nil
 				}
@@ -154,7 +164,7 @@ var _ = SIGDescribe("Job", func() {
 		By("Checking that the Job releases the Pod")
 		Expect(framework.WaitForPodCondition(f.ClientSet, pod.Namespace, pod.Name, "released", framework.JobTimeout,
 			func(pod *v1.Pod) (bool, error) {
-				controllerRef := controller.GetControllerOf(pod)
+				controllerRef := metav1.GetControllerOf(pod)
 				if controllerRef != nil {
 					return false, nil
 				}

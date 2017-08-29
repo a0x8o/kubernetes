@@ -23,15 +23,15 @@ import (
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/apis/componentconfig"
+	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
 )
 
 // Checkpoint represents a local copy of a config source (payload) object
 type Checkpoint interface {
 	// UID returns the UID of the config source object behind the Checkpoint
 	UID() string
-	// Parse parses the checkpoint into the internal KubeletConfiguration type
-	Parse() (*componentconfig.KubeletConfiguration, error)
+	// Parse extracts the KubeletConfiguration from the checkpoint, applies defaults, and converts to the internal type
+	Parse() (*kubeletconfig.KubeletConfiguration, error)
 	// Encode returns a []byte representation of the config source object behind the Checkpoint
 	Encode() ([]byte, error)
 
@@ -56,6 +56,7 @@ func DecodeCheckpoint(data []byte) (Checkpoint, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert decoded object into a v1 ConfigMap, error: %v", err)
 	}
+
 	return NewConfigMapCheckpoint(cm)
 }
 

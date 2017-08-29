@@ -41,6 +41,9 @@ type BuiltInAuthenticationOptions struct {
 	ServiceAccounts *ServiceAccountAuthenticationOptions
 	TokenFile       *TokenFileAuthenticationOptions
 	WebHook         *WebHookAuthenticationOptions
+
+	TokenSuccessCacheTTL time.Duration
+	TokenFailureCacheTTL time.Duration
 }
 
 type AnonymousAuthenticationOptions struct {
@@ -48,7 +51,7 @@ type AnonymousAuthenticationOptions struct {
 }
 
 type BootstrapTokenAuthenticationOptions struct {
-	Allow bool
+	Enable bool
 }
 
 type KeystoneAuthenticationOptions struct {
@@ -83,12 +86,15 @@ type WebHookAuthenticationOptions struct {
 }
 
 func NewBuiltInAuthenticationOptions() *BuiltInAuthenticationOptions {
-	return &BuiltInAuthenticationOptions{}
+	return &BuiltInAuthenticationOptions{
+		TokenSuccessCacheTTL: 10 * time.Second,
+		TokenFailureCacheTTL: 0 * time.Second,
+	}
 }
 
 func (s *BuiltInAuthenticationOptions) WithAll() *BuiltInAuthenticationOptions {
 	return s.
-		WithAnyonymous().
+		WithAnonymous().
 		WithBootstrapToken().
 		WithClientCert().
 		WithKeystone().
@@ -100,7 +106,7 @@ func (s *BuiltInAuthenticationOptions) WithAll() *BuiltInAuthenticationOptions {
 		WithWebHook()
 }
 
-func (s *BuiltInAuthenticationOptions) WithAnyonymous() *BuiltInAuthenticationOptions {
+func (s *BuiltInAuthenticationOptions) WithAnonymous() *BuiltInAuthenticationOptions {
 	s.Anonymous = &AnonymousAuthenticationOptions{Allow: true}
 	return s
 }
@@ -172,7 +178,11 @@ func (s *BuiltInAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
 	}
 
 	if s.BootstrapToken != nil {
-		fs.BoolVar(&s.BootstrapToken.Allow, "experimental-bootstrap-token-auth", s.BootstrapToken.Allow, ""+
+		fs.BoolVar(&s.BootstrapToken.Enable, "experimental-bootstrap-token-auth", s.BootstrapToken.Enable, ""+
+			"Deprecated (use --enable-bootstrap-token-auth).")
+		fs.MarkDeprecated("experimental-bootstrap-token-auth", "use --enable-bootstrap-token-auth instead.")
+
+		fs.BoolVar(&s.BootstrapToken.Enable, "enable-bootstrap-token-auth", s.BootstrapToken.Enable, ""+
 			"Enable to allow secrets of type 'bootstrap.kubernetes.io/token' in the 'kube-system' "+
 			"namespace to be used for TLS bootstrapping authentication.")
 	}
@@ -250,14 +260,17 @@ func (s *BuiltInAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
 }
 
 func (s *BuiltInAuthenticationOptions) ToAuthenticationConfig() authenticator.AuthenticatorConfig {
-	ret := authenticator.AuthenticatorConfig{}
+	ret := authenticator.AuthenticatorConfig{
+		TokenSuccessCacheTTL: s.TokenSuccessCacheTTL,
+		TokenFailureCacheTTL: s.TokenFailureCacheTTL,
+	}
 
 	if s.Anonymous != nil {
 		ret.Anonymous = s.Anonymous.Allow
 	}
 
 	if s.BootstrapToken != nil {
-		ret.BootstrapToken = s.BootstrapToken.Allow
+		ret.BootstrapToken = s.BootstrapToken.Enable
 	}
 
 	if s.ClientCert != nil {
@@ -297,6 +310,15 @@ func (s *BuiltInAuthenticationOptions) ToAuthenticationConfig() authenticator.Au
 	if s.WebHook != nil {
 		ret.WebhookTokenAuthnConfigFile = s.WebHook.ConfigFile
 		ret.WebhookTokenAuthnCacheTTL = s.WebHook.CacheTTL
+
+		if len(s.WebHook.ConfigFile) > 0 && s.WebHook.CacheTTL > 0 {
+			if s.TokenSuccessCacheTTL > 0 && s.WebHook.CacheTTL < s.TokenSuccessCacheTTL {
+				glog.Warningf("the webhook cache ttl of %s is shorter than the overall cache ttl of %s for successful token authentication attempts.", s.WebHook.CacheTTL, s.TokenSuccessCacheTTL)
+			}
+			if s.TokenFailureCacheTTL > 0 && s.WebHook.CacheTTL < s.TokenFailureCacheTTL {
+				glog.Warningf("the webhook cache ttl of %s is shorter than the overall cache ttl of %s for failed token authentication attempts.", s.WebHook.CacheTTL, s.TokenFailureCacheTTL)
+			}
+		}
 	}
 
 	return ret

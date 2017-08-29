@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package unversioned contains API types that are common to all versions.
+// Package v1 contains API types that are common to all versions.
 //
 // The package contains two categories of types:
 // - external (serialized) types that lack their own version (e.g TypeMeta)
@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -247,7 +248,9 @@ type Initializers struct {
 	// When the last pending initializer is removed, and no failing result is set, the initializers
 	// struct will be set to nil and the object is considered as initialized and visible to all
 	// clients.
-	Pending []Initializer `json:"pending" protobuf:"bytes,1,rep,name=pending"`
+	// +patchMergeKey=name
+	// +patchStrategy=merge
+	Pending []Initializer `json:"pending" protobuf:"bytes,1,rep,name=pending" patchStrategy:"merge" patchMergeKey:"name"`
 	// If result is set with the Failure field, the object will be persisted to storage and then deleted,
 	// ensuring that other clients can observe the deletion.
 	Result *Status `json:"result,omitempty" protobuf:"bytes,2,opt,name=result"`
@@ -678,6 +681,20 @@ const (
 	// due to an intervening proxy or the server software malfunctioning.
 	CauseTypeUnexpectedServerResponse CauseType = "UnexpectedServerResponse"
 )
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// List holds a list of objects, which may not be known by the server.
+type List struct {
+	TypeMeta `json:",inline"`
+	// Standard list metadata.
+	// More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds
+	// +optional
+	ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+
+	// List of objects
+	Items []runtime.RawExtension `json:"items" protobuf:"bytes,2,rep,name=items"`
+}
 
 // APIVersions lists the versions that are available, to allow clients to
 // discover the API at /api, which is the root path of the legacy v1 API.

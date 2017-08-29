@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	internalapi "k8s.io/kubernetes/pkg/kubelet/apis/cri"
@@ -288,12 +289,34 @@ func (r *RemoteRuntimeService) ContainerStatus(containerID string) (*runtimeapi.
 	return resp.Status, nil
 }
 
+// UpdateContainerResources updates a containers resource config
+func (r *RemoteRuntimeService) UpdateContainerResources(containerID string, resources *runtimeapi.LinuxContainerResources) error {
+	ctx, cancel := getContextWithTimeout(r.timeout)
+	defer cancel()
+
+	_, err := r.runtimeClient.UpdateContainerResources(ctx, &runtimeapi.UpdateContainerResourcesRequest{
+		ContainerId: containerID,
+		Linux:       resources,
+	})
+	if err != nil {
+		glog.Errorf("UpdateContainerResources %q from runtime service failed: %v", containerID, err)
+		return err
+	}
+
+	return nil
+}
+
 // ExecSync executes a command in the container, and returns the stdout output.
 // If command exits with a non-zero exit code, an error is returned.
 func (r *RemoteRuntimeService) ExecSync(containerID string, cmd []string, timeout time.Duration) (stdout []byte, stderr []byte, err error) {
-	ctx, cancel := getContextWithTimeout(timeout)
-	if timeout == 0 {
-		// Do not set timeout when timeout is 0.
+	// Do not set timeout when timeout is 0.
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if timeout != 0 {
+		// Use timeout + default timeout (2 minutes) as timeout to leave some time for
+		// the runtime to do cleanup.
+		ctx, cancel = getContextWithTimeout(r.timeout + timeout)
+	} else {
 		ctx, cancel = getContextWithCancel()
 	}
 	defer cancel()

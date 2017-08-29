@@ -49,11 +49,13 @@ type Resources interface {
 // - Map is a map of string to one and only one given subtype
 // - Primitive can be string, integer, number and boolean.
 // - Kind is an object with specific fields mapping to specific types.
+// - Reference is a link to another definition.
 type SchemaVisitor interface {
 	VisitArray(*Array)
 	VisitMap(*Map)
 	VisitPrimitive(*Primitive)
 	VisitKind(*Kind)
+	VisitReference(Reference)
 }
 
 // Schema is the base definition of an openapi type.
@@ -77,6 +79,10 @@ type Path struct {
 	key    string
 }
 
+func NewPath(key string) Path {
+	return Path{key: key}
+}
+
 func (p *Path) Get() []string {
 	if p == nil {
 		return []string{}
@@ -92,7 +98,23 @@ func (p *Path) Len() int {
 }
 
 func (p *Path) String() string {
-	return strings.Join(p.Get(), ".")
+	return strings.Join(p.Get(), "")
+}
+
+// ArrayPath appends an array index and creates a new path
+func (p *Path) ArrayPath(i int) Path {
+	return Path{
+		parent: p,
+		key:    fmt.Sprintf("[%d]", i),
+	}
+}
+
+// FieldPath appends a field name and creates a new path
+func (p *Path) FieldPath(field string) Path {
+	return Path{
+		parent: p,
+		key:    fmt.Sprintf(".%s", field),
+	}
 }
 
 // BaseSchema holds data used by each types of schema.
@@ -198,4 +220,12 @@ func (p *Primitive) GetName() string {
 		return p.Type
 	}
 	return fmt.Sprintf("%s (%s)", p.Type, p.Format)
+}
+
+// Reference implementation depends on the type of document.
+type Reference interface {
+	Schema
+
+	Reference() string
+	SubSchema() Schema
 }

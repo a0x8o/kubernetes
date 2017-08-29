@@ -22,10 +22,9 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	kubeletapp "k8s.io/kubernetes/cmd/kubelet/app"
 	"k8s.io/kubernetes/cmd/kubelet/app/options"
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/apis/componentconfig"
-	"k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1"
 	"k8s.io/kubernetes/pkg/kubelet"
+	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
+	kubeletv1alpha1 "k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/v1alpha1"
 	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
 	containertest "k8s.io/kubernetes/pkg/kubelet/container/testing"
@@ -43,7 +42,7 @@ import (
 
 type HollowKubelet struct {
 	KubeletFlags         *options.KubeletFlags
-	KubeletConfiguration *componentconfig.KubeletConfiguration
+	KubeletConfiguration *kubeletconfig.KubeletConfiguration
 	KubeletDeps          *kubelet.Dependencies
 }
 
@@ -102,7 +101,7 @@ func GetHollowKubeletConfig(
 	kubeletPort int,
 	kubeletReadOnlyPort int,
 	maxPods int,
-	podsPerCore int) (*options.KubeletFlags, *componentconfig.KubeletConfiguration) {
+	podsPerCore int) (*options.KubeletFlags, *kubeletconfig.KubeletConfiguration) {
 
 	testRootDir := utils.MakeTempDirOrDie("hollow-kubelet.", "")
 	manifestFilePath := utils.MakeTempDirOrDie("manifest", testRootDir)
@@ -112,17 +111,16 @@ func GetHollowKubeletConfig(
 	f := &options.KubeletFlags{
 		RootDirectory:    testRootDir,
 		HostnameOverride: nodeName,
+		CloudProvider:    kubeletv1alpha1.AutoDetectCloudProvider,
 		// Use the default runtime options.
 		ContainerRuntimeOptions: *options.NewContainerRuntimeOptions(),
 	}
 
 	// Config struct
-	// Do the external -> internal conversion to make sure that defaults
-	// are set for fields not overridden in NewHollowKubelet.
-	tmp := &v1alpha1.KubeletConfiguration{}
-	api.Scheme.Default(tmp)
-	c := &componentconfig.KubeletConfiguration{}
-	api.Scheme.Convert(tmp, c, nil)
+	c, err := options.NewKubeletConfiguration()
+	if err != nil {
+		panic(err)
+	}
 
 	c.ManifestURL = ""
 	c.Address = "0.0.0.0" /* bind address */
@@ -153,7 +151,7 @@ func GetHollowKubeletConfig(
 	// hairpin-veth is used to allow hairpin packets. Note that this deviates from
 	// what the "real" kubelet currently does, because there's no way to
 	// set promiscuous mode on docker0.
-	c.HairpinMode = componentconfig.HairpinVeth
+	c.HairpinMode = kubeletconfig.HairpinVeth
 	c.MaxContainerCount = 100
 	c.MaxOpenFiles = 1024
 	c.MaxPerPodContainerCount = 2

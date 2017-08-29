@@ -28,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	clientset "k8s.io/client-go/kubernetes"
-	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	"k8s.io/kubernetes/test/e2e/common"
 	"k8s.io/kubernetes/test/e2e/framework"
 	testutils "k8s.io/kubernetes/test/utils"
@@ -66,7 +65,7 @@ var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
 	ignoreLabels := framework.ImagePullerLabels
 
 	AfterEach(func() {
-		rc, err := cs.Core().ReplicationControllers(ns).Get(RCName, metav1.GetOptions{})
+		rc, err := cs.CoreV1().ReplicationControllers(ns).Get(RCName, metav1.GetOptions{})
 		if err == nil && *(rc.Spec.Replicas) != 0 {
 			By("Cleaning up the replication controller")
 			err := framework.DeleteRCAndPods(f.ClientSet, f.InternalClientset, ns, RCName)
@@ -157,7 +156,7 @@ var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
 
 		nodeToAllocatableMap := make(map[string]int64)
 		for _, node := range nodeList.Items {
-			allocatable, found := node.Status.Allocatable["cpu"]
+			allocatable, found := node.Status.Allocatable[v1.ResourceCPU]
 			Expect(found).To(Equal(true))
 			nodeToAllocatableMap[node.Name] = allocatable.MilliValue()
 			if nodeMaxAllocatable < allocatable.MilliValue() {
@@ -166,7 +165,7 @@ var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
 		}
 		framework.WaitForStableCluster(cs, masterNodes)
 
-		pods, err := cs.Core().Pods(metav1.NamespaceAll).List(metav1.ListOptions{})
+		pods, err := cs.CoreV1().Pods(metav1.NamespaceAll).List(metav1.ListOptions{})
 		framework.ExpectNoError(err)
 		for _, pod := range pods.Items {
 			_, found := nodeToAllocatableMap[pod.Spec.NodeName]
@@ -201,10 +200,10 @@ var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
 					Labels: map[string]string{"name": ""},
 					Resources: &v1.ResourceRequirements{
 						Limits: v1.ResourceList{
-							"cpu": *resource.NewMilliQuantity(milliCpuPerPod, "DecimalSI"),
+							v1.ResourceCPU: *resource.NewMilliQuantity(milliCpuPerPod, "DecimalSI"),
 						},
 						Requests: v1.ResourceList{
-							"cpu": *resource.NewMilliQuantity(milliCpuPerPod, "DecimalSI"),
+							v1.ResourceCPU: *resource.NewMilliQuantity(milliCpuPerPod, "DecimalSI"),
 						},
 					},
 				}), true, framework.Logf))
@@ -215,7 +214,7 @@ var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
 			Labels: map[string]string{"name": "additional"},
 			Resources: &v1.ResourceRequirements{
 				Limits: v1.ResourceList{
-					"cpu": *resource.NewMilliQuantity(milliCpuPerPod, "DecimalSI"),
+					v1.ResourceCPU: *resource.NewMilliQuantity(milliCpuPerPod, "DecimalSI"),
 				},
 			},
 		}
@@ -291,7 +290,7 @@ var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
 		// already when the kubelet does not know about its new label yet. The
 		// kubelet will then refuse to launch the pod.
 		framework.ExpectNoError(framework.WaitForPodNotPending(cs, ns, labelPodName))
-		labelPod, err := cs.Core().Pods(ns).Get(labelPodName, metav1.GetOptions{})
+		labelPod, err := cs.CoreV1().Pods(ns).Get(labelPodName, metav1.GetOptions{})
 		framework.ExpectNoError(err)
 		Expect(labelPod.Spec.NodeName).To(Equal(nodeName))
 	})
@@ -421,7 +420,7 @@ var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
 		// already when the kubelet does not know about its new taint yet. The
 		// kubelet will then refuse to launch the pod.
 		framework.ExpectNoError(framework.WaitForPodNotPending(cs, ns, tolerationPodName))
-		deployedPod, err := cs.Core().Pods(ns).Get(tolerationPodName, metav1.GetOptions{})
+		deployedPod, err := cs.CoreV1().Pods(ns).Get(tolerationPodName, metav1.GetOptions{})
 		framework.ExpectNoError(err)
 		Expect(deployedPod.Spec.NodeName).To(Equal(nodeName))
 	})
@@ -495,7 +494,7 @@ func initPausePod(f *framework.Framework, conf pausePodConfig) *v1.Pod {
 }
 
 func createPausePod(f *framework.Framework, conf pausePodConfig) *v1.Pod {
-	pod, err := f.ClientSet.Core().Pods(f.Namespace.Name).Create(initPausePod(f, conf))
+	pod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Create(initPausePod(f, conf))
 	framework.ExpectNoError(err)
 	return pod
 }
@@ -503,7 +502,7 @@ func createPausePod(f *framework.Framework, conf pausePodConfig) *v1.Pod {
 func runPausePod(f *framework.Framework, conf pausePodConfig) *v1.Pod {
 	pod := createPausePod(f, conf)
 	framework.ExpectNoError(framework.WaitForPodRunningInNamespace(f.ClientSet, pod))
-	pod, err := f.ClientSet.Core().Pods(f.Namespace.Name).Get(conf.Name, metav1.GetOptions{})
+	pod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(conf.Name, metav1.GetOptions{})
 	framework.ExpectNoError(err)
 	return pod
 }
@@ -516,7 +515,7 @@ func runPodAndGetNodeName(f *framework.Framework, conf pausePodConfig) string {
 	pod := runPausePod(f, conf)
 
 	By("Explicitly delete pod here to free the resource it takes.")
-	err := f.ClientSet.Core().Pods(f.Namespace.Name).Delete(pod.Name, metav1.NewDeleteOptions(0))
+	err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Delete(pod.Name, metav1.NewDeleteOptions(0))
 	framework.ExpectNoError(err)
 
 	return pod.Spec.NodeName
@@ -583,34 +582,6 @@ func createPodWithPodAffinity(f *framework.Framework, topologyKey string) *v1.Po
 			},
 		},
 	})
-}
-
-// Returns a number of currently scheduled and not scheduled Pods.
-func getPodsScheduled(pods *v1.PodList) (scheduledPods, notScheduledPods []v1.Pod) {
-	for _, pod := range pods.Items {
-		if !masterNodes.Has(pod.Spec.NodeName) {
-			if pod.Spec.NodeName != "" {
-				_, scheduledCondition := podutil.GetPodCondition(&pod.Status, v1.PodScheduled)
-				// We can't assume that the scheduledCondition is always set if Pod is assigned to Node,
-				// as e.g. DaemonController doesn't set it when assigning Pod to a Node. Currently
-				// Kubelet sets this condition when it gets a Pod without it, but if we were expecting
-				// that it would always be not nil, this would cause a rare race condition.
-				if scheduledCondition != nil {
-					Expect(scheduledCondition.Status).To(Equal(v1.ConditionTrue))
-				}
-				scheduledPods = append(scheduledPods, pod)
-			} else {
-				_, scheduledCondition := podutil.GetPodCondition(&pod.Status, v1.PodScheduled)
-				if scheduledCondition != nil {
-					Expect(scheduledCondition.Status).To(Equal(v1.ConditionFalse))
-				}
-				if scheduledCondition.Reason == "Unschedulable" {
-					notScheduledPods = append(notScheduledPods, pod)
-				}
-			}
-		}
-	}
-	return
 }
 
 func getRequestedCPU(pod v1.Pod) int64 {
@@ -691,7 +662,7 @@ func verifyReplicasResult(c clientset.Interface, expectedScheduled int, expected
 
 func getPodsByLabels(c clientset.Interface, ns string, labelsMap map[string]string) *v1.PodList {
 	selector := labels.SelectorFromSet(labels.Set(labelsMap))
-	allPods, err := c.Core().Pods(ns).List(metav1.ListOptions{LabelSelector: selector.String()})
+	allPods, err := c.CoreV1().Pods(ns).List(metav1.ListOptions{LabelSelector: selector.String()})
 	framework.ExpectNoError(err)
 	return allPods
 }

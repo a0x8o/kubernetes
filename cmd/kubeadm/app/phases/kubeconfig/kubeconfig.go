@@ -32,12 +32,13 @@ import (
 	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/cmd/kubeadm/app/phases/certs/pkiutil"
+	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
 	kubeconfigutil "k8s.io/kubernetes/cmd/kubeadm/app/util/kubeconfig"
 )
 
 // clientCertAuth struct holds info required to build a client certificate to provide authentication info in a kubeconfig object
 type clientCertAuth struct {
-	CaKey         *rsa.PrivateKey
+	CAKey         *rsa.PrivateKey
 	Organizations []string
 }
 
@@ -48,7 +49,7 @@ type tokenAuth struct {
 
 // kubeConfigSpec struct holds info required to build a KubeConfig object
 type kubeConfigSpec struct {
-	CaCert         *x509.Certificate
+	CACert         *x509.Certificate
 	APIServer      string
 	ClientName     string
 	TokenAuth      *tokenAuth
@@ -117,8 +118,7 @@ func createKubeConfigFiles(outDir string, cfg *kubeadmapi.MasterConfiguration, k
 		}
 
 		// writes the KubeConfig to disk if it not exists
-		err = createKubeConfigFileIfNotExists(outDir, kubeConfigFileName, config)
-		if err != nil {
+		if err = createKubeConfigFileIfNotExists(outDir, kubeConfigFileName, config); err != nil {
 			return err
 		}
 	}
@@ -135,39 +135,44 @@ func getKubeConfigSpecs(cfg *kubeadmapi.MasterConfiguration) (map[string]*kubeCo
 		return nil, fmt.Errorf("couldn't create a kubeconfig; the CA files couldn't be loaded: %v", err)
 	}
 
+	masterEndpoint, err := kubeadmutil.GetMasterEndpoint(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	var kubeConfigSpec = map[string]*kubeConfigSpec{
 		kubeadmconstants.AdminKubeConfigFileName: {
-			CaCert:     caCert,
-			APIServer:  cfg.GetMasterEndpoint(),
+			CACert:     caCert,
+			APIServer:  masterEndpoint,
 			ClientName: "kubernetes-admin",
 			ClientCertAuth: &clientCertAuth{
-				CaKey:         caKey,
+				CAKey:         caKey,
 				Organizations: []string{kubeadmconstants.MastersGroup},
 			},
 		},
 		kubeadmconstants.KubeletKubeConfigFileName: {
-			CaCert:     caCert,
-			APIServer:  cfg.GetMasterEndpoint(),
+			CACert:     caCert,
+			APIServer:  masterEndpoint,
 			ClientName: fmt.Sprintf("system:node:%s", cfg.NodeName),
 			ClientCertAuth: &clientCertAuth{
-				CaKey:         caKey,
+				CAKey:         caKey,
 				Organizations: []string{kubeadmconstants.NodesGroup},
 			},
 		},
 		kubeadmconstants.ControllerManagerKubeConfigFileName: {
-			CaCert:     caCert,
-			APIServer:  cfg.GetMasterEndpoint(),
+			CACert:     caCert,
+			APIServer:  masterEndpoint,
 			ClientName: kubeadmconstants.ControllerManagerUser,
 			ClientCertAuth: &clientCertAuth{
-				CaKey: caKey,
+				CAKey: caKey,
 			},
 		},
 		kubeadmconstants.SchedulerKubeConfigFileName: {
-			CaCert:     caCert,
-			APIServer:  cfg.GetMasterEndpoint(),
+			CACert:     caCert,
+			APIServer:  masterEndpoint,
 			ClientName: kubeadmconstants.SchedulerUser,
 			ClientCertAuth: &clientCertAuth{
-				CaKey: caKey,
+				CAKey: caKey,
 			},
 		},
 	}
@@ -178,14 +183,14 @@ func getKubeConfigSpecs(cfg *kubeadmapi.MasterConfiguration) (map[string]*kubeCo
 // buildKubeConfigFromSpec creates a kubeconfig object for the given kubeConfigSpec
 func buildKubeConfigFromSpec(spec *kubeConfigSpec) (*clientcmdapi.Config, error) {
 
-	// If this kubeconfing should use token
+	// If this kubeconfig should use token
 	if spec.TokenAuth != nil {
 		// create a kubeconfig with a token
 		return kubeconfigutil.CreateWithToken(
 			spec.APIServer,
 			"kubernetes",
 			spec.ClientName,
-			certutil.EncodeCertPEM(spec.CaCert),
+			certutil.EncodeCertPEM(spec.CACert),
 			spec.TokenAuth.Token,
 		), nil
 	}
@@ -196,7 +201,7 @@ func buildKubeConfigFromSpec(spec *kubeConfigSpec) (*clientcmdapi.Config, error)
 		Organization: spec.ClientCertAuth.Organizations,
 		Usages:       []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	}
-	clientCert, clientKey, err := pkiutil.NewCertAndKey(spec.CaCert, spec.ClientCertAuth.CaKey, clientCertConfig)
+	clientCert, clientKey, err := pkiutil.NewCertAndKey(spec.CACert, spec.ClientCertAuth.CAKey, clientCertConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failure while creating %s client certificate: %v", spec.ClientName, err)
 	}
@@ -206,7 +211,7 @@ func buildKubeConfigFromSpec(spec *kubeConfigSpec) (*clientcmdapi.Config, error)
 		spec.APIServer,
 		"kubernetes",
 		spec.ClientName,
-		certutil.EncodeCertPEM(spec.CaCert),
+		certutil.EncodeCertPEM(spec.CACert),
 		certutil.EncodePrivateKeyPEM(clientKey),
 		certutil.EncodeCertPEM(clientCert),
 	), nil
@@ -267,12 +272,17 @@ func WriteKubeConfigWithClientCert(out io.Writer, cfg *kubeadmapi.MasterConfigur
 		return fmt.Errorf("couldn't create a kubeconfig; the CA files couldn't be loaded: %v", err)
 	}
 
+	masterEndpoint, err := kubeadmutil.GetMasterEndpoint(cfg)
+	if err != nil {
+		return err
+	}
+
 	spec := &kubeConfigSpec{
 		ClientName: clientName,
-		APIServer:  cfg.GetMasterEndpoint(),
-		CaCert:     caCert,
+		APIServer:  masterEndpoint,
+		CACert:     caCert,
 		ClientCertAuth: &clientCertAuth{
-			CaKey: caKey,
+			CAKey: caKey,
 		},
 	}
 
@@ -288,10 +298,15 @@ func WriteKubeConfigWithToken(out io.Writer, cfg *kubeadmapi.MasterConfiguration
 		return fmt.Errorf("couldn't create a kubeconfig; the CA files couldn't be loaded: %v", err)
 	}
 
+	masterEndpoint, err := kubeadmutil.GetMasterEndpoint(cfg)
+	if err != nil {
+		return err
+	}
+
 	spec := &kubeConfigSpec{
 		ClientName: clientName,
-		APIServer:  cfg.GetMasterEndpoint(),
-		CaCert:     caCert,
+		APIServer:  masterEndpoint,
+		CACert:     caCert,
 		TokenAuth: &tokenAuth{
 			Token: token,
 		},

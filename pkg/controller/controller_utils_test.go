@@ -453,23 +453,26 @@ func int64P(num int64) *int64 {
 }
 
 func TestComputeHash(t *testing.T) {
+	collisionCount := int32(1)
+	otherCollisionCount := int32(2)
+	maxCollisionCount := int32(math.MaxInt32)
 	tests := []struct {
 		name                string
 		template            *v1.PodTemplateSpec
-		collisionCount      *int64
-		otherCollisionCount *int64
+		collisionCount      *int32
+		otherCollisionCount *int32
 	}{
 		{
 			name:                "simple",
 			template:            &v1.PodTemplateSpec{},
-			collisionCount:      int64P(1),
-			otherCollisionCount: int64P(2),
+			collisionCount:      &collisionCount,
+			otherCollisionCount: &otherCollisionCount,
 		},
 		{
 			name:                "using math.MaxInt64",
 			template:            &v1.PodTemplateSpec{},
 			collisionCount:      nil,
-			otherCollisionCount: int64P(int64(math.MaxInt64)),
+			otherCollisionCount: &maxCollisionCount,
 		},
 	}
 
@@ -753,7 +756,7 @@ func TestAddOrUpdateTaintOnNode(t *testing.T) {
 				{Key: "key1", Value: "value1", Effect: "NoSchedule"},
 				{Key: "key2", Value: "value2", Effect: "NoExecute"},
 			},
-			requestCount: 3,
+			requestCount: 2,
 		},
 		{
 			name: "add taint to node without taints",

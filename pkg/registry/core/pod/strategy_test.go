@@ -32,6 +32,9 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	apitesting "k8s.io/kubernetes/pkg/api/testing"
 	"k8s.io/kubernetes/pkg/kubelet/client"
+
+	// install all api groups for testing
+	_ "k8s.io/kubernetes/pkg/api/testapi"
 )
 
 func TestMatchPod(t *testing.T) {
@@ -66,6 +69,20 @@ func TestMatchPod(t *testing.T) {
 				Spec: api.PodSpec{RestartPolicy: api.RestartPolicyAlways},
 			},
 			fieldSelector: fields.ParseSelectorOrDie("spec.restartPolicy=Never"),
+			expectMatch:   false,
+		},
+		{
+			in: &api.Pod{
+				Spec: api.PodSpec{SchedulerName: "scheduler1"},
+			},
+			fieldSelector: fields.ParseSelectorOrDie("spec.schedulerName=scheduler1"),
+			expectMatch:   true,
+		},
+		{
+			in: &api.Pod{
+				Spec: api.PodSpec{SchedulerName: "scheduler1"},
+			},
+			fieldSelector: fields.ParseSelectorOrDie("spec.schedulerName=scheduler2"),
 			expectMatch:   false,
 		},
 		{

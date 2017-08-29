@@ -1101,6 +1101,12 @@ func (c *Cloud) ExternalID(nodeName types.NodeName) (string, error) {
 	return orEmpty(instance.InstanceId), nil
 }
 
+// InstanceExistsByProviderID returns true if the instance with the given provider id still exists and is running.
+// If false is returned with no error, the instance will be immediately deleted by the cloud controller manager.
+func (c *Cloud) InstanceExistsByProviderID(providerID string) (bool, error) {
+	return false, errors.New("unimplemented")
+}
+
 // InstanceID returns the cloud provider ID of the node with the specified nodeName.
 func (c *Cloud) InstanceID(nodeName types.NodeName) (string, error) {
 	// In the future it is possible to also return an endpoint as:
@@ -1199,6 +1205,20 @@ func (c *Cloud) GetZone() (cloudprovider.Zone, error) {
 		FailureDomain: c.selfAWSInstance.availabilityZone,
 		Region:        c.region,
 	}, nil
+}
+
+// GetZoneByProviderID implements Zones.GetZoneByProviderID
+// This is particularly useful in external cloud providers where the kubelet
+// does not initialize node data.
+func (c *Cloud) GetZoneByProviderID(providerID string) (cloudprovider.Zone, error) {
+	return cloudprovider.Zone{}, errors.New("GetZoneByProviderID not implemented")
+}
+
+// GetZoneByNodeName implements Zones.GetZoneByNodeName
+// This is particularly useful in external cloud providers where the kubelet
+// does not initialize node data.
+func (c *Cloud) GetZoneByNodeName(nodeName types.NodeName) (cloudprovider.Zone, error) {
+	return cloudprovider.Zone{}, errors.New("GetZoneByNodeName not imeplemented")
 }
 
 // Abstraction around AWS Instance Types
@@ -2487,8 +2507,15 @@ func (c *Cloud) findELBSubnets(internalELB bool) ([]string, error) {
 			continue
 		}
 
-		// TODO: Should this be an error?
-		glog.Warningf("Found multiple subnets in AZ %q; making arbitrary choice between subnets %q and %q", az, *existing.SubnetId, *subnet.SubnetId)
+		// If we have two subnets for the same AZ we arbitrarily choose the one that is first lexicographically.
+		// TODO: Should this be an error.
+		if strings.Compare(*existing.SubnetId, *subnet.SubnetId) > 0 {
+			glog.Warningf("Found multiple subnets in AZ %q; choosing %q between subnets %q and %q", az, *subnet.SubnetId, *existing.SubnetId, *subnet.SubnetId)
+			subnetsByAZ[az] = subnet
+			continue
+		}
+
+		glog.Warningf("Found multiple subnets in AZ %q; choosing %q between subnets %q and %q", az, *existing.SubnetId, *existing.SubnetId, *subnet.SubnetId)
 		continue
 	}
 

@@ -40,7 +40,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
-	"k8s.io/kubernetes/pkg/util/i18n"
+	"k8s.io/kubernetes/pkg/kubectl/util/i18n"
 	"k8s.io/kubernetes/pkg/util/interrupt"
 	uexec "k8s.io/utils/exec"
 )
@@ -175,6 +175,9 @@ func RunRun(f cmdutil.Factory, cmdIn io.Reader, cmdOut, cmdErr io.Writer, cmd *c
 	replicas := cmdutil.GetFlagInt(cmd, "replicas")
 	if interactive && replicas != 1 {
 		return cmdutil.UsageErrorf(cmd, "-i/--stdin requires that replicas is 1, found %d", replicas)
+	}
+	if cmdutil.GetFlagBool(cmd, "expose") && len(cmdutil.GetFlagString(cmd, "port")) == 0 {
+		return cmdutil.UsageErrorf(cmd, "--port must be set when exposing a service")
 	}
 
 	namespace, _, err := f.DefaultNamespace()
@@ -455,42 +458,44 @@ func handleAttachPod(f cmdutil.Factory, podClient coreclient.PodsGetter, ns, nam
 	if err != nil && err != conditions.ErrPodCompleted {
 		return err
 	}
-	ctrName, err := opts.GetContainerName(pod)
-	if err != nil {
-		return err
-	}
+
 	if pod.Status.Phase == api.PodSucceeded || pod.Status.Phase == api.PodFailed {
-		req, err := f.LogsForObject(pod, &api.PodLogOptions{Container: ctrName}, opts.GetPodTimeout)
-		if err != nil {
-			return err
-		}
-		readCloser, err := req.Stream()
-		if err != nil {
-			return err
-		}
-		defer readCloser.Close()
-		_, err = io.Copy(opts.Out, readCloser)
-		return err
+		return logOpts(f, pod, opts)
 	}
 
 	opts.PodClient = podClient
-
 	opts.PodName = name
 	opts.Namespace = ns
+
 	// TODO: opts.Run sets opts.Err to nil, we need to find a better way
 	stderr := opts.Err
 	if err := opts.Run(); err != nil {
 		fmt.Fprintf(stderr, "Error attaching, falling back to logs: %v\n", err)
-		req, err := f.LogsForObject(pod, &api.PodLogOptions{Container: ctrName}, opts.GetPodTimeout)
-		if err != nil {
-			return err
-		}
-		readCloser, err := req.Stream()
-		if err != nil {
-			return err
-		}
-		defer readCloser.Close()
-		_, err = io.Copy(opts.Out, readCloser)
+		return logOpts(f, pod, opts)
+	}
+	return nil
+}
+
+// logOpts logs output from opts to the pods log.
+func logOpts(f cmdutil.Factory, pod *api.Pod, opts *AttachOptions) error {
+	ctrName, err := opts.GetContainerName(pod)
+	if err != nil {
+		return err
+	}
+
+	req, err := f.LogsForObject(pod, &api.PodLogOptions{Container: ctrName}, opts.GetPodTimeout)
+	if err != nil {
+		return err
+	}
+
+	readCloser, err := req.Stream()
+	if err != nil {
+		return err
+	}
+	defer readCloser.Close()
+
+	_, err = io.Copy(opts.Out, readCloser)
+	if err != nil {
 		return err
 	}
 	return nil
@@ -534,11 +539,6 @@ func generateService(f cmdutil.Factory, cmd *cobra.Command, args []string, servi
 		return nil, fmt.Errorf("missing service generator: %s", serviceGenerator)
 	}
 	names := generator.ParamNames()
-
-	port := cmdutil.GetFlagString(cmd, "port")
-	if len(port) == 0 {
-		return nil, fmt.Errorf("--port must be set when exposing a service")
-	}
 
 	params := map[string]interface{}{}
 	for key, value := range paramsIn {

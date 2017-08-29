@@ -193,7 +193,8 @@ type DeploymentSpec struct {
 
 	// The deployment strategy to use to replace existing pods with new ones.
 	// +optional
-	Strategy DeploymentStrategy `json:"strategy,omitempty" protobuf:"bytes,4,opt,name=strategy"`
+	// +patchStrategy=retainKeys
+	Strategy DeploymentStrategy `json:"strategy,omitempty" patchStrategy:"retainKeys" protobuf:"bytes,4,opt,name=strategy"`
 
 	// Minimum number of seconds for which a newly created pod should be ready
 	// without any of its container crashing, for it to be considered available.
@@ -345,7 +346,7 @@ type DeploymentStatus struct {
 	// field as a collision avoidance mechanism when it needs to create the name for the
 	// newest ReplicaSet.
 	// +optional
-	CollisionCount *int64 `json:"collisionCount,omitempty" protobuf:"varint,8,opt,name=collisionCount"`
+	CollisionCount *int32 `json:"collisionCount,omitempty" protobuf:"varint,8,opt,name=collisionCount"`
 }
 
 type DeploymentConditionType string
@@ -524,7 +525,7 @@ type DaemonSetStatus struct {
 	// uses this field as a collision avoidance mechanism when it needs to
 	// create the name for the newest ControllerRevision.
 	// +optional
-	CollisionCount *int64 `json:"collisionCount,omitempty" protobuf:"varint,9,opt,name=collisionCount"`
+	CollisionCount *int32 `json:"collisionCount,omitempty" protobuf:"varint,9,opt,name=collisionCount"`
 }
 
 // +genclient
@@ -1181,6 +1182,20 @@ type NetworkPolicyPort struct {
 	Port *intstr.IntOrString `json:"port,omitempty" protobuf:"bytes,2,opt,name=port"`
 }
 
+// IPBlock describes a particular CIDR (Ex. "192.168.1.1/24") that is allowed to the pods
+// matched by a NetworkPolicySpec's podSelector. The except entry describes CIDRs that should
+// not be included within this rule.
+type IPBlock struct {
+	// CIDR is a string representing the IP Block
+	// Valid examples are "192.168.1.1/24"
+	CIDR string `json:"cidr" protobuf:"bytes,1,name=cidr"`
+	// Except is a slice of CIDRs that should not be included within an IP Block
+	// Valid examples are "192.168.1.1/24"
+	// Except values will be rejected if they are outside the CIDR range
+	// +optional
+	Except []string `json:"except,omitempty" protobuf:"bytes,2,rep,name=except"`
+}
+
 type NetworkPolicyPeer struct {
 	// Exactly one of the following must be specified.
 
@@ -1196,6 +1211,10 @@ type NetworkPolicyPeer struct {
 	// If present but empty, this selector selects all namespaces.
 	// +optional
 	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty" protobuf:"bytes,2,opt,name=namespaceSelector"`
+
+	// IPBlock defines policy on a particular IPBlock
+	// +optional
+	IPBlock *IPBlock `json:"ipBlock,omitempty" protobuf:"bytes,3,rep,name=ipBlock"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

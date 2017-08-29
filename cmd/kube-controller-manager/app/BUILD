@@ -1,7 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
-
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -23,7 +21,6 @@ go_library(
         "plugins.go",
         "policy.go",
     ],
-    tags = ["automanaged"],
     deps = [
         "//cmd/kube-controller-manager/app/options:go_default_library",
         "//pkg/api:go_default_library",
@@ -94,6 +91,7 @@ go_library(
         "//pkg/volume/gce_pd:go_default_library",
         "//pkg/volume/glusterfs:go_default_library",
         "//pkg/volume/host_path:go_default_library",
+        "//pkg/volume/iscsi:go_default_library",
         "//pkg/volume/local:go_default_library",
         "//pkg/volume/nfs:go_default_library",
         "//pkg/volume/photon_pd:go_default_library",
@@ -153,6 +151,5 @@ go_test(
     name = "go_default_test",
     srcs = ["controller_manager_test.go"],
     library = ":go_default_library",
-    tags = ["automanaged"],
     deps = ["//vendor/k8s.io/apimachinery/pkg/util/sets:go_default_library"],
 )

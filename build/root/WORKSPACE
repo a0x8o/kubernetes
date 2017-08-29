@@ -1,15 +1,15 @@
 http_archive(
     name = "io_bazel_rules_go",
-    sha256 = "abdea3986d9e850eda27b12163b0b558accdb5bca69ef945b022356f920d430d",
-    strip_prefix = "rules_go-473417ec48310325e1fcb1c154621a83197a17fe",
-    urls = ["https://github.com/bazelbuild/rules_go/archive/473417ec48310325e1fcb1c154621a83197a17fe.tar.gz"],
+    sha256 = "f9cc31e9d66dad1154de3c214158916411040e2c2614e4fbc2bab67330e95f82",
+    strip_prefix = "rules_go-82483596ec203eb9c1849937636f4cbed83733eb",
+    urls = ["https://github.com/bazelbuild/rules_go/archive/82483596ec203eb9c1849937636f4cbed83733eb.tar.gz"],
 )
 
 http_archive(
     name = "io_kubernetes_build",
-    sha256 = "232fec0ffcb53df5e87fc036ae3e966ea32122fc89ead4c32581b3255c1ab7d0",
-    strip_prefix = "repo-infra-f521b5d472e00e05da5394994942064510a6e8bf",
-    urls = ["https://github.com/kubernetes/repo-infra/archive/f521b5d472e00e05da5394994942064510a6e8bf.tar.gz"],
+    sha256 = "5da78568ffb9a323410c701618c23da8c93f4bf4aea76eee41ac244dbd8c8f95",
+    strip_prefix = "repo-infra-4eaf9e671bbb549fb4ec292cf251f921d7ef80ac",
+    urls = ["https://github.com/kubernetes/repo-infra/archive/4eaf9e671bbb549fb4ec292cf251f921d7ef80ac.tar.gz"],
 )
 
 ETCD_VERSION = "3.0.17"

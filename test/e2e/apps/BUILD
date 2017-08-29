@@ -1,7 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
-
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -22,7 +20,6 @@ go_library(
         "statefulset.go",
         "types.go",
     ],
-    tags = ["automanaged"],
     deps = [
         "//pkg/api:go_default_library",
         "//pkg/api/v1/pod:go_default_library",
@@ -46,6 +43,7 @@ go_library(
         "//vendor/github.com/onsi/ginkgo:go_default_library",
         "//vendor/github.com/onsi/gomega:go_default_library",
         "//vendor/k8s.io/api/apps/v1beta1:go_default_library",
+        "//vendor/k8s.io/api/apps/v1beta2:go_default_library",
         "//vendor/k8s.io/api/batch/v1:go_default_library",
         "//vendor/k8s.io/api/batch/v2alpha1:go_default_library",
         "//vendor/k8s.io/api/core/v1:go_default_library",

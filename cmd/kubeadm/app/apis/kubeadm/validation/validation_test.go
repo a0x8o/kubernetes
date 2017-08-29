@@ -152,21 +152,26 @@ func TestValidateAPIServerCertSANs(t *testing.T) {
 
 func TestValidateIPFromString(t *testing.T) {
 	var tests = []struct {
+		name     string
 		ip       string
 		expected bool
 	}{
-		{"", false},           // not valid
-		{"1234", false},       // not valid
-		{"1.2", false},        // not valid
-		{"1.2.3.4/16", false}, // not valid
-		{"1.2.3.4", true},     // valid
-		{"16.0.1.1", true},    // valid
+		{"invalid missing address", "", false},
+		{"invalid missing decimal points in IPv4 address", "1234", false},
+		{"invalid incomplete IPv4 address", "1.2", false},
+		{"invalid IPv4 CIDR provided instead of IPv4 address", "1.2.3.4/16", false},
+		{"valid IPv4 address", "1.2.3.4", true},
+		{"valid IPv6 address", "2001:db8::1", true},
+		{"invalid IPv6 CIDR provided instead of IPv6 address", "2001:db8::1/64", false},
+		{"invalid hex character in IPv6 address", "2001:xb8::", false},
+		{"invalid use of colons in IPv6 address", "2001::db8::", false},
 	}
 	for _, rt := range tests {
 		actual := ValidateIPFromString(rt.ip, nil)
 		if (len(actual) == 0) != rt.expected {
 			t.Errorf(
-				"failed ValidateIPFromString:\n\texpected: %t\n\t  actual: %t",
+				"%s test case failed:\n\texpected: %t\n\t  actual: %t",
+				rt.name,
 				rt.expected,
 				(len(actual) == 0),
 			)
@@ -176,22 +181,92 @@ func TestValidateIPFromString(t *testing.T) {
 
 func TestValidateIPNetFromString(t *testing.T) {
 	var tests = []struct {
+		name     string
 		subnet   string
 		minaddrs int64
 		expected bool
 	}{
-		{"", 0, false},              // not valid
-		{"1234", 0, false},          // not valid
-		{"abc", 0, false},           // not valid
-		{"1.2.3.4", 0, false},       // ip not valid
-		{"10.0.0.16/29", 10, false}, // valid, but too small. At least 10 addrs needed
-		{"10.0.0.16/12", 10, true},  // valid
+		{"invalid missing CIDR", "", 0, false},
+		{"invalid CIDR missing decimal points in IPv4 address and / mask", "1234", 0, false},
+		{"invalid CIDR use of letters instead of numbers and / mask", "abc", 0, false},
+		{"invalid IPv4 address provided instead of CIDR representation", "1.2.3.4", 0, false},
+		{"invalid IPv6 address provided instead of CIDR representation", "2001:db8::1", 0, false},
+		{"valid, but IPv4 CIDR too small. At least 10 addresses needed", "10.0.0.16/29", 10, false},
+		{"valid, but IPv6 CIDR too small. At least 10 addresses needed", "2001:db8::/125", 10, false},
+		{"valid IPv4 CIDR", "10.0.0.16/12", 10, true},
+		{"valid IPv6 CIDR", "2001:db8::/98", 10, true},
 	}
 	for _, rt := range tests {
 		actual := ValidateIPNetFromString(rt.subnet, rt.minaddrs, nil)
 		if (len(actual) == 0) != rt.expected {
 			t.Errorf(
-				"failed ValidateIPNetFromString:\n\texpected: %t\n\t  actual: %t",
+				"%s test case failed :\n\texpected: %t\n\t  actual: %t",
+				rt.name,
+				rt.expected,
+				(len(actual) == 0),
+			)
+		}
+	}
+}
+
+func TestValidateAPIEndpoint(t *testing.T) {
+	var tests = []struct {
+		name     string
+		s        *kubeadm.MasterConfiguration
+		expected bool
+	}{
+		{
+			name:     "Missing configuration",
+			s:        &kubeadm.MasterConfiguration{},
+			expected: false,
+		},
+		{
+			name: "Valid IPv4 address and default port",
+			s: &kubeadm.MasterConfiguration{
+				API: kubeadm.API{
+					AdvertiseAddress: "1.2.3.4",
+					BindPort:         6443,
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "Valid IPv6 address and port",
+			s: &kubeadm.MasterConfiguration{
+				API: kubeadm.API{
+					AdvertiseAddress: "2001:db7::1",
+					BindPort:         3446,
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "Invalid IPv4 address",
+			s: &kubeadm.MasterConfiguration{
+				API: kubeadm.API{
+					AdvertiseAddress: "1.2.34",
+					BindPort:         6443,
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Invalid IPv6 address",
+			s: &kubeadm.MasterConfiguration{
+				API: kubeadm.API{
+					AdvertiseAddress: "2001:db7:1",
+					BindPort:         3446,
+				},
+			},
+			expected: false,
+		},
+	}
+	for _, rt := range tests {
+		actual := ValidateAPIEndpoint(rt.s, nil)
+		if (len(actual) == 0) != rt.expected {
+			t.Errorf(
+				"%s test case failed:\n\texpected: %t\n\t  actual: %t",
+				rt.name,
 				rt.expected,
 				(len(actual) == 0),
 			)
@@ -202,54 +277,91 @@ func TestValidateIPNetFromString(t *testing.T) {
 func TestValidateMasterConfiguration(t *testing.T) {
 	nodename := "valid-nodename"
 	var tests = []struct {
+		name     string
 		s        *kubeadm.MasterConfiguration
 		expected bool
 	}{
-		{&kubeadm.MasterConfiguration{}, false},
-		{&kubeadm.MasterConfiguration{
-			AuthorizationModes: []string{"Node", "RBAC"},
-			Networking: kubeadm.Networking{
-				ServiceSubnet: "10.96.0.1/12",
-				DNSDomain:     "cluster.local",
-			},
-			CertificatesDir: "/some/cert/dir",
-			NodeName:        nodename,
-		}, false},
-		{&kubeadm.MasterConfiguration{
-			AuthorizationModes: []string{"Node", "RBAC"},
-			Networking: kubeadm.Networking{
-				ServiceSubnet: "10.96.0.1/12",
-				DNSDomain:     "cluster.local",
-			},
-			CertificatesDir: "/some/other/cert/dir",
-			Token:           "abcdef.0123456789abcdef",
-			NodeName:        nodename,
-		}, true},
-		{&kubeadm.MasterConfiguration{
-			AuthorizationModes: []string{"Node", "RBAC"},
-			Networking: kubeadm.Networking{
-				ServiceSubnet: "2001:db8::/98",
-				DNSDomain:     "cluster.local",
-			},
-			CertificatesDir: "/some/cert/dir",
-			NodeName:        nodename,
-		}, false},
-		{&kubeadm.MasterConfiguration{
-			AuthorizationModes: []string{"Node", "RBAC"},
-			Networking: kubeadm.Networking{
-				ServiceSubnet: "2001:db8::/98",
-				DNSDomain:     "cluster.local",
-			},
-			CertificatesDir: "/some/other/cert/dir",
-			Token:           "abcdef.0123456789abcdef",
-			NodeName:        nodename,
-		}, true},
+		{"invalid missing master configuration",
+			&kubeadm.MasterConfiguration{}, false},
+		{"invalid missing token with IPv4 service subnet",
+			&kubeadm.MasterConfiguration{
+				API: kubeadm.API{
+					AdvertiseAddress: "1.2.3.4",
+					BindPort:         6443,
+				},
+				AuthorizationModes: []string{"Node", "RBAC"},
+				Networking: kubeadm.Networking{
+					ServiceSubnet: "10.96.0.1/12",
+					DNSDomain:     "cluster.local",
+				},
+				CertificatesDir: "/some/cert/dir",
+				NodeName:        nodename,
+			}, false},
+		{"invalid missing token with IPv6 service subnet",
+			&kubeadm.MasterConfiguration{
+				API: kubeadm.API{
+					AdvertiseAddress: "1.2.3.4",
+					BindPort:         6443,
+				},
+				AuthorizationModes: []string{"Node", "RBAC"},
+				Networking: kubeadm.Networking{
+					ServiceSubnet: "2001:db8::1/98",
+					DNSDomain:     "cluster.local",
+				},
+				CertificatesDir: "/some/cert/dir",
+				NodeName:        nodename,
+			}, false},
+		{"invalid missing node name",
+			&kubeadm.MasterConfiguration{
+				API: kubeadm.API{
+					AdvertiseAddress: "1.2.3.4",
+					BindPort:         6443,
+				},
+				AuthorizationModes: []string{"Node", "RBAC"},
+				Networking: kubeadm.Networking{
+					ServiceSubnet: "10.96.0.1/12",
+					DNSDomain:     "cluster.local",
+				},
+				CertificatesDir: "/some/other/cert/dir",
+				Token:           "abcdef.0123456789abcdef",
+			}, false},
+		{"valid master configuration with IPv4 service subnet",
+			&kubeadm.MasterConfiguration{
+				API: kubeadm.API{
+					AdvertiseAddress: "1.2.3.4",
+					BindPort:         6443,
+				},
+				AuthorizationModes: []string{"Node", "RBAC"},
+				Networking: kubeadm.Networking{
+					ServiceSubnet: "10.96.0.1/12",
+					DNSDomain:     "cluster.local",
+				},
+				CertificatesDir: "/some/other/cert/dir",
+				Token:           "abcdef.0123456789abcdef",
+				NodeName:        nodename,
+			}, true},
+		{"valid master configuration using IPv6 service subnet",
+			&kubeadm.MasterConfiguration{
+				API: kubeadm.API{
+					AdvertiseAddress: "1:2:3::4",
+					BindPort:         3446,
+				},
+				AuthorizationModes: []string{"Node", "RBAC"},
+				Networking: kubeadm.Networking{
+					ServiceSubnet: "2001:db8::1/98",
+					DNSDomain:     "cluster.local",
+				},
+				CertificatesDir: "/some/other/cert/dir",
+				Token:           "abcdef.0123456789abcdef",
+				NodeName:        nodename,
+			}, true},
 	}
 	for _, rt := range tests {
 		actual := ValidateMasterConfiguration(rt.s)
 		if (len(actual) == 0) != rt.expected {
 			t.Errorf(
-				"failed ValidateMasterConfiguration:\n\texpected: %t\n\t  actual: %t",
+				"%s test case failed:\n\texpected: %t\n\t  actual: %t",
+				rt.name,
 				rt.expected,
 				(len(actual) == 0),
 			)
@@ -324,10 +436,10 @@ func TestValidateMixedArguments(t *testing.T) {
 	}
 }
 
-func TestValidateFeatureFlags(t *testing.T) {
+func TestValidateFeatureGates(t *testing.T) {
 	type featureFlag map[string]bool
 	var tests = []struct {
-		featureFlags featureFlag
+		featureGates featureFlag
 		expected     bool
 	}{
 		{featureFlag{"SelfHosting": true}, true},
@@ -337,10 +449,10 @@ func TestValidateFeatureFlags(t *testing.T) {
 		{featureFlag{"Foo": true}, false},
 	}
 	for _, rt := range tests {
-		actual := ValidateFeatureFlags(rt.featureFlags, nil)
+		actual := ValidateFeatureGates(rt.featureGates, nil)
 		if (len(actual) == 0) != rt.expected {
 			t.Errorf(
-				"failed featureFlags:\n\texpected: %t\n\t  actual: %t",
+				"failed featureGates:\n\texpected: %t\n\t  actual: %t",
 				rt.expected,
 				(len(actual) == 0),
 			)

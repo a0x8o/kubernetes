@@ -1,7 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
-
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -16,7 +14,6 @@ go_library(
         "glusterfs_minmax.go",
         "glusterfs_util.go",
     ],
-    tags = ["automanaged"],
     deps = [
         "//pkg/api/v1/helper:go_default_library",
         "//pkg/util/mount:go_default_library",
@@ -33,8 +30,8 @@ go_library(
         "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/labels:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/types:go_default_library",
+        "//vendor/k8s.io/apimachinery/pkg/util/sets:go_default_library",
         "//vendor/k8s.io/client-go/kubernetes:go_default_library",
-        "//vendor/k8s.io/utils/exec:go_default_library",
     ],
 )
 
@@ -45,7 +42,6 @@ go_test(
         "glusterfs_test.go",
     ],
     library = ":go_default_library",
-    tags = ["automanaged"],
     deps = [
         "//pkg/util/mount:go_default_library",
         "//pkg/volume:go_default_library",
@@ -58,8 +54,6 @@ go_test(
         "//vendor/k8s.io/client-go/kubernetes/fake:go_default_library",
         "//vendor/k8s.io/client-go/testing:go_default_library",
         "//vendor/k8s.io/client-go/util/testing:go_default_library",
-        "//vendor/k8s.io/utils/exec:go_default_library",
-        "//vendor/k8s.io/utils/exec/testing:go_default_library",
     ],
 )
 

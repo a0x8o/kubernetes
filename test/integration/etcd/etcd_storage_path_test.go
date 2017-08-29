@@ -168,6 +168,11 @@ var etcdStorageData = map[schema.GroupVersionResource]struct {
 		expectedEtcdPath: "/registry/replicasets/etcdstoragepathtestnamespace/rs2",
 		expectedGVK:      gvkP("extensions", "v1beta1", "ReplicaSet"),
 	},
+	gvr("apps", "v1beta2", "controllerrevisions"): {
+		stub:             `{"metadata":{"name":"crs2"},"data":{"name":"abc","namespace":"default","creationTimestamp":null,"Spec":{"Replicas":0,"Selector":{"matchLabels":{"foo":"bar"}},"Template":{"creationTimestamp":null,"labels":{"foo":"bar"},"Spec":{"Volumes":null,"InitContainers":null,"Containers":null,"RestartPolicy":"Always","TerminationGracePeriodSeconds":null,"ActiveDeadlineSeconds":null,"DNSPolicy":"ClusterFirst","NodeSelector":null,"ServiceAccountName":"","AutomountServiceAccountToken":null,"NodeName":"","SecurityContext":null,"ImagePullSecrets":null,"Hostname":"","Subdomain":"","Affinity":null,"SchedulerName":"","Tolerations":null,"HostAliases":null}},"VolumeClaimTemplates":null,"ServiceName":""},"Status":{"ObservedGeneration":null,"Replicas":0}},"revision":0}`,
+		expectedEtcdPath: "/registry/controllerrevisions/etcdstoragepathtestnamespace/crs2",
+		expectedGVK:      gvkP("apps", "v1beta1", "ControllerRevision"),
+	},
 	// --
 
 	// k8s.io/kubernetes/pkg/apis/autoscaling/v1
@@ -192,10 +197,19 @@ var etcdStorageData = map[schema.GroupVersionResource]struct {
 	},
 	// --
 
+	// k8s.io/kubernetes/pkg/apis/batch/v1beta1
+	gvr("batch", "v1beta1", "cronjobs"): {
+		stub:             `{"metadata": {"name": "cjv1beta1"}, "spec": {"jobTemplate": {"spec": {"template": {"metadata": {"labels": {"controller-uid": "uid0"}}, "spec": {"containers": [{"image": "fedora:latest", "name": "container0"}], "dnsPolicy": "ClusterFirst", "restartPolicy": "Never"}}}}, "schedule": "* * * * *"}}`,
+		expectedEtcdPath: "/registry/cronjobs/etcdstoragepathtestnamespace/cjv1beta1",
+		// TODO this needs to be updated to batch/v1beta1 when it's enabed by default
+		expectedGVK: gvkP("batch", "v2alpha1", "CronJob"),
+	},
+	// --
+
 	// k8s.io/kubernetes/pkg/apis/batch/v2alpha1
 	gvr("batch", "v2alpha1", "cronjobs"): {
-		stub:             `{"metadata": {"name": "cj1"}, "spec": {"jobTemplate": {"spec": {"template": {"metadata": {"labels": {"controller-uid": "uid0"}}, "spec": {"containers": [{"image": "fedora:latest", "name": "container0"}], "dnsPolicy": "ClusterFirst", "restartPolicy": "Never"}}}}, "schedule": "* * * * *"}}`,
-		expectedEtcdPath: "/registry/cronjobs/etcdstoragepathtestnamespace/cj1",
+		stub:             `{"metadata": {"name": "cjv2alpha1"}, "spec": {"jobTemplate": {"spec": {"template": {"metadata": {"labels": {"controller-uid": "uid0"}}, "spec": {"containers": [{"image": "fedora:latest", "name": "container0"}], "dnsPolicy": "ClusterFirst", "restartPolicy": "Never"}}}}, "schedule": "* * * * *"}}`,
+		expectedEtcdPath: "/registry/cronjobs/etcdstoragepathtestnamespace/cjv2alpha1",
 	},
 	// --
 
@@ -407,12 +421,15 @@ var ephemeralWhiteList = createEphemeralWhiteList(
 	gvr("apps", "v1beta2", "scales"), // not stored in etcd, part of kapiv1.ReplicationController
 	// --
 
+	// k8s.io/kubernetes/pkg/apis/batch/v1beta1
+	gvr("batch", "v1beta1", "jobtemplates"), // not stored in etcd
+	// --
+
 	// k8s.io/kubernetes/pkg/apis/batch/v2alpha1
 	gvr("batch", "v2alpha1", "jobtemplates"), // not stored in etcd
 	// --
 
 	// k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1
-	gvr("componentconfig", "v1alpha1", "kubeletconfigurations"),       // not stored in etcd
 	gvr("componentconfig", "v1alpha1", "kubeschedulerconfigurations"), // not stored in etcd
 	gvr("componentconfig", "v1alpha1", "kubeproxyconfigurations"),     // not stored in etcd
 	// --
@@ -438,7 +455,7 @@ var ephemeralWhiteList = createEphemeralWhiteList(
 	// --
 )
 
-// Only add kinds to this list when there is no mapping from GVK to GVR (and thus there is no way to create the object)
+// Only add kinds to this list when there is no way to create the object
 var kindWhiteList = sets.NewString(
 	// k8s.io/kubernetes/pkg/api/v1
 	"DeleteOptions",
@@ -496,14 +513,14 @@ func TestEtcdStoragePath(t *testing.T) {
 		kind := gvk.Kind
 		pkgPath := apiType.PkgPath()
 
+		if kindWhiteList.Has(kind) {
+			kindSeen.Insert(kind)
+			continue
+		}
+
 		mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 		if err != nil {
-			kindSeen.Insert(kind)
-			if kindWhiteList.Has(kind) {
-				// t.Logf("skipping test for %s from %s because its GVK %s is whitelisted and has no mapping", kind, pkgPath, gvk)
-			} else {
-				t.Errorf("no mapping found for %s from %s but its GVK %s is not whitelisted", kind, pkgPath, gvk)
-			}
+			t.Errorf("unexpected error getting mapping for %s from %s with GVK %s: %v", kind, pkgPath, gvk, err)
 			continue
 		}
 

@@ -26,7 +26,7 @@ import (
 	"github.com/containernetworking/cni/libcni"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/golang/glog"
-	"k8s.io/kubernetes/pkg/apis/componentconfig"
+	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/network"
 	utilexec "k8s.io/utils/exec"
@@ -119,6 +119,13 @@ func getDefaultCNINetwork(pluginDir, binDir, vendorCNIDirPrefix string) (*cniNet
 				glog.Warningf("Error loading CNI config file %s: %v", confFile, err)
 				continue
 			}
+			// Ensure the config has a "type" so we know what plugin to run.
+			// Also catches the case where somebody put a conflist into a conf file.
+			if conf.Network.Type == "" {
+				glog.Warningf("Error loading CNI config file %s: no 'type'; perhaps this is a .conflist?", confFile)
+				continue
+			}
+
 			confList, err = libcni.ConfListFromConf(conf)
 			if err != nil {
 				glog.Warningf("Error converting CNI config file %s to list: %v", confFile, err)
@@ -171,7 +178,7 @@ func getLoNetwork(binDir, vendorDirPrefix string) *cniNetwork {
 	return loNetwork
 }
 
-func (plugin *cniNetworkPlugin) Init(host network.Host, hairpinMode componentconfig.HairpinMode, nonMasqueradeCIDR string, mtu int) error {
+func (plugin *cniNetworkPlugin) Init(host network.Host, hairpinMode kubeletconfig.HairpinMode, nonMasqueradeCIDR string, mtu int) error {
 	var err error
 	plugin.nsenterPath, err = plugin.execer.LookPath("nsenter")
 	if err != nil {

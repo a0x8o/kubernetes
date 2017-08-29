@@ -134,10 +134,10 @@ type NodeController struct {
 	// is just created, e.g. cluster bootstrap or node creation, we give a longer grace period.
 	nodeStartupGracePeriod time.Duration
 	// per Node map storing last observed Status together with a local time when it was observed.
+	nodeStatusMap map[string]nodeStatusData
 	// This timestamp is to be used instead of LastProbeTime stored in Condition. We do this
 	// to aviod the problem with time skew across the cluster.
-	nodeStatusMap map[string]nodeStatusData
-	now           func() metav1.Time
+	now func() metav1.Time
 	// Lock to access evictor workers
 	evictorLock sync.Mutex
 	// workers that evicts pods from unresponsive nodes.
@@ -948,8 +948,6 @@ func (nc *NodeController) tryUpdateNodeStatus(node *v1.Node) (time.Duration, v1.
 			v1.NodeOutOfDisk,
 			v1.NodeMemoryPressure,
 			v1.NodeDiskPressure,
-			// We don't change 'NodeInodePressure' condition, as it'll be removed in future.
-			// v1.NodeInodePressure,
 			// We don't change 'NodeNetworkUnavailable' condition, as it's managed on a control plane level.
 			// v1.NodeNetworkUnavailable,
 		}

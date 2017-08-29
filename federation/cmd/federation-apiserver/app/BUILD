@@ -1,7 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
-
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -19,7 +17,6 @@ go_library(
         "plugins.go",
         "server.go",
     ],
-    tags = ["automanaged"],
     deps = [
         "//federation/apis/core:go_default_library",
         "//federation/apis/core/install:go_default_library",
@@ -69,6 +66,7 @@ go_library(
         "//vendor/github.com/golang/glog:go_default_library",
         "//vendor/github.com/spf13/cobra:go_default_library",
         "//vendor/github.com/spf13/pflag:go_default_library",
+        "//vendor/k8s.io/api/apps/v1beta2:go_default_library",
         "//vendor/k8s.io/api/autoscaling/v1:go_default_library",
         "//vendor/k8s.io/api/batch/v1:go_default_library",
         "//vendor/k8s.io/api/core/v1:go_default_library",

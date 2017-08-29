@@ -18327,7 +18327,7 @@
    },
    "v1.Taint": {
     "id": "v1.Taint",
-    "description": "The node this Taint is attached to has the effect \"effect\" on any pod that that does not tolerate the Taint.",
+    "description": "The node this Taint is attached to has the \"effect\" on any pod that does not tolerate the Taint.",
     "required": [
      "key",
      "effect"
@@ -18865,7 +18865,7 @@
       "description": "Cinder represents a cinder volume attached and mounted on kubelets host machine More info: https://releases.k8s.io/HEAD/examples/mysql-cinder-pd/README.md"
      },
      "cephfs": {
-      "$ref": "v1.CephFSVolumeSource",
+      "$ref": "v1.CephFSPersistentVolumeSource",
       "description": "CephFS represents a Ceph FS mount on the host that shares a pod's lifetime"
      },
      "fc": {
@@ -18881,7 +18881,7 @@
       "description": "FlexVolume represents a generic volume resource that is provisioned/attached using an exec based plugin. This is an alpha feature and may change in future."
      },
      "azureFile": {
-      "$ref": "v1.AzureFileVolumeSource",
+      "$ref": "v1.AzureFilePersistentVolumeSource",
       "description": "AzureFile represents an Azure File Service mount on the host and bind mount to the pod."
      },
      "vsphereVolume": {
@@ -18934,6 +18934,13 @@
      "storageClassName": {
       "type": "string",
       "description": "Name of StorageClass to which this persistent volume belongs. Empty value means that this volume does not belong to any StorageClass."
+     },
+     "mountOptions": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "A list of mount options, e.g. [\"ro\", \"soft\"]. Not validated - mount will simply fail if one is invalid. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#mount-options"
      }
     }
    },
@@ -18998,9 +19005,17 @@
     "properties": {
      "path": {
       "type": "string",
-      "description": "Path of the directory on the host. More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath"
+      "description": "Path of the directory on the host. If the path is a symlink, it will follow the link to the real path. More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath"
+     },
+     "type": {
+      "$ref": "v1.HostPathType",
+      "description": "Type for HostPath Volume Defaults to \"\" More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath"
      }
     }
+   },
+   "v1.HostPathType": {
+    "id": "v1.HostPathType",
+    "properties": {}
    },
    "v1.GlusterfsVolumeSource": {
     "id": "v1.GlusterfsVolumeSource",
@@ -19153,6 +19168,10 @@
      "secretRef": {
       "$ref": "v1.LocalObjectReference",
       "description": "CHAP secret for iSCSI target and initiator authentication"
+     },
+     "initiatorName": {
+      "type": "string",
+      "description": "Custom iSCSI initiator name. If initiatorName is specified with iscsiInterface simultaneously, new iSCSI interface \u003ctarget portal\u003e:\u003cvolume name\u003e will be created for the connection."
      }
     }
    },
@@ -19177,8 +19196,8 @@
      }
     }
    },
-   "v1.CephFSVolumeSource": {
-    "id": "v1.CephFSVolumeSource",
+   "v1.CephFSPersistentVolumeSource": {
+    "id": "v1.CephFSPersistentVolumeSource",
     "description": "Represents a Ceph Filesystem mount that lasts the lifetime of a pod Cephfs volumes do not support ownership management or SELinux relabeling.",
     "required": [
      "monitors"
@@ -19204,7 +19223,7 @@
       "description": "Optional: SecretFile is the path to key ring for User, default is /etc/ceph/user.secret More info: https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it"
      },
      "secretRef": {
-      "$ref": "v1.LocalObjectReference",
+      "$ref": "v1.SecretReference",
       "description": "Optional: SecretRef is reference to the authentication secret for User, default is empty. More info: https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it"
      },
      "readOnly": {
@@ -19213,25 +19232,35 @@
      }
     }
    },
+   "v1.SecretReference": {
+    "id": "v1.SecretReference",
+    "description": "SecretReference represents a Secret Reference. It has enough information to retrieve secret in any namespace",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "Name is unique within a namespace to reference a secret resource."
+     },
+     "namespace": {
+      "type": "string",
+      "description": "Namespace defines the space within which the secret name must be unique."
+     }
+    }
+   },
    "v1.FCVolumeSource": {
     "id": "v1.FCVolumeSource",
     "description": "Represents a Fibre Channel volume. Fibre Channel volumes can only be mounted as read/write once. Fibre Channel volumes support ownership management and SELinux relabeling.",
-    "required": [
-     "targetWWNs",
-     "lun"
-    ],
     "properties": {
      "targetWWNs": {
       "type": "array",
       "items": {
        "type": "string"
       },
-      "description": "Required: FC target worldwide names (WWNs)"
+      "description": "Optional: FC target worldwide names (WWNs)"
      },
      "lun": {
       "type": "integer",
       "format": "int32",
-      "description": "Required: FC target lun number"
+      "description": "Optional: FC target lun number"
      },
      "fsType": {
       "type": "string",
@@ -19240,6 +19269,13 @@
      "readOnly": {
       "type": "boolean",
       "description": "Optional: Defaults to false (read/write). ReadOnly here will force the ReadOnly setting in VolumeMounts."
+     },
+     "wwids": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Optional: FC volume world wide identifiers (wwids) Either wwids or combination of targetWWNs and lun must be set, but not both simultaneously."
      }
     }
    },
@@ -19286,12 +19322,13 @@
      }
     }
    },
-   "v1.AzureFileVolumeSource": {
-    "id": "v1.AzureFileVolumeSource",
+   "v1.AzureFilePersistentVolumeSource": {
+    "id": "v1.AzureFilePersistentVolumeSource",
     "description": "AzureFile represents an Azure File Service mount on the host and bind mount to the pod.",
     "required": [
      "secretName",
-     "shareName"
+     "shareName",
+     "secretNamespace"
     ],
     "properties": {
      "secretName": {
@@ -19305,6 +19342,10 @@
      "readOnly": {
       "type": "boolean",
       "description": "Defaults to false (read/write). ReadOnly here will force the ReadOnly setting in VolumeMounts."
+     },
+     "secretNamespace": {
+      "type": "string",
+      "description": "the namespace of the secret that contains Azure Storage Account Name and Key default is the same as the Pod"
      }
     }
    },
@@ -19957,6 +19998,42 @@
      }
     }
    },
+   "v1.CephFSVolumeSource": {
+    "id": "v1.CephFSVolumeSource",
+    "description": "Represents a Ceph Filesystem mount that lasts the lifetime of a pod Cephfs volumes do not support ownership management or SELinux relabeling.",
+    "required": [
+     "monitors"
+    ],
+    "properties": {
+     "monitors": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Required: Monitors is a collection of Ceph monitors More info: https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it"
+     },
+     "path": {
+      "type": "string",
+      "description": "Optional: Used as the mounted root, rather than the full Ceph tree, default is /"
+     },
+     "user": {
+      "type": "string",
+      "description": "Optional: User is the rados user name, default is admin More info: https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it"
+     },
+     "secretFile": {
+      "type": "string",
+      "description": "Optional: SecretFile is the path to key ring for User, default is /etc/ceph/user.secret More info: https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it"
+     },
+     "secretRef": {
+      "$ref": "v1.LocalObjectReference",
+      "description": "Optional: SecretRef is reference to the authentication secret for User, default is empty. More info: https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it"
+     },
+     "readOnly": {
+      "type": "boolean",
+      "description": "Optional: Defaults to false (read/write). ReadOnly here will force the ReadOnly setting in VolumeMounts. More info: https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it"
+     }
+    }
+   },
    "v1.DownwardAPIVolumeSource": {
     "id": "v1.DownwardAPIVolumeSource",
     "description": "DownwardAPIVolumeSource represents a volume containing downward API info. Downward API volumes support ownership management and SELinux relabeling.",
@@ -20036,6 +20113,28 @@
      "divisor": {
       "type": "string",
       "description": "Specifies the output format of the exposed resources, defaults to \"1\""
+     }
+    }
+   },
+   "v1.AzureFileVolumeSource": {
+    "id": "v1.AzureFileVolumeSource",
+    "description": "AzureFile represents an Azure File Service mount on the host and bind mount to the pod.",
+    "required": [
+     "secretName",
+     "shareName"
+    ],
+    "properties": {
+     "secretName": {
+      "type": "string",
+      "description": "the name of secret that contains Azure Storage Account Name and Key"
+     },
+     "shareName": {
+      "type": "string",
+      "description": "Share Name"
+     },
+     "readOnly": {
+      "type": "boolean",
+      "description": "Defaults to false (read/write). ReadOnly here will force the ReadOnly setting in VolumeMounts."
      }
     }
    },
@@ -20401,7 +20500,7 @@
      },
      "resourceFieldRef": {
       "$ref": "v1.ResourceFieldSelector",
-      "description": "Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported."
+      "description": "Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported."
      },
      "configMapKeyRef": {
       "$ref": "v1.ConfigMapKeySelector",
@@ -20868,7 +20967,7 @@
       "items": {
        "$ref": "v1.PodAffinityTerm"
       },
-      "description": "NOT YET IMPLEMENTED. TODO: Uncomment field once it is implemented. If the affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system will try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied. RequiredDuringSchedulingRequiredDuringExecution []PodAffinityTerm  `json:\"requiredDuringSchedulingRequiredDuringExecution,omitempty\"` If the affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system may or may not try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied."
+      "description": "If the affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system may or may not try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied."
      },
      "preferredDuringSchedulingIgnoredDuringExecution": {
       "type": "array",
@@ -20928,7 +21027,7 @@
       "items": {
        "$ref": "v1.PodAffinityTerm"
       },
-      "description": "NOT YET IMPLEMENTED. TODO: Uncomment field once it is implemented. If the anti-affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the anti-affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system will try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied. RequiredDuringSchedulingRequiredDuringExecution []PodAffinityTerm  `json:\"requiredDuringSchedulingRequiredDuringExecution,omitempty\"` If the anti-affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the anti-affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system may or may not try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied."
+      "description": "If the anti-affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the anti-affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system may or may not try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied."
      },
      "preferredDuringSchedulingIgnoredDuringExecution": {
       "type": "array",
@@ -21815,6 +21914,10 @@
      "publishNotReadyAddresses": {
       "type": "boolean",
       "description": "publishNotReadyAddresses, when set to true, indicates that DNS implementations must publish the notReadyAddresses of subsets for the Endpoints associated with the Service. The default value is false. The primary use case for setting this field is to use a StatefulSet's Headless Service to propagate SRV records for its Pods without respect to their readiness for purpose of peer discovery. This field will replace the service.alpha.kubernetes.io/tolerate-unready-endpoints when that annotation is deprecated and all clients have been converted to use this field."
+     },
+     "sessionAffinityConfig": {
+      "$ref": "v1.SessionAffinityConfig",
+      "description": "sessionAffinityConfig contains the configurations of session affinity."
      }
     }
    },
@@ -21846,6 +21949,27 @@
       "type": "integer",
       "format": "int32",
       "description": "The port on each node on which this service is exposed when type=NodePort or LoadBalancer. Usually assigned by the system. If specified, it will be allocated to the service if unused or else creation of the service will fail. Default is to auto-allocate a port if the ServiceType of this Service requires one. More info: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport"
+     }
+    }
+   },
+   "v1.SessionAffinityConfig": {
+    "id": "v1.SessionAffinityConfig",
+    "description": "SessionAffinityConfig represents the configurations of session affinity.",
+    "properties": {
+     "clientIP": {
+      "$ref": "v1.ClientIPConfig",
+      "description": "clientIP contains the configurations of Client IP based session affinity."
+     }
+    }
+   },
+   "v1.ClientIPConfig": {
+    "id": "v1.ClientIPConfig",
+    "description": "ClientIPConfig represents the configurations of Client IP based session affinity.",
+    "properties": {
+     "timeoutSeconds": {
+      "type": "integer",
+      "format": "int32",
+      "description": "timeoutSeconds specifies the seconds of ClientIP type session sticky time. The value must be \u003e0 \u0026\u0026 \u003c=86400(for 1 day) if ServiceAffinity == \"ClientIP\". Default value is 10800(for 3 hours)."
      }
     }
    },

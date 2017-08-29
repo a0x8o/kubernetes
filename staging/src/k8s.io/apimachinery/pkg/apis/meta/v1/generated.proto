@@ -250,6 +250,8 @@ message Initializers {
   // When the last pending initializer is removed, and no failing result is set, the initializers
   // struct will be set to nil and the object is considered as initialized and visible to all
   // clients.
+  // +patchMergeKey=name
+  // +patchStrategy=merge
   repeated Initializer pending = 1;
 
   // If result is set with the Failure field, the object will be persisted to storage and then deleted,
@@ -290,6 +292,17 @@ message LabelSelectorRequirement {
   // merge patch.
   // +optional
   repeated string values = 3;
+}
+
+// List holds a list of objects, which may not be known by the server.
+message List {
+  // Standard list metadata.
+  // More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds
+  // +optional
+  optional ListMeta metadata = 1;
+
+  // List of objects
+  repeated k8s.io.apimachinery.pkg.runtime.RawExtension items = 2;
 }
 
 // ListMeta describes metadata that synthetic resources must have, including lists and

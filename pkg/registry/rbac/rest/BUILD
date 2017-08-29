@@ -1,7 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
-
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -10,13 +8,11 @@ load(
 go_library(
     name = "go_default_library",
     srcs = ["storage_rbac.go"],
-    tags = ["automanaged"],
     deps = [
         "//pkg/api:go_default_library",
         "//pkg/apis/rbac:go_default_library",
         "//pkg/client/clientset_generated/internalclientset/typed/core/internalversion:go_default_library",
         "//pkg/client/clientset_generated/internalclientset/typed/rbac/internalversion:go_default_library",
-        "//pkg/client/retry:go_default_library",
         "//pkg/registry/rbac/clusterrole:go_default_library",
         "//pkg/registry/rbac/clusterrole/policybased:go_default_library",
         "//pkg/registry/rbac/clusterrole/storage:go_default_library",
@@ -45,6 +41,7 @@ go_library(
         "//vendor/k8s.io/apiserver/pkg/registry/rest:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/server:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/server/storage:go_default_library",
+        "//vendor/k8s.io/client-go/util/retry:go_default_library",
     ],
 )
 

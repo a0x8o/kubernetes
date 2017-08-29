@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os/exec"
 	"reflect"
 	"strings"
 	"time"
@@ -34,9 +35,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/apis/componentconfig"
-	v1alpha1 "k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1"
+	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
+	kubeletscheme "k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/scheme"
+	kubeletconfigv1alpha1 "k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/v1alpha1"
 	stats "k8s.io/kubernetes/pkg/kubelet/apis/stats/v1alpha1"
 	kubeletmetrics "k8s.io/kubernetes/pkg/kubelet/metrics"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -81,7 +82,7 @@ func getNodeSummary() (*stats.Summary, error) {
 }
 
 // Returns the current KubeletConfiguration
-func getCurrentKubeletConfig() (*componentconfig.KubeletConfiguration, error) {
+func getCurrentKubeletConfig() (*kubeletconfig.KubeletConfiguration, error) {
 	resp := pollConfigz(5*time.Minute, 5*time.Second)
 	kubeCfg, err := decodeConfigz(resp)
 	if err != nil {
@@ -93,8 +94,8 @@ func getCurrentKubeletConfig() (*componentconfig.KubeletConfiguration, error) {
 // Must be called within a Context. Allows the function to modify the KubeletConfiguration during the BeforeEach of the context.
 // The change is reverted in the AfterEach of the context.
 // Returns true on success.
-func tempSetCurrentKubeletConfig(f *framework.Framework, updateFunction func(initialConfig *componentconfig.KubeletConfiguration)) {
-	var oldCfg *componentconfig.KubeletConfiguration
+func tempSetCurrentKubeletConfig(f *framework.Framework, updateFunction func(initialConfig *kubeletconfig.KubeletConfiguration)) {
+	var oldCfg *kubeletconfig.KubeletConfiguration
 	BeforeEach(func() {
 		configEnabled, err := isKubeletConfigEnabled(f)
 		framework.ExpectNoError(err)
@@ -103,7 +104,7 @@ func tempSetCurrentKubeletConfig(f *framework.Framework, updateFunction func(ini
 			framework.ExpectNoError(err)
 			clone, err := scheme.Scheme.DeepCopy(oldCfg)
 			framework.ExpectNoError(err)
-			newCfg := clone.(*componentconfig.KubeletConfiguration)
+			newCfg := clone.(*kubeletconfig.KubeletConfiguration)
 			updateFunction(newCfg)
 			framework.ExpectNoError(setKubeletConfiguration(f, newCfg))
 		} else {
@@ -132,7 +133,7 @@ func isKubeletConfigEnabled(f *framework.Framework) (bool, error) {
 // Creates or updates the configmap for KubeletConfiguration, waits for the Kubelet to restart
 // with the new configuration. Returns an error if the configuration after waiting for restartGap
 // doesn't match what you attempted to set, or if the dynamic configuration feature is disabled.
-func setKubeletConfiguration(f *framework.Framework, kubeCfg *componentconfig.KubeletConfiguration) error {
+func setKubeletConfiguration(f *framework.Framework, kubeCfg *kubeletconfig.KubeletConfiguration) error {
 	const (
 		restartGap   = 40 * time.Second
 		pollInterval = 5 * time.Second
@@ -217,16 +218,16 @@ func pollConfigz(timeout time.Duration, pollInterval time.Duration) *http.Respon
 	return resp
 }
 
-// Decodes the http response from /configz and returns a componentconfig.KubeletConfiguration (internal type).
-func decodeConfigz(resp *http.Response) (*componentconfig.KubeletConfiguration, error) {
+// Decodes the http response from /configz and returns a kubeletconfig.KubeletConfiguration (internal type).
+func decodeConfigz(resp *http.Response) (*kubeletconfig.KubeletConfiguration, error) {
 	// This hack because /configz reports the following structure:
-	// {"componentconfig": {the JSON representation of v1alpha1.KubeletConfiguration}}
+	// {"kubeletconfig": {the JSON representation of kubeletconfigv1alpha1.KubeletConfiguration}}
 	type configzWrapper struct {
-		ComponentConfig v1alpha1.KubeletConfiguration `json:"componentconfig"`
+		ComponentConfig kubeletconfigv1alpha1.KubeletConfiguration `json:"kubeletconfig"`
 	}
 
 	configz := configzWrapper{}
-	kubeCfg := componentconfig.KubeletConfiguration{}
+	kubeCfg := kubeletconfig.KubeletConfiguration{}
 
 	contentsBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -247,7 +248,7 @@ func decodeConfigz(resp *http.Response) (*componentconfig.KubeletConfiguration, 
 }
 
 // creates a configmap containing kubeCfg in kube-system namespace
-func createConfigMap(f *framework.Framework, internalKC *componentconfig.KubeletConfiguration) (*v1.ConfigMap, error) {
+func createConfigMap(f *framework.Framework, internalKC *kubeletconfig.KubeletConfiguration) (*v1.ConfigMap, error) {
 	cmap := makeKubeletConfigMap(internalKC)
 	cmap, err := f.ClientSet.Core().ConfigMaps("kube-system").Create(cmap)
 	if err != nil {
@@ -257,14 +258,18 @@ func createConfigMap(f *framework.Framework, internalKC *componentconfig.Kubelet
 }
 
 // constructs a ConfigMap, populating one of its keys with the KubeletConfiguration. Uses GenerateName.
-func makeKubeletConfigMap(internalKC *componentconfig.KubeletConfiguration) *v1.ConfigMap {
-	externalKC := &v1alpha1.KubeletConfiguration{}
-	api.Scheme.Convert(internalKC, externalKC, nil)
-
-	encoder, err := newJSONEncoder(componentconfig.GroupName)
+func makeKubeletConfigMap(internalKC *kubeletconfig.KubeletConfiguration) *v1.ConfigMap {
+	scheme, _, err := kubeletscheme.NewSchemeAndCodecs()
 	framework.ExpectNoError(err)
 
-	data, err := runtime.Encode(encoder, externalKC)
+	versioned := &kubeletconfigv1alpha1.KubeletConfiguration{}
+	err = scheme.Convert(internalKC, versioned, nil)
+	framework.ExpectNoError(err)
+
+	encoder, err := newKubeletConfigJSONEncoder()
+	framework.ExpectNoError(err)
+
+	data, err := runtime.Encode(encoder, versioned)
 	framework.ExpectNoError(err)
 
 	cmap := &v1.ConfigMap{
@@ -273,7 +278,6 @@ func makeKubeletConfigMap(internalKC *componentconfig.KubeletConfiguration) *v1.
 			"kubelet": string(data),
 		},
 	}
-
 	return cmap
 }
 
@@ -309,19 +313,26 @@ func logKubeletMetrics(metricKeys ...string) {
 	}
 }
 
-func newJSONEncoder(groupName string) (runtime.Encoder, error) {
-	// encode to json
+func newKubeletConfigJSONEncoder() (runtime.Encoder, error) {
+	_, kubeletCodecs, err := kubeletscheme.NewSchemeAndCodecs()
+	if err != nil {
+		return nil, err
+	}
+
 	mediaType := "application/json"
-	info, ok := runtime.SerializerInfoForMediaType(api.Codecs.SupportedMediaTypes(), mediaType)
+	info, ok := runtime.SerializerInfoForMediaType(kubeletCodecs.SupportedMediaTypes(), mediaType)
 	if !ok {
 		return nil, fmt.Errorf("unsupported media type %q", mediaType)
 	}
+	return kubeletCodecs.EncoderForVersion(info.Serializer, kubeletconfigv1alpha1.SchemeGroupVersion), nil
+}
 
-	versions := api.Registry.EnabledVersionsForGroup(groupName)
-	if len(versions) == 0 {
-		return nil, fmt.Errorf("no enabled versions for group %q", groupName)
+// runCommand runs the cmd and returns the combined stdout and stderr, or an
+// error if the command failed.
+func runCommand(cmd ...string) (string, error) {
+	output, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to run %q: %s (%s)", strings.Join(cmd, " "), err, output)
 	}
-
-	// the "best" version supposedly comes first in the list returned from api.Registry.EnabledVersionsForGroup
-	return api.Codecs.EncoderForVersion(info.Serializer, versions[0]), nil
+	return string(output), nil
 }

@@ -132,7 +132,8 @@ func NewOpenAPIData(doc *openapi_v2.Document) (Resources, error) {
 
 	// Now, parse each model. We can validate that references exists.
 	for _, namedSchema := range doc.GetDefinitions().GetAdditionalProperties() {
-		schema, err := definitions.ParseSchema(namedSchema.GetValue(), &Path{key: namedSchema.GetName()})
+		path := NewPath(namedSchema.GetName())
+		schema, err := definitions.ParseSchema(namedSchema.GetValue(), &path)
 		if err != nil {
 			return nil, err
 		}
@@ -163,8 +164,9 @@ func (d *Definitions) parseReference(s *openapi_v2.Schema, path *Path) (Schema, 
 	if _, ok := d.models[reference]; !ok {
 		return nil, newSchemaError(path, "unknown model in reference: %q", reference)
 	}
-	return &Reference{
-		Reference:   reference,
+	return &Ref{
+		BaseSchema:  d.parseBaseSchema(s, path),
+		reference:   reference,
 		definitions: d,
 	}, nil
 }
@@ -252,7 +254,8 @@ func (d *Definitions) parseKind(s *openapi_v2.Schema, path *Path) (Schema, error
 
 	for _, namedSchema := range s.GetProperties().GetAdditionalProperties() {
 		var err error
-		fields[namedSchema.GetName()], err = d.ParseSchema(namedSchema.GetValue(), &Path{parent: path, key: namedSchema.GetName()})
+		path := path.FieldPath(namedSchema.GetName())
+		fields[namedSchema.GetName()], err = d.ParseSchema(namedSchema.GetValue(), &path)
 		if err != nil {
 			return nil, err
 		}
@@ -301,38 +304,27 @@ func (d *Definitions) LookupResource(gvk schema.GroupVersionKind) Schema {
 	return model
 }
 
-// SchemaReference doesn't match a specific type. It's mostly a
-// pass-through type.
-type Reference struct {
-	Reference string
+type Ref struct {
+	BaseSchema
 
+	reference   string
 	definitions *Definitions
 }
 
-var _ Schema = &Reference{}
+var _ Reference = &Ref{}
 
-func (r *Reference) GetSubSchema() Schema {
-	return r.definitions.models[r.Reference]
+func (r *Ref) Reference() string {
+	return r.reference
 }
 
-func (r *Reference) Accept(s SchemaVisitor) {
-	r.GetSubSchema().Accept(s)
+func (r *Ref) SubSchema() Schema {
+	return r.definitions.models[r.reference]
 }
 
-func (r *Reference) GetDescription() string {
-	return r.GetSubSchema().GetDescription()
+func (r *Ref) Accept(v SchemaVisitor) {
+	v.VisitReference(r)
 }
 
-func (r *Reference) GetExtensions() map[string]interface{} {
-	return r.GetSubSchema().GetExtensions()
-}
-
-func (*Reference) GetPath() *Path {
-	// Reference never has a path, because it can be referenced from
-	// multiple locations.
-	return &Path{}
-}
-
-func (r *Reference) GetName() string {
-	return r.Reference
+func (r *Ref) GetName() string {
+	return fmt.Sprintf("Reference to %q", r.reference)
 }

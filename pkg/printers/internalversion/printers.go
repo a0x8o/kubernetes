@@ -55,12 +55,20 @@ import (
 	"k8s.io/kubernetes/pkg/apis/rbac"
 	"k8s.io/kubernetes/pkg/apis/storage"
 	storageutil "k8s.io/kubernetes/pkg/apis/storage/util"
-	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/printers"
 	"k8s.io/kubernetes/pkg/util/node"
 )
 
-const loadBalancerWidth = 16
+const (
+	loadBalancerWidth = 16
+
+	// labelNodeRolePrefix is a label prefix for node roles
+	// It's copied over to here until it's merged in core: https://github.com/kubernetes/kubernetes/pull/39112
+	labelNodeRolePrefix = "node-role.kubernetes.io/"
+
+	// nodeLabelRole specifies the role of a node
+	nodeLabelRole = "kubernetes.io/role"
+)
 
 // AddHandlers adds print handlers for default Kubernetes types dealing with internal versions.
 // TODO: handle errors from Handler
@@ -209,6 +217,7 @@ func AddHandlers(h printers.PrintHandler) {
 	nodeColumnDefinitions := []metav1alpha1.TableColumnDefinition{
 		{Name: "Name", Type: "string", Format: "name", Description: metav1.ObjectMeta{}.SwaggerDoc()["name"]},
 		{Name: "Status", Type: "string", Description: "The status of the node"},
+		{Name: "Roles", Type: "string", Description: "The roles of the node"},
 		{Name: "Age", Type: "string", Description: metav1.ObjectMeta{}.SwaggerDoc()["creationTimestamp"]},
 		{Name: "Version", Type: "string", Description: apiv1.NodeSystemInfo{}.SwaggerDoc()["kubeletVersion"]},
 		{Name: "External-IP", Type: "string", Priority: 1, Description: apiv1.NodeStatus{}.SwaggerDoc()["addresses"]},
@@ -277,6 +286,7 @@ func AddHandlers(h printers.PrintHandler) {
 	persistentVolumeClaimColumnDefinitions := []metav1alpha1.TableColumnDefinition{
 		{Name: "Name", Type: "string", Format: "name", Description: metav1.ObjectMeta{}.SwaggerDoc()["name"]},
 		{Name: "Status", Type: "string", Description: apiv1.PersistentVolumeClaimStatus{}.SwaggerDoc()["phase"]},
+		{Name: "Volume", Type: "string", Description: apiv1.PersistentVolumeSpec{}.SwaggerDoc()["volumeName"]},
 		{Name: "Capacity", Type: "string", Description: apiv1.PersistentVolumeClaimStatus{}.SwaggerDoc()["capacity"]},
 		{Name: "Access Modes", Type: "string", Description: apiv1.PersistentVolumeClaimStatus{}.SwaggerDoc()["accessModes"]},
 		{Name: "StorageClass", Type: "string", Description: "StorageClass of the pvc"},
@@ -364,8 +374,6 @@ func AddHandlers(h printers.PrintHandler) {
 		{Name: "Pod-Selector", Type: "string", Description: extensionsv1beta1.NetworkPolicySpec{}.SwaggerDoc()["podSelector"]},
 		{Name: "Age", Type: "string", Description: metav1.ObjectMeta{}.SwaggerDoc()["creationTimestamp"]},
 	}
-	h.TableHandler(networkPolicyColumnDefinitioins, printExtensionsNetworkPolicy)
-	h.TableHandler(networkPolicyColumnDefinitioins, printExtensionsNetworkPolicyList)
 	h.TableHandler(networkPolicyColumnDefinitioins, printNetworkPolicy)
 	h.TableHandler(networkPolicyColumnDefinitioins, printNetworkPolicyList)
 
@@ -1158,7 +1166,12 @@ func printNode(obj *api.Node, options printers.PrintOptions) ([]metav1alpha1.Tab
 		status = append(status, "SchedulingDisabled")
 	}
 
-	row.Cells = append(row.Cells, obj.Name, strings.Join(status, ","), translateTimestamp(obj.CreationTimestamp), obj.Status.NodeInfo.KubeletVersion)
+	roles := strings.Join(findNodeRoles(obj), ",")
+	if len(roles) == 0 {
+		roles = "<none>"
+	}
+
+	row.Cells = append(row.Cells, obj.Name, strings.Join(status, ","), roles, translateTimestamp(obj.CreationTimestamp), obj.Status.NodeInfo.KubeletVersion)
 	if options.Wide {
 		osImage, kernelVersion, crVersion := obj.Status.NodeInfo.OSImage, obj.Status.NodeInfo.KernelVersion, obj.Status.NodeInfo.ContainerRuntimeVersion
 		if osImage == "" {
@@ -1185,6 +1198,26 @@ func getNodeExternalIP(node *api.Node) string {
 	}
 
 	return "<none>"
+}
+
+// findNodeRoles returns the roles of a given node.
+// The roles are determined by looking for:
+// * a node-role.kubernetes.io/<role>="" label
+// * a kubernetes.io/role="<role>" label
+func findNodeRoles(node *api.Node) []string {
+	roles := sets.NewString()
+	for k, v := range node.Labels {
+		switch {
+		case strings.HasPrefix(k, labelNodeRolePrefix):
+			if role := strings.TrimPrefix(k, labelNodeRolePrefix); len(role) > 0 {
+				roles.Insert(role)
+			}
+
+		case k == nodeLabelRole && v != "":
+			roles.Insert(v)
+		}
+	}
+	return roles.List()
 }
 
 func printNodeList(list *api.NodeList, options printers.PrintOptions) ([]metav1alpha1.TableRow, error) {
@@ -1644,26 +1677,6 @@ func printPodSecurityPolicyList(list *extensions.PodSecurityPolicyList, options 
 	return rows, nil
 }
 
-func printExtensionsNetworkPolicy(obj *extensions.NetworkPolicy, options printers.PrintOptions) ([]metav1alpha1.TableRow, error) {
-	row := metav1alpha1.TableRow{
-		Object: runtime.RawExtension{Object: obj},
-	}
-	row.Cells = append(row.Cells, obj.Name, metav1.FormatLabelSelector(&obj.Spec.PodSelector), translateTimestamp(obj.CreationTimestamp))
-	return []metav1alpha1.TableRow{row}, nil
-}
-
-func printExtensionsNetworkPolicyList(list *extensions.NetworkPolicyList, options printers.PrintOptions) ([]metav1alpha1.TableRow, error) {
-	rows := make([]metav1alpha1.TableRow, 0, len(list.Items))
-	for i := range list.Items {
-		r, err := printExtensionsNetworkPolicy(&list.Items[i], options)
-		if err != nil {
-			return nil, err
-		}
-		rows = append(rows, r...)
-	}
-	return rows, nil
-}
-
 func printNetworkPolicy(obj *networking.NetworkPolicy, options printers.PrintOptions) ([]metav1alpha1.TableRow, error) {
 	row := metav1alpha1.TableRow{
 		Object: runtime.RawExtension{Object: obj},
@@ -1771,7 +1784,7 @@ func printControllerRevision(obj *apps.ControllerRevision, options printers.Prin
 		Object: runtime.RawExtension{Object: obj},
 	}
 
-	controllerRef := controller.GetControllerOf(obj)
+	controllerRef := metav1.GetControllerOf(obj)
 	controllerName := "<none>"
 	if controllerRef != nil {
 		withKind := true

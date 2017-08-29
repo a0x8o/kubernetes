@@ -25,8 +25,8 @@ import (
 	"github.com/onsi/ginkgo/config"
 	"github.com/spf13/viper"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/kubernetes/pkg/apis/componentconfig"
 	"k8s.io/kubernetes/pkg/cloudprovider"
+	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
 	"k8s.io/kubernetes/pkg/kubemark"
 )
 
@@ -136,7 +136,7 @@ type NodeTestContextType struct {
 	// PrepullImages indicates whether node e2e framework should prepull images.
 	PrepullImages bool
 	// KubeletConfig is the kubelet configuration the test is running against.
-	KubeletConfig componentconfig.KubeletConfiguration
+	KubeletConfig kubeletconfig.KubeletConfiguration
 	// ImageDescription is the description of the image on which the test is running.
 	ImageDescription string
 	// SystemSpecName is the name of the system spec (e.g., gke) that's used in
@@ -300,5 +300,9 @@ func AfterReadingAllFlags(t *TestContextType) {
 	// Only set a default host if one won't be supplied via kubeconfig
 	if len(t.Host) == 0 && len(t.KubeConfig) == 0 {
 		t.Host = defaultHost
+	}
+	// Reset the cluster IP range flag to CLUSTER_IP_RANGE env var, if defined.
+	if clusterIPRange := os.Getenv("CLUSTER_IP_RANGE"); clusterIPRange != "" {
+		t.CloudConfig.ClusterIPRange = clusterIPRange
 	}
 }

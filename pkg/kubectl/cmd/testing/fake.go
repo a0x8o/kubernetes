@@ -34,18 +34,19 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
 	fedclientset "k8s.io/kubernetes/federation/client/clientset_generated/federation_clientset"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
-	"k8s.io/kubernetes/pkg/api/validation"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/kubectl"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util/openapi"
 	"k8s.io/kubernetes/pkg/kubectl/plugins"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
+	"k8s.io/kubernetes/pkg/kubectl/validation"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -240,6 +241,7 @@ type TestFactory struct {
 	Err                error
 	Command            string
 	TmpDir             string
+	CategoryExpander   resource.CategoryExpander
 
 	ClientForMappingFunc             func(mapping *meta.RESTMapping) (resource.RESTClient, error)
 	UnstructuredClientForMappingFunc func(mapping *meta.RESTMapping) (resource.RESTClient, error)
@@ -304,6 +306,10 @@ func (f *FakeFactory) JSONEncoder() runtime.Encoder {
 }
 
 func (f *FakeFactory) RESTClient() (*restclient.RESTClient, error) {
+	return nil, nil
+}
+
+func (f *FakeFactory) KubernetesClientSet() (*kubernetes.Clientset, error) {
 	return nil, nil
 }
 
@@ -410,7 +416,7 @@ func (f *FakeFactory) ResolveImage(name string) (string, error) {
 	return name, nil
 }
 
-func (f *FakeFactory) Validator(validate bool, cacheDir string) (validation.Schema, error) {
+func (f *FakeFactory) Validator(validate bool, openapi bool, cacheDir string) (validation.Schema, error) {
 	return f.tf.Validator, f.tf.Err
 }
 
@@ -582,6 +588,33 @@ func (f *fakeAPIFactory) JSONEncoder() runtime.Encoder {
 	return testapi.Default.Codec()
 }
 
+func (f *fakeAPIFactory) KubernetesClientSet() (*kubernetes.Clientset, error) {
+	fakeClient := f.tf.Client.(*fake.RESTClient)
+	clientset := kubernetes.NewForConfigOrDie(f.tf.ClientConfig)
+
+	clientset.CoreV1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AuthorizationV1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AuthorizationV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AuthorizationV1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AuthorizationV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AutoscalingV1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AutoscalingV2alpha1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.BatchV1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.BatchV2alpha1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.CertificatesV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.ExtensionsV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.RbacV1alpha1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.RbacV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.StorageV1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.StorageV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AppsV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AppsV1beta2().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.PolicyV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.DiscoveryClient.RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+
+	return clientset, f.tf.Err
+}
+
 func (f *fakeAPIFactory) ClientSet() (internalclientset.Interface, error) {
 	// Swap the HTTP client out of the REST client with the fake
 	// version.
@@ -620,6 +653,13 @@ func (f *fakeAPIFactory) DiscoveryClient() (discovery.CachedDiscoveryInterface, 
 
 	cacheDir := filepath.Join(f.tf.TmpDir, ".kube", "cache", "discovery")
 	return cmdutil.NewCachedDiscoveryClient(discoveryClient, cacheDir, time.Duration(10*time.Minute)), nil
+}
+
+func (f *fakeAPIFactory) CategoryExpander() resource.CategoryExpander {
+	if f.tf.CategoryExpander != nil {
+		return f.tf.CategoryExpander
+	}
+	return f.Factory.CategoryExpander()
 }
 
 func (f *fakeAPIFactory) ClientSetForVersion(requiredVersion *schema.GroupVersion) (internalclientset.Interface, error) {
@@ -691,7 +731,7 @@ func (f *fakeAPIFactory) AttachablePodForObject(object runtime.Object, timeout t
 	}
 }
 
-func (f *fakeAPIFactory) Validator(validate bool, cacheDir string) (validation.Schema, error) {
+func (f *fakeAPIFactory) Validator(validate bool, openapi bool, cacheDir string) (validation.Schema, error) {
 	return f.tf.Validator, f.tf.Err
 }
 

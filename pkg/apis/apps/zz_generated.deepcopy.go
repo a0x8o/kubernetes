@@ -273,6 +273,15 @@ func (in *StatefulSetStatus) DeepCopyInto(out *StatefulSetStatus) {
 			**out = **in
 		}
 	}
+	if in.CollisionCount != nil {
+		in, out := &in.CollisionCount, &out.CollisionCount
+		if *in == nil {
+			*out = nil
+		} else {
+			*out = new(int32)
+			**out = **in
+		}
+	}
 	return
 }
 

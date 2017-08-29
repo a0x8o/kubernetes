@@ -26,7 +26,6 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
-	intstr "k8s.io/apimachinery/pkg/util/intstr"
 	api "k8s.io/kubernetes/pkg/api"
 	api_v1 "k8s.io/kubernetes/pkg/api/v1"
 	extensions "k8s.io/kubernetes/pkg/apis/extensions"
@@ -99,18 +98,6 @@ func RegisterConversions(scheme *runtime.Scheme) error {
 		Convert_extensions_IngressStatus_To_v1beta1_IngressStatus,
 		Convert_v1beta1_IngressTLS_To_extensions_IngressTLS,
 		Convert_extensions_IngressTLS_To_v1beta1_IngressTLS,
-		Convert_v1beta1_NetworkPolicy_To_extensions_NetworkPolicy,
-		Convert_extensions_NetworkPolicy_To_v1beta1_NetworkPolicy,
-		Convert_v1beta1_NetworkPolicyIngressRule_To_extensions_NetworkPolicyIngressRule,
-		Convert_extensions_NetworkPolicyIngressRule_To_v1beta1_NetworkPolicyIngressRule,
-		Convert_v1beta1_NetworkPolicyList_To_extensions_NetworkPolicyList,
-		Convert_extensions_NetworkPolicyList_To_v1beta1_NetworkPolicyList,
-		Convert_v1beta1_NetworkPolicyPeer_To_extensions_NetworkPolicyPeer,
-		Convert_extensions_NetworkPolicyPeer_To_v1beta1_NetworkPolicyPeer,
-		Convert_v1beta1_NetworkPolicyPort_To_extensions_NetworkPolicyPort,
-		Convert_extensions_NetworkPolicyPort_To_v1beta1_NetworkPolicyPort,
-		Convert_v1beta1_NetworkPolicySpec_To_extensions_NetworkPolicySpec,
-		Convert_extensions_NetworkPolicySpec_To_v1beta1_NetworkPolicySpec,
 		Convert_v1beta1_PodSecurityPolicy_To_extensions_PodSecurityPolicy,
 		Convert_extensions_PodSecurityPolicy_To_v1beta1_PodSecurityPolicy,
 		Convert_v1beta1_PodSecurityPolicyList_To_extensions_PodSecurityPolicyList,
@@ -211,11 +198,7 @@ func Convert_v1beta1_CustomMetricCurrentStatusList_To_extensions_CustomMetricCur
 }
 
 func autoConvert_extensions_CustomMetricCurrentStatusList_To_v1beta1_CustomMetricCurrentStatusList(in *extensions.CustomMetricCurrentStatusList, out *v1beta1.CustomMetricCurrentStatusList, s conversion.Scope) error {
-	if in.Items == nil {
-		out.Items = make([]v1beta1.CustomMetricCurrentStatus, 0)
-	} else {
-		out.Items = *(*[]v1beta1.CustomMetricCurrentStatus)(unsafe.Pointer(&in.Items))
-	}
+	out.Items = *(*[]v1beta1.CustomMetricCurrentStatus)(unsafe.Pointer(&in.Items))
 	return nil
 }
 
@@ -257,11 +240,7 @@ func Convert_v1beta1_CustomMetricTargetList_To_extensions_CustomMetricTargetList
 }
 
 func autoConvert_extensions_CustomMetricTargetList_To_v1beta1_CustomMetricTargetList(in *extensions.CustomMetricTargetList, out *v1beta1.CustomMetricTargetList, s conversion.Scope) error {
-	if in.Items == nil {
-		out.Items = make([]v1beta1.CustomMetricTarget, 0)
-	} else {
-		out.Items = *(*[]v1beta1.CustomMetricTarget)(unsafe.Pointer(&in.Items))
-	}
+	out.Items = *(*[]v1beta1.CustomMetricTarget)(unsafe.Pointer(&in.Items))
 	return nil
 }
 
@@ -334,7 +313,7 @@ func autoConvert_extensions_DaemonSetList_To_v1beta1_DaemonSetList(in *extension
 			}
 		}
 	} else {
-		out.Items = make([]v1beta1.DaemonSet, 0)
+		out.Items = nil
 	}
 	return nil
 }
@@ -391,7 +370,7 @@ func autoConvert_v1beta1_DaemonSetStatus_To_extensions_DaemonSetStatus(in *v1bet
 	out.UpdatedNumberScheduled = in.UpdatedNumberScheduled
 	out.NumberAvailable = in.NumberAvailable
 	out.NumberUnavailable = in.NumberUnavailable
-	out.CollisionCount = (*int64)(unsafe.Pointer(in.CollisionCount))
+	out.CollisionCount = (*int32)(unsafe.Pointer(in.CollisionCount))
 	return nil
 }
 
@@ -409,7 +388,7 @@ func autoConvert_extensions_DaemonSetStatus_To_v1beta1_DaemonSetStatus(in *exten
 	out.UpdatedNumberScheduled = in.UpdatedNumberScheduled
 	out.NumberAvailable = in.NumberAvailable
 	out.NumberUnavailable = in.NumberUnavailable
-	out.CollisionCount = (*int64)(unsafe.Pointer(in.CollisionCount))
+	out.CollisionCount = (*int32)(unsafe.Pointer(in.CollisionCount))
 	return nil
 }
 
@@ -550,7 +529,7 @@ func autoConvert_extensions_DeploymentList_To_v1beta1_DeploymentList(in *extensi
 			}
 		}
 	} else {
-		out.Items = make([]v1beta1.Deployment, 0)
+		out.Items = nil
 	}
 	return nil
 }
@@ -634,7 +613,7 @@ func autoConvert_v1beta1_DeploymentStatus_To_extensions_DeploymentStatus(in *v1b
 	out.AvailableReplicas = in.AvailableReplicas
 	out.UnavailableReplicas = in.UnavailableReplicas
 	out.Conditions = *(*[]extensions.DeploymentCondition)(unsafe.Pointer(&in.Conditions))
-	out.CollisionCount = (*int64)(unsafe.Pointer(in.CollisionCount))
+	out.CollisionCount = (*int32)(unsafe.Pointer(in.CollisionCount))
 	return nil
 }
 
@@ -651,7 +630,7 @@ func autoConvert_extensions_DeploymentStatus_To_v1beta1_DeploymentStatus(in *ext
 	out.AvailableReplicas = in.AvailableReplicas
 	out.UnavailableReplicas = in.UnavailableReplicas
 	out.Conditions = *(*[]v1beta1.DeploymentCondition)(unsafe.Pointer(&in.Conditions))
-	out.CollisionCount = (*int64)(unsafe.Pointer(in.CollisionCount))
+	out.CollisionCount = (*int32)(unsafe.Pointer(in.CollisionCount))
 	return nil
 }
 
@@ -747,11 +726,7 @@ func Convert_v1beta1_HTTPIngressRuleValue_To_extensions_HTTPIngressRuleValue(in 
 }
 
 func autoConvert_extensions_HTTPIngressRuleValue_To_v1beta1_HTTPIngressRuleValue(in *extensions.HTTPIngressRuleValue, out *v1beta1.HTTPIngressRuleValue, s conversion.Scope) error {
-	if in.Paths == nil {
-		out.Paths = make([]v1beta1.HTTPIngressPath, 0)
-	} else {
-		out.Paths = *(*[]v1beta1.HTTPIngressPath)(unsafe.Pointer(&in.Paths))
-	}
+	out.Paths = *(*[]v1beta1.HTTPIngressPath)(unsafe.Pointer(&in.Paths))
 	return nil
 }
 
@@ -849,11 +824,7 @@ func Convert_v1beta1_IngressList_To_extensions_IngressList(in *v1beta1.IngressLi
 
 func autoConvert_extensions_IngressList_To_v1beta1_IngressList(in *extensions.IngressList, out *v1beta1.IngressList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	if in.Items == nil {
-		out.Items = make([]v1beta1.Ingress, 0)
-	} else {
-		out.Items = *(*[]v1beta1.Ingress)(unsafe.Pointer(&in.Items))
-	}
+	out.Items = *(*[]v1beta1.Ingress)(unsafe.Pointer(&in.Items))
 	return nil
 }
 
@@ -980,146 +951,6 @@ func Convert_extensions_IngressTLS_To_v1beta1_IngressTLS(in *extensions.IngressT
 	return autoConvert_extensions_IngressTLS_To_v1beta1_IngressTLS(in, out, s)
 }
 
-func autoConvert_v1beta1_NetworkPolicy_To_extensions_NetworkPolicy(in *v1beta1.NetworkPolicy, out *extensions.NetworkPolicy, s conversion.Scope) error {
-	out.ObjectMeta = in.ObjectMeta
-	if err := Convert_v1beta1_NetworkPolicySpec_To_extensions_NetworkPolicySpec(&in.Spec, &out.Spec, s); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Convert_v1beta1_NetworkPolicy_To_extensions_NetworkPolicy is an autogenerated conversion function.
-func Convert_v1beta1_NetworkPolicy_To_extensions_NetworkPolicy(in *v1beta1.NetworkPolicy, out *extensions.NetworkPolicy, s conversion.Scope) error {
-	return autoConvert_v1beta1_NetworkPolicy_To_extensions_NetworkPolicy(in, out, s)
-}
-
-func autoConvert_extensions_NetworkPolicy_To_v1beta1_NetworkPolicy(in *extensions.NetworkPolicy, out *v1beta1.NetworkPolicy, s conversion.Scope) error {
-	out.ObjectMeta = in.ObjectMeta
-	if err := Convert_extensions_NetworkPolicySpec_To_v1beta1_NetworkPolicySpec(&in.Spec, &out.Spec, s); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Convert_extensions_NetworkPolicy_To_v1beta1_NetworkPolicy is an autogenerated conversion function.
-func Convert_extensions_NetworkPolicy_To_v1beta1_NetworkPolicy(in *extensions.NetworkPolicy, out *v1beta1.NetworkPolicy, s conversion.Scope) error {
-	return autoConvert_extensions_NetworkPolicy_To_v1beta1_NetworkPolicy(in, out, s)
-}
-
-func autoConvert_v1beta1_NetworkPolicyIngressRule_To_extensions_NetworkPolicyIngressRule(in *v1beta1.NetworkPolicyIngressRule, out *extensions.NetworkPolicyIngressRule, s conversion.Scope) error {
-	out.Ports = *(*[]extensions.NetworkPolicyPort)(unsafe.Pointer(&in.Ports))
-	out.From = *(*[]extensions.NetworkPolicyPeer)(unsafe.Pointer(&in.From))
-	return nil
-}
-
-// Convert_v1beta1_NetworkPolicyIngressRule_To_extensions_NetworkPolicyIngressRule is an autogenerated conversion function.
-func Convert_v1beta1_NetworkPolicyIngressRule_To_extensions_NetworkPolicyIngressRule(in *v1beta1.NetworkPolicyIngressRule, out *extensions.NetworkPolicyIngressRule, s conversion.Scope) error {
-	return autoConvert_v1beta1_NetworkPolicyIngressRule_To_extensions_NetworkPolicyIngressRule(in, out, s)
-}
-
-func autoConvert_extensions_NetworkPolicyIngressRule_To_v1beta1_NetworkPolicyIngressRule(in *extensions.NetworkPolicyIngressRule, out *v1beta1.NetworkPolicyIngressRule, s conversion.Scope) error {
-	out.Ports = *(*[]v1beta1.NetworkPolicyPort)(unsafe.Pointer(&in.Ports))
-	out.From = *(*[]v1beta1.NetworkPolicyPeer)(unsafe.Pointer(&in.From))
-	return nil
-}
-
-// Convert_extensions_NetworkPolicyIngressRule_To_v1beta1_NetworkPolicyIngressRule is an autogenerated conversion function.
-func Convert_extensions_NetworkPolicyIngressRule_To_v1beta1_NetworkPolicyIngressRule(in *extensions.NetworkPolicyIngressRule, out *v1beta1.NetworkPolicyIngressRule, s conversion.Scope) error {
-	return autoConvert_extensions_NetworkPolicyIngressRule_To_v1beta1_NetworkPolicyIngressRule(in, out, s)
-}
-
-func autoConvert_v1beta1_NetworkPolicyList_To_extensions_NetworkPolicyList(in *v1beta1.NetworkPolicyList, out *extensions.NetworkPolicyList, s conversion.Scope) error {
-	out.ListMeta = in.ListMeta
-	out.Items = *(*[]extensions.NetworkPolicy)(unsafe.Pointer(&in.Items))
-	return nil
-}
-
-// Convert_v1beta1_NetworkPolicyList_To_extensions_NetworkPolicyList is an autogenerated conversion function.
-func Convert_v1beta1_NetworkPolicyList_To_extensions_NetworkPolicyList(in *v1beta1.NetworkPolicyList, out *extensions.NetworkPolicyList, s conversion.Scope) error {
-	return autoConvert_v1beta1_NetworkPolicyList_To_extensions_NetworkPolicyList(in, out, s)
-}
-
-func autoConvert_extensions_NetworkPolicyList_To_v1beta1_NetworkPolicyList(in *extensions.NetworkPolicyList, out *v1beta1.NetworkPolicyList, s conversion.Scope) error {
-	out.ListMeta = in.ListMeta
-	if in.Items == nil {
-		out.Items = make([]v1beta1.NetworkPolicy, 0)
-	} else {
-		out.Items = *(*[]v1beta1.NetworkPolicy)(unsafe.Pointer(&in.Items))
-	}
-	return nil
-}
-
-// Convert_extensions_NetworkPolicyList_To_v1beta1_NetworkPolicyList is an autogenerated conversion function.
-func Convert_extensions_NetworkPolicyList_To_v1beta1_NetworkPolicyList(in *extensions.NetworkPolicyList, out *v1beta1.NetworkPolicyList, s conversion.Scope) error {
-	return autoConvert_extensions_NetworkPolicyList_To_v1beta1_NetworkPolicyList(in, out, s)
-}
-
-func autoConvert_v1beta1_NetworkPolicyPeer_To_extensions_NetworkPolicyPeer(in *v1beta1.NetworkPolicyPeer, out *extensions.NetworkPolicyPeer, s conversion.Scope) error {
-	out.PodSelector = (*v1.LabelSelector)(unsafe.Pointer(in.PodSelector))
-	out.NamespaceSelector = (*v1.LabelSelector)(unsafe.Pointer(in.NamespaceSelector))
-	return nil
-}
-
-// Convert_v1beta1_NetworkPolicyPeer_To_extensions_NetworkPolicyPeer is an autogenerated conversion function.
-func Convert_v1beta1_NetworkPolicyPeer_To_extensions_NetworkPolicyPeer(in *v1beta1.NetworkPolicyPeer, out *extensions.NetworkPolicyPeer, s conversion.Scope) error {
-	return autoConvert_v1beta1_NetworkPolicyPeer_To_extensions_NetworkPolicyPeer(in, out, s)
-}
-
-func autoConvert_extensions_NetworkPolicyPeer_To_v1beta1_NetworkPolicyPeer(in *extensions.NetworkPolicyPeer, out *v1beta1.NetworkPolicyPeer, s conversion.Scope) error {
-	out.PodSelector = (*v1.LabelSelector)(unsafe.Pointer(in.PodSelector))
-	out.NamespaceSelector = (*v1.LabelSelector)(unsafe.Pointer(in.NamespaceSelector))
-	return nil
-}
-
-// Convert_extensions_NetworkPolicyPeer_To_v1beta1_NetworkPolicyPeer is an autogenerated conversion function.
-func Convert_extensions_NetworkPolicyPeer_To_v1beta1_NetworkPolicyPeer(in *extensions.NetworkPolicyPeer, out *v1beta1.NetworkPolicyPeer, s conversion.Scope) error {
-	return autoConvert_extensions_NetworkPolicyPeer_To_v1beta1_NetworkPolicyPeer(in, out, s)
-}
-
-func autoConvert_v1beta1_NetworkPolicyPort_To_extensions_NetworkPolicyPort(in *v1beta1.NetworkPolicyPort, out *extensions.NetworkPolicyPort, s conversion.Scope) error {
-	out.Protocol = (*api.Protocol)(unsafe.Pointer(in.Protocol))
-	out.Port = (*intstr.IntOrString)(unsafe.Pointer(in.Port))
-	return nil
-}
-
-// Convert_v1beta1_NetworkPolicyPort_To_extensions_NetworkPolicyPort is an autogenerated conversion function.
-func Convert_v1beta1_NetworkPolicyPort_To_extensions_NetworkPolicyPort(in *v1beta1.NetworkPolicyPort, out *extensions.NetworkPolicyPort, s conversion.Scope) error {
-	return autoConvert_v1beta1_NetworkPolicyPort_To_extensions_NetworkPolicyPort(in, out, s)
-}
-
-func autoConvert_extensions_NetworkPolicyPort_To_v1beta1_NetworkPolicyPort(in *extensions.NetworkPolicyPort, out *v1beta1.NetworkPolicyPort, s conversion.Scope) error {
-	out.Protocol = (*core_v1.Protocol)(unsafe.Pointer(in.Protocol))
-	out.Port = (*intstr.IntOrString)(unsafe.Pointer(in.Port))
-	return nil
-}
-
-// Convert_extensions_NetworkPolicyPort_To_v1beta1_NetworkPolicyPort is an autogenerated conversion function.
-func Convert_extensions_NetworkPolicyPort_To_v1beta1_NetworkPolicyPort(in *extensions.NetworkPolicyPort, out *v1beta1.NetworkPolicyPort, s conversion.Scope) error {
-	return autoConvert_extensions_NetworkPolicyPort_To_v1beta1_NetworkPolicyPort(in, out, s)
-}
-
-func autoConvert_v1beta1_NetworkPolicySpec_To_extensions_NetworkPolicySpec(in *v1beta1.NetworkPolicySpec, out *extensions.NetworkPolicySpec, s conversion.Scope) error {
-	out.PodSelector = in.PodSelector
-	out.Ingress = *(*[]extensions.NetworkPolicyIngressRule)(unsafe.Pointer(&in.Ingress))
-	return nil
-}
-
-// Convert_v1beta1_NetworkPolicySpec_To_extensions_NetworkPolicySpec is an autogenerated conversion function.
-func Convert_v1beta1_NetworkPolicySpec_To_extensions_NetworkPolicySpec(in *v1beta1.NetworkPolicySpec, out *extensions.NetworkPolicySpec, s conversion.Scope) error {
-	return autoConvert_v1beta1_NetworkPolicySpec_To_extensions_NetworkPolicySpec(in, out, s)
-}
-
-func autoConvert_extensions_NetworkPolicySpec_To_v1beta1_NetworkPolicySpec(in *extensions.NetworkPolicySpec, out *v1beta1.NetworkPolicySpec, s conversion.Scope) error {
-	out.PodSelector = in.PodSelector
-	out.Ingress = *(*[]v1beta1.NetworkPolicyIngressRule)(unsafe.Pointer(&in.Ingress))
-	return nil
-}
-
-// Convert_extensions_NetworkPolicySpec_To_v1beta1_NetworkPolicySpec is an autogenerated conversion function.
-func Convert_extensions_NetworkPolicySpec_To_v1beta1_NetworkPolicySpec(in *extensions.NetworkPolicySpec, out *v1beta1.NetworkPolicySpec, s conversion.Scope) error {
-	return autoConvert_extensions_NetworkPolicySpec_To_v1beta1_NetworkPolicySpec(in, out, s)
-}
-
 func autoConvert_v1beta1_PodSecurityPolicy_To_extensions_PodSecurityPolicy(in *v1beta1.PodSecurityPolicy, out *extensions.PodSecurityPolicy, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
 	if err := Convert_v1beta1_PodSecurityPolicySpec_To_extensions_PodSecurityPolicySpec(&in.Spec, &out.Spec, s); err != nil {
@@ -1178,7 +1009,7 @@ func autoConvert_extensions_PodSecurityPolicyList_To_v1beta1_PodSecurityPolicyLi
 			}
 		}
 	} else {
-		out.Items = make([]v1beta1.PodSecurityPolicy, 0)
+		out.Items = nil
 	}
 	return nil
 }
@@ -1361,7 +1192,7 @@ func autoConvert_extensions_ReplicaSetList_To_v1beta1_ReplicaSetList(in *extensi
 			}
 		}
 	} else {
-		out.Items = make([]v1beta1.ReplicaSet, 0)
+		out.Items = nil
 	}
 	return nil
 }
@@ -1675,11 +1506,7 @@ func Convert_v1beta1_ThirdPartyResourceDataList_To_extensions_ThirdPartyResource
 
 func autoConvert_extensions_ThirdPartyResourceDataList_To_v1beta1_ThirdPartyResourceDataList(in *extensions.ThirdPartyResourceDataList, out *v1beta1.ThirdPartyResourceDataList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	if in.Items == nil {
-		out.Items = make([]v1beta1.ThirdPartyResourceData, 0)
-	} else {
-		out.Items = *(*[]v1beta1.ThirdPartyResourceData)(unsafe.Pointer(&in.Items))
-	}
+	out.Items = *(*[]v1beta1.ThirdPartyResourceData)(unsafe.Pointer(&in.Items))
 	return nil
 }
 
@@ -1701,11 +1528,7 @@ func Convert_v1beta1_ThirdPartyResourceList_To_extensions_ThirdPartyResourceList
 
 func autoConvert_extensions_ThirdPartyResourceList_To_v1beta1_ThirdPartyResourceList(in *extensions.ThirdPartyResourceList, out *v1beta1.ThirdPartyResourceList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	if in.Items == nil {
-		out.Items = make([]v1beta1.ThirdPartyResource, 0)
-	} else {
-		out.Items = *(*[]v1beta1.ThirdPartyResource)(unsafe.Pointer(&in.Items))
-	}
+	out.Items = *(*[]v1beta1.ThirdPartyResource)(unsafe.Pointer(&in.Items))
 	return nil
 }
 

@@ -2143,7 +2143,7 @@ span.icon > [class^="icon-"], span.icon > [class*=" icon-"] { cursor: default; }
 <div class="sect2">
 <h3 id="_v1_taint">v1.Taint</h3>
 <div class="paragraph">
-<p>The node this Taint is attached to has the effect "effect" on any pod that that does not tolerate the Taint.</p>
+<p>The node this Taint is attached to has the "effect" on any pod that does not tolerate the Taint.</p>
 </div>
 <table class="tableblock frame-all grid-all" style="width:100%; ">
 <colgroup>
@@ -2380,6 +2380,47 @@ span.icon > [class^="icon-"], span.icon > [class*=" icon-"] { cursor: default; }
 
 </div>
 <div class="sect2">
+<h3 id="_v1_secretreference">v1.SecretReference</h3>
+<div class="paragraph">
+<p>SecretReference represents a Secret Reference. It has enough information to retrieve secret in any namespace</p>
+</div>
+<table class="tableblock frame-all grid-all" style="width:100%; ">
+<colgroup>
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;"> 
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Required</th>
+<th class="tableblock halign-left valign-top">Schema</th>
+<th class="tableblock halign-left valign-top">Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">name</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Name is unique within a namespace to reference a secret resource.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">namespace</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Namespace defines the space within which the secret name must be unique.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+<div class="sect2">
 <h3 id="_v1_objectmeta">v1.ObjectMeta</h3>
 <div class="paragraph">
 <p>ObjectMeta is metadata that all persisted resources must have, which includes all objects users must create.</p>
@@ -2569,10 +2610,6 @@ When an object is created, the system will populate this list with the current s
 
 </div>
 <div class="sect2">
-<h3 id="_types_uid">types.UID</h3>
-
-</div>
-<div class="sect2">
 <h3 id="_v1_azurefilevolumesource">v1.AzureFileVolumeSource</h3>
 <div class="paragraph">
 <p>AzureFile represents an Azure File Service mount on the host and bind mount to the pod.</p>
@@ -2618,6 +2655,10 @@ When an object is created, the system will populate this list with the current s
 </tr>
 </tbody>
 </table>
+
+</div>
+<div class="sect2">
+<h3 id="_types_uid">types.UID</h3>
 
 </div>
 <div class="sect2">
@@ -2711,6 +2752,13 @@ When an object is created, the system will populate this list with the current s
 <td class="tableblock halign-left valign-top"><p class="tableblock">CHAP secret for iSCSI target and initiator authentication</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_localobjectreference">v1.LocalObjectReference</a></p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">initiatorName</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Custom iSCSI initiator name. If initiatorName is specified with iscsiInterface simultaneously, new iSCSI interface &lt;target portal&gt;:&lt;volume name&gt; will be created for the connection.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 </tbody>
@@ -3106,7 +3154,7 @@ When an object is created, the system will populate this list with the current s
 <tbody>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">requiredDuringSchedulingIgnoredDuringExecution</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">NOT YET IMPLEMENTED. TODO: Uncomment field once it is implemented. If the affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system will try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied. RequiredDuringSchedulingRequiredDuringExecution []PodAffinityTerm  <code>json:"requiredDuringSchedulingRequiredDuringExecution,omitempty"</code> If the affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system may or may not try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">If the affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system may or may not try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied.</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_podaffinityterm">v1.PodAffinityTerm</a> array</p></td>
 <td class="tableblock halign-left valign-top"></td>
@@ -3669,7 +3717,7 @@ The resulting set of endpoints can be viewed as:<br>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">resourceFieldRef</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported.</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_resourcefieldselector">v1.ResourceFieldSelector</a></p></td>
 <td class="tableblock halign-left valign-top"></td>
@@ -3858,6 +3906,54 @@ The resulting set of endpoints can be viewed as:<br>
 
 </div>
 <div class="sect2">
+<h3 id="_v1_keytopath">v1.KeyToPath</h3>
+<div class="paragraph">
+<p>Maps a string key to a path within a volume.</p>
+</div>
+<table class="tableblock frame-all grid-all" style="width:100%; ">
+<colgroup>
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;"> 
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Required</th>
+<th class="tableblock halign-left valign-top">Schema</th>
+<th class="tableblock halign-left valign-top">Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">key</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">The key to project.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">path</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">The relative path of the file to map the key to. May not be an absolute path. May not contain the path element <em>..</em>. May not start with the string <em>..</em>.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">mode</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: mode bits to use on this file, must be a value between 0 and 0777. If not specified, the volume defaultMode will be used. This might be in conflict with other options that affect the file mode, like fsGroup, and the result can be other mode bits set.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">integer (int32)</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+<div class="sect2">
 <h3 id="_v1_azurediskvolumesource">v1.AzureDiskVolumeSource</h3>
 <div class="paragraph">
 <p>AzureDisk represents an Azure Data Disk mount on the host and bind mount to the pod.</p>
@@ -3920,54 +4016,6 @@ The resulting set of endpoints can be viewed as:<br>
 <td class="tableblock halign-left valign-top"><p class="tableblock">Expected values Shared: mulitple blob disks per storage account  Dedicated: single blob disk per storage account  Managed: azure managed data disk (only in managed availability set). defaults to shared</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_azuredatadiskkind">v1.AzureDataDiskKind</a></p></td>
-<td class="tableblock halign-left valign-top"></td>
-</tr>
-</tbody>
-</table>
-
-</div>
-<div class="sect2">
-<h3 id="_v1_keytopath">v1.KeyToPath</h3>
-<div class="paragraph">
-<p>Maps a string key to a path within a volume.</p>
-</div>
-<table class="tableblock frame-all grid-all" style="width:100%; ">
-<colgroup>
-<col style="width:20%;">
-<col style="width:20%;">
-<col style="width:20%;">
-<col style="width:20%;">
-<col style="width:20%;"> 
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Name</th>
-<th class="tableblock halign-left valign-top">Description</th>
-<th class="tableblock halign-left valign-top">Required</th>
-<th class="tableblock halign-left valign-top">Schema</th>
-<th class="tableblock halign-left valign-top">Default</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">key</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">The key to project.</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
-<td class="tableblock halign-left valign-top"></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">path</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">The relative path of the file to map the key to. May not be an absolute path. May not contain the path element <em>..</em>. May not start with the string <em>..</em>.</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
-<td class="tableblock halign-left valign-top"></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">mode</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: mode bits to use on this file, must be a value between 0 and 0777. If not specified, the volume defaultMode will be used. This might be in conflict with other options that affect the file mode, like fsGroup, and the result can be other mode bits set.</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">integer (int32)</p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 </tbody>
@@ -4836,6 +4884,75 @@ The resulting set of endpoints can be viewed as:<br>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">integer (int32)</p></td>
 <td class="tableblock halign-left valign-top"></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+<div class="sect2">
+<h3 id="_v1_cephfspersistentvolumesource">v1.CephFSPersistentVolumeSource</h3>
+<div class="paragraph">
+<p>Represents a Ceph Filesystem mount that lasts the lifetime of a pod Cephfs volumes do not support ownership management or SELinux relabeling.</p>
+</div>
+<table class="tableblock frame-all grid-all" style="width:100%; ">
+<colgroup>
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;"> 
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Required</th>
+<th class="tableblock halign-left valign-top">Schema</th>
+<th class="tableblock halign-left valign-top">Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">monitors</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Required: Monitors is a collection of Ceph monitors More info: <a href="https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it">https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it</a></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string array</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">path</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: Used as the mounted root, rather than the full Ceph tree, default is /</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">user</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: User is the rados user name, default is admin More info: <a href="https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it">https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it</a></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">secretFile</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: SecretFile is the path to key ring for User, default is /etc/ceph/user.secret More info: <a href="https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it">https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it</a></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">secretRef</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: SecretRef is reference to the authentication secret for User, default is empty. More info: <a href="https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it">https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it</a></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_secretreference">v1.SecretReference</a></p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">readOnly</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: Defaults to false (read/write). ReadOnly here will force the ReadOnly setting in VolumeMounts. More info: <a href="https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it">https://releases.k8s.io/HEAD/examples/volumes/cephfs/README.md#how-to-use-it</a></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">boolean</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 </tr>
 </tbody>
 </table>
@@ -6029,6 +6146,40 @@ Examples:<br>
 
 </div>
 <div class="sect2">
+<h3 id="_v1_sessionaffinityconfig">v1.SessionAffinityConfig</h3>
+<div class="paragraph">
+<p>SessionAffinityConfig represents the configurations of session affinity.</p>
+</div>
+<table class="tableblock frame-all grid-all" style="width:100%; ">
+<colgroup>
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;"> 
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Required</th>
+<th class="tableblock halign-left valign-top">Schema</th>
+<th class="tableblock halign-left valign-top">Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">clientIP</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">clientIP contains the configurations of Client IP based session affinity.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_clientipconfig">v1.ClientIPConfig</a></p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+<div class="sect2">
 <h3 id="_v1_podcondition">v1.PodCondition</h3>
 <div class="paragraph">
 <p>PodCondition contains details for the current condition of this pod.</p>
@@ -6370,6 +6521,10 @@ Examples:<br>
 
 </div>
 <div class="sect2">
+<h3 id="_v1_hostpathtype">v1.HostPathType</h3>
+
+</div>
+<div class="sect2">
 <h3 id="_v1_initializers">v1.Initializers</h3>
 <div class="paragraph">
 <p>Initializers tracks the progress of initialization.</p>
@@ -6696,15 +6851,15 @@ Examples:<br>
 <tbody>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">targetWWNs</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Required: FC target worldwide names (WWNs)</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: FC target worldwide names (WWNs)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">string array</p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">lun</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Required: FC target lun number</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: FC target lun number</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">integer (int32)</p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
@@ -6721,6 +6876,13 @@ Examples:<br>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">boolean</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">wwids</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: FC volume world wide identifiers (wwids) Either wwids or combination of targetWWNs and lun must be set, but not both simultaneously.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string array</p></td>
+<td class="tableblock halign-left valign-top"></td>
 </tr>
 </tbody>
 </table>
@@ -6751,7 +6913,7 @@ Examples:<br>
 <tbody>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">requiredDuringSchedulingIgnoredDuringExecution</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">NOT YET IMPLEMENTED. TODO: Uncomment field once it is implemented. If the anti-affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the anti-affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system will try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied. RequiredDuringSchedulingRequiredDuringExecution []PodAffinityTerm  <code>json:"requiredDuringSchedulingRequiredDuringExecution,omitempty"</code> If the anti-affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the anti-affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system may or may not try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">If the anti-affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the anti-affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system may or may not try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied.</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_podaffinityterm">v1.PodAffinityTerm</a> array</p></td>
 <td class="tableblock halign-left valign-top"></td>
@@ -7401,7 +7563,7 @@ Examples:<br>
 <td class="tableblock halign-left valign-top"><p class="tableblock">cephfs</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">CephFS represents a Ceph FS mount on the host that shares a pod&#8217;s lifetime</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_cephfsvolumesource">v1.CephFSVolumeSource</a></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_cephfspersistentvolumesource">v1.CephFSPersistentVolumeSource</a></p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 <tr>
@@ -7429,7 +7591,7 @@ Examples:<br>
 <td class="tableblock halign-left valign-top"><p class="tableblock">azureFile</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">AzureFile represents an Azure File Service mount on the host and bind mount to the pod.</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_azurefilevolumesource">v1.AzureFileVolumeSource</a></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_azurefilepersistentvolumesource">v1.AzureFilePersistentVolumeSource</a></p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 <tr>
@@ -7514,6 +7676,13 @@ Examples:<br>
 <td class="tableblock halign-left valign-top"><p class="tableblock">Name of StorageClass to which this persistent volume belongs. Empty value means that this volume does not belong to any StorageClass.</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">mountOptions</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">A list of mount options, e.g. ["ro", "soft"]. Not validated - mount will simply fail if one is invalid. More info: <a href="https://kubernetes.io/docs/concepts/storage/persistent-volumes/#mount-options">https://kubernetes.io/docs/concepts/storage/persistent-volumes/#mount-options</a></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string array</p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 </tbody>
@@ -7869,6 +8038,40 @@ Examples:<br>
 
 </div>
 <div class="sect2">
+<h3 id="_v1_clientipconfig">v1.ClientIPConfig</h3>
+<div class="paragraph">
+<p>ClientIPConfig represents the configurations of Client IP based session affinity.</p>
+</div>
+<table class="tableblock frame-all grid-all" style="width:100%; ">
+<colgroup>
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;"> 
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Required</th>
+<th class="tableblock halign-left valign-top">Schema</th>
+<th class="tableblock halign-left valign-top">Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">timeoutSeconds</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">timeoutSeconds specifies the seconds of ClientIP type session sticky time. The value must be &gt;0 &amp;&amp; &#8656;86400(for 1 day) if ServiceAffinity == "ClientIP". Default value is 10800(for 3 hours).</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">integer (int32)</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+<div class="sect2">
 <h3 id="_v1_apiresource">v1.APIResource</h3>
 <div class="paragraph">
 <p>APIResource specifies the name of a resource and whether it is namespaced.</p>
@@ -8017,9 +8220,16 @@ Examples:<br>
 <tbody>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">path</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Path of the directory on the host. More info: <a href="https://kubernetes.io/docs/concepts/storage/volumes#hostpath">https://kubernetes.io/docs/concepts/storage/volumes#hostpath</a></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Path of the directory on the host. If the path is a symlink, it will follow the link to the real path. More info: <a href="https://kubernetes.io/docs/concepts/storage/volumes#hostpath">https://kubernetes.io/docs/concepts/storage/volumes#hostpath</a></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">type</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Type for HostPath Volume Defaults to "" More info: <a href="https://kubernetes.io/docs/concepts/storage/volumes#hostpath">https://kubernetes.io/docs/concepts/storage/volumes#hostpath</a></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_hostpathtype">v1.HostPathType</a></p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 </tbody>
@@ -10088,6 +10298,68 @@ Examples:<br>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">boolean</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">sessionAffinityConfig</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">sessionAffinityConfig contains the configurations of session affinity.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_sessionaffinityconfig">v1.SessionAffinityConfig</a></p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+<div class="sect2">
+<h3 id="_v1_azurefilepersistentvolumesource">v1.AzureFilePersistentVolumeSource</h3>
+<div class="paragraph">
+<p>AzureFile represents an Azure File Service mount on the host and bind mount to the pod.</p>
+</div>
+<table class="tableblock frame-all grid-all" style="width:100%; ">
+<colgroup>
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;"> 
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Required</th>
+<th class="tableblock halign-left valign-top">Schema</th>
+<th class="tableblock halign-left valign-top">Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">secretName</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">the name of secret that contains Azure Storage Account Name and Key</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">shareName</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Share Name</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">readOnly</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Defaults to false (read/write). ReadOnly here will force the ReadOnly setting in VolumeMounts.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">boolean</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">secretNamespace</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">the namespace of the secret that contains Azure Storage Account Name and Key default is the same as the Pod</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
 </tr>
 </tbody>
 </table>

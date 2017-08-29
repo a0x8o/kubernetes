@@ -47,8 +47,12 @@ type FakeUpdateBalancerCall struct {
 
 // FakeCloud is a test-double implementation of Interface, LoadBalancer, Instances, and Routes. It is useful for testing.
 type FakeCloud struct {
-	Exists        bool
-	Err           error
+	Exists bool
+	Err    error
+
+	ExistsByProviderID bool
+	ErrByProviderID    error
+
 	Calls         []string
 	Addresses     []v1.NodeAddress
 	ExtID         map[types.NodeName]string
@@ -234,6 +238,13 @@ func (f *FakeCloud) InstanceTypeByProviderID(providerID string) (string, error) 
 	return f.InstanceTypes[types.NodeName(providerID)], nil
 }
 
+// InstanceExistsByProviderID returns true if the instance with the given provider id still exists and is running.
+// If false is returned with no error, the instance will be immediately deleted by the cloud controller manager.
+func (f *FakeCloud) InstanceExistsByProviderID(providerID string) (bool, error) {
+	f.addCall("instance-exists-by-provider-id")
+	return f.ExistsByProviderID, f.ErrByProviderID
+}
+
 // List is a test-spy implementation of Instances.List.
 // It adds an entry "list" into the internal method call record.
 func (f *FakeCloud) List(filter string) ([]types.NodeName, error) {
@@ -249,6 +260,22 @@ func (f *FakeCloud) List(filter string) ([]types.NodeName, error) {
 
 func (f *FakeCloud) GetZone() (cloudprovider.Zone, error) {
 	f.addCall("get-zone")
+	return f.Zone, f.Err
+}
+
+// GetZoneByProviderID implements Zones.GetZoneByProviderID
+// This is particularly useful in external cloud providers where the kubelet
+// does not initialize node data.
+func (f *FakeCloud) GetZoneByProviderID(providerID string) (cloudprovider.Zone, error) {
+	f.addCall("get-zone-by-provider-id")
+	return f.Zone, f.Err
+}
+
+// GetZoneByNodeName implements Zones.GetZoneByNodeName
+// This is particularly useful in external cloud providers where the kubelet
+// does not initialize node data.
+func (f *FakeCloud) GetZoneByNodeName(nodeName types.NodeName) (cloudprovider.Zone, error) {
+	f.addCall("get-zone-by-node-name")
 	return f.Zone, f.Err
 }
 

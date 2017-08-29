@@ -38,7 +38,6 @@ import (
 	extensionsclient "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
 	extensionsinternal "k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
-	"k8s.io/kubernetes/pkg/controller"
 	deploymentutil "k8s.io/kubernetes/pkg/controller/deployment/util"
 	"k8s.io/kubernetes/pkg/kubectl"
 	utilpointer "k8s.io/kubernetes/pkg/util/pointer"
@@ -1380,7 +1379,7 @@ func checkDeploymentReplicaSetsControllerRef(c clientset.Interface, ns string, u
 	rsList := listDeploymentReplicaSets(c, ns, label)
 	for _, rs := range rsList.Items {
 		// This rs is adopted only when its controller ref is update
-		if controllerRef := controller.GetControllerOf(&rs); controllerRef == nil || controllerRef.UID != uid {
+		if controllerRef := metav1.GetControllerOf(&rs); controllerRef == nil || controllerRef.UID != uid {
 			return fmt.Errorf("ReplicaSet %s has unexpected controllerRef %v", rs.Name, controllerRef)
 		}
 	}
@@ -1392,7 +1391,7 @@ func waitDeploymentReplicaSetsOrphaned(c clientset.Interface, ns string, label m
 		rsList := listDeploymentReplicaSets(c, ns, label)
 		for _, rs := range rsList.Items {
 			// This rs is orphaned only when controller ref is cleared
-			if controllerRef := controller.GetControllerOf(&rs); controllerRef != nil {
+			if controllerRef := metav1.GetControllerOf(&rs); controllerRef != nil {
 				return false, nil
 			}
 		}
@@ -1450,7 +1449,7 @@ func testDeploymentHashCollisionAvoidance(f *framework.Framework) {
 			return false, nil
 		}
 		framework.Logf(spew.Sprintf("deployment status: %#v", d.Status))
-		return d.Status.CollisionCount != nil && *d.Status.CollisionCount == int64(1), nil
+		return d.Status.CollisionCount != nil && *d.Status.CollisionCount == int32(1), nil
 	}); err != nil {
 		framework.Failf("Failed to increment collision counter for deployment %q: %v", deploymentName, err)
 	}

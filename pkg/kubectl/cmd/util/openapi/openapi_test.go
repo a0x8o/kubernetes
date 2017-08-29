@@ -17,17 +17,22 @@ limitations under the License.
 package openapi_test
 
 import (
+	"path/filepath"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util/openapi"
+	tst "k8s.io/kubernetes/pkg/kubectl/cmd/util/openapi/testing"
 )
+
+var fakeSchema = tst.Fake{Path: filepath.Join("..", "..", "..", "..", "..", "api", "openapi-spec", "swagger.json")}
 
 var _ = Describe("Reading apps/v1beta1/Deployment from openAPIData", func() {
 	var resources openapi.Resources
 	BeforeEach(func() {
-		s, err := data.OpenAPISchema()
+		s, err := fakeSchema.OpenAPISchema()
 		Expect(err).To(BeNil())
 		resources, err = openapi.NewOpenAPIData(s)
 		Expect(err).To(BeNil())
@@ -60,7 +65,7 @@ var _ = Describe("Reading apps/v1beta1/Deployment from openAPIData", func() {
 		key := deployment.Fields["kind"].(*openapi.Primitive)
 		Expect(key).ToNot(BeNil())
 		Expect(key.Type).To(Equal("string"))
-		Expect(key.GetPath().Get()).To(Equal([]string{"io.k8s.api.apps.v1beta1.Deployment", "kind"}))
+		Expect(key.GetPath().Get()).To(Equal([]string{"io.k8s.api.apps.v1beta1.Deployment", ".kind"}))
 	})
 
 	It("should have a apiVersion key of type string", func() {
@@ -68,25 +73,25 @@ var _ = Describe("Reading apps/v1beta1/Deployment from openAPIData", func() {
 		key := deployment.Fields["apiVersion"].(*openapi.Primitive)
 		Expect(key).ToNot(BeNil())
 		Expect(key.Type).To(Equal("string"))
-		Expect(key.GetPath().Get()).To(Equal([]string{"io.k8s.api.apps.v1beta1.Deployment", "apiVersion"}))
+		Expect(key.GetPath().Get()).To(Equal([]string{"io.k8s.api.apps.v1beta1.Deployment", ".apiVersion"}))
 	})
 
 	It("should have a metadata key of type Reference", func() {
 		Expect(deployment.Fields).To(HaveKey("metadata"))
-		key := deployment.Fields["metadata"].(*openapi.Reference)
+		key := deployment.Fields["metadata"].(openapi.Reference)
 		Expect(key).ToNot(BeNil())
-		Expect(key.Reference).To(Equal("io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"))
-		subSchema := key.GetSubSchema().(*openapi.Kind)
+		Expect(key.Reference()).To(Equal("io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"))
+		subSchema := key.SubSchema().(*openapi.Kind)
 		Expect(subSchema).ToNot(BeNil())
 	})
 
 	var status *openapi.Kind
 	It("should have a status key of type Reference", func() {
 		Expect(deployment.Fields).To(HaveKey("status"))
-		key := deployment.Fields["status"].(*openapi.Reference)
+		key := deployment.Fields["status"].(openapi.Reference)
 		Expect(key).ToNot(BeNil())
-		Expect(key.Reference).To(Equal("io.k8s.api.apps.v1beta1.DeploymentStatus"))
-		status = key.GetSubSchema().(*openapi.Kind)
+		Expect(key.Reference()).To(Equal("io.k8s.api.apps.v1beta1.DeploymentStatus"))
+		status = key.SubSchema().(*openapi.Kind)
 		Expect(status).ToNot(BeNil())
 	})
 
@@ -101,22 +106,22 @@ var _ = Describe("Reading apps/v1beta1/Deployment from openAPIData", func() {
 		Expect(status.Fields).To(HaveKey("conditions"))
 		conditions := status.Fields["conditions"].(*openapi.Array)
 		Expect(conditions).ToNot(BeNil())
-		Expect(conditions.GetName()).To(Equal("Array of io.k8s.api.apps.v1beta1.DeploymentCondition"))
+		Expect(conditions.GetName()).To(Equal(`Array of Reference to "io.k8s.api.apps.v1beta1.DeploymentCondition"`))
 		Expect(conditions.GetExtensions()).To(Equal(map[string]interface{}{
 			"x-kubernetes-patch-merge-key": "type",
 			"x-kubernetes-patch-strategy":  "merge",
 		}))
-		condition := conditions.SubType.(*openapi.Reference)
-		Expect(condition.Reference).To(Equal("io.k8s.api.apps.v1beta1.DeploymentCondition"))
+		condition := conditions.SubType.(openapi.Reference)
+		Expect(condition.Reference()).To(Equal("io.k8s.api.apps.v1beta1.DeploymentCondition"))
 	})
 
 	var spec *openapi.Kind
 	It("should have a spec key of type Reference", func() {
 		Expect(deployment.Fields).To(HaveKey("spec"))
-		key := deployment.Fields["spec"].(*openapi.Reference)
+		key := deployment.Fields["spec"].(openapi.Reference)
 		Expect(key).ToNot(BeNil())
-		Expect(key.Reference).To(Equal("io.k8s.api.apps.v1beta1.DeploymentSpec"))
-		spec = key.GetSubSchema().(*openapi.Kind)
+		Expect(key.Reference()).To(Equal("io.k8s.api.apps.v1beta1.DeploymentSpec"))
+		spec = key.SubSchema().(*openapi.Kind)
 		Expect(spec).ToNot(BeNil())
 	})
 
@@ -127,16 +132,16 @@ var _ = Describe("Reading apps/v1beta1/Deployment from openAPIData", func() {
 
 	It("should have a spec with a PodTemplateSpec sub-field", func() {
 		Expect(spec.Fields).To(HaveKey("template"))
-		key := spec.Fields["template"].(*openapi.Reference)
+		key := spec.Fields["template"].(openapi.Reference)
 		Expect(key).ToNot(BeNil())
-		Expect(key.Reference).To(Equal("io.k8s.api.core.v1.PodTemplateSpec"))
+		Expect(key.Reference()).To(Equal("io.k8s.api.core.v1.PodTemplateSpec"))
 	})
 })
 
 var _ = Describe("Reading authorization.k8s.io/v1/SubjectAccessReview from openAPIData", func() {
 	var resources openapi.Resources
 	BeforeEach(func() {
-		s, err := data.OpenAPISchema()
+		s, err := fakeSchema.OpenAPISchema()
 		Expect(err).To(BeNil())
 		resources, err = openapi.NewOpenAPIData(s)
 		Expect(err).To(BeNil())
@@ -159,10 +164,10 @@ var _ = Describe("Reading authorization.k8s.io/v1/SubjectAccessReview from openA
 		sar := schema.(*openapi.Kind)
 		Expect(sar).ToNot(BeNil())
 		Expect(sar.Fields).To(HaveKey("spec"))
-		specRef := sar.Fields["spec"].(*openapi.Reference)
+		specRef := sar.Fields["spec"].(openapi.Reference)
 		Expect(specRef).ToNot(BeNil())
-		Expect(specRef.Reference).To(Equal("io.k8s.api.authorization.v1.SubjectAccessReviewSpec"))
-		sarspec = specRef.GetSubSchema().(*openapi.Kind)
+		Expect(specRef.Reference()).To(Equal("io.k8s.api.authorization.v1.SubjectAccessReviewSpec"))
+		sarspec = specRef.SubSchema().(*openapi.Kind)
 		Expect(sarspec).ToNot(BeNil())
 	})
 
@@ -171,15 +176,43 @@ var _ = Describe("Reading authorization.k8s.io/v1/SubjectAccessReview from openA
 		extra := sarspec.Fields["extra"].(*openapi.Map)
 		Expect(extra).ToNot(BeNil())
 		Expect(extra.GetName()).To(Equal("Map of Array of string"))
-		Expect(extra.GetPath().Get()).To(Equal([]string{"io.k8s.api.authorization.v1.SubjectAccessReviewSpec", "extra"}))
+		Expect(extra.GetPath().Get()).To(Equal([]string{"io.k8s.api.authorization.v1.SubjectAccessReviewSpec", ".extra"}))
 		array := extra.SubType.(*openapi.Array)
 		Expect(array).ToNot(BeNil())
 		Expect(array.GetName()).To(Equal("Array of string"))
-		Expect(array.GetPath().Get()).To(Equal([]string{"io.k8s.api.authorization.v1.SubjectAccessReviewSpec", "extra"}))
+		Expect(array.GetPath().Get()).To(Equal([]string{"io.k8s.api.authorization.v1.SubjectAccessReviewSpec", ".extra"}))
 		str := array.SubType.(*openapi.Primitive)
 		Expect(str).ToNot(BeNil())
 		Expect(str.Type).To(Equal("string"))
 		Expect(str.GetName()).To(Equal("string"))
-		Expect(str.GetPath().Get()).To(Equal([]string{"io.k8s.api.authorization.v1.SubjectAccessReviewSpec", "extra"}))
+		Expect(str.GetPath().Get()).To(Equal([]string{"io.k8s.api.authorization.v1.SubjectAccessReviewSpec", ".extra"}))
+	})
+})
+
+var _ = Describe("Path", func() {
+	It("can be created by NewPath", func() {
+		path := openapi.NewPath("key")
+		Expect(path.String()).To(Equal("key"))
+	})
+	It("can create and print complex paths", func() {
+		key := openapi.NewPath("key")
+		array := key.ArrayPath(12)
+		field := array.FieldPath("subKey")
+
+		Expect(field.String()).To(Equal("key[12].subKey"))
+	})
+	It("has a length", func() {
+		key := openapi.NewPath("key")
+		array := key.ArrayPath(12)
+		field := array.FieldPath("subKey")
+
+		Expect(field.Len()).To(Equal(3))
+	})
+	It("can look like an array", func() {
+		key := openapi.NewPath("key")
+		array := key.ArrayPath(12)
+		field := array.FieldPath("subKey")
+
+		Expect(field.Get()).To(Equal([]string{"key", "[12]", ".subKey"}))
 	})
 })

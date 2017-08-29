@@ -31,7 +31,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/golang/glog"
@@ -268,18 +267,11 @@ func newPCCloud(cfg PCConfig) (*PCCloud, error) {
 	vmID := cfg.Global.VMID
 
 	// Get local hostname
-	cmd := exec.Command("bash", "-c", `echo $HOSTNAME`)
-	out, err := cmd.CombinedOutput()
+	hostname, err := os.Hostname()
 	if err != nil {
-		glog.Errorf("Photon Cloud Provider: get local hostname bash command failed. Error[%v]", err)
+		glog.Errorf("Photon Cloud Provider: get hostname failed. Error[%v]", err)
 		return nil, err
 	}
-	if len(out) == 0 {
-		glog.Errorf("unable to retrieve hostname for Instance ID")
-		return nil, fmt.Errorf("unable to retrieve hostname for Instance ID")
-	}
-	hostname := strings.TrimRight(string(out), "\n")
-
 	pc := PCCloud{
 		cfg:              &cfg,
 		localInstanceID:  vmID,
@@ -478,6 +470,12 @@ func (pc *PCCloud) ExternalID(nodeName k8stypes.NodeName) (string, error) {
 	}
 }
 
+// InstanceExistsByProviderID returns true if the instance with the given provider id still exists and is running.
+// If false is returned with no error, the instance will be immediately deleted by the cloud controller manager.
+func (pc *PCCloud) InstanceExistsByProviderID(providerID string) (bool, error) {
+	return false, errors.New("unimplemented")
+}
+
 // InstanceID returns the cloud provider ID of the specified instance.
 func (pc *PCCloud) InstanceID(nodeName k8stypes.NodeName) (string, error) {
 	name := string(nodeName)
@@ -527,6 +525,20 @@ func (pc *PCCloud) Zones() (cloudprovider.Zones, bool) {
 
 func (pc *PCCloud) GetZone() (cloudprovider.Zone, error) {
 	return pc.Zone, nil
+}
+
+// GetZoneByProviderID implements Zones.GetZoneByProviderID
+// This is particularly useful in external cloud providers where the kubelet
+// does not initialize node data.
+func (pc *PCCloud) GetZoneByProviderID(providerID string) (cloudprovider.Zone, error) {
+	return cloudprovider.Zone{}, errors.New("GetZoneByProviderID not implemented")
+}
+
+// GetZoneByNodeName implements Zones.GetZoneByNodeName
+// This is particularly useful in external cloud providers where the kubelet
+// does not initialize node data.
+func (pc *PCCloud) GetZoneByNodeName(nodeName k8stypes.NodeName) (cloudprovider.Zone, error) {
+	return cloudprovider.Zone{}, errors.New("GetZoneByNodeName not imeplemented")
 }
 
 // Routes returns a false since the interface is not supported for photon controller.

@@ -73,10 +73,6 @@ const (
 	NodesGroup              = "system:nodes"
 	NodesClusterRoleBinding = "system:node"
 
-	// Constants for what we name our ServiceAccounts with limited access to the cluster in case of RBAC
-	KubeDNSServiceAccountName   = "kube-dns"
-	KubeProxyServiceAccountName = "kube-proxy"
-
 	// APICallRetryInterval defines how long kubeadm should wait before retrying a failed API operation
 	APICallRetryInterval = 500 * time.Millisecond
 	// DiscoveryRetryInterval specifies how long kubeadm should wait before retrying to connect to the master when doing discovery
@@ -117,9 +113,18 @@ const (
 	// SelfHostingPrefix describes the prefix workloads that are self-hosted by kubeadm has
 	SelfHostingPrefix = "self-hosted-"
 
+	// KubeCertificatesVolumeName specifies the name for the Volume that is used for injecting certificates to control plane components (can be both a hostPath volume or a projected, all-in-one volume)
+	KubeCertificatesVolumeName = "k8s-certs"
+
+	// KubeConfigVolumeName specifies the name for the Volume that is used for injecting the kubeconfig to talk securely to the api server for a control plane component if applicable
+	KubeConfigVolumeName = "kubeconfig"
+
 	// NodeBootstrapTokenAuthGroup specifies which group a Node Bootstrap Token should be authenticated in
 	// TODO: This should be changed in the v1.8 dev cycle to a node-BT-specific group instead of the generic Bootstrap Token group that is used now
 	NodeBootstrapTokenAuthGroup = "system:bootstrappers"
+
+	// DefaultCIImageRepository points to image registry where CI uploads images from ci-cross build job
+	DefaultCIImageRepository = "gcr.io/kubernetes-ci-images"
 )
 
 var (
@@ -151,6 +156,10 @@ var (
 	// MinimumCSRAutoApprovalClusterRolesVersion defines whether kubeadm can rely on the built-in CSR approval ClusterRole or not (note, the binding is always created by kubeadm!)
 	// TODO: Remove this when the v1.9 cycle starts and we bump the minimum supported version to v1.8.0
 	MinimumCSRAutoApprovalClusterRolesVersion = version.MustParseSemantic("v1.8.0-alpha.3")
+
+	// UseEnableBootstrapTokenAuthFlagVersion defines the first version where the API server supports the --enable-bootstrap-token-auth flag instead of the old and deprecated flag.
+	// TODO: Remove this when the v1.9 cycle starts and we bump the minimum supported version to v1.8.0
+	UseEnableBootstrapTokenAuthFlagVersion = version.MustParseSemantic("v1.8.0-beta.0")
 )
 
 // GetStaticPodDirectory returns the location on the disk where the Static Pod should be present

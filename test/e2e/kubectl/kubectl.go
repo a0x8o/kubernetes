@@ -431,6 +431,8 @@ var _ = SIGDescribe("Kubectl client", func() {
 		})
 
 		It("should support exec through kubectl proxy", func() {
+			Skip("kubernetes/kubernetes#50466: This feature doesn't work for anything but client certs authentication.")
+
 			// Fail if the variable isn't set
 			if framework.TestContext.Host == "" {
 				framework.Failf("--host variable must be set to the full URI to the api server on e2e run.")
@@ -697,7 +699,7 @@ metadata:
 
 	framework.KubeDescribe("Kubectl api-versions", func() {
 		It("should check if v1 is in available api versions [Conformance]", func() {
-			By("validating api verions")
+			By("validating api versions")
 			output := framework.RunKubectlOrDie("api-versions")
 			if !strings.Contains(output, "v1") {
 				framework.Failf("No v1 in kubectl api-versions")

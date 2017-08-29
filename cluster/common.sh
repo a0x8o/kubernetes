@@ -638,6 +638,7 @@ DNS_SERVER_IP: $(yaml-quote ${DNS_SERVER_IP:-})
 DNS_DOMAIN: $(yaml-quote ${DNS_DOMAIN:-})
 ENABLE_DNS_HORIZONTAL_AUTOSCALER: $(yaml-quote ${ENABLE_DNS_HORIZONTAL_AUTOSCALER:-false})
 KUBELET_TOKEN: $(yaml-quote ${KUBELET_TOKEN:-})
+KUBE_PROXY_DAEMONSET: $(yaml-quote ${KUBE_PROXY_DAEMONSET:-false})
 KUBE_PROXY_TOKEN: $(yaml-quote ${KUBE_PROXY_TOKEN:-})
 NODE_PROBLEM_DETECTOR_TOKEN: $(yaml-quote ${NODE_PROBLEM_DETECTOR_TOKEN:-})
 ADMISSION_CONTROL: $(yaml-quote ${ADMISSION_CONTROL:-})
@@ -668,6 +669,9 @@ ENABLE_CACHE_MUTATION_DETECTOR: $(yaml-quote ${ENABLE_CACHE_MUTATION_DETECTOR:-f
 ENABLE_PATCH_CONVERSION_DETECTOR: $(yaml-quote ${ENABLE_PATCH_CONVERSION_DETECTOR:-false})
 ADVANCED_AUDIT_BACKEND: $(yaml-quote ${ADVANCED_AUDIT_BACKEND:-log})
 GCE_API_ENDPOINT: $(yaml-quote ${GCE_API_ENDPOINT:-})
+PROMETHEUS_TO_SD_ENDPOINT: $(yaml-quote ${PROMETHEUS_TO_SD_ENDPOINT:-})
+PROMETHEUS_TO_SD_PREFIX: $(yaml-quote ${PROMETHEUS_TO_SD_PREFIX:-})
+ENABLE_PROMETHEUS_TO_SD: $(yaml-quote ${ENABLE_PROMETHEUS_TO_SD:-false})
 EOF
   if [ -n "${KUBELET_PORT:-}" ]; then
     cat >>$file <<EOF
@@ -749,7 +753,7 @@ EOF
   if [[ "${master}" == "true" && "${MASTER_OS_DISTRIBUTION}" == "gci" ]] ||
      [[ "${master}" == "false" && "${NODE_OS_DISTRIBUTION}" == "gci" ]]; then
     cat >>$file <<EOF
-VOLUME_PLUGIN_DIR: $(yaml-quote ${VOLUME_PLUGIN_DIR:-/home/kubernetes/flexvolume})
+VOLUME_PLUGIN_DIR: $(yaml-quote ${VOLUME_PLUGIN_DIR:-/etc/srv/kubernetes/kubelet-plugins/volume/exec})
 EOF
   fi
 

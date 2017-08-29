@@ -266,6 +266,12 @@ EOF
 multizone = ${MULTIZONE}
 EOF
   fi
+  if [[ -n "${GCE_ALPHA_FEATURES:-}" ]]; then
+    use_cloud_config="true"
+    cat <<EOF >>/etc/gce.conf
+alpha-features = ${GCE_ALPHA_FEATURES}
+EOF
+  fi
   if [[ "${use_cloud_config}" != "true" ]]; then
     rm -f /etc/gce.conf
   fi
@@ -387,8 +393,8 @@ function create-master-kubelet-auth {
   fi
 }
 
-function create-kubeproxy-kubeconfig {
-  echo "Creating kube-proxy kubeconfig file"
+function create-kubeproxy-user-kubeconfig {
+  echo "Creating kube-proxy user kubeconfig file"
   cat <<EOF >/var/lib/kube-proxy/kubeconfig
 apiVersion: v1
 kind: Config
@@ -406,6 +412,30 @@ contexts:
     user: kube-proxy
   name: service-account-context
 current-context: service-account-context
+EOF
+}
+
+function create-kubeproxy-serviceaccount-kubeconfig {
+  echo "Creating kube-proxy serviceaccount kubeconfig file"
+  cat <<EOF >/var/lib/kube-proxy/kubeconfig
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    server: https://${KUBERNETES_MASTER_NAME}
+  name: default
+contexts:
+- context:
+    cluster: default
+    namespace: default
+    user: default
+  name: default
+current-context: default
+users:
+- name: default
+  user:
+    tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
 EOF
 }
 
@@ -613,8 +643,17 @@ function start-kubelet {
   if [[ -n "${ENABLE_CUSTOM_METRICS:-}" ]]; then
     flags+=" --enable-custom-metrics=${ENABLE_CUSTOM_METRICS}"
   fi
+  local node_labels=""
+  if [[ "${KUBE_PROXY_DAEMONSET:-}" == "true" && "${KUBERNETES_MASTER:-}" != "true" ]]; then
+    # Add kube-proxy daemonset label to node to avoid situation during cluster
+    # upgrade/downgrade when there are two instances of kube-proxy running on a node.
+    node_labels="beta.kubernetes.io/kube-proxy-ds-ready=true"
+  fi
   if [[ -n "${NODE_LABELS:-}" ]]; then
-    flags+=" --node-labels=${NODE_LABELS}"
+    node_labels="${node_labels:+${node_labels},}${NODE_LABELS}"
+  fi
+  if [[ -n "${node_labels:-}" ]]; then
+    flags+=" --node-labels=${node_labels}"
   fi
   if [[ -n "${NODE_TAINTS:-}" ]]; then
     flags+=" --register-with-taints=${NODE_TAINTS}"
@@ -666,11 +705,11 @@ function prepare-log-file {
   chown root:root $1
 }
 
-# Starts kube-proxy pod.
-function start-kube-proxy {
-  echo "Start kube-proxy pod"
-  prepare-log-file /var/log/kube-proxy.log
-  local -r src_file="${KUBE_HOME}/kube-manifests/kubernetes/kube-proxy.manifest"
+# Prepares parameters for kube-proxy manifest.
+# $1 source path of kube-proxy manifest.
+function prepare-kube-proxy-manifest-variables {
+  local -r src_file=$1;
+
   remove-salt-config-comments "${src_file}"
 
   local -r kubeconfig="--kubeconfig=/var/lib/kube-proxy/kubeconfig"
@@ -689,14 +728,20 @@ function start-kube-proxy {
     params+=" ${KUBEPROXY_TEST_ARGS}"
   fi
   local container_env=""
+  local kube_cache_mutation_detector_env_name=""
+  local kube_cache_mutation_detector_env_value=""
   if [[ -n "${ENABLE_CACHE_MUTATION_DETECTOR:-}" ]]; then
-    container_env="env:\n    - name: KUBE_CACHE_MUTATION_DETECTOR\n    value: \"${ENABLE_CACHE_MUTATION_DETECTOR}\""
+    container_env="env:"
+    kube_cache_mutation_detector_env_name="- name: KUBE_CACHE_MUTATION_DETECTOR"
+    kube_cache_mutation_detector_env_value="value: \"${ENABLE_CACHE_MUTATION_DETECTOR}\""
   fi
   sed -i -e "s@{{kubeconfig}}@${kubeconfig}@g" ${src_file}
   sed -i -e "s@{{pillar\['kube_docker_registry'\]}}@${kube_docker_registry}@g" ${src_file}
   sed -i -e "s@{{pillar\['kube-proxy_docker_tag'\]}}@${kube_proxy_docker_tag}@g" ${src_file}
   sed -i -e "s@{{params}}@${params}@g" ${src_file}
   sed -i -e "s@{{container_env}}@${container_env}@g" ${src_file}
+  sed -i -e "s@{{kube_cache_mutation_detector_env_name}}@${kube_cache_mutation_detector_env_name}@g" ${src_file}
+  sed -i -e "s@{{kube_cache_mutation_detector_env_value}}@${kube_cache_mutation_detector_env_value}@g" ${src_file}
   sed -i -e "s@{{ cpurequest }}@100m@g" ${src_file}
   sed -i -e "s@{{api_servers_with_port}}@${api_servers}@g" ${src_file}
   if [[ -n "${CLUSTER_IP_RANGE:-}" ]]; then
@@ -713,6 +758,14 @@ function start-kube-proxy {
       mount -o remount,rw /sys; "
     sed -i -e "s@-\\s\\+kube-proxy@- ${extra_workaround_cmd} kube-proxy@g" "${src_file}"
   fi
+}
+
+# Starts kube-proxy static pod.
+function start-kube-proxy {
+  echo "Start kube-proxy static pod"
+  prepare-log-file /var/log/kube-proxy.log
+  local -r src_file="${KUBE_HOME}/kube-manifests/kubernetes/kube-proxy.manifest"
+  prepare-kube-proxy-manifest-variables "$src_file"
 
   cp "${src_file}" /etc/kubernetes/manifests
 }
@@ -828,7 +881,7 @@ function compute-master-manifest-variables {
   CLOUD_CONFIG_MOUNT=""
   if [[ -f /etc/gce.conf ]]; then
     CLOUD_CONFIG_OPT="--cloud-config=/etc/gce.conf"
-    CLOUD_CONFIG_VOLUME="{\"name\": \"cloudconfigmount\",\"hostPath\": {\"path\": \"/etc/gce.conf\"}},"
+    CLOUD_CONFIG_VOLUME="{\"name\": \"cloudconfigmount\",\"hostPath\": {\"path\": \"/etc/gce.conf\", \"type\": \"FileOrCreate\"}},"
     CLOUD_CONFIG_MOUNT="{\"name\": \"cloudconfigmount\",\"mountPath\": \"/etc/gce.conf\", \"readOnly\": true},"
   fi
   DOCKER_REGISTRY="gcr.io/google_containers"
@@ -933,10 +986,10 @@ function start-kube-apiserver {
       params+=" --admission-control-config-file=/etc/admission_controller.config"
       # Mount the file to configure admission controllers if ImagePolicyWebhook is set.
       admission_controller_config_mount="{\"name\": \"admissioncontrollerconfigmount\",\"mountPath\": \"/etc/admission_controller.config\", \"readOnly\": false},"
-      admission_controller_config_volume="{\"name\": \"admissioncontrollerconfigmount\",\"hostPath\": {\"path\": \"/etc/admission_controller.config\"}},"
+      admission_controller_config_volume="{\"name\": \"admissioncontrollerconfigmount\",\"hostPath\": {\"path\": \"/etc/admission_controller.config\", \"type\": \"FileOrCreate\"}},"
       # Mount the file to configure the ImagePolicyWebhook's webhook.
       image_policy_webhook_config_mount="{\"name\": \"imagepolicywebhookconfigmount\",\"mountPath\": \"/etc/gcp_image_review.config\", \"readOnly\": false},"
-      image_policy_webhook_config_volume="{\"name\": \"imagepolicywebhookconfigmount\",\"hostPath\": {\"path\": \"/etc/gcp_image_review.config\"}},"
+      image_policy_webhook_config_volume="{\"name\": \"imagepolicywebhookconfigmount\",\"hostPath\": {\"path\": \"/etc/gcp_image_review.config\", \"type\": \"FileOrCreate\"}},"
     fi
   fi
 
@@ -963,7 +1016,7 @@ function start-kube-apiserver {
   if [[ -n "${GCP_AUTHN_URL:-}" ]]; then
     params+=" --authentication-token-webhook-config-file=/etc/gcp_authn.config"
     webhook_authn_config_mount="{\"name\": \"webhookauthnconfigmount\",\"mountPath\": \"/etc/gcp_authn.config\", \"readOnly\": false},"
-    webhook_authn_config_volume="{\"name\": \"webhookauthnconfigmount\",\"hostPath\": {\"path\": \"/etc/gcp_authn.config\"}},"
+    webhook_authn_config_volume="{\"name\": \"webhookauthnconfigmount\",\"hostPath\": {\"path\": \"/etc/gcp_authn.config\", \"type\": \"FileOrCreate\"}},"
   fi
 
   local authorization_mode="RBAC"
@@ -994,7 +1047,7 @@ function start-kube-apiserver {
     authorization_mode+=",Webhook"
     params+=" --authorization-webhook-config-file=/etc/gcp_authz.config"
     webhook_config_mount="{\"name\": \"webhookconfigmount\",\"mountPath\": \"/etc/gcp_authz.config\", \"readOnly\": false},"
-    webhook_config_volume="{\"name\": \"webhookconfigmount\",\"hostPath\": {\"path\": \"/etc/gcp_authz.config\"}},"
+    webhook_config_volume="{\"name\": \"webhookconfigmount\",\"hostPath\": {\"path\": \"/etc/gcp_authz.config\", \"type\": \"FileOrCreate\"}},"
   fi
   params+=" --authorization-mode=${authorization_mode}"
 
@@ -1193,6 +1246,18 @@ function setup-addon-manifests {
   chmod 644 "${dst_dir}"/*
 }
 
+# Updates parameters in yaml file for prometheus-to-sd configuration, or
+# removes component if it is disabled.
+function update-prometheus-to-sd-parameters {
+  if [[ "${ENABLE_PROMETHEUS_TO_SD:-}" == "true" ]]; then
+    sed -i -e "s@{{ *prometheus_to_sd_prefix *}}@${PROMETHEUS_TO_SD_PREFIX}@g" "$1"
+    sed -i -e "s@{{ *prometheus_to_sd_endpoint *}}@${PROMETHEUS_TO_SD_ENDPOINT}@g" "$1"
+  else
+    # Removes all lines between two patterns (throws away prometheus-to-sd)
+    sed -i -e "/# BEGIN_PROMETHEUS_TO_SD/,/# END_PROMETHEUS_TO_SD/d" "$1"
+  fi
+}
+
 # Prepares the manifests of k8s addons, and starts the addon manager.
 # Vars assumed:
 #   CLUSTER_NAME
@@ -1205,6 +1270,10 @@ function start-kube-addons {
   setup-addon-manifests "addons" "rbac"
 
   # Set up manifests of other addons.
+  if [[ "${KUBE_PROXY_DAEMONSET:-}" == "true" ]]; then
+    prepare-kube-proxy-manifest-variables "$src_dir/kube-proxy/kube-proxy-ds.yaml"
+    setup-addon-manifests "addons" "kube-proxy"
+  fi
   if [[ "${ENABLE_CLUSTER_MONITORING:-}" == "influxdb" ]] || \
      [[ "${ENABLE_CLUSTER_MONITORING:-}" == "google" ]] || \
      [[ "${ENABLE_CLUSTER_MONITORING:-}" == "stackdriver" ]] || \
@@ -1241,6 +1310,7 @@ function start-kube-addons {
     sed -i -e "s@{{ *eventer_memory_per_node *}}@${eventer_memory_per_node}@g" "${controller_yaml}"
     sed -i -e "s@{{ *nanny_memory *}}@${nanny_memory}@g" "${controller_yaml}"
     sed -i -e "s@{{ *metrics_cpu_per_node *}}@${metrics_cpu_per_node}@g" "${controller_yaml}"
+    update-prometheus-to-sd-parameters ${controller_yaml}
   fi
   if [[ "${ENABLE_CLUSTER_DNS:-}" == "true" ]]; then
     setup-addon-manifests "addons" "dns"
@@ -1276,6 +1346,10 @@ function start-kube-addons {
   if [[ "${ENABLE_NODE_LOGGING:-}" == "true" ]] && \
      [[ "${LOGGING_DESTINATION:-}" == "gcp" ]]; then
     setup-addon-manifests "addons" "fluentd-gcp"
+    local -r event_exporter_yaml="${dst_dir}/fluentd-gcp/event-exporter.yaml"
+    local -r fluentd_gcp_yaml="${dst_dir}/fluentd-gcp/fluentd-gcp-ds.yaml"
+    update-prometheus-to-sd-parameters ${event_exporter_yaml}
+    update-prometheus-to-sd-parameters ${fluentd_gcp_yaml}
   fi
   if [[ "${ENABLE_CLUSTER_UI:-}" == "true" ]]; then
     setup-addon-manifests "addons" "dashboard"
@@ -1447,7 +1521,11 @@ if [[ "${KUBERNETES_MASTER:-}" == "true" ]]; then
   create-master-etcd-auth
 else
   create-kubelet-kubeconfig "https://${KUBERNETES_MASTER_NAME}"
-  create-kubeproxy-kubeconfig
+  if [[ "${KUBE_PROXY_DAEMONSET:-}" != "true" ]]; then
+    create-kubeproxy-user-kubeconfig
+  else
+    create-kubeproxy-serviceaccount-kubeconfig
+  fi
 fi
 
 if [[ "${CONTAINER_RUNTIME:-}" == "rkt" ]]; then
@@ -1475,7 +1553,9 @@ if [[ "${KUBERNETES_MASTER:-}" == "true" ]]; then
   start-lb-controller
   start-rescheduler
 else
-  start-kube-proxy
+  if [[ "${KUBE_PROXY_DAEMONSET:-}" != "true" ]]; then
+    start-kube-proxy
+  fi
   # Kube-registry-proxy.
   if [[ "${ENABLE_CLUSTER_REGISTRY:-}" == "true" ]]; then
     start-kube-registry-proxy

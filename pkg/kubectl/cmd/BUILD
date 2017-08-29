@@ -1,5 +1,3 @@
-licenses(["notice"])
-
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -58,14 +56,12 @@ go_library(
         "rollingupdate.go",
         "run.go",
         "scale.go",
-        "stop.go",
         "taint.go",
         "top.go",
         "top_node.go",
         "top_pod.go",
         "version.go",
     ],
-    tags = ["automanaged"],
     visibility = [
         "//build/visible_to:pkg_kubectl_cmd_CONSUMERS",
     ],
@@ -79,7 +75,6 @@ go_library(
         "//pkg/client/clientset_generated/internalclientset/typed/core/internalversion:go_default_library",
         "//pkg/client/clientset_generated/internalclientset/typed/rbac/internalversion:go_default_library",
         "//pkg/client/unversioned:go_default_library",
-        "//pkg/controller:go_default_library",
         "//pkg/kubectl:go_default_library",
         "//pkg/kubectl/cmd/auth:go_default_library",
         "//pkg/kubectl/cmd/config:go_default_library",
@@ -94,10 +89,10 @@ go_library(
         "//pkg/kubectl/proxy:go_default_library",
         "//pkg/kubectl/resource:go_default_library",
         "//pkg/kubectl/util:go_default_library",
+        "//pkg/kubectl/util/i18n:go_default_library",
         "//pkg/kubectl/util/term:go_default_library",
         "//pkg/printers:go_default_library",
         "//pkg/printers/internalversion:go_default_library",
-        "//pkg/util/i18n:go_default_library",
         "//pkg/util/interrupt:go_default_library",
         "//pkg/util/taints:go_default_library",
         "//pkg/version:go_default_library",
@@ -195,9 +190,6 @@ go_test(
         "//test/fixtures",
     ],
     library = ":go_default_library",
-    tags = [
-        "automanaged",
-    ],
     deps = [
         "//pkg/api:go_default_library",
         "//pkg/api/ref:go_default_library",
@@ -213,10 +205,10 @@ go_test(
         "//pkg/kubectl/cmd/util/openapi:go_default_library",
         "//pkg/kubectl/plugins:go_default_library",
         "//pkg/kubectl/resource:go_default_library",
+        "//pkg/kubectl/util/i18n:go_default_library",
         "//pkg/kubectl/util/term:go_default_library",
         "//pkg/printers:go_default_library",
         "//pkg/printers/internalversion:go_default_library",
-        "//pkg/util/i18n:go_default_library",
         "//pkg/util/strings:go_default_library",
         "//vendor/github.com/spf13/cobra:go_default_library",
         "//vendor/github.com/stretchr/testify/assert:go_default_library",

@@ -1,7 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
-
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -10,7 +8,6 @@ load(
 go_library(
     name = "go_default_library",
     srcs = [
-        "conversion.go",
         "defaults.go",
         "doc.go",
         "generated.pb.go",
@@ -22,7 +19,6 @@ go_library(
         "zz_generated.deepcopy.go",
         "zz_generated.defaults.go",
     ],
-    tags = ["automanaged"],
     deps = [
         "//federation/apis/federation:go_default_library",
         "//pkg/api:go_default_library",
@@ -48,4 +44,10 @@ filegroup(
     name = "all-srcs",
     srcs = [":package-srcs"],
     tags = ["automanaged"],
+)
+
+filegroup(
+    name = "go_default_library_protos",
+    srcs = ["generated.proto"],
+    visibility = ["//visibility:public"],
 )

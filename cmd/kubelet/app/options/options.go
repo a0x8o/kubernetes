@@ -25,12 +25,12 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/apiserver/pkg/util/flag"
 	utilflag "k8s.io/apiserver/pkg/util/flag"
-	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/componentconfig"
-	_ "k8s.io/kubernetes/pkg/apis/componentconfig/install" // Need to make sure the componentconfig api is installed so defaulting funcs work
-	"k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1"
-	componentconfigvalidation "k8s.io/kubernetes/pkg/apis/componentconfig/validation"
 	"k8s.io/kubernetes/pkg/features"
+	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
+	kubeletscheme "k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/scheme"
+	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/v1alpha1"
+	kubeletconfigvalidation "k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/validation"
 	utiltaints "k8s.io/kubernetes/pkg/util/taints"
 
 	"github.com/spf13/pflag"
@@ -121,8 +121,12 @@ func NewKubeletFlags() *KubeletFlags {
 		KubeConfig:              flag.NewStringFlag("/var/lib/kubelet/kubeconfig"),
 		ContainerRuntimeOptions: *NewContainerRuntimeOptions(),
 		CertDirectory:           "/var/run/kubernetes",
-		CloudProvider:           v1alpha1.AutoDetectCloudProvider,
 		RootDirectory:           v1alpha1.DefaultRootDir,
+		// DEPRECATED: auto detecting cloud providers goes against the initiative
+		// for out-of-tree cloud providers as we'll now depend on cAdvisor integrations
+		// with cloud providers instead of in the core repo.
+		// More details here: https://github.com/kubernetes/kubernetes/issues/50986
+		CloudProvider: v1alpha1.AutoDetectCloudProvider,
 	}
 }
 
@@ -139,11 +143,15 @@ func ValidateKubeletFlags(f *KubeletFlags) error {
 }
 
 // NewKubeletConfiguration will create a new KubeletConfiguration with default values
-func NewKubeletConfiguration() (*componentconfig.KubeletConfiguration, error) {
+func NewKubeletConfiguration() (*kubeletconfig.KubeletConfiguration, error) {
+	scheme, _, err := kubeletscheme.NewSchemeAndCodecs()
+	if err != nil {
+		return nil, err
+	}
 	versioned := &v1alpha1.KubeletConfiguration{}
-	api.Scheme.Default(versioned)
-	config := &componentconfig.KubeletConfiguration{}
-	if err := api.Scheme.Convert(versioned, config, nil); err != nil {
+	scheme.Default(versioned)
+	config := &kubeletconfig.KubeletConfiguration{}
+	if err := scheme.Convert(versioned, config, nil); err != nil {
 		return nil, err
 	}
 	return config, nil
@@ -153,7 +161,7 @@ func NewKubeletConfiguration() (*componentconfig.KubeletConfiguration, error) {
 // a kubelet. These can either be set via command line or directly.
 type KubeletServer struct {
 	KubeletFlags
-	componentconfig.KubeletConfiguration
+	kubeletconfig.KubeletConfiguration
 }
 
 // NewKubeletServer will create a new KubeletServer with default values.
@@ -170,8 +178,8 @@ func NewKubeletServer() (*KubeletServer, error) {
 
 // validateKubeletServer validates configuration of KubeletServer and returns an error if the input configuration is invalid
 func ValidateKubeletServer(s *KubeletServer) error {
-	// please add any KubeletConfiguration validation to the componentconfigvalidation.ValidateKubeletConfiguration function
-	if err := componentconfigvalidation.ValidateKubeletConfiguration(&s.KubeletConfiguration); err != nil {
+	// please add any KubeletConfiguration validation to the kubeletconfigvalidation.ValidateKubeletConfiguration function
+	if err := kubeletconfigvalidation.ValidateKubeletConfiguration(&s.KubeletConfiguration); err != nil {
 		return err
 	}
 	if err := ValidateKubeletFlags(&s.KubeletFlags); err != nil {
@@ -216,7 +224,7 @@ func (f *KubeletFlags) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.CertDirectory, "cert-dir", f.CertDirectory, "The directory where the TLS certs are located. "+
 		"If --tls-cert-file and --tls-private-key-file are provided, this flag will be ignored.")
 
-	fs.StringVar(&f.CloudProvider, "cloud-provider", f.CloudProvider, "The provider for cloud services. By default, kubelet will attempt to auto-detect the cloud provider. Specify empty string for running with no cloud provider.")
+	fs.StringVar(&f.CloudProvider, "cloud-provider", f.CloudProvider, "The provider for cloud services. By default, kubelet will attempt to auto-detect the cloud provider (deprecated). Specify empty string for running with no cloud provider, this will be the default in upcoming releases.")
 	fs.StringVar(&f.CloudConfigFile, "cloud-config", f.CloudConfigFile, "The path to the cloud provider configuration file.  Empty string for no configuration file.")
 
 	fs.StringVar(&f.RootDirectory, "root-dir", f.RootDirectory, "Directory path for managing kubelet files (volume mounts,etc).")
@@ -225,8 +233,8 @@ func (f *KubeletFlags) AddFlags(fs *pflag.FlagSet) {
 	fs.Var(&f.InitConfigDir, "init-config-dir", "The Kubelet will look in this directory for the init configuration. The path may be absolute or relative; relative paths start at the Kubelet's current working directory. Omit this argument to use the built-in default configuration values. Presently, you must also enable the DynamicKubeletConfig feature gate to pass this flag.")
 }
 
-// AddKubeletConfigFlags adds flags for a specific componentconfig.KubeletConfiguration to the specified FlagSet
-func AddKubeletConfigFlags(fs *pflag.FlagSet, c *componentconfig.KubeletConfiguration) {
+// AddKubeletConfigFlags adds flags for a specific kubeletconfig.KubeletConfiguration to the specified FlagSet
+func AddKubeletConfigFlags(fs *pflag.FlagSet, c *kubeletconfig.KubeletConfiguration) {
 	fs.BoolVar(&c.FailSwapOn, "fail-swap-on", true, "Makes the Kubelet fail to start if swap is enabled on the node. ")
 	fs.BoolVar(&c.FailSwapOn, "experimental-fail-swap-on", true, "DEPRECATED: please use --fail-swap-on instead.")
 	fs.MarkDeprecated("experimental-fail-swap-on", "This flag is deprecated and will be removed in future releases. please use --fail-swap-on instead.")
@@ -288,8 +296,8 @@ func AddKubeletConfigFlags(fs *pflag.FlagSet, c *componentconfig.KubeletConfigur
 	fs.MarkDeprecated("maximum-dead-containers-per-container", "Use --eviction-hard or --eviction-soft instead. Will be removed in a future version.")
 	fs.Int32Var(&c.MaxContainerCount, "maximum-dead-containers", c.MaxContainerCount, "Maximum number of old instances of containers to retain globally.  Each container takes up some disk space. To disable, set to a negative number.")
 	fs.MarkDeprecated("maximum-dead-containers", "Use --eviction-hard or --eviction-soft instead. Will be removed in a future version.")
-	fs.Int32Var(&c.CAdvisorPort, "cadvisor-port", c.CAdvisorPort, "The port of the localhost cAdvisor endpoint")
-	fs.Int32Var(&c.HealthzPort, "healthz-port", c.HealthzPort, "The port of the localhost healthz endpoint")
+	fs.Int32Var(&c.CAdvisorPort, "cadvisor-port", c.CAdvisorPort, "The port of the localhost cAdvisor endpoint (set to 0 to disable)")
+	fs.Int32Var(&c.HealthzPort, "healthz-port", c.HealthzPort, "The port of the localhost healthz endpoint (set to 0 to disable)")
 	fs.Var(componentconfig.IPVar{Val: &c.HealthzBindAddress}, "healthz-bind-address", "The IP address for the healthz server to serve on. (set to 0.0.0.0 for all interfaces)")
 	fs.Int32Var(&c.OOMScoreAdj, "oom-score-adj", c.OOMScoreAdj, "The oom-score-adj value for kubelet process. Values must be within the range [-1000, 1000]")
 	fs.BoolVar(&c.RegisterNode, "register-node", c.RegisterNode, "Register the node with the apiserver. If --kubeconfig is not provided, this flag is irrelevant, as the Kubelet won't have an apiserver to register with. Default=true.")

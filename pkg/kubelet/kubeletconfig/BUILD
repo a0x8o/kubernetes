@@ -1,7 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
-
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -15,21 +13,17 @@ go_library(
         "rollback.go",
         "watch.go",
     ],
-    tags = ["automanaged"],
     deps = [
-        "//pkg/apis/componentconfig:go_default_library",
-        "//pkg/apis/componentconfig/validation:go_default_library",
-        "//pkg/kubelet/kubeletconfig/badconfig:go_default_library",
+        "//pkg/kubelet/apis/kubeletconfig:go_default_library",
+        "//pkg/kubelet/apis/kubeletconfig/validation:go_default_library",
         "//pkg/kubelet/kubeletconfig/checkpoint:go_default_library",
         "//pkg/kubelet/kubeletconfig/checkpoint/store:go_default_library",
         "//pkg/kubelet/kubeletconfig/configfiles:go_default_library",
-        "//pkg/kubelet/kubeletconfig/startups:go_default_library",
         "//pkg/kubelet/kubeletconfig/status:go_default_library",
         "//pkg/kubelet/kubeletconfig/util/equal:go_default_library",
         "//pkg/kubelet/kubeletconfig/util/filesystem:go_default_library",
         "//pkg/kubelet/kubeletconfig/util/log:go_default_library",
         "//pkg/kubelet/kubeletconfig/util/panic:go_default_library",
-        "//pkg/version:go_default_library",
         "//vendor/k8s.io/api/core/v1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/fields:go_default_library",
@@ -52,10 +46,8 @@ filegroup(
     name = "all-srcs",
     srcs = [
         ":package-srcs",
-        "//pkg/kubelet/kubeletconfig/badconfig:all-srcs",
         "//pkg/kubelet/kubeletconfig/checkpoint:all-srcs",
         "//pkg/kubelet/kubeletconfig/configfiles:all-srcs",
-        "//pkg/kubelet/kubeletconfig/startups:all-srcs",
         "//pkg/kubelet/kubeletconfig/status:all-srcs",
         "//pkg/kubelet/kubeletconfig/util/codec:all-srcs",
         "//pkg/kubelet/kubeletconfig/util/equal:all-srcs",

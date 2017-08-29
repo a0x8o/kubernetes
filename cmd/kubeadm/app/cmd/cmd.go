@@ -24,6 +24,7 @@ import (
 
 	"k8s.io/apiserver/pkg/util/flag"
 	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/phases"
+	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/upgrade"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 )
 
@@ -68,11 +69,13 @@ func NewKubeadmCommand(f cmdutil.Factory, in io.Reader, out, err io.Writer) *cob
 	cmds.SetGlobalNormalizationFunc(flag.WarnWordSepNormalizeFunc)
 
 	cmds.AddCommand(NewCmdCompletion(out, ""))
+	cmds.AddCommand(NewCmdConfig(out))
 	cmds.AddCommand(NewCmdInit(out))
 	cmds.AddCommand(NewCmdJoin(out))
 	cmds.AddCommand(NewCmdReset(out))
 	cmds.AddCommand(NewCmdVersion(out))
 	cmds.AddCommand(NewCmdToken(out, err))
+	cmds.AddCommand(upgrade.NewCmdUpgrade(out))
 
 	// Wrap not yet fully supported commands in an alpha subcommand
 	experimentalCmd := &cobra.Command{

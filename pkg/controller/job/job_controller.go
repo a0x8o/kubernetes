@@ -82,10 +82,10 @@ func NewJobController(podInformer coreinformers.PodInformer, jobInformer batchin
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(glog.Infof)
 	// TODO: remove the wrapper when every clients have moved to use the clientset.
-	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(kubeClient.Core().RESTClient()).Events("")})
+	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(kubeClient.CoreV1().RESTClient()).Events("")})
 
-	if kubeClient != nil && kubeClient.Core().RESTClient().GetRateLimiter() != nil {
-		metrics.RegisterMetricAndTrackRateLimiterUsage("job_controller", kubeClient.Core().RESTClient().GetRateLimiter())
+	if kubeClient != nil && kubeClient.CoreV1().RESTClient().GetRateLimiter() != nil {
+		metrics.RegisterMetricAndTrackRateLimiterUsage("job_controller", kubeClient.CoreV1().RESTClient().GetRateLimiter())
 	}
 
 	jm := &JobController{
@@ -100,12 +100,8 @@ func NewJobController(podInformer coreinformers.PodInformer, jobInformer batchin
 	}
 
 	jobInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: jm.enqueueController,
-		UpdateFunc: func(old, cur interface{}) {
-			if job := cur.(*batch.Job); !IsJobFinished(job) {
-				jm.enqueueController(job)
-			}
-		},
+		AddFunc:    jm.enqueueController,
+		UpdateFunc: jm.updateJob,
 		DeleteFunc: jm.enqueueController,
 	})
 	jm.jobLister = jobInformer.Lister()
@@ -193,7 +189,7 @@ func (jm *JobController) addPod(obj interface{}) {
 	}
 
 	// If it has a ControllerRef, that's all that matters.
-	if controllerRef := controller.GetControllerOf(pod); controllerRef != nil {
+	if controllerRef := metav1.GetControllerOf(pod); controllerRef != nil {
 		job := jm.resolveControllerRef(pod.Namespace, controllerRef)
 		if job == nil {
 			return
@@ -238,8 +234,8 @@ func (jm *JobController) updatePod(old, cur interface{}) {
 
 	labelChanged := !reflect.DeepEqual(curPod.Labels, oldPod.Labels)
 
-	curControllerRef := controller.GetControllerOf(curPod)
-	oldControllerRef := controller.GetControllerOf(oldPod)
+	curControllerRef := metav1.GetControllerOf(curPod)
+	oldControllerRef := metav1.GetControllerOf(oldPod)
 	controllerRefChanged := !reflect.DeepEqual(curControllerRef, oldControllerRef)
 	if controllerRefChanged && oldControllerRef != nil {
 		// The ControllerRef was changed. Sync the old controller, if any.
@@ -289,7 +285,7 @@ func (jm *JobController) deletePod(obj interface{}) {
 		}
 	}
 
-	controllerRef := controller.GetControllerOf(pod)
+	controllerRef := metav1.GetControllerOf(pod)
 	if controllerRef == nil {
 		// No controller should care about orphans being deleted.
 		return
@@ -304,6 +300,35 @@ func (jm *JobController) deletePod(obj interface{}) {
 	}
 	jm.expectations.DeletionObserved(jobKey)
 	jm.enqueueController(job)
+}
+
+func (jm *JobController) updateJob(old, cur interface{}) {
+	oldJob := cur.(*batch.Job)
+	curJob := cur.(*batch.Job)
+
+	// never return error
+	key, err := controller.KeyFunc(curJob)
+	if err != nil {
+		return
+	}
+	jm.queue.Add(key)
+	// check if need to add a new rsync for ActiveDeadlineSeconds
+	if curJob.Status.StartTime != nil {
+		curADS := curJob.Spec.ActiveDeadlineSeconds
+		if curADS == nil {
+			return
+		}
+		oldADS := oldJob.Spec.ActiveDeadlineSeconds
+		if oldADS == nil || *oldADS != *curADS {
+			now := metav1.Now()
+			start := curJob.Status.StartTime.Time
+			passed := now.Time.Sub(start)
+			total := time.Duration(*curADS) * time.Second
+			// AddAfter will handle total < passed
+			jm.queue.AddAfter(key, total-passed)
+			glog.V(4).Infof("job ActiveDeadlineSeconds updated, will rsync after %d seconds", total-passed)
+		}
+	}
 }
 
 // obj could be an *batch.Job, or a DeletionFinalStateUnknown marker item.
@@ -420,9 +445,16 @@ func (jm *JobController) syncJob(key string) error {
 	active := int32(len(activePods))
 	succeeded, failed := getStatus(pods)
 	conditions := len(job.Status.Conditions)
+	// job first start
 	if job.Status.StartTime == nil {
 		now := metav1.Now()
 		job.Status.StartTime = &now
+		// enqueue a sync to check if job past ActiveDeadlineSeconds
+		if job.Spec.ActiveDeadlineSeconds != nil {
+			glog.V(4).Infof("Job %s have ActiveDeadlineSeconds will sync after %d seconds",
+				key, *job.Spec.ActiveDeadlineSeconds)
+			jm.queue.AddAfter(key, time.Duration(*job.Spec.ActiveDeadlineSeconds)*time.Second)
+		}
 	}
 	// if job was finished previously, we don't want to redo the termination
 	if IsJobFinished(&job) {
@@ -624,7 +656,7 @@ func (jm *JobController) manageJob(activePods []*v1.Pod, succeeded int32, job *b
 		for i := int32(0); i < diff; i++ {
 			go func() {
 				defer wait.Done()
-				err := jm.podControl.CreatePodsWithControllerRef(job.Namespace, &job.Spec.Template, job, newControllerRef(job))
+				err := jm.podControl.CreatePodsWithControllerRef(job.Namespace, &job.Spec.Template, job, metav1.NewControllerRef(job, controllerKind))
 				if err != nil && errors.IsTimeout(err) {
 					// Pod is created but its initialization has timed out.
 					// If the initialization is successful eventually, the
@@ -685,8 +717,8 @@ func (o byCreationTimestamp) Len() int      { return len(o) }
 func (o byCreationTimestamp) Swap(i, j int) { o[i], o[j] = o[j], o[i] }
 
 func (o byCreationTimestamp) Less(i, j int) bool {
-	if o[i].CreationTimestamp.Equal(o[j].CreationTimestamp) {
+	if o[i].CreationTimestamp.Equal(&o[j].CreationTimestamp) {
 		return o[i].Name < o[j].Name
 	}
-	return o[i].CreationTimestamp.Before(o[j].CreationTimestamp)
+	return o[i].CreationTimestamp.Before(&o[j].CreationTimestamp)
 }

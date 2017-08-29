@@ -32,11 +32,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-	clientretry "k8s.io/kubernetes/pkg/client/retry"
+	clientretry "k8s.io/client-go/util/retry"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = SIGDescribe("Initializers", func() {
+var _ = SIGDescribe("Initializers [Feature:Initializers]", func() {
 	f := framework.NewDefaultFramework("initializers")
 
 	// TODO: Add failure traps once we have JustAfterEach
@@ -261,6 +261,29 @@ var _ = SIGDescribe("Initializers", func() {
 		pods, err := c.Core().Pods(ns).List(listOptions)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(pods.Items)).Should(Equal(1))
+	})
+
+	It("will be set to nil if a patch removes the last pending initializer", func() {
+		ns := f.Namespace.Name
+		c := f.ClientSet
+
+		podName := "to-be-patch-initialized-pod"
+		framework.Logf("Creating pod %s", podName)
+
+		// TODO: lower the timeout so that the server responds faster.
+		_, err := c.CoreV1().Pods(ns).Create(newUninitializedPod(podName))
+		if err != nil && !errors.IsTimeout(err) {
+			framework.Failf("expect err to be timeout error, got %v", err)
+		}
+		uninitializedPod, err := c.CoreV1().Pods(ns).Get(podName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(uninitializedPod.Initializers).NotTo(BeNil())
+		Expect(len(uninitializedPod.Initializers.Pending)).Should(Equal(1))
+
+		patch := fmt.Sprintf(`{"metadata":{"initializers":{"pending":[{"$patch":"delete","name":"%s"}]}}}`, uninitializedPod.Initializers.Pending[0].Name)
+		patchedPod, err := c.CoreV1().Pods(ns).Patch(uninitializedPod.Name, types.StrategicMergePatchType, []byte(patch))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(patchedPod.Initializers).To(BeNil())
 	})
 })
 
