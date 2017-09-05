@@ -309,10 +309,7 @@ clean:
 else
 clean: clean_meta
 	build/make-clean.sh
-	rm -rf $(OUT_DIR)
-	rm -rf Godeps/_workspace # Just until we are sure it is gone
-	# TODO(thockin): Remove this when we call clean_generated.
-	rm -f pkg/generated/openapi/zz_generated.openapi.go
+	git clean -Xdf
 endif
 
 define CLEAN_META_HELP_INFO
@@ -525,7 +522,7 @@ bazel-build:
 	@echo "$$BAZEL_BUILD_HELP_INFO"
 else
 bazel-build:
-	bazel build //cmd/... //pkg/... //federation/... //plugin/... //third_party/... //examples/... //test/... //vendor/k8s.io/...
+	bazel build //cmd/... //hack/... //pkg/... //federation/... //plugin/... //third_party/... //examples/... //test/... //vendor/k8s.io/...
 endif
 
 

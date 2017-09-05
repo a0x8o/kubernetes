@@ -7,9 +7,9 @@ http_archive(
 
 http_archive(
     name = "io_kubernetes_build",
-    sha256 = "5ba54d17d582ec099ba65d4e409e318e209216b15be819c922a5baae3f4d4283",
-    strip_prefix = "repo-infra-e9d1a126ef355ff5d38e20612c889b07728225a4",
-    urls = ["https://github.com/kubernetes/repo-infra/archive/e9d1a126ef355ff5d38e20612c889b07728225a4.tar.gz"],
+    sha256 = "ca8fa1ee0928220d77fcaa6bcf40a26c57800c024e21b08c8dd9cc8fbf910236",
+    strip_prefix = "repo-infra-0aafaab9e158d3628804242c6a9c4dd3eb8bce1f",
+    urls = ["https://github.com/kubernetes/repo-infra/archive/0aafaab9e158d3628804242c6a9c4dd3eb8bce1f.tar.gz"],
 )
 
 ETCD_VERSION = "3.0.17"
@@ -56,10 +56,10 @@ http_file(
 
 docker_pull(
     name = "debian-iptables-amd64",
-    digest = "sha256:bc20977ac38abfb43071b4c61c4b7edb30af894c05eb06758dd61d05118d2842",
+    digest = "sha256:2e747bc7455b46350d8e57f05c03e109fa306861e7b2a2e8e1cd563932170cf1",
     registry = "gcr.io",
     repository = "google-containers/debian-iptables-amd64",
-    tag = "v7",  # ignored, but kept here for documentation
+    tag = "v8",  # ignored, but kept here for documentation
 )
 
 docker_pull(

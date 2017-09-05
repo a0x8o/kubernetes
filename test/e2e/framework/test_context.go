@@ -235,7 +235,7 @@ func RegisterClusterFlags() {
 	flag.StringVar(&cloudConfig.NodeInstanceGroup, "node-instance-group", "", "Name of the managed instance group for nodes. Valid only for gce, gke or aws. If there is more than one group: comma separated list of groups.")
 	flag.StringVar(&cloudConfig.Network, "network", "e2e", "The cloud provider network for this e2e cluster.")
 	flag.IntVar(&cloudConfig.NumNodes, "num-nodes", -1, "Number of nodes in the cluster")
-	flag.StringVar(&cloudConfig.ClusterIPRange, "cluster-ip-range", "10.100.0.0/14", "A CIDR notation IP range from which to assign IPs in the cluster.")
+	flag.StringVar(&cloudConfig.ClusterIPRange, "cluster-ip-range", "10.64.0.0/14", "A CIDR notation IP range from which to assign IPs in the cluster.")
 	flag.StringVar(&cloudConfig.NodeTag, "node-tag", "", "Network tags used on node instances. Valid only for gce, gke")
 	flag.StringVar(&cloudConfig.MasterTag, "master-tag", "", "Network tags used on master instances. Valid only for gce, gke")
 
@@ -300,5 +300,9 @@ func AfterReadingAllFlags(t *TestContextType) {
 	// Only set a default host if one won't be supplied via kubeconfig
 	if len(t.Host) == 0 && len(t.KubeConfig) == 0 {
 		t.Host = defaultHost
+	}
+	// Reset the cluster IP range flag to CLUSTER_IP_RANGE env var, if defined.
+	if clusterIPRange := os.Getenv("CLUSTER_IP_RANGE"); clusterIPRange != "" {
+		t.CloudConfig.ClusterIPRange = clusterIPRange
 	}
 }

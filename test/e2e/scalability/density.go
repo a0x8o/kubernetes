@@ -147,7 +147,7 @@ func density30AddonResourceVerifier(numNodes int) map[string]framework.ResourceC
 	}
 	constraints["l7-lb-controller"] = framework.ResourceConstraint{
 		CPUConstraint:    0.15,
-		MemoryConstraint: 75 * (1024 * 1024),
+		MemoryConstraint: (75 + uint64(math.Ceil(0.6*float64(numNodes)))) * (1024 * 1024),
 	}
 	constraints["influxdb"] = framework.ResourceConstraint{
 		CPUConstraint:    2,
@@ -328,7 +328,7 @@ var _ = SIGDescribe("Density", func() {
 
 		summaries := make([]framework.TestDataSummary, 0, 2)
 		// Verify latency metrics.
-		highLatencyRequests, metrics, err := framework.HighLatencyRequests(c)
+		highLatencyRequests, metrics, err := framework.HighLatencyRequests(c, nodeCount)
 		framework.ExpectNoError(err)
 		if err == nil {
 			summaries = append(summaries, metrics)
@@ -582,7 +582,7 @@ var _ = SIGDescribe("Density", func() {
 							var startTime metav1.Time
 							for _, cs := range p.Status.ContainerStatuses {
 								if cs.State.Running != nil {
-									if startTime.Before(cs.State.Running.StartedAt) {
+									if startTime.Before(&cs.State.Running.StartedAt) {
 										startTime = cs.State.Running.StartedAt
 									}
 								}

@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"crypto/tls"
@@ -46,6 +47,8 @@ import (
 	"k8s.io/kubernetes/pkg/api/validation"
 	authzmodes "k8s.io/kubernetes/pkg/kubeapiserver/authorizer/modes"
 	"k8s.io/kubernetes/pkg/util/initsystem"
+	versionutil "k8s.io/kubernetes/pkg/util/version"
+	kubeadmversion "k8s.io/kubernetes/pkg/version"
 	schoptions "k8s.io/kubernetes/plugin/cmd/kube-scheduler/app/options"
 	"k8s.io/kubernetes/test/e2e_node/system"
 )
@@ -394,6 +397,66 @@ func (sysver SystemVerificationCheck) Check() (warnings, errors []error) {
 	return warns, nil
 }
 
+type KubernetesVersionCheck struct {
+	KubeadmVersion    string
+	KubernetesVersion string
+}
+
+func (kubever KubernetesVersionCheck) Check() (warnings, errors []error) {
+
+	// Skip this check for "super-custom builds", where apimachinery/the overall codebase version is not set.
+	if strings.HasPrefix(kubever.KubeadmVersion, "v0.0.0") {
+		return nil, nil
+	}
+
+	kadmVersion, err := versionutil.ParseSemantic(kubever.KubeadmVersion)
+	if err != nil {
+		return nil, []error{fmt.Errorf("couldn't parse kubeadm version %q: %v", kubever.KubeadmVersion, err)}
+	}
+
+	k8sVersion, err := versionutil.ParseSemantic(kubever.KubernetesVersion)
+	if err != nil {
+		return nil, []error{fmt.Errorf("couldn't parse kubernetes version %q: %v", kubever.KubernetesVersion, err)}
+	}
+
+	// Checks if k8sVersion greater or equal than the first unsupported versions by current version of kubeadm,
+	// that is major.minor+1 (all patch and pre-releases versions included)
+	// NB. in semver patches number is a numeric, while prerelease is a string where numeric identifiers always have lower precedence than non-numeric identifiers.
+	//     thus setting the value to x.y.0-0 we are defining the very first patch - prereleases within x.y minor release.
+	firstUnsupportedVersion := versionutil.MustParseSemantic(fmt.Sprintf("%d.%d.%s", kadmVersion.Major(), kadmVersion.Minor()+1, "0-0"))
+	if k8sVersion.AtLeast(firstUnsupportedVersion) {
+		return []error{fmt.Errorf("kubernetes version is greater than kubeadm version. Please consider to upgrade kubeadm. kubernetes version: %s. Kubeadm version: %d.%d.x", k8sVersion, kadmVersion.Components()[0], kadmVersion.Components()[1])}, nil
+	}
+
+	return nil, nil
+}
+
+// SwapCheck warns if swap is enabled
+type SwapCheck struct{}
+
+func (swc SwapCheck) Check() (warnings, errors []error) {
+	f, err := os.Open("/proc/swaps")
+	if err != nil {
+		// /proc/swaps not available, thus no reasons to warn
+		return nil, nil
+	}
+	defer f.Close()
+	var buf []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		buf = append(buf, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, []error{fmt.Errorf("error parsing /proc/swaps: %v", err)}
+	}
+
+	if len(buf) > 1 {
+		return []error{fmt.Errorf("Running with swap on is not supported. Please disable swap or set kubelet's --fail-swap-on flag to false.")}, nil
+	}
+
+	return nil, nil
+}
+
 type etcdVersionResponse struct {
 	Etcdserver  string `json:"etcdserver"`
 	Etcdcluster string `json:"etcdcluster"`
@@ -534,6 +597,7 @@ func RunInitMasterChecks(cfg *kubeadmapi.MasterConfiguration) error {
 	}
 
 	checks := []Checker{
+		KubernetesVersionCheck{KubernetesVersion: cfg.KubernetesVersion, KubeadmVersion: kubeadmversion.Get().GitVersion},
 		SystemVerificationCheck{},
 		IsRootCheck{},
 		HostnameCheck{nodeName: cfg.NodeName},
@@ -548,6 +612,7 @@ func RunInitMasterChecks(cfg *kubeadmapi.MasterConfiguration) error {
 		DirAvailableCheck{Path: filepath.Join(kubeadmconstants.KubernetesDir, kubeadmconstants.ManifestsSubDirName)},
 		DirAvailableCheck{Path: "/var/lib/kubelet"},
 		FileContentCheck{Path: bridgenf, Content: []byte{'1'}},
+		SwapCheck{},
 		InPathCheck{executable: "ip", mandatory: true},
 		InPathCheck{executable: "iptables", mandatory: true},
 		InPathCheck{executable: "mount", mandatory: true},
@@ -608,6 +673,7 @@ func RunJoinNodeChecks(cfg *kubeadmapi.NodeConfiguration) error {
 		FileAvailableCheck{Path: cfg.CACertPath},
 		FileAvailableCheck{Path: filepath.Join(kubeadmconstants.KubernetesDir, kubeadmconstants.KubeletKubeConfigFileName)},
 		FileContentCheck{Path: bridgenf, Content: []byte{'1'}},
+		SwapCheck{},
 		InPathCheck{executable: "ip", mandatory: true},
 		InPathCheck{executable: "iptables", mandatory: true},
 		InPathCheck{executable: "mount", mandatory: true},

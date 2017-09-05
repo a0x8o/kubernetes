@@ -75,7 +75,6 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
-	nodeutil "k8s.io/kubernetes/pkg/api/v1/node"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	batchinternal "k8s.io/kubernetes/pkg/apis/batch"
 	extensionsinternal "k8s.io/kubernetes/pkg/apis/extensions"
@@ -96,6 +95,7 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/scheduler/schedulercache"
 	"k8s.io/kubernetes/test/e2e/framework/ginkgowrapper"
 	testutil "k8s.io/kubernetes/test/utils"
+	imageutils "k8s.io/kubernetes/test/utils/image"
 	uexec "k8s.io/utils/exec"
 )
 
@@ -179,8 +179,6 @@ const (
 	// TODO(justinsb): Avoid hardcoding this.
 	awsMasterIP = "172.20.0.9"
 
-	// Serve hostname image name
-	ServeHostnameImage = "gcr.io/google_containers/serve_hostname:v1.4"
 	// ssh port
 	sshPort = "22"
 
@@ -192,6 +190,7 @@ const (
 )
 
 var (
+	BusyBoxImage = imageutils.GetBusyBoxImage()
 	// Label allocated to the image puller static pod that runs on each node
 	// before e2es.
 	ImagePullerLabels = map[string]string{"name": "e2e-image-puller"}
@@ -205,6 +204,9 @@ var (
 		regexp.MustCompile(".*fluentd-elasticsearch.*"),
 		regexp.MustCompile(".*node-problem-detector.*"),
 	}
+
+	// Serve hostname image name
+	ServeHostnameImage = imageutils.GetE2EImage(imageutils.ServeHostname)
 )
 
 type Address struct {
@@ -418,7 +420,7 @@ func ProxyMode(f *Framework) (string, error) {
 			Containers: []v1.Container{
 				{
 					Name:    "detector",
-					Image:   "gcr.io/google_containers/e2e-net-amd64:1.0",
+					Image:   imageutils.GetE2EImage(imageutils.Net),
 					Command: []string{"/bin/sleep", "3600"},
 				},
 			},
@@ -1130,6 +1132,28 @@ func countRemainingPods(c clientset.Interface, namespace string) (int, int, erro
 	return numPods, missingTimestamp, nil
 }
 
+// isDynamicDiscoveryError returns true if the error is a group discovery error
+// only for groups expected to be created/deleted dynamically during e2e tests
+func isDynamicDiscoveryError(err error) bool {
+	if !discovery.IsGroupDiscoveryFailedError(err) {
+		return false
+	}
+	discoveryErr := err.(*discovery.ErrGroupDiscoveryFailed)
+	for gv := range discoveryErr.Groups {
+		switch gv.Group {
+		case "mygroup.example.com":
+			// custom_resource_definition
+			// garbage_collector
+		case "wardle.k8s.io":
+			// aggregator
+		default:
+			Logf("discovery error for unexpected group: %#v", gv)
+			return false
+		}
+	}
+	return false
+}
+
 // hasRemainingContent checks if there is remaining content in the namespace via API discovery
 func hasRemainingContent(c clientset.Interface, clientPool dynamic.ClientPool, namespace string) (bool, error) {
 	// some tests generate their own framework.Client rather than the default
@@ -1140,11 +1164,11 @@ func hasRemainingContent(c clientset.Interface, clientPool dynamic.ClientPool, n
 
 	// find out what content is supported on the server
 	resources, err := c.Discovery().ServerPreferredNamespacedResources()
-	if err != nil {
+	if err != nil && !isDynamicDiscoveryError(err) {
 		return false, err
 	}
 	groupVersionResources, err := discovery.GroupVersionResources(resources)
-	if err != nil {
+	if err != nil && !isDynamicDiscoveryError(err) {
 		return false, err
 	}
 
@@ -2282,10 +2306,10 @@ func (o byFirstTimestamp) Len() int      { return len(o) }
 func (o byFirstTimestamp) Swap(i, j int) { o[i], o[j] = o[j], o[i] }
 
 func (o byFirstTimestamp) Less(i, j int) bool {
-	if o[i].FirstTimestamp.Equal(o[j].FirstTimestamp) {
+	if o[i].FirstTimestamp.Equal(&o[j].FirstTimestamp) {
 		return o[i].InvolvedObject.Name < o[j].InvolvedObject.Name
 	}
-	return o[i].FirstTimestamp.Before(o[j].FirstTimestamp)
+	return o[i].FirstTimestamp.Before(&o[j].FirstTimestamp)
 }
 
 func dumpAllPodInfo(c clientset.Interface) {
@@ -2487,10 +2511,7 @@ func WaitForAllNodesSchedulable(c clientset.Interface, timeout time.Duration) er
 				Logf("================================")
 			}
 		}
-		if len(notSchedulable) > TestContext.AllowedNotReadyNodes {
-			return false, nil
-		}
-		return allowedNotReadyReasons(notSchedulable), nil
+		return len(notSchedulable) <= TestContext.AllowedNotReadyNodes, nil
 	})
 }
 
@@ -3264,7 +3285,7 @@ func NewHostExecPodSpec(ns, name string) *v1.Pod {
 			Containers: []v1.Container{
 				{
 					Name:            "hostexec",
-					Image:           "gcr.io/google_containers/hostexec:1.2",
+					Image:           imageutils.GetE2EImage(imageutils.Hostexec),
 					ImagePullPolicy: v1.PullIfNotPresent,
 				},
 			},
@@ -3288,6 +3309,24 @@ func RunHostCmdOrDie(ns, name, cmd string) string {
 	Logf("stdout: %v", stdout)
 	ExpectNoError(err)
 	return stdout
+}
+
+// RunHostCmdWithRetries calls RunHostCmd until it succeeds or a built-in timeout expires.
+// This can be used with idempotent commands to deflake transient connection issues.
+func RunHostCmdWithRetries(ns, name, cmd string, interval time.Duration, maxTries int) (string, error) {
+	tries := 0
+	for {
+		out, err := RunHostCmd(ns, name, cmd)
+		if err == nil {
+			return out, nil
+		}
+		tries++
+		if tries >= maxTries {
+			return out, fmt.Errorf("RunHostCmd still failed after %d tries: %v", tries, err)
+		}
+		Logf("Waiting %v to retry failed RunHostCmd (attempt %d): %v", interval, tries, err)
+		time.Sleep(interval)
+	}
 }
 
 // LaunchHostExecPod launches a hostexec pod in the given namespace and waits
@@ -3314,7 +3353,7 @@ func newExecPodSpec(ns, generateName string) *v1.Pod {
 			Containers: []v1.Container{
 				{
 					Name:    "exec",
-					Image:   "gcr.io/google_containers/busybox:1.24",
+					Image:   BusyBoxImage,
 					Command: []string{"sh", "-c", "while true; do sleep 5; done"},
 				},
 			},
@@ -3579,23 +3618,6 @@ func WaitForNodeToBe(c clientset.Interface, name string, conditionType v1.NodeCo
 	return false
 }
 
-// Checks whether not-ready nodes can be ignored while checking if all nodes are
-// ready (we allow e.g. for incorrect provisioning of some small percentage of nodes
-// while validating cluster, and those nodes may never become healthy).
-// Currently we allow only for:
-// - not present CNI plugins on node
-// TODO: we should extend it for other reasons.
-func allowedNotReadyReasons(nodes []*v1.Node) bool {
-	for _, node := range nodes {
-		index, condition := nodeutil.GetNodeCondition(&node.Status, v1.NodeReady)
-		if index == -1 ||
-			!strings.Contains(condition.Message, "could not locate kubenet required CNI plugins") {
-			return false
-		}
-	}
-	return true
-}
-
 // Checks whether all registered nodes are ready.
 // TODO: we should change the AllNodesReady call in AfterEach to WaitForAllNodesHealthy,
 // and figure out how to do it in a configurable way, as we can't expect all setups to run
@@ -3625,19 +3647,14 @@ func AllNodesReady(c clientset.Interface, timeout time.Duration) error {
 		// of nodes (which we allow in cluster validation). Some nodes that are not
 		// provisioned correctly at startup will never become ready (e.g. when something
 		// won't install correctly), so we can't expect them to be ready at any point.
-		//
-		// However, we only allow non-ready nodes with some specific reasons.
-		if len(notReady) > TestContext.AllowedNotReadyNodes {
-			return false, nil
-		}
-		return allowedNotReadyReasons(notReady), nil
+		return len(notReady) <= TestContext.AllowedNotReadyNodes, nil
 	})
 
 	if err != nil && err != wait.ErrWaitTimeout {
 		return err
 	}
 
-	if len(notReady) > TestContext.AllowedNotReadyNodes || !allowedNotReadyReasons(notReady) {
+	if len(notReady) > TestContext.AllowedNotReadyNodes {
 		msg := ""
 		for _, node := range notReady {
 			msg = fmt.Sprintf("%s, %s", msg, node.Name)
@@ -3900,9 +3917,26 @@ func WaitForControllerManagerUp() error {
 	return fmt.Errorf("waiting for controller-manager timed out")
 }
 
-// WaitForClusterSize waits until the cluster has desired size and there is no not-ready nodes in it.
+// Returns number of ready Nodes excluding Master Node.
+func NumberOfReadyNodes(c clientset.Interface) (int, error) {
+	nodes, err := c.Core().Nodes().List(metav1.ListOptions{FieldSelector: fields.Set{
+		"spec.unschedulable": "false",
+	}.AsSelector().String()})
+	if err != nil {
+		Logf("Failed to list nodes: %v", err)
+		return 0, err
+	}
+
+	// Filter out not-ready nodes.
+	FilterNodes(nodes, func(node v1.Node) bool {
+		return IsNodeConditionSetAsExpected(&node, v1.NodeReady, true)
+	})
+	return len(nodes.Items), nil
+}
+
+// WaitForReadyNodes waits until the cluster has desired size and there is no not-ready nodes in it.
 // By cluster size we mean number of Nodes excluding Master Node.
-func WaitForClusterSize(c clientset.Interface, size int, timeout time.Duration) error {
+func WaitForReadyNodes(c clientset.Interface, size int, timeout time.Duration) error {
 	for start := time.Now(); time.Since(start) < timeout; time.Sleep(20 * time.Second) {
 		nodes, err := c.Core().Nodes().List(metav1.ListOptions{FieldSelector: fields.Set{
 			"spec.unschedulable": "false",
@@ -3920,12 +3954,12 @@ func WaitForClusterSize(c clientset.Interface, size int, timeout time.Duration) 
 		numReady := len(nodes.Items)
 
 		if numNodes == size && numReady == size {
-			Logf("Cluster has reached the desired size %d", size)
+			Logf("Cluster has reached the desired number of ready nodes %d", size)
 			return nil
 		}
-		Logf("Waiting for cluster size %d, current size %d, not ready nodes %d", size, numNodes, numNodes-numReady)
+		Logf("Waiting for ready nodes %d, current ready %d, not ready nodes %d", size, numNodes, numNodes-numReady)
 	}
-	return fmt.Errorf("timeout waiting %v for cluster size to be %d", timeout, size)
+	return fmt.Errorf("timeout waiting %v for number of ready nodes to be %d", timeout, size)
 }
 
 func GenerateMasterRegexp(prefix string) string {
@@ -4416,7 +4450,7 @@ func LaunchWebserverPod(f *Framework, podName, nodeName string) (ip string) {
 			Containers: []v1.Container{
 				{
 					Name:  containerName,
-					Image: "gcr.io/google_containers/porter:4524579c0eb935c056c8e75563b4e1eda31587e0",
+					Image: imageutils.GetE2EImage(imageutils.Porter),
 					Env:   []v1.EnvVar{{Name: fmt.Sprintf("SERVE_PORT_%d", port), Value: "foo"}},
 					Ports: []v1.ContainerPort{{ContainerPort: int32(port)}},
 				},
@@ -4459,7 +4493,7 @@ func CheckConnectivityToHost(f *Framework, nodeName, podName, host string, timeo
 			Containers: []v1.Container{
 				{
 					Name:    contName,
-					Image:   "gcr.io/google_containers/busybox:1.24",
+					Image:   BusyBoxImage,
 					Command: command,
 				},
 			},
@@ -4768,7 +4802,7 @@ func CleanupGCEResources(c clientset.Interface, loadBalancerName, zone string) (
 		retErr = fmt.Errorf("%v\n%v", retErr, err)
 		return
 	}
-	if err := gceCloud.DeleteExternalTargetPoolAndChecks(loadBalancerName, region, clusterID, hcNames...); err != nil &&
+	if err := gceCloud.DeleteExternalTargetPoolAndChecks(nil, loadBalancerName, region, clusterID, hcNames...); err != nil &&
 		!IsGoogleAPIHTTPErrorCode(err, http.StatusNotFound) {
 		retErr = fmt.Errorf("%v\n%v", retErr, err)
 	}

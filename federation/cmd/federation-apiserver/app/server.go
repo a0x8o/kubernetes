@@ -30,6 +30,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	appsv1beta2 "k8s.io/api/apps/v1beta2"
 	apiv1 "k8s.io/api/core/v1"
 	extensionsapiv1beta1 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -189,7 +190,7 @@ func NonBlockingRun(s *options.ServerRunOptions, stopCh <-chan struct{}) error {
 	sharedInformers := informers.NewSharedInformerFactory(client, 10*time.Minute)
 
 	authorizationConfig := s.Authorization.ToAuthorizationConfig(sharedInformers)
-	apiAuthorizer, err := authorizationConfig.New()
+	apiAuthorizer, _, err := authorizationConfig.New()
 	if err != nil {
 		return fmt.Errorf("invalid Authorization Config: %v", err)
 	}
@@ -285,6 +286,12 @@ func defaultResourceConfig() *serverstorage.ResourceConfig {
 		extensionsapiv1beta1.SchemeGroupVersion.WithResource("deployments"),
 		extensionsapiv1beta1.SchemeGroupVersion.WithResource("ingresses"),
 		extensionsapiv1beta1.SchemeGroupVersion.WithResource("replicasets"),
+	)
+	// All apps resources except these are disabled by default.
+	rc.EnableResources(
+		appsv1beta2.SchemeGroupVersion.WithResource("daemonsets"),
+		appsv1beta2.SchemeGroupVersion.WithResource("deployments"),
+		appsv1beta2.SchemeGroupVersion.WithResource("replicasets"),
 	)
 	return rc
 }

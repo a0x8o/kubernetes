@@ -53,13 +53,19 @@ var upgradeTests = []upgrades.Test{
 	&upgrades.AppArmorUpgradeTest{},
 }
 
-var _ = framework.KubeDescribe("Upgrade [Feature:Upgrade]", func() {
+var statefulsetUpgradeTests = []upgrades.Test{
+	&upgrades.MySqlUpgradeTest{},
+	&upgrades.EtcdUpgradeTest{},
+	&upgrades.CassandraUpgradeTest{},
+}
+
+var _ = SIGDescribe("Upgrade [Feature:Upgrade]", func() {
 	f := framework.NewDefaultFramework("cluster-upgrade")
 
 	// Create the frameworks here because we can only create them
 	// in a "Describe".
-	testFrameworks := createUpgradeFrameworks()
-	SIGDescribe("master upgrade", func() {
+	testFrameworks := createUpgradeFrameworks(upgradeTests)
+	Describe("master upgrade", func() {
 		It("should maintain a functioning cluster [Feature:MasterUpgrade]", func() {
 			upgCtx, err := getUpgradeContext(f.ClientSet.Discovery(), framework.TestContext.UpgradeTarget)
 			framework.ExpectNoError(err)
@@ -78,11 +84,11 @@ var _ = framework.KubeDescribe("Upgrade [Feature:Upgrade]", func() {
 				framework.ExpectNoError(framework.MasterUpgrade(target))
 				framework.ExpectNoError(framework.CheckMasterVersion(f.ClientSet, target))
 			}
-			runUpgradeSuite(f, testFrameworks, testSuite, upgCtx, upgrades.MasterUpgrade, upgradeFunc)
+			runUpgradeSuite(f, upgradeTests, testFrameworks, testSuite, upgCtx, upgrades.MasterUpgrade, upgradeFunc)
 		})
 	})
 
-	SIGDescribe("node upgrade", func() {
+	Describe("node upgrade", func() {
 		It("should maintain a functioning cluster [Feature:NodeUpgrade]", func() {
 			upgCtx, err := getUpgradeContext(f.ClientSet.Discovery(), framework.TestContext.UpgradeTarget)
 			framework.ExpectNoError(err)
@@ -100,11 +106,11 @@ var _ = framework.KubeDescribe("Upgrade [Feature:Upgrade]", func() {
 				framework.ExpectNoError(framework.NodeUpgrade(f, target, framework.TestContext.UpgradeImage))
 				framework.ExpectNoError(framework.CheckNodesVersions(f.ClientSet, target))
 			}
-			runUpgradeSuite(f, testFrameworks, testSuite, upgCtx, upgrades.NodeUpgrade, upgradeFunc)
+			runUpgradeSuite(f, upgradeTests, testFrameworks, testSuite, upgCtx, upgrades.NodeUpgrade, upgradeFunc)
 		})
 	})
 
-	SIGDescribe("cluster upgrade", func() {
+	Describe("cluster upgrade", func() {
 		It("should maintain a functioning cluster [Feature:ClusterUpgrade]", func() {
 			upgCtx, err := getUpgradeContext(f.ClientSet.Discovery(), framework.TestContext.UpgradeTarget)
 			framework.ExpectNoError(err)
@@ -121,7 +127,7 @@ var _ = framework.KubeDescribe("Upgrade [Feature:Upgrade]", func() {
 				framework.ExpectNoError(framework.NodeUpgrade(f, target, framework.TestContext.UpgradeImage))
 				framework.ExpectNoError(framework.CheckNodesVersions(f.ClientSet, target))
 			}
-			runUpgradeSuite(f, testFrameworks, testSuite, upgCtx, upgrades.ClusterUpgrade, upgradeFunc)
+			runUpgradeSuite(f, upgradeTests, testFrameworks, testSuite, upgCtx, upgrades.ClusterUpgrade, upgradeFunc)
 		})
 	})
 })
@@ -131,9 +137,9 @@ var _ = SIGDescribe("Downgrade [Feature:Downgrade]", func() {
 
 	// Create the frameworks here because we can only create them
 	// in a "Describe".
-	testFrameworks := createUpgradeFrameworks()
+	testFrameworks := createUpgradeFrameworks(upgradeTests)
 
-	SIGDescribe("cluster downgrade", func() {
+	Describe("cluster downgrade", func() {
 		It("should maintain a functioning cluster [Feature:ClusterDowngrade]", func() {
 			upgCtx, err := getUpgradeContext(f.ClientSet.Discovery(), framework.TestContext.UpgradeTarget)
 			framework.ExpectNoError(err)
@@ -152,7 +158,7 @@ var _ = SIGDescribe("Downgrade [Feature:Downgrade]", func() {
 				framework.ExpectNoError(framework.MasterUpgrade(target))
 				framework.ExpectNoError(framework.CheckMasterVersion(f.ClientSet, target))
 			}
-			runUpgradeSuite(f, testFrameworks, testSuite, upgCtx, upgrades.ClusterUpgrade, upgradeFunc)
+			runUpgradeSuite(f, upgradeTests, testFrameworks, testSuite, upgCtx, upgrades.ClusterUpgrade, upgradeFunc)
 		})
 	})
 })
@@ -162,8 +168,8 @@ var _ = SIGDescribe("etcd Upgrade [Feature:EtcdUpgrade]", func() {
 
 	// Create the frameworks here because we can only create them
 	// in a "Describe".
-	testFrameworks := createUpgradeFrameworks()
-	SIGDescribe("etcd upgrade", func() {
+	testFrameworks := createUpgradeFrameworks(upgradeTests)
+	Describe("etcd upgrade", func() {
 		It("should maintain a functioning cluster", func() {
 			upgCtx, err := getUpgradeContext(f.ClientSet.Discovery(), "")
 			framework.ExpectNoError(err)
@@ -177,7 +183,98 @@ var _ = SIGDescribe("etcd Upgrade [Feature:EtcdUpgrade]", func() {
 				defer finalizeUpgradeTest(start, etcdTest)
 				framework.ExpectNoError(framework.EtcdUpgrade(framework.TestContext.EtcdUpgradeStorage, framework.TestContext.EtcdUpgradeVersion))
 			}
-			runUpgradeSuite(f, testFrameworks, testSuite, upgCtx, upgrades.EtcdUpgrade, upgradeFunc)
+			runUpgradeSuite(f, upgradeTests, testFrameworks, testSuite, upgCtx, upgrades.EtcdUpgrade, upgradeFunc)
+		})
+	})
+})
+
+var _ = Describe("[sig-apps] stateful Upgrade [Feature:StatefulUpgrade]", func() {
+	f := framework.NewDefaultFramework("stateful-upgrade")
+
+	// Create the frameworks here because we can only create them
+	// in a "Describe".
+	testFrameworks := createUpgradeFrameworks(statefulsetUpgradeTests)
+	framework.KubeDescribe("stateful upgrade", func() {
+		It("should maintain a functioning cluster", func() {
+			upgCtx, err := getUpgradeContext(f.ClientSet.Discovery(), framework.TestContext.UpgradeTarget)
+			framework.ExpectNoError(err)
+
+			testSuite := &junit.TestSuite{Name: "Stateful upgrade"}
+			statefulUpgradeTest := &junit.TestCase{Name: "[sig-apps] stateful-upgrade", Classname: "upgrade_tests"}
+			testSuite.TestCases = append(testSuite.TestCases, statefulUpgradeTest)
+			upgradeFunc := func() {
+				start := time.Now()
+				defer finalizeUpgradeTest(start, statefulUpgradeTest)
+				target := upgCtx.Versions[1].Version.String()
+				framework.ExpectNoError(framework.MasterUpgrade(target))
+				framework.ExpectNoError(framework.CheckMasterVersion(f.ClientSet, target))
+				framework.ExpectNoError(framework.NodeUpgrade(f, target, framework.TestContext.UpgradeImage))
+				framework.ExpectNoError(framework.CheckNodesVersions(f.ClientSet, target))
+			}
+			runUpgradeSuite(f, statefulsetUpgradeTests, testFrameworks, testSuite, upgCtx, upgrades.ClusterUpgrade, upgradeFunc)
+		})
+	})
+})
+
+var _ = SIGDescribe("kube-proxy migration [Feature:KubeProxyDaemonSetMigration]", func() {
+	f := framework.NewDefaultFramework("kube-proxy-ds-migration")
+
+	// Create the frameworks here because we can only create them
+	// in a "Describe".
+	testFrameworks := createUpgradeFrameworks(upgradeTests)
+
+	BeforeEach(func() {
+		framework.SkipUnlessProviderIs("gce")
+	})
+
+	Describe("Upgrade kube-proxy from static pods to a DaemonSet", func() {
+		It("should maintain a functioning cluster [Feature:KubeProxyDaemonSetUpgrade]", func() {
+			upgCtx, err := getUpgradeContext(f.ClientSet.Discovery(), framework.TestContext.UpgradeTarget)
+			framework.ExpectNoError(err)
+
+			testSuite := &junit.TestSuite{Name: "kube-proxy upgrade"}
+			kubeProxyUpgradeTest := &junit.TestCase{
+				Name:      "kube-proxy-ds-upgrade",
+				Classname: "upgrade_tests",
+			}
+			testSuite.TestCases = append(testSuite.TestCases, kubeProxyUpgradeTest)
+
+			upgradeFunc := func() {
+				start := time.Now()
+				defer finalizeUpgradeTest(start, kubeProxyUpgradeTest)
+				target := upgCtx.Versions[1].Version.String()
+				framework.ExpectNoError(framework.MasterUpgradeGCEWithKubeProxyDaemonSet(target, true))
+				framework.ExpectNoError(framework.CheckMasterVersion(f.ClientSet, target))
+				framework.ExpectNoError(framework.NodeUpgradeGCEWithKubeProxyDaemonSet(f, target, true))
+				framework.ExpectNoError(framework.CheckNodesVersions(f.ClientSet, target))
+			}
+			runUpgradeSuite(f, upgradeTests, testFrameworks, testSuite, upgCtx, upgrades.ClusterUpgrade, upgradeFunc)
+		})
+	})
+
+	Describe("Downgrade kube-proxy from a DaemonSet to static pods", func() {
+		It("should maintain a functioning cluster [Feature:KubeProxyDaemonSetDowngrade]", func() {
+			upgCtx, err := getUpgradeContext(f.ClientSet.Discovery(), framework.TestContext.UpgradeTarget)
+			framework.ExpectNoError(err)
+
+			testSuite := &junit.TestSuite{Name: "kube-proxy downgrade"}
+			kubeProxyDowngradeTest := &junit.TestCase{
+				Name:      "kube-proxy-ds-downgrade",
+				Classname: "upgrade_tests",
+			}
+			testSuite.TestCases = append(testSuite.TestCases, kubeProxyDowngradeTest)
+
+			upgradeFunc := func() {
+				start := time.Now()
+				defer finalizeUpgradeTest(start, kubeProxyDowngradeTest)
+				// Yes this really is a downgrade. And nodes must downgrade first.
+				target := upgCtx.Versions[1].Version.String()
+				framework.ExpectNoError(framework.NodeUpgradeGCEWithKubeProxyDaemonSet(f, target, false))
+				framework.ExpectNoError(framework.CheckNodesVersions(f.ClientSet, target))
+				framework.ExpectNoError(framework.MasterUpgradeGCEWithKubeProxyDaemonSet(target, false))
+				framework.ExpectNoError(framework.CheckMasterVersion(f.ClientSet, target))
+			}
+			runUpgradeSuite(f, upgradeTests, testFrameworks, testSuite, upgCtx, upgrades.ClusterUpgrade, upgradeFunc)
 		})
 	})
 })
@@ -241,10 +338,10 @@ func finalizeUpgradeTest(start time.Time, tc *junit.TestCase) {
 	}
 }
 
-func createUpgradeFrameworks() map[string]*framework.Framework {
+func createUpgradeFrameworks(tests []upgrades.Test) map[string]*framework.Framework {
 	nsFilter := regexp.MustCompile("[^[:word:]-]+") // match anything that's not a word character or hyphen
 	testFrameworks := map[string]*framework.Framework{}
-	for _, t := range upgradeTests {
+	for _, t := range tests {
 		ns := nsFilter.ReplaceAllString(t.Name(), "-") // and replace with a single hyphen
 		ns = strings.Trim(ns, "-")
 		testFrameworks[t.Name()] = framework.NewDefaultFramework(ns)
@@ -254,6 +351,7 @@ func createUpgradeFrameworks() map[string]*framework.Framework {
 
 func runUpgradeSuite(
 	f *framework.Framework,
+	tests []upgrades.Test,
 	testFrameworks map[string]*framework.Framework,
 	testSuite *junit.TestSuite,
 	upgCtx *upgrades.UpgradeContext,
@@ -264,7 +362,7 @@ func runUpgradeSuite(
 	framework.ExpectNoError(err)
 
 	cm := chaosmonkey.New(upgradeFunc)
-	for _, t := range upgradeTests {
+	for _, t := range tests {
 		testCase := &junit.TestCase{
 			Name:      t.Name(),
 			Classname: "upgrade_tests",

@@ -23,6 +23,7 @@ import (
 	extensions "k8s.io/api/extensions/v1beta1"
 	rbac "k8s.io/api/rbac/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 )
 
@@ -38,6 +39,20 @@ func CreateOrUpdateConfigMap(client clientset.Interface, cm *v1.ConfigMap) error
 
 		if _, err := client.CoreV1().ConfigMaps(cm.ObjectMeta.Namespace).Update(cm); err != nil {
 			return fmt.Errorf("unable to update configmap: %v", err)
+		}
+	}
+	return nil
+}
+
+// CreateOrUpdateSecret creates a Secret if the target resource doesn't exist. If the resource exists already, this function will update the resource instead.
+func CreateOrUpdateSecret(client clientset.Interface, secret *v1.Secret) error {
+	if _, err := client.CoreV1().Secrets(secret.ObjectMeta.Namespace).Create(secret); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return fmt.Errorf("unable to create secret: %v", err)
+		}
+
+		if _, err := client.CoreV1().Secrets(secret.ObjectMeta.Namespace).Update(secret); err != nil {
+			return fmt.Errorf("unable to update secret: %v", err)
 		}
 	}
 	return nil
@@ -81,6 +96,15 @@ func CreateOrUpdateDaemonSet(client clientset.Interface, ds *extensions.DaemonSe
 		}
 	}
 	return nil
+}
+
+// DeleteDaemonSetForeground deletes the specified DaemonSet in foreground mode; i.e. it blocks until/makes sure all the managed Pods are deleted
+func DeleteDaemonSetForeground(client clientset.Interface, namespace, name string) error {
+	foregroundDelete := metav1.DeletePropagationForeground
+	deleteOptions := &metav1.DeleteOptions{
+		PropagationPolicy: &foregroundDelete,
+	}
+	return client.ExtensionsV1beta1().DaemonSets(namespace).Delete(name, deleteOptions)
 }
 
 // CreateOrUpdateRole creates a Role if the target resource doesn't exist. If the resource exists already, this function will update the resource instead.

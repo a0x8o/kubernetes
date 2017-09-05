@@ -41,6 +41,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubernetes/pkg/api"
 	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
@@ -48,7 +49,9 @@ import (
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	"k8s.io/kubernetes/pkg/api/v1/resource"
 	"k8s.io/kubernetes/pkg/api/v1/validation"
+	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/fieldpath"
+	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/v1alpha1/runtime"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/envvars"
@@ -188,12 +191,19 @@ func makeMounts(pod *v1.Pod, podDir string, container *v1.Container, hostName, h
 			}
 		}
 
+		propagation, err := translateMountPropagation(mount.MountPropagation)
+		if err != nil {
+			return nil, err
+		}
+		glog.V(5).Infof("Pod %q container %q mount %q has propagation %q", format.Pod(pod), container.Name, mount.Name, propagation)
+
 		mounts = append(mounts, kubecontainer.Mount{
 			Name:           mount.Name,
 			ContainerPath:  containerPath,
 			HostPath:       hostPath,
 			ReadOnly:       mount.ReadOnly,
 			SELinuxRelabel: relabelVolume,
+			Propagation:    propagation,
 		})
 	}
 	if mountEtcHostsFile {
@@ -205,6 +215,26 @@ func makeMounts(pod *v1.Pod, podDir string, container *v1.Container, hostName, h
 		mounts = append(mounts, *hostsMount)
 	}
 	return mounts, nil
+}
+
+// translateMountPropagation transforms v1.MountPropagationMode to
+// runtimeapi.MountPropagation.
+func translateMountPropagation(mountMode *v1.MountPropagationMode) (runtimeapi.MountPropagation, error) {
+	if !utilfeature.DefaultFeatureGate.Enabled(features.MountPropagation) {
+		// mount propagation is disabled, use private as in the old versions
+		return runtimeapi.MountPropagation_PROPAGATION_PRIVATE, nil
+	}
+	switch {
+	case mountMode == nil:
+		// HostToContainer is the default
+		return runtimeapi.MountPropagation_PROPAGATION_HOST_TO_CONTAINER, nil
+	case *mountMode == v1.MountPropagationHostToContainer:
+		return runtimeapi.MountPropagation_PROPAGATION_HOST_TO_CONTAINER, nil
+	case *mountMode == v1.MountPropagationBidirectional:
+		return runtimeapi.MountPropagation_PROPAGATION_BIDIRECTIONAL, nil
+	default:
+		return 0, fmt.Errorf("invalid MountPropagation mode: %q", mountMode)
+	}
 }
 
 // makeHostsMount makes the mountpoint for the hosts file that the containers
@@ -233,7 +263,7 @@ func ensureHostsFile(fileName, hostIP, hostName, hostDomainName string, hostAlia
 		// if Pod is using host network, read hosts file from the node's filesystem.
 		// `etcHostsPath` references the location of the hosts file on the node.
 		// `/etc/hosts` for *nix systems.
-		hostsFileContent, err = nodeHostsFileContent(etcHostsPath)
+		hostsFileContent, err = nodeHostsFileContent(etcHostsPath, hostAliases)
 		if err != nil {
 			return err
 		}
@@ -246,8 +276,13 @@ func ensureHostsFile(fileName, hostIP, hostName, hostDomainName string, hostAlia
 }
 
 // nodeHostsFileContent reads the content of node's hosts file.
-func nodeHostsFileContent(hostsFilePath string) ([]byte, error) {
-	return ioutil.ReadFile(hostsFilePath)
+func nodeHostsFileContent(hostsFilePath string, hostAliases []v1.HostAlias) ([]byte, error) {
+	hostsFileContent, err := ioutil.ReadFile(hostsFilePath)
+	if err != nil {
+		return nil, err
+	}
+	hostsFileContent = append(hostsFileContent, hostsEntriesFromHostAliases(hostAliases)...)
+	return hostsFileContent, nil
 }
 
 // managedHostsFileContent generates the content of the managed etc hosts based on Pod IP and other
@@ -266,6 +301,19 @@ func managedHostsFileContent(hostIP, hostName, hostDomainName string, hostAliase
 	} else {
 		buffer.WriteString(fmt.Sprintf("%s\t%s\n", hostIP, hostName))
 	}
+	hostsFileContent := buffer.Bytes()
+	hostsFileContent = append(hostsFileContent, hostsEntriesFromHostAliases(hostAliases)...)
+	return hostsFileContent
+}
+
+func hostsEntriesFromHostAliases(hostAliases []v1.HostAlias) []byte {
+	if len(hostAliases) == 0 {
+		return []byte{}
+	}
+
+	var buffer bytes.Buffer
+	buffer.WriteString("\n")
+	buffer.WriteString("# Entries added by HostAliases.\n")
 	// write each IP/hostname pair as an entry into hosts file
 	for _, hostAlias := range hostAliases {
 		for _, hostname := range hostAlias.Hostnames {
@@ -333,10 +381,14 @@ func (kl *Kubelet) GetPodCgroupParent(pod *v1.Pod) string {
 // GenerateRunContainerOptions generates the RunContainerOptions, which can be used by
 // the container runtime to set parameters for launching a container.
 func (kl *Kubelet) GenerateRunContainerOptions(pod *v1.Pod, container *v1.Container, podIP string) (*kubecontainer.RunContainerOptions, bool, error) {
-	var err error
 	useClusterFirstPolicy := false
+	opts, err := kl.containerManager.GetResources(pod, container, kl.GetActivePods())
+	if err != nil {
+		return nil, false, err
+	}
+
 	cgroupParent := kl.GetPodCgroupParent(pod)
-	opts := &kubecontainer.RunContainerOptions{CgroupParent: cgroupParent}
+	opts.CgroupParent = cgroupParent
 	hostname, hostDomainName, err := kl.GeneratePodHostNameAndDomain(pod)
 	if err != nil {
 		return nil, false, err
@@ -347,19 +399,23 @@ func (kl *Kubelet) GenerateRunContainerOptions(pod *v1.Pod, container *v1.Contai
 
 	opts.PortMappings = kubecontainer.MakePortMappings(container)
 	// TODO(random-liu): Move following convert functions into pkg/kubelet/container
-	opts.Devices, err = kl.makeDevices(pod, container)
+	devices, err := kl.makeDevices(pod, container)
 	if err != nil {
 		return nil, false, err
 	}
+	opts.Devices = append(opts.Devices, devices...)
 
-	opts.Mounts, err = makeMounts(pod, kl.getPodDir(pod.UID), container, hostname, hostDomainName, podIP, volumes)
+	mounts, err := makeMounts(pod, kl.getPodDir(pod.UID), container, hostname, hostDomainName, podIP, volumes)
 	if err != nil {
 		return nil, false, err
 	}
-	opts.Envs, err = kl.makeEnvironmentVariables(pod, container, podIP)
+	opts.Mounts = append(opts.Mounts, mounts...)
+
+	envs, err := kl.makeEnvironmentVariables(pod, container, podIP)
 	if err != nil {
 		return nil, false, err
 	}
+	opts.Envs = append(opts.Envs, envs...)
 
 	// Disabling adding TerminationMessagePath on Windows as these files would be mounted as docker volume and
 	// Docker for Windows has a bug where only directories can be mounted

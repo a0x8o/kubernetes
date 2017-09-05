@@ -1,13 +1,9 @@
-package(default_visibility = ["//visibility:public"])
-
-load(
-    "@io_bazel_rules_go//go:def.bzl",
-    "go_library",
-)
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
     srcs = ["trie.go"],
+    visibility = ["//visibility:public"],
 )
 
 filegroup(
@@ -19,6 +15,10 @@ filegroup(
 
 filegroup(
     name = "all-srcs",
-    srcs = [":package-srcs"],
+    srcs = [
+        ":package-srcs",
+        "//vendor/k8s.io/kube-openapi/pkg/util/proto:all-srcs",
+    ],
     tags = ["automanaged"],
+    visibility = ["//visibility:public"],
 )

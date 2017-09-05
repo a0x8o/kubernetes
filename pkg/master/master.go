@@ -25,12 +25,14 @@ import (
 	"time"
 
 	appsv1beta1 "k8s.io/api/apps/v1beta1"
+	appsv1beta2 "k8s.io/api/apps/v1beta2"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authenticationv1beta1 "k8s.io/api/authentication/v1beta1"
 	authorizationapiv1 "k8s.io/api/authorization/v1"
 	authorizationapiv1beta1 "k8s.io/api/authorization/v1beta1"
 	autoscalingapiv1 "k8s.io/api/autoscaling/v1"
 	batchapiv1 "k8s.io/api/batch/v1"
+	batchapiv1beta1 "k8s.io/api/batch/v1beta1"
 	certificatesapiv1beta1 "k8s.io/api/certificates/v1beta1"
 	apiv1 "k8s.io/api/core/v1"
 	extensionsapiv1beta1 "k8s.io/api/extensions/v1beta1"
@@ -255,7 +257,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 	// handlers that we have.
 	restStorageProviders := []RESTStorageProvider{
 		authenticationrest.RESTStorageProvider{Authenticator: c.GenericConfig.Authenticator},
-		authorizationrest.RESTStorageProvider{Authorizer: c.GenericConfig.Authorizer},
+		authorizationrest.RESTStorageProvider{Authorizer: c.GenericConfig.Authorizer, RuleResolver: c.GenericConfig.RuleResolver},
 		autoscalingrest.RESTStorageProvider{},
 		batchrest.RESTStorageProvider{},
 		certificatesrest.RESTStorageProvider{},
@@ -277,9 +279,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		m.installTunneler(c.Tunneler, corev1client.NewForConfigOrDie(c.GenericConfig.LoopbackClientConfig).Nodes())
 	}
 
-	if err := m.GenericAPIServer.AddPostStartHook("ca-registration", c.ClientCARegistrationHook.PostStartHook); err != nil {
-		glog.Fatalf("Error registering PostStartHook %q: %v", "ca-registration", err)
-	}
+	m.GenericAPIServer.AddPostStartHookOrDie("ca-registration", c.ClientCARegistrationHook.PostStartHook)
 
 	return m, nil
 }
@@ -293,9 +293,7 @@ func (m *Master) InstallLegacyAPI(c *Config, restOptionsGetter generic.RESTOptio
 	if c.EnableCoreControllers {
 		coreClient := coreclient.NewForConfigOrDie(c.GenericConfig.LoopbackClientConfig)
 		bootstrapController := c.NewBootstrapController(legacyRESTStorage, coreClient, coreClient)
-		if err := m.GenericAPIServer.AddPostStartHook("bootstrap-controller", bootstrapController.PostStartHook); err != nil {
-			glog.Fatalf("Error registering PostStartHook %q: %v", "bootstrap-controller", err)
-		}
+		m.GenericAPIServer.AddPostStartHookOrDie("bootstrap-controller", bootstrapController.PostStartHook)
 	}
 
 	if err := m.GenericAPIServer.InstallLegacyAPIGroup(genericapiserver.DefaultLegacyAPIPrefix, &apiGroupInfo); err != nil {
@@ -340,9 +338,7 @@ func (m *Master) InstallAPIs(apiResourceConfigSource serverstorage.APIResourceCo
 			if err != nil {
 				glog.Fatalf("Error building PostStartHook: %v", err)
 			}
-			if err := m.GenericAPIServer.AddPostStartHook(name, hook); err != nil {
-				glog.Fatalf("Error registering PostStartHook %q: %v", name, err)
-			}
+			m.GenericAPIServer.AddPostStartHookOrDie(name, hook)
 		}
 
 		apiGroupsInfo = append(apiGroupsInfo, apiGroupInfo)
@@ -386,12 +382,12 @@ func DefaultAPIResourceConfigSource() *serverstorage.ResourceConfig {
 		apiv1.SchemeGroupVersion,
 		extensionsapiv1beta1.SchemeGroupVersion,
 		batchapiv1.SchemeGroupVersion,
+		batchapiv1beta1.SchemeGroupVersion,
 		authenticationv1.SchemeGroupVersion,
 		authenticationv1beta1.SchemeGroupVersion,
 		autoscalingapiv1.SchemeGroupVersion,
 		appsv1beta1.SchemeGroupVersion,
-		// TODO: enable apps/v1beta2 by default before 1.8 release, after the API changes are done
-		// appsv1beta2.SchemeGroupVersion,
+		appsv1beta2.SchemeGroupVersion,
 		policyapiv1beta1.SchemeGroupVersion,
 		rbacv1.SchemeGroupVersion,
 		rbacv1beta1.SchemeGroupVersion,

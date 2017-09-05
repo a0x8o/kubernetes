@@ -36,6 +36,15 @@ func (APIVersion) SwaggerDoc() map[string]string {
 	return map_APIVersion
 }
 
+var map_AllowedHostPath = map[string]string{
+	"":           "defines the host volume conditions that will be enabled by a policy for pods to use. It requires the path prefix to be defined.",
+	"pathPrefix": "is the path prefix that the host volume must match. It does not support `*`. Trailing slashes are trimmed when validating the path prefix with a host path.\n\nExamples: `/foo` would allow `/foo`, `/foo/` and `/foo/bar` `/foo` would not allow `/food` or `/etc/foo`",
+}
+
+func (AllowedHostPath) SwaggerDoc() map[string]string {
+	return map_AllowedHostPath
+}
+
 var map_CustomMetricCurrentStatus = map[string]string{
 	"name":  "Custom Metric name.",
 	"value": "Custom Metric value (average).",
@@ -56,7 +65,7 @@ func (CustomMetricTarget) SwaggerDoc() map[string]string {
 }
 
 var map_DaemonSet = map[string]string{
-	"":         "DaemonSet represents the configuration of a daemon set.",
+	"":         "DEPRECATED - This group version of DaemonSet is deprecated by apps/v1beta2/DaemonSet. See the release notes for more information. DaemonSet represents the configuration of a daemon set.",
 	"metadata": "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata",
 	"spec":     "The desired behavior of this daemon set. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#spec-and-status",
 	"status":   "The current status of this daemon set. This data may be out of date by some window of time. Populated by the system. Read-only. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#spec-and-status",
@@ -117,7 +126,7 @@ func (DaemonSetUpdateStrategy) SwaggerDoc() map[string]string {
 }
 
 var map_Deployment = map[string]string{
-	"":         "Deployment enables declarative updates for Pods and ReplicaSets.",
+	"":         "DEPRECATED - This group version of Deployment is deprecated by apps/v1beta2/Deployment. See the release notes for more information. Deployment enables declarative updates for Pods and ReplicaSets.",
 	"metadata": "Standard object metadata.",
 	"spec":     "Specification of the desired behavior of the Deployment.",
 	"status":   "Most recently observed status of the Deployment.",
@@ -186,7 +195,7 @@ var map_DeploymentStatus = map[string]string{
 	"updatedReplicas":     "Total number of non-terminated pods targeted by this deployment that have the desired template spec.",
 	"readyReplicas":       "Total number of ready pods targeted by this deployment.",
 	"availableReplicas":   "Total number of available pods (ready for at least minReadySeconds) targeted by this deployment.",
-	"unavailableReplicas": "Total number of unavailable pods targeted by this deployment.",
+	"unavailableReplicas": "Total number of unavailable pods targeted by this deployment. This is the total number of pods that are still required for the deployment to have 100% available capacity. They may either be pods that are running but not yet available or pods that still have not been created.",
 	"conditions":          "Represents the latest available observations of a deployment's current state.",
 	"collisionCount":      "Count of hash collisions for the Deployment. The Deployment controller uses this field as a collision avoidance mechanism when it needs to create the name for the newest ReplicaSet.",
 }
@@ -252,6 +261,16 @@ var map_IDRange = map[string]string{
 
 func (IDRange) SwaggerDoc() map[string]string {
 	return map_IDRange
+}
+
+var map_IPBlock = map[string]string{
+	"":       "IPBlock describes a particular CIDR (Ex. \"192.168.1.1/24\") that is allowed to the pods matched by a NetworkPolicySpec's podSelector. The except entry describes CIDRs that should not be included within this rule.",
+	"cidr":   "CIDR is a string representing the IP Block Valid examples are \"192.168.1.1/24\"",
+	"except": "Except is a slice of CIDRs that should not be included within an IP Block Valid examples are \"192.168.1.1/24\" Except values will be rejected if they are outside the CIDR range",
+}
+
+func (IPBlock) SwaggerDoc() map[string]string {
+	return map_IPBlock
 }
 
 var map_Ingress = map[string]string{
@@ -365,6 +384,7 @@ func (NetworkPolicyList) SwaggerDoc() map[string]string {
 var map_NetworkPolicyPeer = map[string]string{
 	"podSelector":       "This is a label selector which selects Pods in this namespace. This field follows standard label selector semantics. If present but empty, this selector selects all pods in this namespace.",
 	"namespaceSelector": "Selects Namespaces using cluster scoped-labels.  This matches all pods in all namespaces selected by this label selector. This field follows standard label selector semantics. If present but empty, this selector selects all namespaces.",
+	"ipBlock":           "IPBlock defines policy on a particular IPBlock",
 }
 
 func (NetworkPolicyPeer) SwaggerDoc() map[string]string {
@@ -425,8 +445,9 @@ var map_PodSecurityPolicySpec = map[string]string{
 	"supplementalGroups":              "SupplementalGroups is the strategy that will dictate what supplemental groups are used by the SecurityContext.",
 	"fsGroup":                         "FSGroup is the strategy that will dictate what fs group is used by the SecurityContext.",
 	"readOnlyRootFilesystem":          "ReadOnlyRootFilesystem when set to true will force containers to run with a read only root file system.  If the container specifically requests to run with a non-read only root file system the PSP should deny the pod. If set to false the container may run with a read only root file system if it wishes but it will not be forced to.",
-	"defaultAllowPrivilegeEscalation": "DefaultAllowPrivilegeEscalation controls the default setting for whether a process can gain more privileges than it's parent process.",
+	"defaultAllowPrivilegeEscalation": "DefaultAllowPrivilegeEscalation controls the default setting for whether a process can gain more privileges than its parent process.",
 	"allowPrivilegeEscalation":        "AllowPrivilegeEscalation determines if a pod can request to allow privilege escalation.",
+	"allowedHostPaths":                "is a white list of allowed host paths. Empty indicates that all host paths may be used.",
 }
 
 func (PodSecurityPolicySpec) SwaggerDoc() map[string]string {
@@ -434,7 +455,7 @@ func (PodSecurityPolicySpec) SwaggerDoc() map[string]string {
 }
 
 var map_ReplicaSet = map[string]string{
-	"":         "ReplicaSet represents the configuration of a ReplicaSet.",
+	"":         "DEPRECATED - This group version of ReplicaSet is deprecated by apps/v1beta2/ReplicaSet. See the release notes for more information. ReplicaSet represents the configuration of a ReplicaSet.",
 	"metadata": "If the Labels of a ReplicaSet are empty, they are defaulted to be the same as the Pod(s) that the ReplicaSet manages. Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata",
 	"spec":     "Spec defines the specification of the desired behavior of the ReplicaSet. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#spec-and-status",
 	"status":   "Status is the most recently observed status of the ReplicaSet. This data may be out of date by some window of time. Populated by the system. Read-only. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#spec-and-status",

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os/exec"
 	"reflect"
 	"strings"
 	"time"
@@ -34,8 +35,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
+	kubeletscheme "k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/scheme"
 	kubeletconfigv1alpha1 "k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/v1alpha1"
 	stats "k8s.io/kubernetes/pkg/kubelet/apis/stats/v1alpha1"
 	kubeletmetrics "k8s.io/kubernetes/pkg/kubelet/metrics"
@@ -44,6 +45,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	imageutils "k8s.io/kubernetes/test/utils/image"
 )
 
 // TODO(random-liu): Get this automatically from kubelet flag.
@@ -51,6 +53,7 @@ var kubeletAddress = flag.String("kubelet-address", "http://127.0.0.1:10255", "H
 
 var startServices = flag.Bool("start-services", true, "If true, start local node services")
 var stopServices = flag.Bool("stop-services", true, "If true, stop local node services after running tests")
+var busyboxImage = imageutils.GetBusyBoxImage()
 
 func getNodeSummary() (*stats.Summary, error) {
 	req, err := http.NewRequest("GET", *kubeletAddress+"/stats/summary", nil)
@@ -101,9 +104,7 @@ func tempSetCurrentKubeletConfig(f *framework.Framework, updateFunction func(ini
 		if configEnabled {
 			oldCfg, err = getCurrentKubeletConfig()
 			framework.ExpectNoError(err)
-			clone, err := scheme.Scheme.DeepCopy(oldCfg)
-			framework.ExpectNoError(err)
-			newCfg := clone.(*kubeletconfig.KubeletConfiguration)
+			newCfg := oldCfg.DeepCopy()
 			updateFunction(newCfg)
 			framework.ExpectNoError(setKubeletConfiguration(f, newCfg))
 		} else {
@@ -258,13 +259,17 @@ func createConfigMap(f *framework.Framework, internalKC *kubeletconfig.KubeletCo
 
 // constructs a ConfigMap, populating one of its keys with the KubeletConfiguration. Uses GenerateName.
 func makeKubeletConfigMap(internalKC *kubeletconfig.KubeletConfiguration) *v1.ConfigMap {
-	externalKC := &kubeletconfigv1alpha1.KubeletConfiguration{}
-	api.Scheme.Convert(internalKC, externalKC, nil)
-
-	encoder, err := newJSONEncoder(kubeletconfig.GroupName)
+	scheme, _, err := kubeletscheme.NewSchemeAndCodecs()
 	framework.ExpectNoError(err)
 
-	data, err := runtime.Encode(encoder, externalKC)
+	versioned := &kubeletconfigv1alpha1.KubeletConfiguration{}
+	err = scheme.Convert(internalKC, versioned, nil)
+	framework.ExpectNoError(err)
+
+	encoder, err := newKubeletConfigJSONEncoder()
+	framework.ExpectNoError(err)
+
+	data, err := runtime.Encode(encoder, versioned)
 	framework.ExpectNoError(err)
 
 	cmap := &v1.ConfigMap{
@@ -273,7 +278,6 @@ func makeKubeletConfigMap(internalKC *kubeletconfig.KubeletConfiguration) *v1.Co
 			"kubelet": string(data),
 		},
 	}
-
 	return cmap
 }
 
@@ -309,19 +313,26 @@ func logKubeletMetrics(metricKeys ...string) {
 	}
 }
 
-func newJSONEncoder(groupName string) (runtime.Encoder, error) {
-	// encode to json
+func newKubeletConfigJSONEncoder() (runtime.Encoder, error) {
+	_, kubeletCodecs, err := kubeletscheme.NewSchemeAndCodecs()
+	if err != nil {
+		return nil, err
+	}
+
 	mediaType := "application/json"
-	info, ok := runtime.SerializerInfoForMediaType(api.Codecs.SupportedMediaTypes(), mediaType)
+	info, ok := runtime.SerializerInfoForMediaType(kubeletCodecs.SupportedMediaTypes(), mediaType)
 	if !ok {
 		return nil, fmt.Errorf("unsupported media type %q", mediaType)
 	}
+	return kubeletCodecs.EncoderForVersion(info.Serializer, kubeletconfigv1alpha1.SchemeGroupVersion), nil
+}
 
-	versions := api.Registry.EnabledVersionsForGroup(groupName)
-	if len(versions) == 0 {
-		return nil, fmt.Errorf("no enabled versions for group %q", groupName)
+// runCommand runs the cmd and returns the combined stdout and stderr, or an
+// error if the command failed.
+func runCommand(cmd ...string) (string, error) {
+	output, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to run %q: %s (%s)", strings.Join(cmd, " "), err, output)
 	}
-
-	// the "best" version supposedly comes first in the list returned from api.Registry.EnabledVersionsForGroup
-	return api.Codecs.EncoderForVersion(info.Serializer, versions[0]), nil
+	return string(output), nil
 }

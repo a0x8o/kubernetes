@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/pflag"
 	"gopkg.in/natefinch/lumberjack.v2"
 
+	auditv1beta1 "k8s.io/apiserver/pkg/apis/audit/v1beta1"
 	"k8s.io/apiserver/pkg/audit"
 	"k8s.io/apiserver/pkg/audit/policy"
 	"k8s.io/apiserver/pkg/features"
@@ -79,7 +80,7 @@ type AuditWebhookOptions struct {
 func NewAuditOptions() *AuditOptions {
 	return &AuditOptions{
 		WebhookOptions: AuditWebhookOptions{Mode: pluginwebhook.ModeBatch},
-		LogOptions:     AuditLogOptions{Format: pluginlog.FormatLegacy},
+		LogOptions:     AuditLogOptions{Format: pluginlog.FormatJson},
 	}
 }
 
@@ -212,7 +213,7 @@ func (o *AuditLogOptions) getWriter() io.Writer {
 
 func (o *AuditLogOptions) advancedApplyTo(c *server.Config) error {
 	if w := o.getWriter(); w != nil {
-		c.AuditBackend = appendBackend(c.AuditBackend, pluginlog.NewBackend(w, o.Format))
+		c.AuditBackend = appendBackend(c.AuditBackend, pluginlog.NewBackend(w, o.Format, auditv1beta1.SchemeGroupVersion))
 	}
 	return nil
 }
@@ -237,7 +238,7 @@ func (o *AuditWebhookOptions) applyTo(c *server.Config) error {
 		return nil
 	}
 
-	webhook, err := pluginwebhook.NewBackend(o.ConfigFile, o.Mode)
+	webhook, err := pluginwebhook.NewBackend(o.ConfigFile, o.Mode, auditv1beta1.SchemeGroupVersion)
 	if err != nil {
 		return fmt.Errorf("initializing audit webhook: %v", err)
 	}

@@ -88,8 +88,9 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/rkt"
 	"k8s.io/kubernetes/pkg/kubelet/secret"
 	"k8s.io/kubernetes/pkg/kubelet/server"
-	"k8s.io/kubernetes/pkg/kubelet/server/stats"
+	serverstats "k8s.io/kubernetes/pkg/kubelet/server/stats"
 	"k8s.io/kubernetes/pkg/kubelet/server/streaming"
+	"k8s.io/kubernetes/pkg/kubelet/stats"
 	"k8s.io/kubernetes/pkg/kubelet/status"
 	"k8s.io/kubernetes/pkg/kubelet/sysctl"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
@@ -243,6 +244,7 @@ type Dependencies struct {
 	Recorder                record.EventRecorder
 	Writer                  kubeio.Writer
 	VolumePlugins           []volume.VolumePlugin
+	DynamicPluginProber     volume.DynamicPluginProber
 	TLSOptions              *server.TLSOptions
 	KubeletConfigController *kubeletconfig.Controller
 }
@@ -559,6 +561,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		MTU:               int(crOptions.NetworkPluginMTU),
 	}
 
+	klet.resourceAnalyzer = serverstats.NewResourceAnalyzer(klet, kubeCfg.VolumeStatsAggPeriod.Duration)
+
 	// Remote runtime shim just cannot talk back to kubelet, so it doesn't
 	// support bandwidth shaping or hostports till #35457. To enable legacy
 	// features, replace with networkHost.
@@ -618,6 +622,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		if err != nil {
 			return nil, err
 		}
+		klet.runtimeService = runtimeService
 		runtime, err := kuberuntime.NewKubeGenericRuntimeManager(
 			kubecontainer.FilterEventRecorder(kubeDeps.Recorder),
 			klet.livenessManager,
@@ -635,12 +640,19 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 			kubeCfg.CPUCFSQuota,
 			runtimeService,
 			imageService,
+			kubeDeps.ContainerManager.InternalContainerLifecycle(),
 		)
 		if err != nil {
 			return nil, err
 		}
 		klet.containerRuntime = runtime
 		klet.runner = runtime
+		klet.StatsProvider = stats.NewCadvisorStatsProvider(
+			klet.cadvisor,
+			klet.resourceAnalyzer,
+			klet.podManager,
+			klet.runtimeCache,
+			klet.containerRuntime)
 	} else {
 		// rkt uses the legacy, non-CRI, integration. Configure it the old way.
 		// TODO: Include hairpin mode settings in rkt?
@@ -673,10 +685,13 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		}
 		klet.containerRuntime = runtime
 		klet.runner = kubecontainer.DirectStreamingRunner(runtime)
+		klet.StatsProvider = stats.NewCadvisorStatsProvider(
+			klet.cadvisor,
+			klet.resourceAnalyzer,
+			klet.podManager,
+			klet.runtimeCache,
+			klet.containerRuntime)
 	}
-
-	// TODO: Factor out "StatsProvider" from Kubelet so we don't have a cyclic dependency
-	klet.resourceAnalyzer = stats.NewResourceAnalyzer(klet, kubeCfg.VolumeStatsAggPeriod.Duration, klet.containerRuntime)
 
 	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
 	klet.runtimeState = newRuntimeState(maxWaitForContainerRuntime)
@@ -736,7 +751,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		kubeDeps.Recorder)
 
 	klet.volumePluginMgr, err =
-		NewInitializedVolumePluginMgr(klet, secretManager, configMapManager, kubeDeps.VolumePlugins)
+		NewInitializedVolumePluginMgr(klet, secretManager, configMapManager, kubeDeps.VolumePlugins, kubeDeps.DynamicPluginProber)
 	if err != nil {
 		return nil, err
 	}
@@ -952,7 +967,11 @@ type Kubelet struct {
 	volumeManager volumemanager.VolumeManager
 
 	// Cloud provider interface.
-	cloud                   cloudprovider.Interface
+	cloud cloudprovider.Interface
+	// DEPRECATED: auto detecting cloud providers goes against the initiative
+	// for out-of-tree cloud providers as we'll now depend on cAdvisor integrations
+	// with cloud providers instead of in the core repo.
+	// More details here: https://github.com/kubernetes/kubernetes/issues/50986
 	autoDetectCloudProvider bool
 	// Indicates that the node initialization happens in an external cloud controller
 	externalCloudProvider bool
@@ -961,6 +980,11 @@ type Kubelet struct {
 
 	// Container runtime.
 	containerRuntime kubecontainer.Runtime
+
+	// Container runtime service (needed by container runtime Start()).
+	// TODO(CD): try to make this available without holding a reference in this
+	//           struct. For example, by adding a getter to generic runtime.
+	runtimeService internalapi.RuntimeService
 
 	// reasonCache caches the failure reason of the last creation of all containers, which is
 	// used for generating ContainerStatus.
@@ -992,7 +1016,7 @@ type Kubelet struct {
 	oomWatcher OOMWatcher
 
 	// Monitor resource usage
-	resourceAnalyzer stats.ResourceAnalyzer
+	resourceAnalyzer serverstats.ResourceAnalyzer
 
 	// Whether or not we should have the QOS cgroup hierarchy for resource management
 	cgroupsPerQOS bool
@@ -1103,6 +1127,9 @@ type Kubelet struct {
 	// dockerLegacyService contains some legacy methods for backward compatibility.
 	// It should be set only when docker is using non json-file logging driver.
 	dockerLegacyService dockershim.DockerLegacyService
+
+	// StatsProvider provides the node and the container stats.
+	*stats.StatsProvider
 }
 
 func allLocalIPsWithoutLoopback() ([]net.IP, error) {
@@ -1136,6 +1163,9 @@ func (kl *Kubelet) setupDataDirs() error {
 	kl.rootDirectory = path.Clean(kl.rootDirectory)
 	if err := os.MkdirAll(kl.getRootDir(), 0750); err != nil {
 		return fmt.Errorf("error creating root directory: %v", err)
+	}
+	if err := kl.mounter.MakeRShared(kl.getRootDir()); err != nil {
+		return fmt.Errorf("error configuring root directory: %v", err)
 	}
 	if err := os.MkdirAll(kl.getPodsDir(), 0750); err != nil {
 		return fmt.Errorf("error creating pods directory: %v", err)
@@ -1220,7 +1250,7 @@ func (kl *Kubelet) initializeModules() error {
 		return fmt.Errorf("Kubelet failed to get node info: %v", err)
 	}
 
-	if err := kl.containerManager.Start(node, kl.GetActivePods); err != nil {
+	if err := kl.containerManager.Start(node, kl.GetActivePods, kl.statusManager, kl.runtimeService); err != nil {
 		return fmt.Errorf("Failed to start ContainerManager %v", err)
 	}
 

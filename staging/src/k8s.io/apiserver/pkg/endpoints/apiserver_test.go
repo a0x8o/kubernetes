@@ -331,7 +331,7 @@ func handleInternal(storage map[string]rest.Storage, admissionControl admission.
 		}
 	}
 
-	handler := genericapifilters.WithAudit(mux, requestContextMapper, auditSink, auditpolicy.FakeChecker(auditinternal.LevelRequestResponse), func(r *http.Request, requestInfo *request.RequestInfo) bool {
+	handler := genericapifilters.WithAudit(mux, requestContextMapper, auditSink, auditpolicy.FakeChecker(auditinternal.LevelRequestResponse, nil), func(r *http.Request, requestInfo *request.RequestInfo) bool {
 		// simplified long-running check
 		return requestInfo.Verb == "watch" || requestInfo.Verb == "proxy"
 	})
@@ -1869,7 +1869,7 @@ func TestGetTable(t *testing.T) {
 			expected: &metav1alpha1.Table{
 				TypeMeta: metav1.TypeMeta{Kind: "Table", APIVersion: "meta.k8s.io/v1alpha1"},
 				ColumnDefinitions: []metav1alpha1.TableColumnDefinition{
-					{Name: "Name", Type: "string", Description: metaDoc["name"]},
+					{Name: "Name", Type: "string", Format: "name", Description: metaDoc["name"]},
 					{Name: "Created At", Type: "date", Description: metaDoc["creationTimestamp"]},
 				},
 				Rows: []metav1alpha1.TableRow{
@@ -1883,7 +1883,7 @@ func TestGetTable(t *testing.T) {
 			expected: &metav1alpha1.Table{
 				TypeMeta: metav1.TypeMeta{Kind: "Table", APIVersion: "meta.k8s.io/v1alpha1"},
 				ColumnDefinitions: []metav1alpha1.TableColumnDefinition{
-					{Name: "Name", Type: "string", Description: metaDoc["name"]},
+					{Name: "Name", Type: "string", Format: "name", Description: metaDoc["name"]},
 					{Name: "Created At", Type: "date", Description: metaDoc["creationTimestamp"]},
 				},
 				Rows: []metav1alpha1.TableRow{

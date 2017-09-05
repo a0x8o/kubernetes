@@ -29,8 +29,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
-	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/features"
 	"k8s.io/kubernetes/cmd/kubeadm/app/constants"
+	"k8s.io/kubernetes/cmd/kubeadm/app/features"
+	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
 	tokenutil "k8s.io/kubernetes/cmd/kubeadm/app/util/token"
 	apivalidation "k8s.io/kubernetes/pkg/api/validation"
 	authzmodes "k8s.io/kubernetes/pkg/kubeapiserver/authorizer/modes"
@@ -67,7 +68,8 @@ func ValidateMasterConfiguration(c *kubeadm.MasterConfiguration) field.ErrorList
 	allErrs = append(allErrs, ValidateAbsolutePath(c.CertificatesDir, field.NewPath("certificates-dir"))...)
 	allErrs = append(allErrs, ValidateNodeName(c.NodeName, field.NewPath("node-name"))...)
 	allErrs = append(allErrs, ValidateToken(c.Token, field.NewPath("token"))...)
-	allErrs = append(allErrs, ValidateFeatureFlags(c.FeatureFlags, field.NewPath("feature-flags"))...)
+	allErrs = append(allErrs, ValidateFeatureGates(c.FeatureGates, field.NewPath("feature-gates"))...)
+	allErrs = append(allErrs, ValidateAPIEndpoint(c, field.NewPath("api-endpoint"))...)
 	return allErrs
 }
 
@@ -282,8 +284,8 @@ func ValidateMixedArguments(flag *pflag.FlagSet) error {
 
 	mixedInvalidFlags := []string{}
 	flag.Visit(func(f *pflag.Flag) {
-		if f.Name == "config" || strings.HasPrefix(f.Name, "skip-") {
-			// "--skip-*" flags can be set with --config
+		if f.Name == "config" || strings.HasPrefix(f.Name, "skip-") || f.Name == "dry-run" || f.Name == "kubeconfig" {
+			// "--skip-*" flags or other whitelisted flags can be set with --config
 			return
 		}
 		mixedInvalidFlags = append(mixedInvalidFlags, f.Name)
@@ -295,17 +297,27 @@ func ValidateMixedArguments(flag *pflag.FlagSet) error {
 	return nil
 }
 
-func ValidateFeatureFlags(featureFlags map[string]bool, fldPath *field.Path) field.ErrorList {
+func ValidateFeatureGates(featureGates map[string]bool, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	validFeatures := features.Keys(features.InitFeatureGates)
 
 	// check valid feature names are provided
-	for k := range featureFlags {
+	for k := range featureGates {
 		if !features.Supports(features.InitFeatureGates, k) {
-			allErrs = append(allErrs, field.Invalid(fldPath, featureFlags,
+			allErrs = append(allErrs, field.Invalid(fldPath, featureGates,
 				fmt.Sprintf("%s is not a valid feature name. Valid features are: %s", k, validFeatures)))
 		}
 	}
 
+	return allErrs
+}
+
+func ValidateAPIEndpoint(c *kubeadm.MasterConfiguration, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	endpoint, err := kubeadmutil.GetMasterEndpoint(c)
+	if err != nil {
+		allErrs = append(allErrs, field.Invalid(fldPath, endpoint, "Invalid API Endpoint"))
+	}
 	return allErrs
 }

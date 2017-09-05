@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	fakeclient "k8s.io/client-go/kubernetes/fake"
 	utiltesting "k8s.io/client-go/util/testing"
-	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/volume"
 	volumetest "k8s.io/kubernetes/pkg/volume/testing"
 )
@@ -64,7 +63,7 @@ func newPluginMgr(t *testing.T) (*volume.VolumePluginMgr, string) {
 	fakeClient := fakeclient.NewSimpleClientset(config)
 	host := volumetest.NewFakeVolumeHost(tmpDir, fakeClient, nil)
 	plugMgr := &volume.VolumePluginMgr{}
-	plugMgr.InitPlugins(ProbeVolumePlugins(), host)
+	plugMgr.InitPlugins(ProbeVolumePlugins(), nil /* prober */, host)
 
 	return plugMgr, tmpDir
 }
@@ -137,8 +136,6 @@ func TestVolumeMounterUnmounter(t *testing.T) {
 	if !ok {
 		t.Errorf("Cannot assert plugin to be type sioPlugin")
 	}
-
-	sioPlug.mounter = &mount.FakeMounter{}
 
 	vol := &api.Volume{
 		Name: testSioVolName,

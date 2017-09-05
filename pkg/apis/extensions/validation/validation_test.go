@@ -1238,6 +1238,7 @@ func int64p(i int) *int64 {
 }
 
 func TestValidateDeploymentStatus(t *testing.T) {
+	collisionCount := int32(-3)
 	tests := []struct {
 		name string
 
@@ -1246,7 +1247,7 @@ func TestValidateDeploymentStatus(t *testing.T) {
 		readyReplicas      int32
 		availableReplicas  int32
 		observedGeneration int64
-		collisionCount     *int64
+		collisionCount     *int32
 
 		expectedErr bool
 	}{
@@ -1347,7 +1348,7 @@ func TestValidateDeploymentStatus(t *testing.T) {
 			name:               "invalid collisionCount",
 			replicas:           3,
 			observedGeneration: 1,
-			collisionCount:     int64p(-3),
+			collisionCount:     &collisionCount,
 			expectedErr:        true,
 		},
 	}
@@ -1371,6 +1372,8 @@ func TestValidateDeploymentStatus(t *testing.T) {
 }
 
 func TestValidateDeploymentStatusUpdate(t *testing.T) {
+	collisionCount := int32(1)
+	otherCollisionCount := int32(2)
 	tests := []struct {
 		name string
 
@@ -1384,24 +1387,24 @@ func TestValidateDeploymentStatusUpdate(t *testing.T) {
 				CollisionCount: nil,
 			},
 			to: extensions.DeploymentStatus{
-				CollisionCount: int64p(1),
+				CollisionCount: &collisionCount,
 			},
 			expectedErr: false,
 		},
 		{
 			name: "stable: valid update",
 			from: extensions.DeploymentStatus{
-				CollisionCount: int64p(1),
+				CollisionCount: &collisionCount,
 			},
 			to: extensions.DeploymentStatus{
-				CollisionCount: int64p(1),
+				CollisionCount: &collisionCount,
 			},
 			expectedErr: false,
 		},
 		{
 			name: "unset: invalid update",
 			from: extensions.DeploymentStatus{
-				CollisionCount: int64p(1),
+				CollisionCount: &collisionCount,
 			},
 			to: extensions.DeploymentStatus{
 				CollisionCount: nil,
@@ -1411,10 +1414,10 @@ func TestValidateDeploymentStatusUpdate(t *testing.T) {
 		{
 			name: "decrease: invalid update",
 			from: extensions.DeploymentStatus{
-				CollisionCount: int64p(2),
+				CollisionCount: &otherCollisionCount,
 			},
 			to: extensions.DeploymentStatus{
-				CollisionCount: int64p(1),
+				CollisionCount: &collisionCount,
 			},
 			expectedErr: true,
 		},
@@ -2415,6 +2418,10 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 				SupplementalGroups: extensions.SupplementalGroupsStrategyOptions{
 					Rule: extensions.SupplementalGroupsStrategyRunAsAny,
 				},
+				AllowedHostPaths: []extensions.AllowedHostPath{
+					{PathPrefix: "/foo/bar"},
+					{PathPrefix: "/baz/"},
+				},
 			},
 		}
 	}
@@ -2492,6 +2499,16 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 	invalidSeccompAllowed := validPSP()
 	invalidSeccompAllowed.Annotations = map[string]string{
 		seccomp.AllowedProfilesAnnotationKey: "docker/default,not-good",
+	}
+
+	invalidAllowedHostPathMissingPath := validPSP()
+	invalidAllowedHostPathMissingPath.Spec.AllowedHostPaths = []extensions.AllowedHostPath{
+		{PathPrefix: ""},
+	}
+
+	invalidAllowedHostPathBacksteps := validPSP()
+	invalidAllowedHostPathBacksteps.Spec.AllowedHostPaths = []extensions.AllowedHostPath{
+		{PathPrefix: "/dont/allow/backsteps/.."},
 	}
 
 	invalidDefaultAllowPrivilegeEscalation := validPSP()
@@ -2608,6 +2625,16 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 			psp:         invalidDefaultAllowPrivilegeEscalation,
 			errorType:   field.ErrorTypeInvalid,
 			errorDetail: "Cannot set DefaultAllowPrivilegeEscalation to true without also setting AllowPrivilegeEscalation to true",
+		},
+		"invalid allowed host path empty path": {
+			psp:         invalidAllowedHostPathMissingPath,
+			errorType:   field.ErrorTypeRequired,
+			errorDetail: "is required",
+		},
+		"invalid allowed host path with backsteps": {
+			psp:         invalidAllowedHostPathBacksteps,
+			errorType:   field.ErrorTypeInvalid,
+			errorDetail: "must not contain '..'",
 		},
 	}
 

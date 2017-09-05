@@ -1,7 +1,6 @@
 cluster/images/etcd-version-monitor
 cmd/cloud-controller-manager/app
 cmd/cloud-controller-manager/app/options
-cmd/genslateyaml
 cmd/genutils
 cmd/gke-certificates-controller/app
 cmd/hyperkube
@@ -29,7 +28,6 @@ cmd/kubectl/app
 cmd/kubelet/app
 cmd/kubelet/app/options
 cmd/kubemark
-cmd/mungedocs
 examples/guestbook-go
 federation/apis/core
 federation/apis/core/v1
@@ -79,7 +77,6 @@ federation/registry/cluster/etcd
 pkg/api/endpoints
 pkg/api/helper
 pkg/api/helper/qos
-pkg/api/meta/metatypes
 pkg/api/ref
 pkg/api/testapi
 pkg/api/testing
@@ -110,7 +107,6 @@ pkg/apis/authorization/v1
 pkg/apis/authorization/v1beta1
 pkg/apis/authorization/validation
 pkg/apis/autoscaling
-pkg/apis/autoscaling/v2alpha1
 pkg/apis/autoscaling/validation
 pkg/apis/batch
 pkg/apis/batch/validation
@@ -145,7 +141,6 @@ pkg/apis/storage/v1/util
 pkg/apis/storage/v1beta1
 pkg/apis/storage/v1beta1/util
 pkg/auth/authorizer/abac
-pkg/auth/user
 pkg/capabilities
 pkg/client/chaosclient
 pkg/client/informers/informers_generated/internalversion/internalinterfaces
@@ -179,7 +174,6 @@ pkg/controller/garbagecollector/metaonly
 pkg/controller/job
 pkg/controller/namespace
 pkg/controller/namespace/deletion
-pkg/controller/node
 pkg/controller/podautoscaler
 pkg/controller/podautoscaler/metrics
 pkg/controller/podgc
@@ -196,6 +190,7 @@ pkg/controller/volume/attachdetach
 pkg/controller/volume/attachdetach/statusupdater
 pkg/controller/volume/attachdetach/testing
 pkg/controller/volume/events
+pkg/controller/volume/expand
 pkg/controller/volume/persistentvolume
 pkg/controller/volume/persistentvolume/options
 pkg/credentialprovider
@@ -233,6 +228,7 @@ pkg/kubelet
 pkg/kubelet/apis
 pkg/kubelet/apis/cri/testing
 pkg/kubelet/apis/cri/v1alpha1/runtime
+pkg/kubelet/apis/deviceplugin/v1alpha1
 pkg/kubelet/apis/kubeletconfig
 pkg/kubelet/apis/kubeletconfig/v1alpha1
 pkg/kubelet/cadvisor
@@ -283,6 +279,7 @@ pkg/kubelet/server/portforward
 pkg/kubelet/server/remotecommand
 pkg/kubelet/server/stats
 pkg/kubelet/server/streaming
+pkg/kubelet/stats
 pkg/kubelet/status
 pkg/kubelet/status/testing
 pkg/kubelet/sysctl
@@ -470,6 +467,8 @@ pkg/volume/util
 pkg/volume/vsphere_volume
 plugin/cmd/kube-scheduler/app
 plugin/pkg/admission/antiaffinity
+plugin/pkg/admission/eventratelimit/apis/eventratelimit
+plugin/pkg/admission/eventratelimit/apis/eventratelimit/v1alpha1
 plugin/pkg/admission/initialization
 plugin/pkg/admission/initialresources
 plugin/pkg/admission/limitranger
@@ -515,6 +514,7 @@ staging/src/k8s.io/api/authorization/v1beta1
 staging/src/k8s.io/api/autoscaling/v1
 staging/src/k8s.io/api/autoscaling/v2alpha1
 staging/src/k8s.io/api/batch/v1
+staging/src/k8s.io/api/batch/v1beta1
 staging/src/k8s.io/api/batch/v2alpha1
 staging/src/k8s.io/api/certificates/v1beta1
 staging/src/k8s.io/api/core/v1
@@ -550,6 +550,7 @@ staging/src/k8s.io/apiextensions-apiserver/pkg/client/informers/internalversion/
 staging/src/k8s.io/apiextensions-apiserver/pkg/cmd/server
 staging/src/k8s.io/apiextensions-apiserver/pkg/controller/finalizer
 staging/src/k8s.io/apiextensions-apiserver/pkg/controller/status
+staging/src/k8s.io/apiextensions-apiserver/pkg/features
 staging/src/k8s.io/apiextensions-apiserver/pkg/registry/customresource
 staging/src/k8s.io/apiextensions-apiserver/pkg/registry/customresourcedefinition
 staging/src/k8s.io/apiextensions-apiserver/test/integration/testserver
@@ -609,6 +610,7 @@ staging/src/k8s.io/apiserver/pkg/apis/apiserver
 staging/src/k8s.io/apiserver/pkg/apis/apiserver/v1alpha1
 staging/src/k8s.io/apiserver/pkg/apis/audit
 staging/src/k8s.io/apiserver/pkg/apis/audit/v1alpha1
+staging/src/k8s.io/apiserver/pkg/apis/audit/v1beta1
 staging/src/k8s.io/apiserver/pkg/apis/audit/validation
 staging/src/k8s.io/apiserver/pkg/apis/example
 staging/src/k8s.io/apiserver/pkg/apis/example/v1
@@ -672,7 +674,6 @@ staging/src/k8s.io/apiserver/plugin/pkg/authenticator/token/tokentest
 staging/src/k8s.io/apiserver/plugin/pkg/authenticator/token/webhook
 staging/src/k8s.io/apiserver/plugin/pkg/authorizer/webhook
 staging/src/k8s.io/client-go/discovery/cached
-staging/src/k8s.io/client-go/discovery/fake
 staging/src/k8s.io/client-go/dynamic
 staging/src/k8s.io/client-go/dynamic/fake
 staging/src/k8s.io/client-go/examples/workqueue
@@ -700,6 +701,8 @@ staging/src/k8s.io/client-go/kubernetes/typed/autoscaling/v2alpha1
 staging/src/k8s.io/client-go/kubernetes/typed/autoscaling/v2alpha1/fake
 staging/src/k8s.io/client-go/kubernetes/typed/batch/v1
 staging/src/k8s.io/client-go/kubernetes/typed/batch/v1/fake
+staging/src/k8s.io/client-go/kubernetes/typed/batch/v1beta1
+staging/src/k8s.io/client-go/kubernetes/typed/batch/v1beta1/fake
 staging/src/k8s.io/client-go/kubernetes/typed/batch/v2alpha1
 staging/src/k8s.io/client-go/kubernetes/typed/batch/v2alpha1/fake
 staging/src/k8s.io/client-go/kubernetes/typed/certificates/v1beta1
@@ -750,6 +753,28 @@ staging/src/k8s.io/client-go/util/integer
 staging/src/k8s.io/client-go/util/jsonpath
 staging/src/k8s.io/client-go/util/retry
 staging/src/k8s.io/client-go/util/testing
+staging/src/k8s.io/code-generator/cmd/client-gen/args
+staging/src/k8s.io/code-generator/cmd/client-gen/generators/fake
+staging/src/k8s.io/code-generator/cmd/client-gen/generators/scheme
+staging/src/k8s.io/code-generator/cmd/client-gen/types
+staging/src/k8s.io/code-generator/cmd/conversion-gen/generators
+staging/src/k8s.io/code-generator/cmd/go-to-protobuf/protobuf
+staging/src/k8s.io/code-generator/cmd/informer-gen/generators
+staging/src/k8s.io/code-generator/cmd/lister-gen/generators
+staging/src/k8s.io/code-generator/test/apis/testgroup
+staging/src/k8s.io/code-generator/test/apis/testgroup/v1
+staging/src/k8s.io/code-generator/test/clientset/internal
+staging/src/k8s.io/code-generator/test/clientset/internal/fake
+staging/src/k8s.io/code-generator/test/clientset/internal/scheme
+staging/src/k8s.io/code-generator/test/clientset/internal/typed/testgroup/internalversion
+staging/src/k8s.io/code-generator/test/clientset/internal/typed/testgroup/internalversion/fake
+staging/src/k8s.io/code-generator/test/clientset/versioned
+staging/src/k8s.io/code-generator/test/clientset/versioned/fake
+staging/src/k8s.io/code-generator/test/clientset/versioned/scheme
+staging/src/k8s.io/code-generator/test/clientset/versioned/typed/testgroup/v1
+staging/src/k8s.io/code-generator/test/clientset/versioned/typed/testgroup/v1/fake
+staging/src/k8s.io/code-generator/test/informers/externalversions/internalinterfaces
+staging/src/k8s.io/code-generator/test/informers/internalversion/internalinterfaces
 staging/src/k8s.io/kube-aggregator/pkg/apis/apiregistration
 staging/src/k8s.io/kube-aggregator/pkg/apis/apiregistration/v1beta1
 staging/src/k8s.io/kube-aggregator/pkg/apis/apiregistration/validation
@@ -761,30 +786,8 @@ staging/src/k8s.io/kube-aggregator/pkg/controllers/autoregister
 staging/src/k8s.io/kube-aggregator/pkg/controllers/status
 staging/src/k8s.io/kube-aggregator/pkg/registry/apiservice
 staging/src/k8s.io/kube-aggregator/pkg/registry/apiservice/etcd
-staging/src/k8s.io/kube-gen/cmd/client-gen/args
-staging/src/k8s.io/kube-gen/cmd/client-gen/generators/fake
-staging/src/k8s.io/kube-gen/cmd/client-gen/generators/scheme
-staging/src/k8s.io/kube-gen/cmd/client-gen/types
-staging/src/k8s.io/kube-gen/cmd/conversion-gen/generators
-staging/src/k8s.io/kube-gen/cmd/go-to-protobuf/protobuf
-staging/src/k8s.io/kube-gen/cmd/informer-gen/generators
-staging/src/k8s.io/kube-gen/cmd/lister-gen/generators
-staging/src/k8s.io/kube-gen/test/apis/testgroup
-staging/src/k8s.io/kube-gen/test/apis/testgroup/v1
-staging/src/k8s.io/kube-gen/test/clientset/internal
-staging/src/k8s.io/kube-gen/test/clientset/internal/fake
-staging/src/k8s.io/kube-gen/test/clientset/internal/scheme
-staging/src/k8s.io/kube-gen/test/clientset/internal/typed/testgroup/internalversion
-staging/src/k8s.io/kube-gen/test/clientset/internal/typed/testgroup/internalversion/fake
-staging/src/k8s.io/kube-gen/test/clientset/versioned
-staging/src/k8s.io/kube-gen/test/clientset/versioned/fake
-staging/src/k8s.io/kube-gen/test/clientset/versioned/scheme
-staging/src/k8s.io/kube-gen/test/clientset/versioned/typed/testgroup/v1
-staging/src/k8s.io/kube-gen/test/clientset/versioned/typed/testgroup/v1/fake
-staging/src/k8s.io/kube-gen/test/informers/externalversions/internalinterfaces
-staging/src/k8s.io/kube-gen/test/informers/internalversion/internalinterfaces
 staging/src/k8s.io/metrics/pkg/apis/custom_metrics
-staging/src/k8s.io/metrics/pkg/apis/custom_metrics/v1alpha1
+staging/src/k8s.io/metrics/pkg/apis/custom_metrics/v1beta1
 staging/src/k8s.io/metrics/pkg/apis/metrics
 staging/src/k8s.io/metrics/pkg/apis/metrics/v1alpha1
 staging/src/k8s.io/metrics/pkg/client/custom_metrics
@@ -816,6 +819,7 @@ test/e2e/network
 test/e2e/node
 test/e2e/scalability
 test/e2e/scheduling
+test/e2e/servicecatalog
 test/e2e/storage
 test/e2e/upgrades
 test/e2e/upgrades/apps
@@ -851,3 +855,4 @@ test/integration/scheduler_perf
 test/integration/volume
 test/list
 test/utils
+test/utils/image
