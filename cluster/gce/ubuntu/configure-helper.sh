@@ -811,20 +811,26 @@ function assemble-docker-flags {
     # If using a network plugin, extend the docker configuration to always remove
     # the network checkpoint to avoid corrupt checkpoints.
     # (https://github.com/docker/docker/issues/18283).
-    echo "Extend the default docker.service configuration"
+    echo "Extend the docker.service configuration to remove the network checkpiont"
     mkdir -p /etc/systemd/system/docker.service.d
     cat <<EOF >/etc/systemd/system/docker.service.d/01network.conf
 [Service]
 ExecStartPre=/bin/sh -x -c "rm -rf /var/lib/docker/network"
 EOF
+  fi
+
+  # Ensure TasksMax is sufficient for docker.
+  # (https://github.com/kubernetes/kubernetes/issues/51977)
+  echo "Extend the docker.service configuration to set a higher pids limit"
+  mkdir -p /etc/systemd/system/docker.service.d
+  cat <<EOF >/etc/systemd/system/docker.service.d/02tasksmax.conf
+[Service]
+TasksMax=infinity
+EOF
 
     systemctl daemon-reload
-
-    # If using a network plugin, we need to explicitly restart docker daemon, because
-    # kubelet will not do it.
     echo "Docker command line is updated. Restart docker to pick it up"
     systemctl restart docker
-  fi
 }
 
 # This function assembles the kubelet systemd service file and starts it
@@ -1042,7 +1048,7 @@ function prepare-kube-proxy-manifest-variables {
     kube_cache_mutation_detector_env_value="value: \"${ENABLE_CACHE_MUTATION_DETECTOR}\""
   fi
   local pod_priority=""
-  if [[ "${ENABLE_POD_PRIORITY}" == "true" ]]; then
+  if [[ "${ENABLE_POD_PRIORITY:-}" == "true" ]]; then
     pod_priority="priorityClassName: system-node-critical"
   fi
   sed -i -e "s@{{kubeconfig}}@${kubeconfig}@g" ${src_file}
@@ -1201,7 +1207,7 @@ function prepare-mounter-rootfs {
   mount --make-rshared "${CONTAINERIZED_MOUNTER_ROOTFS}/var/lib/kubelet"
   mount --bind -o ro /proc "${CONTAINERIZED_MOUNTER_ROOTFS}/proc"
   mount --bind -o ro /dev "${CONTAINERIZED_MOUNTER_ROOTFS}/dev"
-  mount --bind -o ro /etc/resolv.conf "${CONTAINERIZED_MOUNTER_ROOTFS}/etc/resolv.conf"
+  cp /etc/resolv.conf "${CONTAINERIZED_MOUNTER_ROOTFS}/etc/"
 }
 
 # A helper function for removing salt configuration and comments from a file.
@@ -1529,6 +1535,10 @@ function start-kube-controller-manager {
   if [[ -n "${VOLUME_PLUGIN_DIR:-}" ]]; then
     params+=" --flex-volume-plugin-dir=${VOLUME_PLUGIN_DIR}"
   fi
+  if [[ -n "${CLUSTER_SIGNING_DURATION:-}" ]]; then
+    params+=" --experimental-cluster-signing-duration=$CLUSTER_SIGNING_DURATION"
+  fi
+
   local -r kube_rc_docker_tag=$(cat /home/kubernetes/kube-docker-files/kube-controller-manager.docker_tag)
   local container_env=""
   if [[ -n "${ENABLE_CACHE_MUTATION_DETECTOR:-}" ]]; then

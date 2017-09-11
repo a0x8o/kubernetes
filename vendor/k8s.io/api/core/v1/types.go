@@ -2486,6 +2486,7 @@ const (
 	// Kubelet without going through the scheduler to start.
 	// Enforced by Kubelet and the scheduler.
 	// TaintEffectNoScheduleNoAdmit TaintEffect = "NoScheduleNoAdmit"
+
 	// Evict any already-running pods that do not tolerate the taint.
 	// Currently enforced by NodeController.
 	TaintEffectNoExecute TaintEffect = "NoExecute"
@@ -3692,6 +3693,8 @@ const (
 	NodeDiskPressure NodeConditionType = "DiskPressure"
 	// NodeNetworkUnavailable means that network for the node is not correctly configured.
 	NodeNetworkUnavailable NodeConditionType = "NetworkUnavailable"
+	// NodeConfigOK indicates whether the kubelet is correctly configured
+	NodeConfigOK NodeConditionType = "ConfigOK"
 )
 
 // NodeCondition contains condition information for a node.

@@ -80,10 +80,7 @@ go_library(
         "//vendor/k8s.io/api/networking/v1:go_default_library",
         "//vendor/k8s.io/api/policy/v1beta1:go_default_library",
         "//vendor/k8s.io/api/rbac/v1:go_default_library",
-        "//vendor/k8s.io/api/rbac/v1alpha1:go_default_library",
         "//vendor/k8s.io/api/rbac/v1beta1:go_default_library",
-        "//vendor/k8s.io/api/scheduling/v1alpha1:go_default_library",
-        "//vendor/k8s.io/api/settings/v1alpha1:go_default_library",
         "//vendor/k8s.io/api/storage/v1:go_default_library",
         "//vendor/k8s.io/api/storage/v1beta1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/api/errors:go_default_library",
@@ -97,6 +94,7 @@ go_library(
         "//vendor/k8s.io/apiserver/pkg/server:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/server/healthz:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/server/storage:go_default_library",
+        "//vendor/k8s.io/client-go/informers:go_default_library",
         "//vendor/k8s.io/client-go/kubernetes/typed/core/v1:go_default_library",
     ],
 )

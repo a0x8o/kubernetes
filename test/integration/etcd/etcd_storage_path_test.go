@@ -181,8 +181,8 @@ var etcdStorageData = map[schema.GroupVersionResource]struct {
 	},
 	// --
 
-	// k8s.io/kubernetes/pkg/apis/autoscaling/v2alpha1
-	gvr("autoscaling", "v2alpha1", "horizontalpodautoscalers"): {
+	// k8s.io/kubernetes/pkg/apis/autoscaling/v2beta1
+	gvr("autoscaling", "v2beta1", "horizontalpodautoscalers"): {
 		stub:             `{"metadata": {"name": "hpa1"}, "spec": {"maxReplicas": 3, "scaleTargetRef": {"kind": "something", "name": "cross"}}}`,
 		expectedEtcdPath: "/registry/horizontalpodautoscalers/etcdstoragepathtestnamespace/hpa1",
 		expectedGVK:      gvkP("autoscaling", "v1", "HorizontalPodAutoscaler"),
@@ -685,14 +685,14 @@ func startRealMasterOrDie(t *testing.T, certDir string) (*allClient, clientv3.KV
 			if err != nil {
 				t.Fatal(err)
 			}
-			kubeAPIServerConfig, sharedInformers, _, _, _, err := app.CreateKubeAPIServerConfig(kubeAPIServerOptions, tunneler, proxyTransport)
+			kubeAPIServerConfig, sharedInformers, versionedInformers, _, _, err := app.CreateKubeAPIServerConfig(kubeAPIServerOptions, tunneler, proxyTransport)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			kubeAPIServerConfig.APIResourceConfigSource = &allResourceSource{} // force enable all resources
+			kubeAPIServerConfig.ExtraConfig.APIResourceConfigSource = &allResourceSource{} // force enable all resources
 
-			kubeAPIServer, err := app.CreateKubeAPIServer(kubeAPIServerConfig, genericapiserver.EmptyDelegate, sharedInformers)
+			kubeAPIServer, err := app.CreateKubeAPIServer(kubeAPIServerConfig, genericapiserver.EmptyDelegate, sharedInformers, versionedInformers)
 			if err != nil {
 				t.Fatal(err)
 			}

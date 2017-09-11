@@ -861,6 +861,20 @@ func DeploymentTimedOut(deployment *extensions.Deployment, newStatus *extensions
 	if condition == nil {
 		return false
 	}
+	// If the previous condition has been a successful rollout then we shouldn't try to
+	// estimate any progress. Scenario:
+	//
+	// * progressDeadlineSeconds is smaller than the difference between now and the time
+	//   the last rollout finished in the past.
+	// * the creation of a new ReplicaSet triggers a resync of the Deployment prior to the
+	//   cached copy of the Deployment getting updated with the status.condition that indicates
+	//   the creation of the new ReplicaSet.
+	//
+	// The Deployment will be resynced and eventually its Progressing condition will catch
+	// up with the state of the world.
+	if condition.Reason == NewRSAvailableReason {
+		return false
+	}
 	if condition.Reason == TimedOutReason {
 		return true
 	}
@@ -930,7 +944,7 @@ func IsSaturated(deployment *extensions.Deployment, rs *extensions.ReplicaSet) b
 // Returns error if polling timesout.
 func WaitForObservedDeployment(getDeploymentFunc func() (*extensions.Deployment, error), desiredGeneration int64, interval, timeout time.Duration) error {
 	// TODO: This should take clientset.Interface when all code is updated to use clientset. Keeping it this way allows the function to be used by callers who have client.Interface.
-	return wait.Poll(interval, timeout, func() (bool, error) {
+	return wait.PollImmediate(interval, timeout, func() (bool, error) {
 		deployment, err := getDeploymentFunc()
 		if err != nil {
 			return false, err

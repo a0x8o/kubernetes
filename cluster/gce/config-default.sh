@@ -238,6 +238,12 @@ if [ ${ENABLE_IP_ALIASES} = true ]; then
   PROVIDER_VARS="${PROVIDER_VARS:-} ENABLE_IP_ALIASES"
 fi
 
+
+# Enable GCE Alpha features.
+if [[ -n "${GCE_ALPHA_FEATURES:-}" ]]; then
+  PROVIDER_VARS="${PROVIDER_VARS:-} GCE_ALPHA_FEATURES"
+fi
+
 # Admission Controllers to invoke prior to persisting objects in cluster
 # If we included ResourceQuota, we should keep it at the end of the list to prevent incrementing quota usage prematurely.
 ADMISSION_CONTROL=Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,Priority,ResourceQuota
@@ -307,6 +313,9 @@ ENABLE_PROMETHEUS_TO_SD="${ENABLE_PROMETHEUS_TO_SD:-false}"
 # TODO(#51292): Make kube-proxy Daemonset default and remove the configuration here.
 # Optional: Run kube-proxy as a DaemonSet if set to true, run as static pods otherwise.
 KUBE_PROXY_DAEMONSET="${KUBE_PROXY_DAEMONSET:-false}" # true, false
+
+# Optional: duration of cluster signed certificates.
+CLUSTER_SIGNING_DURATION="${CLUSTER_SIGNING_DURATION:-}"
 
 # Optional: enable pod priority
 ENABLE_POD_PRIORITY="${ENABLE_POD_PRIORITY:-}"

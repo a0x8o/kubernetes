@@ -39,7 +39,6 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	restclient "k8s.io/client-go/rest"
-	oapi "k8s.io/kube-openapi/pkg/util/proto"
 	"k8s.io/kubernetes/federation/apis/federation"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/apps"
@@ -119,17 +118,22 @@ func (f *ring1Factory) UnstructuredObject() (meta.RESTMapper, runtime.ObjectType
 }
 
 func (f *ring1Factory) CategoryExpander() resource.CategoryExpander {
-	var categoryExpander resource.CategoryExpander
-	categoryExpander = resource.LegacyCategoryExpander
+	legacyExpander := resource.LegacyCategoryExpander
+
 	discoveryClient, err := f.clientAccessFactory.DiscoveryClient()
 	if err == nil {
-		// wrap with discovery based filtering
-		categoryExpander, err = resource.NewDiscoveryFilteredExpander(categoryExpander, discoveryClient)
-		// you only have an error on missing discoveryClient, so this shouldn't fail.  Check anyway.
+		// fallback is the legacy expander wrapped with discovery based filtering
+		fallbackExpander, err := resource.NewDiscoveryFilteredExpander(legacyExpander, discoveryClient)
 		CheckErr(err)
+
+		// by default use the expander that discovers based on "categories" field from the API
+		discoveryCategoryExpander, err := resource.NewDiscoveryCategoryExpander(fallbackExpander, discoveryClient)
+		CheckErr(err)
+
+		return discoveryCategoryExpander
 	}
 
-	return categoryExpander
+	return legacyExpander
 }
 
 func (f *ring1Factory) ClientForMapping(mapping *meta.RESTMapping) (resource.RESTClient, error) {
@@ -454,7 +458,7 @@ func (f *ring1Factory) SwaggerSchema(gvk schema.GroupVersionKind) (*swagger.ApiD
 }
 
 // OpenAPISchema returns metadata and structural information about Kubernetes object definitions.
-func (f *ring1Factory) OpenAPISchema() (oapi.Resources, error) {
+func (f *ring1Factory) OpenAPISchema() (openapi.Resources, error) {
 	discovery, err := f.clientAccessFactory.DiscoveryClient()
 	if err != nil {
 		return nil, err
