@@ -27,7 +27,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/util/workqueue"
@@ -48,6 +47,14 @@ import (
 const (
 	MatchInterPodAffinity = "MatchInterPodAffinity"
 )
+
+// IMPORTANT NOTE for predicate developers:
+// We are using cached predicate result for pods belonging to the same equivalence class.
+// So when updating a existing predicate, you should consider whether your change will introduce new
+// dependency to attributes of any API object like Pod, Node, Service etc.
+// If yes, you are expected to invalidate the cached predicate result for related API object change.
+// For example:
+// https://github.com/kubernetes/kubernetes/blob/36a218e/plugin/pkg/scheduler/factory/factory.go#L422
 
 // NodeInfo: Other types for predicate functions...
 type NodeInfo interface {
@@ -213,7 +220,7 @@ func (c *MaxPDVolumeCountChecker) filterVolumes(volumes []v1.Volume, namespace s
 			if err != nil {
 				// if the PVC is not found, log the error and count the PV towards the PV limit
 				// generate a random volume ID since its required for de-dup
-				utilruntime.HandleError(fmt.Errorf("Unable to look up PVC info for %s/%s, assuming PVC matches predicate when counting limits: %v", namespace, pvcName, err))
+				glog.V(4).Infof("Unable to look up PVC info for %s/%s, assuming PVC matches predicate when counting limits: %v", namespace, pvcName, err)
 				source := rand.NewSource(time.Now().UnixNano())
 				generatedID := "missingPVC" + strconv.Itoa(rand.New(source).Intn(1000000))
 				filteredVolumes[generatedID] = true
@@ -234,7 +241,7 @@ func (c *MaxPDVolumeCountChecker) filterVolumes(volumes []v1.Volume, namespace s
 				// if the PV is not found, log the error
 				// and count the PV towards the PV limit
 				// generate a random volume ID since it is required for de-dup
-				utilruntime.HandleError(fmt.Errorf("Unable to look up PV info for %s/%s/%s, assuming PV matches predicate when counting limits: %v", namespace, pvcName, pvName, err))
+				glog.V(4).Infof("Unable to look up PV info for %s/%s/%s, assuming PV matches predicate when counting limits: %v", namespace, pvcName, pvName, err)
 				source := rand.NewSource(time.Now().UnixNano())
 				generatedID := "missingPV" + strconv.Itoa(rand.New(source).Intn(1000000))
 				filteredVolumes[generatedID] = true

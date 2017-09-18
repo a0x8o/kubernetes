@@ -474,6 +474,17 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 	// check the status of containers.
 	for idx, container := range pod.Spec.Containers {
 		containerStatus := podStatus.FindContainerStatusByName(container.Name)
+
+		// Call internal container post-stop lifecycle hook for any non-running container so that any
+		// allocated cpus are released immediately. If the container is restarted, cpus will be re-allocated
+		// to it.
+		if containerStatus != nil && containerStatus.State != kubecontainer.ContainerStateRunning {
+			if err := m.internalLifecycle.PostStopContainer(containerStatus.ID.ID); err != nil {
+				glog.Errorf("internal container post-stop lifecycle hook failed for container %v in pod %v with error %v",
+					container.Name, pod.Name, err)
+			}
+		}
+
 		// If container does not exist, or is not running, check whether we
 		// need to restart it.
 		if containerStatus == nil || containerStatus.State != kubecontainer.ContainerStateRunning {
@@ -688,7 +699,14 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 		glog.V(4).Infof("Creating container %+v in pod %v", container, format.Pod(pod))
 		if msg, err := m.startContainer(podSandboxID, podSandboxConfig, container, pod, podStatus, pullSecrets, podIP); err != nil {
 			startContainerResult.Fail(err, msg)
-			utilruntime.HandleError(fmt.Errorf("container start failed: %v: %s", err, msg))
+			// known errors that are logged in other places are logged at higher levels here to avoid
+			// repetitive log spam
+			switch {
+			case err == images.ErrImagePullBackOff:
+				glog.V(3).Infof("container start failed: %v: %s", err, msg)
+			default:
+				utilruntime.HandleError(fmt.Errorf("container start failed: %v: %s", err, msg))
+			}
 			continue
 		}
 	}
