@@ -79,7 +79,7 @@ func NewCloudNodeController(
 	nodeStatusUpdateFrequency time.Duration) *CloudNodeController {
 
 	eventBroadcaster := record.NewBroadcaster()
-	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloudcontrollermanager"})
+	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-node-controller"})
 	eventBroadcaster.StartLogging(glog.Infof)
 	if kubeClient != nil {
 		glog.V(0).Infof("Sending events to api server.")
@@ -178,17 +178,12 @@ func (cnc *CloudNodeController) updateNodeAddress(node *v1.Node, instances cloud
 		}
 		nodeAddresses = []v1.NodeAddress{*nodeIP}
 	}
-	nodeCopy, err := scheme.Scheme.DeepCopy(node)
-	if err != nil {
-		glog.Errorf("failed to copy node to a new object")
-		return
-	}
-	newNode := nodeCopy.(*v1.Node)
+	newNode := node.DeepCopy()
 	newNode.Status.Addresses = nodeAddresses
 	if !nodeAddressesChangeDetected(node.Status.Addresses, newNode.Status.Addresses) {
 		return
 	}
-	_, err = nodeutil.PatchNodeStatus(cnc.kubeClient, types.NodeName(node.Name), node, newNode)
+	_, err = nodeutil.PatchNodeStatus(cnc.kubeClient.CoreV1(), types.NodeName(node.Name), node, newNode)
 	if err != nil {
 		glog.Errorf("Error patching node with cloud ip addresses = [%v]", err)
 	}

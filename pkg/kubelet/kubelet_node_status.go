@@ -139,7 +139,7 @@ func (kl *Kubelet) tryRegisterWithAPIServer(node *v1.Node) bool {
 		requiresUpdate := kl.reconcileCMADAnnotationWithExistingNode(node, existingNode)
 		requiresUpdate = kl.updateDefaultLabels(node, existingNode) || requiresUpdate
 		if requiresUpdate {
-			if _, err := nodeutil.PatchNodeStatus(kl.kubeClient, types.NodeName(kl.nodeName),
+			if _, err := nodeutil.PatchNodeStatus(kl.kubeClient.CoreV1(), types.NodeName(kl.nodeName),
 				originalNode, existingNode); err != nil {
 				glog.Errorf("Unable to reconcile node %q with API server: error updating node: %v", kl.nodeName, err)
 				return false
@@ -367,7 +367,7 @@ func (kl *Kubelet) initialNode() (*v1.Node, error) {
 // It synchronizes node status to master, registering the kubelet first if
 // necessary.
 func (kl *Kubelet) syncNodeStatus() {
-	if kl.kubeClient == nil {
+	if kl.kubeClient == nil || kl.heartbeatClient == nil {
 		return
 	}
 	if kl.registerNode {
@@ -404,7 +404,7 @@ func (kl *Kubelet) tryUpdateNodeStatus(tryNumber int) error {
 	if tryNumber == 0 {
 		util.FromApiserverCache(&opts)
 	}
-	node, err := kl.kubeClient.Core().Nodes().Get(string(kl.nodeName), opts)
+	node, err := kl.heartbeatClient.Nodes().Get(string(kl.nodeName), opts)
 	if err != nil {
 		return fmt.Errorf("error getting node %q: %v", kl.nodeName, err)
 	}
@@ -423,7 +423,7 @@ func (kl *Kubelet) tryUpdateNodeStatus(tryNumber int) error {
 
 	kl.setNodeStatus(node)
 	// Patch the current status on the API server
-	updatedNode, err := nodeutil.PatchNodeStatus(kl.kubeClient, types.NodeName(kl.nodeName), originalNode, node)
+	updatedNode, err := nodeutil.PatchNodeStatus(kl.heartbeatClient, types.NodeName(kl.nodeName), originalNode, node)
 	if err != nil {
 		return err
 	}
@@ -469,14 +469,16 @@ func (kl *Kubelet) setNodeAddress(node *v1.Node) error {
 			return fmt.Errorf("failed to get node address from cloud provider: %v", err)
 		}
 		if kl.nodeIP != nil {
+			enforcedNodeAddresses := []v1.NodeAddress{}
 			for _, nodeAddress := range nodeAddresses {
 				if nodeAddress.Address == kl.nodeIP.String() {
-					node.Status.Addresses = []v1.NodeAddress{
-						{Type: nodeAddress.Type, Address: nodeAddress.Address},
-						{Type: v1.NodeHostName, Address: kl.GetHostname()},
-					}
-					return nil
+					enforcedNodeAddresses = append(enforcedNodeAddresses, v1.NodeAddress{Type: nodeAddress.Type, Address: nodeAddress.Address})
 				}
+			}
+			if len(enforcedNodeAddresses) > 0 {
+				enforcedNodeAddresses = append(enforcedNodeAddresses, v1.NodeAddress{Type: v1.NodeHostName, Address: kl.GetHostname()})
+				node.Status.Addresses = enforcedNodeAddresses
+				return nil
 			}
 			return fmt.Errorf("failed to get node address from cloud provider that matches ip: %v", kl.nodeIP)
 		}
@@ -595,6 +597,25 @@ func (kl *Kubelet) setNodeStatusMachineInfo(node *v1.Node) {
 				node.Status.Capacity[v1.ResourceEphemeralStorage] = initialCapacity[v1.ResourceEphemeralStorage]
 			}
 		}
+
+		currentCapacity := kl.containerManager.GetCapacity()
+		if currentCapacity != nil {
+			for k, v := range currentCapacity {
+				if v1helper.IsExtendedResourceName(k) {
+					glog.V(2).Infof("Update capacity for %s to %d", k, v.Value())
+					node.Status.Capacity[k] = v
+				}
+			}
+			// Remove stale extended resources.
+			for k := range node.Status.Capacity {
+				if v1helper.IsExtendedResourceName(k) {
+					if _, ok := currentCapacity[k]; !ok {
+						glog.V(2).Infof("delete capacity for %s", k)
+						delete(node.Status.Capacity, k)
+					}
+				}
+			}
+		}
 	}
 
 	// Set Allocatable.
@@ -620,6 +641,19 @@ func (kl *Kubelet) setNodeStatusMachineInfo(node *v1.Node) {
 			value.Set(0)
 		}
 		node.Status.Allocatable[k] = value
+	}
+	// for every huge page reservation, we need to remove it from allocatable memory
+	for k, v := range node.Status.Capacity {
+		if v1helper.IsHugePageResourceName(k) {
+			allocatableMemory := node.Status.Allocatable[v1.ResourceMemory]
+			value := *(v.Copy())
+			allocatableMemory.Sub(value)
+			if allocatableMemory.Sign() < 0 {
+				// Negative Allocatable resources don't make sense.
+				allocatableMemory.Set(0)
+			}
+			node.Status.Allocatable[v1.ResourceMemory] = allocatableMemory
+		}
 	}
 }
 

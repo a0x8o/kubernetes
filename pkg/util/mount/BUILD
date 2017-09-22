@@ -20,6 +20,9 @@ go_library(
             "mount_linux.go",
             "nsenter_mount.go",
         ],
+        "@io_bazel_rules_go//go/platform:windows_amd64": [
+            "mount_windows.go",
+        ],
         "//conditions:default": [],
     }),
     deps = [
@@ -27,6 +30,7 @@ go_library(
         "//vendor/k8s.io/utils/exec:go_default_library",
     ] + select({
         "@io_bazel_rules_go//go/platform:linux_amd64": [
+            "//pkg/util/io:go_default_library",
             "//vendor/golang.org/x/sys/unix:go_default_library",
             "//vendor/k8s.io/apimachinery/pkg/util/sets:go_default_library",
         ],
@@ -42,6 +46,9 @@ go_test(
         "@io_bazel_rules_go//go/platform:linux_amd64": [
             "mount_linux_test.go",
             "nsenter_mount_test.go",
+        ],
+        "@io_bazel_rules_go//go/platform:windows_amd64": [
+            "mount_windows_test.go",
         ],
         "//conditions:default": [],
     }),

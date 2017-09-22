@@ -67,6 +67,9 @@ type Interface interface {
 	// GetDeviceNameFromMount finds the device name by checking the mount path
 	// to get the global mount path which matches its plugin directory
 	GetDeviceNameFromMount(mountPath, pluginDir string) (string, error)
+	// MakeRShared checks that given path is on a mount with 'rshared' mount
+	// propagation. If not, it bind-mounts the path as rshared.
+	MakeRShared(path string) error
 }
 
 // Exec executes command where mount utilities are. This can be either the host,
@@ -274,4 +277,29 @@ func IsNotMountPoint(mounter Interface, file string) (bool, error) {
 		}
 	}
 	return notMnt, nil
+}
+
+// isBind detects whether a bind mount is being requested and makes the remount options to
+// use in case of bind mount, due to the fact that bind mount doesn't respect mount options.
+// The list equals:
+//   options - 'bind' + 'remount' (no duplicate)
+func isBind(options []string) (bool, []string) {
+	bindRemountOpts := []string{"remount"}
+	bind := false
+
+	if len(options) != 0 {
+		for _, option := range options {
+			switch option {
+			case "bind":
+				bind = true
+				break
+			case "remount":
+				break
+			default:
+				bindRemountOpts = append(bindRemountOpts, option)
+			}
+		}
+	}
+
+	return bind, bindRemountOpts
 }

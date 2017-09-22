@@ -2418,6 +2418,10 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 				SupplementalGroups: extensions.SupplementalGroupsStrategyOptions{
 					Rule: extensions.SupplementalGroupsStrategyRunAsAny,
 				},
+				AllowedHostPaths: []extensions.AllowedHostPath{
+					{PathPrefix: "/foo/bar"},
+					{PathPrefix: "/baz/"},
+				},
 			},
 		}
 	}
@@ -2468,6 +2472,10 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 		{Min: 1, Max: -10},
 	}
 
+	wildcardAllowedCapAndRequiredDrop := validPSP()
+	wildcardAllowedCapAndRequiredDrop.Spec.RequiredDropCapabilities = []api.Capability{"foo"}
+	wildcardAllowedCapAndRequiredDrop.Spec.AllowedCapabilities = []api.Capability{extensions.AllowAllCapabilities}
+
 	requiredCapAddAndDrop := validPSP()
 	requiredCapAddAndDrop.Spec.DefaultAddCapabilities = []api.Capability{"foo"}
 	requiredCapAddAndDrop.Spec.RequiredDropCapabilities = []api.Capability{"foo"}
@@ -2492,9 +2500,23 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 	invalidSeccompDefault.Annotations = map[string]string{
 		seccomp.DefaultProfileAnnotationKey: "not-good",
 	}
+	invalidSeccompAllowAnyDefault := validPSP()
+	invalidSeccompAllowAnyDefault.Annotations = map[string]string{
+		seccomp.DefaultProfileAnnotationKey: "*",
+	}
 	invalidSeccompAllowed := validPSP()
 	invalidSeccompAllowed.Annotations = map[string]string{
 		seccomp.AllowedProfilesAnnotationKey: "docker/default,not-good",
+	}
+
+	invalidAllowedHostPathMissingPath := validPSP()
+	invalidAllowedHostPathMissingPath.Spec.AllowedHostPaths = []extensions.AllowedHostPath{
+		{PathPrefix: ""},
+	}
+
+	invalidAllowedHostPathBacksteps := validPSP()
+	invalidAllowedHostPathBacksteps.Spec.AllowedHostPaths = []extensions.AllowedHostPath{
+		{PathPrefix: "/dont/allow/backsteps/.."},
 	}
 
 	invalidDefaultAllowPrivilegeEscalation := validPSP()
@@ -2572,6 +2594,11 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 			errorType:   field.ErrorTypeInvalid,
 			errorDetail: "max cannot be negative",
 		},
+		"non-empty required drops and all caps are allowed by a wildcard": {
+			psp:         wildcardAllowedCapAndRequiredDrop,
+			errorType:   field.ErrorTypeInvalid,
+			errorDetail: "must be empty when all capabilities are allowed by a wildcard",
+		},
 		"invalid required caps": {
 			psp:         requiredCapAddAndDrop,
 			errorType:   field.ErrorTypeInvalid,
@@ -2602,6 +2629,11 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 			errorType:   field.ErrorTypeInvalid,
 			errorDetail: "must be a valid seccomp profile",
 		},
+		"invalid seccomp allow any default profile": {
+			psp:         invalidSeccompAllowAnyDefault,
+			errorType:   field.ErrorTypeInvalid,
+			errorDetail: "must be a valid seccomp profile",
+		},
 		"invalid seccomp allowed profile": {
 			psp:         invalidSeccompAllowed,
 			errorType:   field.ErrorTypeInvalid,
@@ -2611,6 +2643,16 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 			psp:         invalidDefaultAllowPrivilegeEscalation,
 			errorType:   field.ErrorTypeInvalid,
 			errorDetail: "Cannot set DefaultAllowPrivilegeEscalation to true without also setting AllowPrivilegeEscalation to true",
+		},
+		"invalid allowed host path empty path": {
+			psp:         invalidAllowedHostPathMissingPath,
+			errorType:   field.ErrorTypeRequired,
+			errorDetail: "is required",
+		},
+		"invalid allowed host path with backsteps": {
+			psp:         invalidAllowedHostPathBacksteps,
+			errorType:   field.ErrorTypeInvalid,
+			errorDetail: "must not contain '..'",
 		},
 	}
 
@@ -2683,7 +2725,7 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 	validSeccomp := validPSP()
 	validSeccomp.Annotations = map[string]string{
 		seccomp.DefaultProfileAnnotationKey:  "docker/default",
-		seccomp.AllowedProfilesAnnotationKey: "docker/default,unconfined,localhost/foo",
+		seccomp.AllowedProfilesAnnotationKey: "docker/default,unconfined,localhost/foo,*",
 	}
 
 	validDefaultAllowPrivilegeEscalation := validPSP()

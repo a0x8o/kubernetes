@@ -48,10 +48,10 @@ import (
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/filters"
+	serveroptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
-	//aggregatorinformers "k8s.io/kube-aggregator/pkg/client/informers/internalversion"
 	openapi "k8s.io/kube-openapi/pkg/common"
 
 	"k8s.io/apiserver/pkg/storage/etcd3/preflight"
@@ -134,7 +134,7 @@ func CreateServerChain(runOptions *options.ServerRunOptions, stopCh <-chan struc
 
 	// TPRs are enabled and not yet beta, since this these are the successor, they fall under the same enablement rule
 	// If additional API servers are added, they should be gated.
-	apiExtensionsConfig, err := createAPIExtensionsConfig(*kubeAPIServerConfig.GenericConfig, runOptions)
+	apiExtensionsConfig, err := createAPIExtensionsConfig(*kubeAPIServerConfig.GenericConfig, versionedInformers, runOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func CreateServerChain(runOptions *options.ServerRunOptions, stopCh <-chan struc
 		return nil, err
 	}
 
-	kubeAPIServer, err := CreateKubeAPIServer(kubeAPIServerConfig, apiExtensionsServer.GenericAPIServer, sharedInformers)
+	kubeAPIServer, err := CreateKubeAPIServer(kubeAPIServerConfig, apiExtensionsServer.GenericAPIServer, sharedInformers, versionedInformers)
 	if err != nil {
 		return nil, err
 	}
@@ -165,13 +165,16 @@ func CreateServerChain(runOptions *options.ServerRunOptions, stopCh <-chan struc
 	// this wires up openapi
 	kubeAPIServer.GenericAPIServer.PrepareRun()
 
+	// This will wire up openapi for extension api server
+	apiExtensionsServer.GenericAPIServer.PrepareRun()
+
 	// aggregator comes last in the chain
 	aggregatorConfig, err := createAggregatorConfig(*kubeAPIServerConfig.GenericConfig, runOptions, versionedInformers, serviceResolver, proxyTransport)
 	if err != nil {
 		return nil, err
 	}
-	aggregatorConfig.ProxyTransport = proxyTransport
-	aggregatorConfig.ServiceResolver = serviceResolver
+	aggregatorConfig.ExtraConfig.ProxyTransport = proxyTransport
+	aggregatorConfig.ExtraConfig.ServiceResolver = serviceResolver
 	aggregatorServer, err := createAggregatorServer(aggregatorConfig, kubeAPIServer.GenericAPIServer, apiExtensionsServer.Informers)
 	if err != nil {
 		// we don't need special handling for innerStopCh because the aggregator server doesn't create any go routines
@@ -189,8 +192,8 @@ func CreateServerChain(runOptions *options.ServerRunOptions, stopCh <-chan struc
 }
 
 // CreateKubeAPIServer creates and wires a workable kube-apiserver
-func CreateKubeAPIServer(kubeAPIServerConfig *master.Config, delegateAPIServer genericapiserver.DelegationTarget, sharedInformers informers.SharedInformerFactory) (*master.Master, error) {
-	kubeAPIServer, err := kubeAPIServerConfig.Complete().New(delegateAPIServer)
+func CreateKubeAPIServer(kubeAPIServerConfig *master.Config, delegateAPIServer genericapiserver.DelegationTarget, sharedInformers informers.SharedInformerFactory, versionedInformers clientgoinformers.SharedInformerFactory) (*master.Master, error) {
+	kubeAPIServer, err := kubeAPIServerConfig.Complete(versionedInformers).New(delegateAPIServer)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +251,7 @@ func CreateNodeDialer(s *options.ServerRunOptions) (tunneler.Tunneler, *http.Tra
 }
 
 // CreateKubeAPIServerConfig creates all the resources for running the API server, but runs none of them
-func CreateKubeAPIServerConfig(s *options.ServerRunOptions, nodeTunneler tunneler.Tunneler, proxyTransport http.RoundTripper) (*master.Config, informers.SharedInformerFactory, clientgoinformers.SharedInformerFactory, *kubeserver.InsecureServingInfo, aggregatorapiserver.ServiceResolver, error) {
+func CreateKubeAPIServerConfig(s *options.ServerRunOptions, nodeTunneler tunneler.Tunneler, proxyTransport *http.Transport) (*master.Config, informers.SharedInformerFactory, clientgoinformers.SharedInformerFactory, *kubeserver.InsecureServingInfo, aggregatorapiserver.ServiceResolver, error) {
 	// set defaults in the options before trying to create the generic config
 	if err := defaultOptions(s); err != nil {
 		return nil, nil, nil, nil, nil, err
@@ -259,7 +262,14 @@ func CreateKubeAPIServerConfig(s *options.ServerRunOptions, nodeTunneler tunnele
 		return nil, nil, nil, nil, nil, utilerrors.NewAggregate(errs)
 	}
 
-	genericConfig, sharedInformers, versionedInformers, insecureServingOptions, serviceResolver, err := BuildGenericConfig(s)
+	if s.CloudProvider != nil {
+		// Initialize the cloudprovider once, to give it a chance to register KMS plugins, if any.
+		_, err := cloudprovider.InitCloudProvider(s.CloudProvider.CloudProvider, s.CloudProvider.CloudConfigFile)
+		if err != nil {
+			return nil, nil, nil, nil, nil, err
+		}
+	}
+	genericConfig, sharedInformers, versionedInformers, insecureServingOptions, serviceResolver, err := BuildGenericConfig(s, proxyTransport)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
@@ -302,47 +312,48 @@ func CreateKubeAPIServerConfig(s *options.ServerRunOptions, nodeTunneler tunnele
 
 	config := &master.Config{
 		GenericConfig: genericConfig,
+		ExtraConfig: master.ExtraConfig{
+			ClientCARegistrationHook: master.ClientCARegistrationHook{
+				ClientCA:                         clientCA,
+				RequestHeaderUsernameHeaders:     s.Authentication.RequestHeader.UsernameHeaders,
+				RequestHeaderGroupHeaders:        s.Authentication.RequestHeader.GroupHeaders,
+				RequestHeaderExtraHeaderPrefixes: s.Authentication.RequestHeader.ExtraHeaderPrefixes,
+				RequestHeaderCA:                  requestHeaderProxyCA,
+				RequestHeaderAllowedNames:        s.Authentication.RequestHeader.AllowedNames,
+			},
 
-		ClientCARegistrationHook: master.ClientCARegistrationHook{
-			ClientCA:                         clientCA,
-			RequestHeaderUsernameHeaders:     s.Authentication.RequestHeader.UsernameHeaders,
-			RequestHeaderGroupHeaders:        s.Authentication.RequestHeader.GroupHeaders,
-			RequestHeaderExtraHeaderPrefixes: s.Authentication.RequestHeader.ExtraHeaderPrefixes,
-			RequestHeaderCA:                  requestHeaderProxyCA,
-			RequestHeaderAllowedNames:        s.Authentication.RequestHeader.AllowedNames,
+			APIResourceConfigSource: storageFactory.APIResourceConfigSource,
+			StorageFactory:          storageFactory,
+			EnableCoreControllers:   true,
+			EventTTL:                s.EventTTL,
+			KubeletClientConfig:     s.KubeletConfig,
+			EnableUISupport:         true,
+			EnableLogsSupport:       s.EnableLogsHandler,
+			ProxyTransport:          proxyTransport,
+
+			Tunneler: nodeTunneler,
+
+			ServiceIPRange:       serviceIPRange,
+			APIServerServiceIP:   apiServerServiceIP,
+			APIServerServicePort: 443,
+
+			ServiceNodePortRange:      s.ServiceNodePortRange,
+			KubernetesServiceNodePort: s.KubernetesServiceNodePort,
+
+			MasterCount: s.MasterCount,
 		},
-
-		APIResourceConfigSource: storageFactory.APIResourceConfigSource,
-		StorageFactory:          storageFactory,
-		EnableCoreControllers:   true,
-		EventTTL:                s.EventTTL,
-		KubeletClientConfig:     s.KubeletConfig,
-		EnableUISupport:         true,
-		EnableLogsSupport:       s.EnableLogsHandler,
-		ProxyTransport:          proxyTransport,
-
-		Tunneler: nodeTunneler,
-
-		ServiceIPRange:       serviceIPRange,
-		APIServerServiceIP:   apiServerServiceIP,
-		APIServerServicePort: 443,
-
-		ServiceNodePortRange:      s.ServiceNodePortRange,
-		KubernetesServiceNodePort: s.KubernetesServiceNodePort,
-
-		MasterCount: s.MasterCount,
 	}
 
 	if nodeTunneler != nil {
 		// Use the nodeTunneler's dialer to connect to the kubelet
-		config.KubeletClientConfig.Dial = nodeTunneler.Dial
+		config.ExtraConfig.KubeletClientConfig.Dial = nodeTunneler.Dial
 	}
 
 	return config, sharedInformers, versionedInformers, insecureServingOptions, serviceResolver, nil
 }
 
 // BuildGenericConfig takes the master server options and produces the genericapiserver.Config associated with it
-func BuildGenericConfig(s *options.ServerRunOptions) (*genericapiserver.Config, informers.SharedInformerFactory, clientgoinformers.SharedInformerFactory, *kubeserver.InsecureServingInfo, aggregatorapiserver.ServiceResolver, error) {
+func BuildGenericConfig(s *options.ServerRunOptions, proxyTransport *http.Transport) (*genericapiserver.Config, informers.SharedInformerFactory, clientgoinformers.SharedInformerFactory, *kubeserver.InsecureServingInfo, aggregatorapiserver.ServiceResolver, error) {
 	genericConfig := genericapiserver.NewConfig(api.Codecs)
 	if err := s.GenericServerRunOptions.ApplyTo(genericConfig); err != nil {
 		return nil, nil, nil, nil, nil, err
@@ -433,7 +444,7 @@ func BuildGenericConfig(s *options.ServerRunOptions) (*genericapiserver.Config, 
 		return nil, nil, nil, nil, nil, fmt.Errorf("invalid authentication config: %v", err)
 	}
 
-	genericConfig.Authorizer, err = BuildAuthorizer(s, sharedInformers)
+	genericConfig.Authorizer, genericConfig.RuleResolver, err = BuildAuthorizer(s, sharedInformers)
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("invalid authorization config: %v", err)
 	}
@@ -448,6 +459,7 @@ func BuildGenericConfig(s *options.ServerRunOptions) (*genericapiserver.Config, 
 		sharedInformers,
 		genericConfig.Authorizer,
 		serviceResolver,
+		proxyTransport,
 	)
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("failed to create admission plugin initializer: %v", err)
@@ -455,6 +467,7 @@ func BuildGenericConfig(s *options.ServerRunOptions) (*genericapiserver.Config, 
 
 	err = s.Admission.ApplyTo(
 		genericConfig,
+		versionedInformers,
 		pluginInitializer)
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("failed to initialize admission: %v", err)
@@ -463,7 +476,7 @@ func BuildGenericConfig(s *options.ServerRunOptions) (*genericapiserver.Config, 
 }
 
 // BuildAdmissionPluginInitializer constructs the admission plugin initializer
-func BuildAdmissionPluginInitializer(s *options.ServerRunOptions, client internalclientset.Interface, externalClient clientset.Interface, sharedInformers informers.SharedInformerFactory, apiAuthorizer authorizer.Authorizer, serviceResolver aggregatorapiserver.ServiceResolver) (admission.PluginInitializer, error) {
+func BuildAdmissionPluginInitializer(s *options.ServerRunOptions, client internalclientset.Interface, externalClient clientset.Interface, sharedInformers informers.SharedInformerFactory, apiAuthorizer authorizer.Authorizer, serviceResolver aggregatorapiserver.ServiceResolver, proxyTransport *http.Transport) (admission.PluginInitializer, error) {
 	var cloudConfig []byte
 
 	if s.CloudProvider.CloudConfigFile != "" {
@@ -497,6 +510,7 @@ func BuildAdmissionPluginInitializer(s *options.ServerRunOptions, client interna
 	}
 
 	pluginInitializer = pluginInitializer.SetServiceResolver(serviceResolver)
+	pluginInitializer = pluginInitializer.SetProxyTransport(proxyTransport)
 
 	return pluginInitializer, nil
 }
@@ -534,12 +548,13 @@ func BuildAuthenticator(s *options.ServerRunOptions, storageFactory serverstorag
 }
 
 // BuildAuthorizer constructs the authorizer
-func BuildAuthorizer(s *options.ServerRunOptions, sharedInformers informers.SharedInformerFactory) (authorizer.Authorizer, error) {
+func BuildAuthorizer(s *options.ServerRunOptions, sharedInformers informers.SharedInformerFactory) (authorizer.Authorizer, authorizer.RuleResolver, error) {
 	authorizationConfig := s.Authorization.ToAuthorizationConfig(sharedInformers)
 	return authorizationConfig.New()
 }
 
-// BuildStorageFactory constructs the storage factory
+// BuildStorageFactory constructs the storage factory. If encryption at rest is used, it expects
+// all supported KMS plugins to be registered in the KMS plugin registry before being called.
 func BuildStorageFactory(s *options.ServerRunOptions) (*serverstorage.DefaultStorageFactory, error) {
 	storageGroupsToEncodingVersion, err := s.StorageSerialization.StorageGroupsToEncodingVersion()
 	if err != nil {
@@ -548,9 +563,8 @@ func BuildStorageFactory(s *options.ServerRunOptions) (*serverstorage.DefaultSto
 	storageFactory, err := kubeapiserver.NewStorageFactory(
 		s.Etcd.StorageConfig, s.Etcd.DefaultStorageMediaType, api.Codecs,
 		serverstorage.NewDefaultResourceEncodingConfig(api.Registry), storageGroupsToEncodingVersion,
-		// FIXME: this GroupVersionResource override should be configurable
-		// TODO we need to update this to batch/v1beta1 when it's enabled by default
-		[]schema.GroupVersionResource{batch.Resource("cronjobs").WithVersion("v2alpha1")},
+		// FIXME (soltysh): this GroupVersionResource override should be configurable
+		[]schema.GroupVersionResource{batch.Resource("cronjobs").WithVersion("v1beta1")},
 		master.DefaultAPIResourceConfigSource(), s.APIEnablement.RuntimeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("error in initializing storage factory: %s", err)
@@ -581,7 +595,7 @@ func BuildStorageFactory(s *options.ServerRunOptions) (*serverstorage.DefaultSto
 		storageFactory.SetEtcdLocation(groupResource, servers)
 	}
 
-	if s.Etcd.EncryptionProviderConfigFilepath != "" {
+	if len(s.Etcd.EncryptionProviderConfigFilepath) != 0 {
 		transformerOverrides, err := encryptionconfig.GetTransformerOverrides(s.Etcd.EncryptionProviderConfigFilepath)
 		if err != nil {
 			return nil, err
@@ -606,8 +620,6 @@ func defaultOptions(s *options.ServerRunOptions) error {
 	if err != nil {
 		return fmt.Errorf("error determining service IP ranges: %v", err)
 	}
-	s.SecureServing.ForceLoopbackConfigUsage()
-
 	if err := s.SecureServing.MaybeDefaultWithSelfSignedCerts(s.GenericServerRunOptions.AdvertiseAddress.String(), []string{"kubernetes.default.svc", "kubernetes.default", "kubernetes"}, []net.IP{apiServerServiceIP}); err != nil {
 		return fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
@@ -649,8 +661,16 @@ func defaultOptions(s *options.ServerRunOptions) error {
 	}
 	if s.Etcd.EnableWatchCache {
 		glog.V(2).Infof("Initializing cache sizes based on %dMB limit", s.GenericServerRunOptions.TargetRAMMB)
-		cachesize.InitializeWatchCacheSizes(s.GenericServerRunOptions.TargetRAMMB)
-		cachesize.SetWatchCacheSizes(s.GenericServerRunOptions.WatchCacheSizes)
+		sizes := cachesize.NewHeuristicWatchCacheSizes(s.GenericServerRunOptions.TargetRAMMB)
+		if userSpecified, err := serveroptions.ParseWatchCacheSizes(s.Etcd.WatchCacheSizes); err == nil {
+			for resource, size := range userSpecified {
+				sizes[resource] = size
+			}
+		}
+		s.Etcd.WatchCacheSizes, err = serveroptions.WriteWatchCacheSizes(sizes)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

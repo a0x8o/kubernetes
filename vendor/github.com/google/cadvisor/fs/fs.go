@@ -43,6 +43,7 @@ const (
 	LabelSystemRoot   = "root"
 	LabelDockerImages = "docker-images"
 	LabelRktImages    = "rkt-images"
+	LabelCrioImages   = "crio-images"
 )
 
 // The maximum number of `du` and `find` tasks that can be running at once.
@@ -83,12 +84,15 @@ type RealFsInfo struct {
 	mounts map[string]*mount.Info
 	// devicemapper client
 	dmsetup devicemapper.DmsetupClient
+	// fsUUIDToDeviceName is a map from the filesystem UUID to its device name.
+	fsUUIDToDeviceName map[string]string
 }
 
 type Context struct {
 	// docker root directory.
 	Docker  DockerContext
 	RktPath string
+	Crio    CrioContext
 }
 
 type DockerContext struct {
@@ -97,8 +101,17 @@ type DockerContext struct {
 	DriverStatus map[string]string
 }
 
+type CrioContext struct {
+	Root string
+}
+
 func NewFsInfo(context Context) (FsInfo, error) {
 	mounts, err := mount.GetMounts()
+	if err != nil {
+		return nil, err
+	}
+
+	fsUUIDToDeviceName, err := getFsUUIDToDeviceNameMap()
 	if err != nil {
 		return nil, err
 	}
@@ -106,10 +119,11 @@ func NewFsInfo(context Context) (FsInfo, error) {
 	// Avoid devicemapper container mounts - these are tracked by the ThinPoolWatcher
 	excluded := []string{fmt.Sprintf("%s/devicemapper/mnt", context.Docker.Root)}
 	fsInfo := &RealFsInfo{
-		partitions: processMounts(mounts, excluded),
-		labels:     make(map[string]string, 0),
-		mounts:     make(map[string]*mount.Info, 0),
-		dmsetup:    devicemapper.NewDmsetupClient(),
+		partitions:         processMounts(mounts, excluded),
+		labels:             make(map[string]string, 0),
+		mounts:             make(map[string]*mount.Info, 0),
+		dmsetup:            devicemapper.NewDmsetupClient(),
+		fsUUIDToDeviceName: fsUUIDToDeviceName,
 	}
 
 	for _, mount := range mounts {
@@ -120,10 +134,44 @@ func NewFsInfo(context Context) (FsInfo, error) {
 	// need to call this before the log line below printing out the partitions, as this function may
 	// add a "partition" for devicemapper to fsInfo.partitions
 	fsInfo.addDockerImagesLabel(context, mounts)
+	fsInfo.addCrioImagesLabel(context, mounts)
 
+	glog.Infof("Filesystem UUIDs: %+v", fsInfo.fsUUIDToDeviceName)
 	glog.Infof("Filesystem partitions: %+v", fsInfo.partitions)
 	fsInfo.addSystemRootLabel(mounts)
 	return fsInfo, nil
+}
+
+// getFsUUIDToDeviceNameMap creates the filesystem uuid to device name map
+// using the information in /dev/disk/by-uuid. If the directory does not exist,
+// this function will return an empty map.
+func getFsUUIDToDeviceNameMap() (map[string]string, error) {
+	const dir = "/dev/disk/by-uuid"
+
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return make(map[string]string), nil
+	}
+
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	fsUUIDToDeviceName := make(map[string]string)
+	for _, file := range files {
+		path := filepath.Join(dir, file.Name())
+		target, err := os.Readlink(path)
+		if err != nil {
+			glog.Infof("Failed to resolve symlink for %q", path)
+			continue
+		}
+		device, err := filepath.Abs(filepath.Join(dir, target))
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve the absolute path of %q", filepath.Join(dir, target))
+		}
+		fsUUIDToDeviceName[file.Name()] = device
+	}
+	return fsUUIDToDeviceName, nil
 }
 
 func processMounts(mounts []*mount.Info, excludedMountpointPrefixes []string) map[string]partition {
@@ -234,6 +282,23 @@ func (self *RealFsInfo) addDockerImagesLabel(context Context, mounts []*mount.In
 		self.labels[LabelDockerImages] = dockerDev
 	} else {
 		self.updateContainerImagesPath(LabelDockerImages, mounts, getDockerImagePaths(context))
+	}
+}
+
+func (self *RealFsInfo) addCrioImagesLabel(context Context, mounts []*mount.Info) {
+	if context.Crio.Root != "" {
+		crioPath := context.Crio.Root
+		crioImagePaths := map[string]struct{}{
+			"/": {},
+		}
+		for _, dir := range []string{"overlay", "overlay2"} {
+			crioImagePaths[path.Join(crioPath, dir+"-images")] = struct{}{}
+		}
+		for crioPath != "/" && crioPath != "." {
+			crioImagePaths[crioPath] = struct{}{}
+			crioPath = filepath.Dir(crioPath)
+		}
+		self.updateContainerImagesPath(LabelCrioImages, mounts, crioImagePaths)
 	}
 }
 
@@ -431,6 +496,18 @@ func major(devNumber uint64) uint {
 
 func minor(devNumber uint64) uint {
 	return uint((devNumber & 0xff) | ((devNumber >> 12) & 0xfff00))
+}
+
+func (self *RealFsInfo) GetDeviceInfoByFsUUID(uuid string) (*DeviceInfo, error) {
+	deviceName, found := self.fsUUIDToDeviceName[uuid]
+	if !found {
+		return nil, ErrNoSuchDevice
+	}
+	p, found := self.partitions[deviceName]
+	if !found {
+		return nil, fmt.Errorf("cannot find device %q in partitions", deviceName)
+	}
+	return &DeviceInfo{deviceName, p.major, p.minor}, nil
 }
 
 func (self *RealFsInfo) GetDirFsDevice(dir string) (*DeviceInfo, error) {

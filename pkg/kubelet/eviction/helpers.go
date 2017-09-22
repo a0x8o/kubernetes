@@ -27,13 +27,11 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/kubernetes/pkg/api"
 	v1qos "k8s.io/kubernetes/pkg/api/v1/helper/qos"
 	statsapi "k8s.io/kubernetes/pkg/kubelet/apis/stats/v1alpha1"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
 	evictionapi "k8s.io/kubernetes/pkg/kubelet/eviction/api"
 	"k8s.io/kubernetes/pkg/kubelet/server/stats"
-	"k8s.io/kubernetes/pkg/quota/evaluator/core"
 )
 
 const (
@@ -61,8 +59,8 @@ var (
 	signalToNodeCondition map[evictionapi.Signal]v1.NodeConditionType
 	// signalToResource maps a Signal to its associated Resource.
 	signalToResource map[evictionapi.Signal]v1.ResourceName
-	// resourceToSignal maps a Resource to its associated Signal
-	resourceToSignal map[v1.ResourceName]evictionapi.Signal
+	// resourceClaimToSignal maps a Resource that can be reclaimed to its associated Signal
+	resourceClaimToSignal map[v1.ResourceName][]evictionapi.Signal
 )
 
 func init() {
@@ -86,13 +84,12 @@ func init() {
 	signalToResource[evictionapi.SignalNodeFsAvailable] = resourceNodeFs
 	signalToResource[evictionapi.SignalNodeFsInodesFree] = resourceNodeFsInodes
 
-	resourceToSignal = map[v1.ResourceName]evictionapi.Signal{}
-	for key, value := range signalToResource {
-		resourceToSignal[value] = key
-	}
-	// Hard-code here to make sure resourceNodeFs maps to evictionapi.SignalNodeFsAvailable
-	// (TODO) resourceToSignal is a map from resource name to a list of signals
-	resourceToSignal[resourceNodeFs] = evictionapi.SignalNodeFsAvailable
+	// maps resource to signals (the following resource could be reclaimed)
+	resourceClaimToSignal = map[v1.ResourceName][]evictionapi.Signal{}
+	resourceClaimToSignal[resourceNodeFs] = []evictionapi.Signal{evictionapi.SignalNodeFsAvailable}
+	resourceClaimToSignal[resourceImageFs] = []evictionapi.Signal{evictionapi.SignalImageFsAvailable}
+	resourceClaimToSignal[resourceNodeFsInodes] = []evictionapi.Signal{evictionapi.SignalNodeFsInodesFree}
+	resourceClaimToSignal[resourceImageFsInodes] = []evictionapi.Signal{evictionapi.SignalImageFsInodesFree}
 }
 
 // validSignal returns true if the signal is supported.
@@ -394,8 +391,8 @@ func localVolumeNames(pod *v1.Pod) []string {
 	return result
 }
 
-// podDiskUsage aggregates pod disk usage and inode consumption for the specified stats to measure.
-func podDiskUsage(podStats statsapi.PodStats, pod *v1.Pod, statsToMeasure []fsStatsType) (v1.ResourceList, error) {
+// containerUsage aggregates container disk usage and inode consumption for the specified stats to measure.
+func containerUsage(podStats statsapi.PodStats, statsToMeasure []fsStatsType) v1.ResourceList {
 	disk := resource.Quantity{Format: resource.BinarySI}
 	inodes := resource.Quantity{Format: resource.BinarySI}
 	for _, container := range podStats.Containers {
@@ -408,17 +405,45 @@ func podDiskUsage(podStats statsapi.PodStats, pod *v1.Pod, statsToMeasure []fsSt
 			inodes.Add(*inodeUsage(container.Logs))
 		}
 	}
-	if hasFsStatsType(statsToMeasure, fsStatsLocalVolumeSource) {
-		volumeNames := localVolumeNames(pod)
-		for _, volumeName := range volumeNames {
-			for _, volumeStats := range podStats.VolumeStats {
-				if volumeStats.Name == volumeName {
-					disk.Add(*diskUsage(&volumeStats.FsStats))
-					inodes.Add(*inodeUsage(&volumeStats.FsStats))
-					break
-				}
+	return v1.ResourceList{
+		resourceDisk:   disk,
+		resourceInodes: inodes,
+	}
+}
+
+// podLocalVolumeUsage aggregates pod local volumes disk usage and inode consumption for the specified stats to measure.
+func podLocalVolumeUsage(volumeNames []string, podStats statsapi.PodStats) v1.ResourceList {
+	disk := resource.Quantity{Format: resource.BinarySI}
+	inodes := resource.Quantity{Format: resource.BinarySI}
+	for _, volumeName := range volumeNames {
+		for _, volumeStats := range podStats.VolumeStats {
+			if volumeStats.Name == volumeName {
+				disk.Add(*diskUsage(&volumeStats.FsStats))
+				inodes.Add(*inodeUsage(&volumeStats.FsStats))
+				break
 			}
 		}
+	}
+	return v1.ResourceList{
+		resourceDisk:   disk,
+		resourceInodes: inodes,
+	}
+}
+
+// podDiskUsage aggregates pod disk usage and inode consumption for the specified stats to measure.
+func podDiskUsage(podStats statsapi.PodStats, pod *v1.Pod, statsToMeasure []fsStatsType) (v1.ResourceList, error) {
+	disk := resource.Quantity{Format: resource.BinarySI}
+	inodes := resource.Quantity{Format: resource.BinarySI}
+
+	containerUsageList := containerUsage(podStats, statsToMeasure)
+	disk.Add(containerUsageList[resourceDisk])
+	inodes.Add(containerUsageList[resourceInodes])
+
+	if hasFsStatsType(statsToMeasure, fsStatsLocalVolumeSource) {
+		volumeNames := localVolumeNames(pod)
+		podLocalVolumeUsageList := podLocalVolumeUsage(volumeNames, podStats)
+		disk.Add(podLocalVolumeUsageList[resourceDisk])
+		inodes.Add(podLocalVolumeUsageList[resourceInodes])
 	}
 	return v1.ResourceList{
 		resourceDisk:   disk,
@@ -441,6 +466,40 @@ func podMemoryUsage(podStats statsapi.PodStats) (v1.ResourceList, error) {
 	return v1.ResourceList{
 		v1.ResourceMemory: memory,
 		resourceDisk:      disk,
+	}, nil
+}
+
+// localEphemeralVolumeNames returns the set of ephemeral volumes for the pod that are local
+func localEphemeralVolumeNames(pod *v1.Pod) []string {
+	result := []string{}
+	for _, volume := range pod.Spec.Volumes {
+		if volume.GitRepo != nil ||
+			(volume.EmptyDir != nil && volume.EmptyDir.Medium != v1.StorageMediumMemory) ||
+			volume.ConfigMap != nil || volume.DownwardAPI != nil {
+			result = append(result, volume.Name)
+		}
+	}
+	return result
+}
+
+// podLocalEphemeralStorageUsage  aggregates pod local ephemeral storage usage and inode consumption for the specified stats to measure.
+func podLocalEphemeralStorageUsage(podStats statsapi.PodStats, pod *v1.Pod, statsToMeasure []fsStatsType) (v1.ResourceList, error) {
+	disk := resource.Quantity{Format: resource.BinarySI}
+	inodes := resource.Quantity{Format: resource.BinarySI}
+
+	containerUsageList := containerUsage(podStats, statsToMeasure)
+	disk.Add(containerUsageList[resourceDisk])
+	inodes.Add(containerUsageList[resourceInodes])
+
+	if hasFsStatsType(statsToMeasure, fsStatsLocalVolumeSource) {
+		volumeNames := localEphemeralVolumeNames(pod)
+		podLocalVolumeUsageList := podLocalVolumeUsage(volumeNames, podStats)
+		disk.Add(podLocalVolumeUsageList[resourceDisk])
+		inodes.Add(podLocalVolumeUsageList[resourceInodes])
+	}
+	return v1.ResourceList{
+		resourceDisk:   disk,
+		resourceInodes: inodes,
 	}, nil
 }
 
@@ -576,24 +635,33 @@ func memory(stats statsFunc) cmpFunc {
 
 		// adjust p1, p2 usage relative to the request (if any)
 		p1Memory := p1Usage[v1.ResourceMemory]
-		p1Spec, err := core.PodUsageFunc(p1)
-		if err != nil {
-			return -1
-		}
-		p1Request := p1Spec[api.ResourceRequestsMemory]
+		p1Request := podMemoryRequest(p1)
 		p1Memory.Sub(p1Request)
 
 		p2Memory := p2Usage[v1.ResourceMemory]
-		p2Spec, err := core.PodUsageFunc(p2)
-		if err != nil {
-			return 1
-		}
-		p2Request := p2Spec[api.ResourceRequestsMemory]
+		p2Request := podMemoryRequest(p2)
 		p2Memory.Sub(p2Request)
 
 		// if p2 is using more than p1, we want p2 first
 		return p2Memory.Cmp(p1Memory)
 	}
+}
+
+// podMemoryRequest returns the total memory request of a pod which is the
+// max(sum of init container requests, sum of container requests)
+func podMemoryRequest(pod *v1.Pod) resource.Quantity {
+	containerValue := resource.Quantity{Format: resource.BinarySI}
+	for i := range pod.Spec.Containers {
+		containerValue.Add(*pod.Spec.Containers[i].Resources.Requests.Memory())
+	}
+	initValue := resource.Quantity{Format: resource.BinarySI}
+	for i := range pod.Spec.InitContainers {
+		initValue.Add(*pod.Spec.InitContainers[i].Resources.Requests.Memory())
+	}
+	if containerValue.Cmp(initValue) > 0 {
+		return containerValue
+	}
+	return initValue
 }
 
 // disk compares pods by largest consumer of disk relative to request for the specified disk resource.

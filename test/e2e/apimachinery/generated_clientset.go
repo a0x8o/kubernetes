@@ -21,19 +21,19 @@ import (
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
-	batchv2alpha1 "k8s.io/api/batch/v2alpha1"
+	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/kubernetes/test/e2e/framework"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	imageutils "k8s.io/kubernetes/test/utils/image"
 )
 
 func stagingClientPod(name, value string) v1.Pod {
@@ -49,7 +49,7 @@ func stagingClientPod(name, value string) v1.Pod {
 			Containers: []v1.Container{
 				{
 					Name:  "nginx",
-					Image: "gcr.io/google_containers/nginx-slim:0.7",
+					Image: imageutils.GetE2EImage(imageutils.NginxSlim),
 					Ports: []v1.ContainerPort{{ContainerPort: 80}},
 				},
 			},
@@ -70,7 +70,7 @@ func testingPod(name, value string) v1.Pod {
 			Containers: []v1.Container{
 				{
 					Name:  "nginx",
-					Image: "gcr.io/google_containers/nginx-slim:0.7",
+					Image: imageutils.GetE2EImage(imageutils.NginxSlim),
 					Ports: []v1.ContainerPort{{ContainerPort: 80}},
 					LivenessProbe: &v1.Probe{
 						Handler: v1.Handler{
@@ -148,7 +148,7 @@ func observerUpdate(w watch.Interface, expectedUpdate func(runtime.Object) bool)
 	return
 }
 
-var _ = SIGDescribe("Generated release_1_5 clientset", func() {
+var _ = SIGDescribe("Generated clientset", func() {
 	f := framework.NewDefaultFramework("clientset")
 	It("should create pods, set the deletionTimestamp and deletionGracePeriodSeconds of the pod", func() {
 		podClient := f.ClientSet.Core().Pods(f.Namespace.Name)
@@ -212,20 +212,20 @@ var _ = SIGDescribe("Generated release_1_5 clientset", func() {
 	})
 })
 
-func newTestingCronJob(name string, value string) *batchv2alpha1.CronJob {
+func newTestingCronJob(name string, value string) *batchv1beta1.CronJob {
 	parallelism := int32(1)
 	completions := int32(1)
-	return &batchv2alpha1.CronJob{
+	return &batchv1beta1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			Labels: map[string]string{
 				"time": value,
 			},
 		},
-		Spec: batchv2alpha1.CronJobSpec{
+		Spec: batchv1beta1.CronJobSpec{
 			Schedule:          "*/1 * * * ?",
-			ConcurrencyPolicy: batchv2alpha1.AllowConcurrent,
-			JobTemplate: batchv2alpha1.JobTemplateSpec{
+			ConcurrencyPolicy: batchv1beta1.AllowConcurrent,
+			JobTemplate: batchv1beta1.JobTemplateSpec{
 				Spec: batchv1.JobSpec{
 					Parallelism: &parallelism,
 					Completions: &completions,
@@ -243,7 +243,7 @@ func newTestingCronJob(name string, value string) *batchv2alpha1.CronJob {
 							Containers: []v1.Container{
 								{
 									Name:  "c",
-									Image: "gcr.io/google_containers/busybox:1.24",
+									Image: imageutils.GetBusyBoxImage(),
 									VolumeMounts: []v1.VolumeMount{
 										{
 											MountPath: "/data",
@@ -260,27 +260,15 @@ func newTestingCronJob(name string, value string) *batchv2alpha1.CronJob {
 	}
 }
 
-var _ = SIGDescribe("Generated release_1_5 clientset", func() {
+var _ = SIGDescribe("Generated clientset", func() {
 	f := framework.NewDefaultFramework("clientset")
-	It("should create v2alpha1 cronJobs, delete cronJobs, watch cronJobs", func() {
-		var enabled bool
-		groupList, err := f.ClientSet.Discovery().ServerGroups()
-		framework.ExpectNoError(err)
-		for _, group := range groupList.Groups {
-			if group.Name == batchv2alpha1.GroupName {
-				for _, version := range group.Versions {
-					if version.Version == batchv2alpha1.SchemeGroupVersion.Version {
-						enabled = true
-						break
-					}
-				}
-			}
-		}
-		if !enabled {
-			framework.Logf("%s is not enabled, test skipped", batchv2alpha1.SchemeGroupVersion)
-			return
-		}
-		cronJobClient := f.ClientSet.BatchV2alpha1().CronJobs(f.Namespace.Name)
+
+	BeforeEach(func() {
+		framework.SkipIfMissingResource(f.ClientPool, CronJobGroupVersionResource, f.Namespace.Name)
+	})
+
+	It("should create v1beta1 cronJobs, delete cronJobs, watch cronJobs", func() {
+		cronJobClient := f.ClientSet.BatchV1beta1().CronJobs(f.Namespace.Name)
 		By("constructing the cronJob")
 		name := "cronjob" + string(uuid.NewUUID())
 		value := strconv.Itoa(time.Now().Nanosecond())
@@ -335,43 +323,5 @@ var _ = SIGDescribe("Generated release_1_5 clientset", func() {
 			framework.Failf("Failed to list cronJobs to verify deletion: %v", err)
 		}
 		Expect(len(cronJobs.Items)).To(Equal(0))
-	})
-})
-
-var _ = SIGDescribe("Staging client repo client", func() {
-	f := framework.NewDefaultFramework("clientset")
-	It("should create pods, delete pods, watch pods", func() {
-		podClient := f.StagingClient.CoreV1().Pods(f.Namespace.Name)
-		By("constructing the pod")
-		name := "pod" + string(uuid.NewUUID())
-		value := strconv.Itoa(time.Now().Nanosecond())
-		podCopy := stagingClientPod(name, value)
-		pod := &podCopy
-		By("verifying no pod exists before the test")
-		pods, err := podClient.List(metav1.ListOptions{})
-		if err != nil {
-			framework.Failf("Failed to query for pods: %v", err)
-		}
-		Expect(len(pods.Items)).To(Equal(0))
-		By("creating the pod")
-		pod, err = podClient.Create(pod)
-		if err != nil {
-			framework.Failf("Failed to create pod: %v", err)
-		}
-
-		By("verifying the pod is in kubernetes")
-		timeout := 1 * time.Minute
-		if err := wait.PollImmediate(time.Second, timeout, func() (bool, error) {
-			pods, err = podClient.List(metav1.ListOptions{})
-			if err != nil {
-				return false, err
-			}
-			if len(pods.Items) == 1 {
-				return true, nil
-			}
-			return false, nil
-		}); err != nil {
-			framework.Failf("Err : %s\n. Failed to wait for 1 pod to be created", err)
-		}
 	})
 })

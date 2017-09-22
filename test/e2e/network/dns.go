@@ -32,6 +32,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	"k8s.io/kubernetes/test/e2e/framework"
+	imageutils "k8s.io/kubernetes/test/utils/image"
 )
 
 const dnsTestPodHostName = "dns-querier-1"
@@ -65,7 +66,7 @@ func createDNSPod(namespace, wheezyProbeCmd, jessieProbeCmd string, useAnnotatio
 				// TODO: Consider scraping logs instead of running a webserver.
 				{
 					Name:  "webserver",
-					Image: "gcr.io/google_containers/test-webserver:e2e",
+					Image: imageutils.GetE2EImage(imageutils.TestWebserver),
 					Ports: []v1.ContainerPort{
 						{
 							Name:          "http",
@@ -81,7 +82,7 @@ func createDNSPod(namespace, wheezyProbeCmd, jessieProbeCmd string, useAnnotatio
 				},
 				{
 					Name:    "querier",
-					Image:   "gcr.io/google_containers/dnsutils:e2e",
+					Image:   imageutils.GetE2EImage(imageutils.Dnsutils),
 					Command: []string{"sh", "-c", wheezyProbeCmd},
 					VolumeMounts: []v1.VolumeMount{
 						{
@@ -92,7 +93,7 @@ func createDNSPod(namespace, wheezyProbeCmd, jessieProbeCmd string, useAnnotatio
 				},
 				{
 					Name:    "jessie-querier",
-					Image:   "gcr.io/google_containers/jessie-dnsutils:e2e",
+					Image:   imageutils.GetE2EImage(imageutils.JessieDnsutils),
 					Command: []string{"sh", "-c", jessieProbeCmd},
 					VolumeMounts: []v1.VolumeMount{
 						{
@@ -448,7 +449,6 @@ var _ = SIGDescribe("DNS", func() {
 		By("changing the service to type=ClusterIP")
 		_, err = framework.UpdateService(f.ClientSet, f.Namespace.Name, serviceName, func(s *v1.Service) {
 			s.Spec.Type = v1.ServiceTypeClusterIP
-			s.Spec.ClusterIP = "10.0.0.123"
 			s.Spec.Ports = []v1.ServicePort{
 				{Port: 80, Name: "http", Protocol: "TCP"},
 			}
@@ -463,6 +463,9 @@ var _ = SIGDescribe("DNS", func() {
 		By("creating a third pod to probe DNS")
 		pod3 := createDNSPod(f.Namespace.Name, wheezyProbeCmd, jessieProbeCmd, true)
 
-		validateTargetedProbeOutput(f, pod3, []string{wheezyFileName, jessieFileName}, "10.0.0.123")
+		svc, err := f.ClientSet.Core().Services(f.Namespace.Name).Get(externalNameService.Name, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		validateTargetedProbeOutput(f, pod3, []string{wheezyFileName, jessieFileName}, svc.Spec.ClusterIP)
 	})
 })

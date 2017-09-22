@@ -274,10 +274,6 @@ func (m *managerImpl) synchronize(diskInfoProvider DiskInfoProvider, podFunc Act
 	}
 	debugLogThresholdsWithObservation("thresholds - reclaim not satisfied", thresholds, observations)
 
-	// determine the set of thresholds whose stats have been updated since the last sync
-	thresholds = thresholdsUpdatedStats(thresholds, observations, m.lastObservations)
-	debugLogThresholdsWithObservation("thresholds - updated stats", thresholds, observations)
-
 	// track when a threshold was first observed
 	now := m.clock.Now()
 	thresholdsFirstObservedAt := thresholdsFirstObservedAt(thresholds, m.thresholdsFirstObservedAt, now)
@@ -307,6 +303,11 @@ func (m *managerImpl) synchronize(diskInfoProvider DiskInfoProvider, podFunc Act
 	m.thresholdsFirstObservedAt = thresholdsFirstObservedAt
 	m.nodeConditionsLastObservedAt = nodeConditionsLastObservedAt
 	m.thresholdsMet = thresholds
+
+	// determine the set of thresholds whose stats have been updated since the last sync
+	thresholds = thresholdsUpdatedStats(thresholds, observations, m.lastObservations)
+	debugLogThresholdsWithObservation("thresholds - updated stats", thresholds, observations)
+
 	m.lastObservations = observations
 	m.Unlock()
 
@@ -435,14 +436,14 @@ func (m *managerImpl) reclaimNodeLevelResources(resourceToReclaim v1.ResourceNam
 		}
 		// update our local observations based on the amount reported to have been reclaimed.
 		// note: this is optimistic, other things could have been still consuming the pressured resource in the interim.
-		signal := resourceToSignal[resourceToReclaim]
-		value, ok := observations[signal]
-		if !ok {
-			glog.Errorf("eviction manager: unable to find value associated with signal %v", signal)
-			continue
+		for _, signal := range resourceClaimToSignal[resourceToReclaim] {
+			value, ok := observations[signal]
+			if !ok {
+				glog.Errorf("eviction manager: unable to find value associated with signal %v", signal)
+				continue
+			}
+			value.available.Add(*reclaimed)
 		}
-		value.available.Add(*reclaimed)
-
 		// evaluate all current thresholds to see if with adjusted observations, we think we have met min reclaim goals
 		if len(thresholdsMet(m.thresholdsMet, observations, true)) == 0 {
 			return true
@@ -496,7 +497,7 @@ func (m *managerImpl) emptyDirLimitEviction(podStats statsapi.PodStats, pod *v1.
 		if source.EmptyDir != nil {
 			size := source.EmptyDir.SizeLimit
 			used := podVolumeUsed[pod.Spec.Volumes[i].Name]
-			if used != nil && size.Sign() == 1 && used.Cmp(size) > 0 {
+			if used != nil && size != nil && size.Sign() == 1 && used.Cmp(*size) > 0 {
 				// the emptyDir usage exceeds the size limit, evict the pod
 				return m.evictPod(pod, v1.ResourceName("EmptyDir"), fmt.Sprintf("emptyDir usage exceeds the limit %q", size.String()))
 			}
@@ -520,13 +521,13 @@ func (m *managerImpl) podEphemeralStorageLimitEviction(podStats statsapi.PodStat
 	} else {
 		fsStatsSet = []fsStatsType{fsStatsRoot, fsStatsLogs, fsStatsLocalVolumeSource}
 	}
-	podUsage, err := podDiskUsage(podStats, pod, fsStatsSet)
+	podEphemeralUsage, err := podLocalEphemeralStorageUsage(podStats, pod, fsStatsSet)
 	if err != nil {
 		glog.Errorf("eviction manager: error getting pod disk usage %v", err)
 		return false
 	}
 
-	podEphemeralStorageTotalUsage.Add(podUsage[resourceDisk])
+	podEphemeralStorageTotalUsage.Add(podEphemeralUsage[resourceDisk])
 	if podEphemeralStorageTotalUsage.Cmp(podLimits[v1.ResourceEphemeralStorage]) > 0 {
 		// the total usage of pod exceeds the total size limit of containers, evict the pod
 		return m.evictPod(pod, v1.ResourceEphemeralStorage, fmt.Sprintf("pod ephemeral local storage usage exceeds the total limit of containers %v", podLimits[v1.ResourceEphemeralStorage]))

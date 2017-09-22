@@ -86,7 +86,7 @@ func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
 		obj.VolumeStatsAggPeriod = metav1.Duration{Duration: time.Minute}
 	}
 	if obj.ContainerRuntime == "" {
-		obj.ContainerRuntime = "docker"
+		obj.ContainerRuntime = kubetypes.DockerContainerRuntime
 	}
 	if obj.RuntimeRequestTimeout == zeroDuration {
 		obj.RuntimeRequestTimeout = metav1.Duration{Duration: 2 * time.Minute}
@@ -170,6 +170,12 @@ func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
 	}
 	if obj.NodeStatusUpdateFrequency == zeroDuration {
 		obj.NodeStatusUpdateFrequency = metav1.Duration{Duration: 10 * time.Second}
+	}
+	if obj.CPUManagerPolicy == "" {
+		obj.CPUManagerPolicy = "none"
+	}
+	if obj.CPUManagerReconcilePeriod == zeroDuration {
+		obj.CPUManagerReconcilePeriod = obj.NodeStatusUpdateFrequency
 	}
 	if obj.OOMScoreAdj == nil {
 		temp := int32(qos.KubeletOOMScoreAdj)

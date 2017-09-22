@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
@@ -35,7 +36,6 @@ import (
 	"k8s.io/kubernetes/pkg/printers"
 	printersinternal "k8s.io/kubernetes/pkg/printers/internalversion"
 	printerstorage "k8s.io/kubernetes/pkg/printers/storage"
-	"k8s.io/kubernetes/pkg/registry/cachesize"
 	"k8s.io/kubernetes/pkg/registry/core/replicationcontroller"
 )
 
@@ -69,7 +69,6 @@ func NewREST(optsGetter generic.RESTOptionsGetter) (*REST, *StatusREST) {
 		NewListFunc:              func() runtime.Object { return &api.ReplicationControllerList{} },
 		PredicateFunc:            replicationcontroller.MatchController,
 		DefaultQualifiedResource: api.Resource("replicationcontrollers"),
-		WatchCacheSize:           cachesize.GetWatchCacheSizeByResource("replicationcontrollers"),
 
 		CreateStrategy: replicationcontroller.Strategy,
 		UpdateStrategy: replicationcontroller.Strategy,
@@ -129,6 +128,11 @@ type ScaleREST struct {
 
 // ScaleREST implements Patcher
 var _ = rest.Patcher(&ScaleREST{})
+var _ = rest.GroupVersionKindProvider(&ScaleREST{})
+
+func (r *ScaleREST) GroupVersionKind() schema.GroupVersionKind {
+	return schema.GroupVersionKind{Group: "autoscaling", Version: "v1", Kind: "Scale"}
+}
 
 // New creates a new Scale object
 func (r *ScaleREST) New() runtime.Object {

@@ -424,7 +424,7 @@ func (f *FakeFactory) SwaggerSchema(schema.GroupVersionKind) (*swagger.ApiDeclar
 	return nil, nil
 }
 
-func (f *FakeFactory) OpenAPISchema(cacheDir string) (openapi.Resources, error) {
+func (f *FakeFactory) OpenAPISchema() (openapi.Resources, error) {
 	return nil, nil
 }
 
@@ -598,7 +598,7 @@ func (f *fakeAPIFactory) KubernetesClientSet() (*kubernetes.Clientset, error) {
 	clientset.AuthorizationV1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
 	clientset.AuthorizationV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
 	clientset.AutoscalingV1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
-	clientset.AutoscalingV2alpha1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AutoscalingV2beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
 	clientset.BatchV1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
 	clientset.BatchV2alpha1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
 	clientset.CertificatesV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
@@ -796,7 +796,7 @@ func (f *fakeAPIFactory) SwaggerSchema(schema.GroupVersionKind) (*swagger.ApiDec
 	return nil, nil
 }
 
-func (f *fakeAPIFactory) OpenAPISchema(cacheDir string) (openapi.Resources, error) {
+func (f *fakeAPIFactory) OpenAPISchema() (openapi.Resources, error) {
 	if f.tf.OpenAPISchemaFunc != nil {
 		return f.tf.OpenAPISchemaFunc()
 	}

@@ -106,6 +106,9 @@ type TestContextType struct {
 	// Whether configuration for accessing federation member clusters should be sourced from the host cluster
 	FederationConfigFromCluster bool
 
+	// Indicates what path the kubernetes-anywhere is installed on
+	KubernetesAnywherePath string
+
 	// Viper-only parameters.  These will in time replace all flags.
 
 	// Example: Create a file 'e2e.json' with the following:
@@ -201,6 +204,7 @@ func RegisterCommonFlags() {
 	flag.StringVar(&TestContext.ContainerRuntimeEndpoint, "container-runtime-endpoint", "", "The container runtime endpoint of cluster VM instances.")
 	flag.StringVar(&TestContext.ImageServiceEndpoint, "image-service-endpoint", "", "The image service endpoint of cluster VM instances.")
 	flag.StringVar(&TestContext.DockershimCheckpointDir, "dockershim-checkpoint-dir", "/var/lib/dockershim/sandbox", "The directory for dockershim to store sandbox checkpoints.")
+	flag.StringVar(&TestContext.KubernetesAnywherePath, "kubernetes-anywhere-path", "/workspace/kubernetes-anywhere", "Which directory kubernetes-anywhere is installed to.")
 }
 
 // Register flags specific to the cluster e2e test suite.
@@ -235,7 +239,7 @@ func RegisterClusterFlags() {
 	flag.StringVar(&cloudConfig.NodeInstanceGroup, "node-instance-group", "", "Name of the managed instance group for nodes. Valid only for gce, gke or aws. If there is more than one group: comma separated list of groups.")
 	flag.StringVar(&cloudConfig.Network, "network", "e2e", "The cloud provider network for this e2e cluster.")
 	flag.IntVar(&cloudConfig.NumNodes, "num-nodes", -1, "Number of nodes in the cluster")
-	flag.StringVar(&cloudConfig.ClusterIPRange, "cluster-ip-range", "10.100.0.0/14", "A CIDR notation IP range from which to assign IPs in the cluster.")
+	flag.StringVar(&cloudConfig.ClusterIPRange, "cluster-ip-range", "10.64.0.0/14", "A CIDR notation IP range from which to assign IPs in the cluster.")
 	flag.StringVar(&cloudConfig.NodeTag, "node-tag", "", "Network tags used on node instances. Valid only for gce, gke")
 	flag.StringVar(&cloudConfig.MasterTag, "master-tag", "", "Network tags used on master instances. Valid only for gce, gke")
 

@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	clientset "k8s.io/client-go/kubernetes"
+	utilversion "k8s.io/kubernetes/pkg/util/version"
 	"k8s.io/kubernetes/test/e2e/common"
 	"k8s.io/kubernetes/test/e2e/framework"
 	testutils "k8s.io/kubernetes/test/utils"
@@ -39,6 +40,8 @@ import (
 
 const maxNumberOfPods int64 = 10
 const minPodCPURequest int64 = 500
+
+var localStorageVersion = utilversion.MustParseSemantic("v1.8.0-beta.0")
 
 // variable set in BeforeEach, never modified afterwards
 var masterNodes sets.String
@@ -52,6 +55,7 @@ type pausePodConfig struct {
 	NodeName                          string
 	Ports                             []v1.ContainerPort
 	OwnerReferences                   []metav1.OwnerReference
+	PriorityClassName                 string
 }
 
 var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
@@ -119,7 +123,7 @@ var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
 
 		for _, node := range nodeList.Items {
 			framework.Logf("Node: %v", node)
-			podCapacity, found := node.Status.Capacity["pods"]
+			podCapacity, found := node.Status.Capacity[v1.ResourcePods]
 			Expect(found).To(Equal(true))
 			totalPodCapacity += podCapacity.Value()
 		}
@@ -145,6 +149,81 @@ var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
 			Name:   podName,
 			Labels: map[string]string{"name": "additional"},
 		}), podName, false)
+		verifyResult(cs, podsNeededForSaturation, 1, ns)
+	})
+
+	// This test verifies we don't allow scheduling of pods in a way that sum of local ephemeral storage limits of pods is greater than machines capacity.
+	// It assumes that cluster add-on pods stay stable and cannot be run in parallel with any other test that touches Nodes or Pods.
+	// It is so because we need to have precise control on what's running in the cluster.
+	It("validates local ephemeral storage resource limits of pods that are allowed to run [Feature:LocalStorageCapacityIsolation]", func() {
+
+		framework.SkipUnlessServerVersionGTE(localStorageVersion, f.ClientSet.Discovery())
+
+		nodeMaxAllocatable := int64(0)
+
+		nodeToAllocatableMap := make(map[string]int64)
+		for _, node := range nodeList.Items {
+			allocatable, found := node.Status.Allocatable[v1.ResourceEphemeralStorage]
+			Expect(found).To(Equal(true))
+			nodeToAllocatableMap[node.Name] = allocatable.MilliValue()
+			if nodeMaxAllocatable < allocatable.MilliValue() {
+				nodeMaxAllocatable = allocatable.MilliValue()
+			}
+		}
+		framework.WaitForStableCluster(cs, masterNodes)
+
+		pods, err := cs.CoreV1().Pods(metav1.NamespaceAll).List(metav1.ListOptions{})
+		framework.ExpectNoError(err)
+		for _, pod := range pods.Items {
+			_, found := nodeToAllocatableMap[pod.Spec.NodeName]
+			if found && pod.Status.Phase != v1.PodSucceeded && pod.Status.Phase != v1.PodFailed {
+				framework.Logf("Pod %v requesting local ephemeral resource =%vm on Node %v", pod.Name, getRequestedStorageEphemeralStorage(pod), pod.Spec.NodeName)
+				nodeToAllocatableMap[pod.Spec.NodeName] -= getRequestedStorageEphemeralStorage(pod)
+			}
+		}
+
+		var podsNeededForSaturation int
+
+		milliEphemeralStoragePerPod := nodeMaxAllocatable / maxNumberOfPods
+
+		framework.Logf("Using pod capacity: %vm", milliEphemeralStoragePerPod)
+		for name, leftAllocatable := range nodeToAllocatableMap {
+			framework.Logf("Node: %v has local ephemeral resource allocatable: %vm", name, leftAllocatable)
+			podsNeededForSaturation += (int)(leftAllocatable / milliEphemeralStoragePerPod)
+		}
+
+		By(fmt.Sprintf("Starting additional %v Pods to fully saturate the cluster local ephemeral resource and trying to start another one", podsNeededForSaturation))
+
+		// As the pods are distributed randomly among nodes,
+		// it can easily happen that all nodes are saturated
+		// and there is no need to create additional pods.
+		// StartPods requires at least one pod to replicate.
+		if podsNeededForSaturation > 0 {
+			framework.ExpectNoError(testutils.StartPods(cs, podsNeededForSaturation, ns, "overcommit",
+				*initPausePod(f, pausePodConfig{
+					Name:   "",
+					Labels: map[string]string{"name": ""},
+					Resources: &v1.ResourceRequirements{
+						Limits: v1.ResourceList{
+							v1.ResourceEphemeralStorage: *resource.NewMilliQuantity(milliEphemeralStoragePerPod, "DecimalSI"),
+						},
+						Requests: v1.ResourceList{
+							v1.ResourceEphemeralStorage: *resource.NewMilliQuantity(milliEphemeralStoragePerPod, "DecimalSI"),
+						},
+					},
+				}), true, framework.Logf))
+		}
+		podName := "additional-pod"
+		conf := pausePodConfig{
+			Name:   podName,
+			Labels: map[string]string{"name": "additional"},
+			Resources: &v1.ResourceRequirements{
+				Limits: v1.ResourceList{
+					v1.ResourceEphemeralStorage: *resource.NewMilliQuantity(milliEphemeralStoragePerPod, "DecimalSI"),
+				},
+			},
+		}
+		WaitForSchedulerAfterAction(f, createPausePodAction(f, conf), podName, false)
 		verifyResult(cs, podsNeededForSaturation, 1, ns)
 	})
 
@@ -483,8 +562,9 @@ func initPausePod(f *framework.Framework, conf pausePodConfig) *v1.Pod {
 					Ports: conf.Ports,
 				},
 			},
-			Tolerations: conf.Tolerations,
-			NodeName:    conf.NodeName,
+			Tolerations:       conf.Tolerations,
+			NodeName:          conf.NodeName,
+			PriorityClassName: conf.PriorityClassName,
 		},
 	}
 	if conf.Resources != nil {
@@ -521,73 +601,18 @@ func runPodAndGetNodeName(f *framework.Framework, conf pausePodConfig) string {
 	return pod.Spec.NodeName
 }
 
-func createPodWithNodeAffinity(f *framework.Framework) *v1.Pod {
-	return createPausePod(f, pausePodConfig{
-		Name: "with-nodeaffinity-" + string(uuid.NewUUID()),
-		Affinity: &v1.Affinity{
-			NodeAffinity: &v1.NodeAffinity{
-				RequiredDuringSchedulingIgnoredDuringExecution: &v1.NodeSelector{
-					NodeSelectorTerms: []v1.NodeSelectorTerm{
-						{
-							MatchExpressions: []v1.NodeSelectorRequirement{
-								{
-									Key:      "kubernetes.io/e2e-az-name",
-									Operator: v1.NodeSelectorOpIn,
-									Values:   []string{"e2e-az1", "e2e-az2"},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	})
-}
-
-func createPodWithPodAffinity(f *framework.Framework, topologyKey string) *v1.Pod {
-	return createPausePod(f, pausePodConfig{
-		Name: "with-podantiaffinity-" + string(uuid.NewUUID()),
-		Affinity: &v1.Affinity{
-			PodAffinity: &v1.PodAffinity{
-				RequiredDuringSchedulingIgnoredDuringExecution: []v1.PodAffinityTerm{
-					{
-						LabelSelector: &metav1.LabelSelector{
-							MatchExpressions: []metav1.LabelSelectorRequirement{
-								{
-									Key:      "security",
-									Operator: metav1.LabelSelectorOpIn,
-									Values:   []string{"S1"},
-								},
-							},
-						},
-						TopologyKey: topologyKey,
-					},
-				},
-			},
-			PodAntiAffinity: &v1.PodAntiAffinity{
-				RequiredDuringSchedulingIgnoredDuringExecution: []v1.PodAffinityTerm{
-					{
-						LabelSelector: &metav1.LabelSelector{
-							MatchExpressions: []metav1.LabelSelectorRequirement{
-								{
-									Key:      "security",
-									Operator: metav1.LabelSelectorOpIn,
-									Values:   []string{"S2"},
-								},
-							},
-						},
-						TopologyKey: topologyKey,
-					},
-				},
-			},
-		},
-	})
-}
-
 func getRequestedCPU(pod v1.Pod) int64 {
 	var result int64
 	for _, container := range pod.Spec.Containers {
 		result += container.Resources.Requests.Cpu().MilliValue()
+	}
+	return result
+}
+
+func getRequestedStorageEphemeralStorage(pod v1.Pod) int64 {
+	var result int64
+	for _, container := range pod.Spec.Containers {
+		result += container.Resources.Requests.StorageEphemeral().MilliValue()
 	}
 	return result
 }

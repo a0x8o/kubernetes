@@ -75,6 +75,8 @@ const (
 	ServiceAnnotationLoadBalancerInternal = "service.beta.kubernetes.io/openstack-internal-load-balancer"
 )
 
+// Deprecated; Since LBaaS v1 is deprecated in the OpenStack Liberty release, Kubernetes deprecated it at V1.8.
+// TODO(FengyunPan): remove LBaaS v1 after kubernetes V1.9.
 // LoadBalancer implementation for LBaaS v1
 type LbaasV1 struct {
 	LoadBalancer
@@ -994,7 +996,7 @@ func (lbaas *LbaasV2) EnsureLoadBalancer(clusterName string, apiService *v1.Serv
 		}
 
 		portID := loadbalancer.VipPortID
-		update_opts := neutronports.UpdateOpts{SecurityGroups: []string{lbSecGroup.ID}}
+		update_opts := neutronports.UpdateOpts{SecurityGroups: &[]string{lbSecGroup.ID}}
 		res := neutronports.Update(lbaas.network, portID, update_opts)
 		if res.Err != nil {
 			glog.Errorf("Error occured updating port: %s", portID)
