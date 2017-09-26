@@ -993,7 +993,7 @@ var supportedHostPathTypes = sets.NewString(
 func validateHostPathType(hostPathType *api.HostPathType, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	if !supportedHostPathTypes.Has(string(*hostPathType)) {
+	if hostPathType != nil && !supportedHostPathTypes.Has(string(*hostPathType)) {
 		allErrs = append(allErrs, field.NotSupported(fldPath, hostPathType, supportedHostPathTypes.List()))
 	}
 
@@ -4388,6 +4388,21 @@ func ValidateSecurityContext(sc *api.SecurityContext, fldPath *field.Path) field
 			allErrs = append(allErrs, field.Invalid(fldPath.Child("runAsUser"), *sc.RunAsUser, isNegativeErrorMsg))
 		}
 	}
+
+	if sc.AllowPrivilegeEscalation != nil && !*sc.AllowPrivilegeEscalation {
+		if sc.Privileged != nil && *sc.Privileged {
+			allErrs = append(allErrs, field.Invalid(fldPath, sc, "cannot set `allowPrivilegeEscalation` to false and `privileged` to true"))
+		}
+
+		if sc.Capabilities != nil {
+			for _, cap := range sc.Capabilities.Add {
+				if string(cap) == "CAP_SYS_ADMIN" {
+					allErrs = append(allErrs, field.Invalid(fldPath, sc, "cannot set `allowPrivilegeEscalation` to false and `capabilities.Add` CAP_SYS_ADMIN"))
+				}
+			}
+		}
+	}
+
 	return allErrs
 }
 
