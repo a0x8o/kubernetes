@@ -120,14 +120,9 @@ func NewKubeletFlags() *KubeletFlags {
 		RequireKubeConfig:       false,
 		KubeConfig:              flag.NewStringFlag("/var/lib/kubelet/kubeconfig"),
 		ContainerRuntimeOptions: *NewContainerRuntimeOptions(),
-		CertDirectory:           "/var/run/kubernetes",
+		CertDirectory:           "/var/lib/kubelet/pki",
 		RootDirectory:           v1alpha1.DefaultRootDir,
-		// DEPRECATED: auto detecting cloud providers goes against the initiative
-		// for out-of-tree cloud providers as we'll now depend on cAdvisor integrations
-		// with cloud providers instead of in the core repo.
-		// More details here: https://github.com/kubernetes/kubernetes/issues/50986
-		CloudProvider:      v1alpha1.AutoDetectCloudProvider,
-		RotateCertificates: false,
+		RotateCertificates:      false,
 	}
 }
 
@@ -226,7 +221,7 @@ func (f *KubeletFlags) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&f.CertDirectory, "cert-dir", f.CertDirectory, "The directory where the TLS certs are located. "+
 		"If --tls-cert-file and --tls-private-key-file are provided, this flag will be ignored.")
 
-	fs.StringVar(&f.CloudProvider, "cloud-provider", f.CloudProvider, "The provider for cloud services. By default, kubelet will attempt to auto-detect the cloud provider (deprecated). Specify empty string for running with no cloud provider, this will be the default in upcoming releases.")
+	fs.StringVar(&f.CloudProvider, "cloud-provider", f.CloudProvider, "The provider for cloud services. Specify empty string for running with no cloud provider.")
 	fs.StringVar(&f.CloudConfigFile, "cloud-config", f.CloudConfigFile, "The path to the cloud provider configuration file.  Empty string for no configuration file.")
 
 	fs.StringVar(&f.RootDirectory, "root-dir", f.RootDirectory, "Directory path for managing kubelet files (volume mounts,etc).")
@@ -241,7 +236,7 @@ func AddKubeletConfigFlags(fs *pflag.FlagSet, c *kubeletconfig.KubeletConfigurat
 	fs.BoolVar(&c.FailSwapOn, "experimental-fail-swap-on", true, "DEPRECATED: please use --fail-swap-on instead.")
 	fs.MarkDeprecated("experimental-fail-swap-on", "This flag is deprecated and will be removed in future releases. please use --fail-swap-on instead.")
 
-	fs.StringVar(&c.PodManifestPath, "pod-manifest-path", c.PodManifestPath, "Path to to the directory containing pod manifest files to run, or the path to a single pod manifest file. Files starting with dots will be ignored.")
+	fs.StringVar(&c.PodManifestPath, "pod-manifest-path", c.PodManifestPath, "Path to the directory containing pod manifest files to run, or the path to a single pod manifest file. Files starting with dots will be ignored.")
 	fs.DurationVar(&c.SyncFrequency.Duration, "sync-frequency", c.SyncFrequency.Duration, "Max period between synchronizing running containers and config")
 	fs.DurationVar(&c.FileCheckFrequency.Duration, "file-check-frequency", c.FileCheckFrequency.Duration, "Duration between checking config files for new data")
 	fs.DurationVar(&c.HTTPCheckFrequency.Duration, "http-check-frequency", c.HTTPCheckFrequency.Duration, "Duration between checking http for new data")
@@ -379,11 +374,11 @@ func AddKubeletConfigFlags(fs *pflag.FlagSet, c *kubeletconfig.KubeletConfigurat
 
 	// Node Allocatable Flags
 	fs.Var(&c.SystemReserved, "system-reserved", "A set of ResourceName=ResourceQuantity (e.g. cpu=200m,memory=500Mi) pairs that describe resources reserved for non-kubernetes components. Currently only cpu and memory are supported. See http://kubernetes.io/docs/user-guide/compute-resources for more detail. [default=none]")
-	fs.Var(&c.KubeReserved, "kube-reserved", "A set of ResourceName=ResourceQuantity (e.g. cpu=200m,memory=500Mi, storage=1Gi) pairs that describe resources reserved for kubernetes system components. Currently cpu, memory and local storage for root file system are supported. See http://kubernetes.io/docs/user-guide/compute-resources for more detail. [default=none]")
-	fs.StringSliceVar(&c.EnforceNodeAllocatable, "enforce-node-allocatable", c.EnforceNodeAllocatable, "A comma separated list of levels of node allocatable enforcement to be enforced by kubelet. Acceptible options are 'pods', 'system-reserved' & 'kube-reserved'. If the latter two options are specified, '--system-reserved-cgroup' & '--kube-reserved-cgroup' must also be set respectively. See https://git.k8s.io/community/contributors/design-proposals/node-allocatable.md for more details.")
+	fs.Var(&c.KubeReserved, "kube-reserved", "A set of ResourceName=ResourceQuantity (e.g. cpu=200m,memory=500Mi, ephemeral-storage=1Gi) pairs that describe resources reserved for kubernetes system components. Currently cpu, memory and local ephemeral storage for root file system are supported. See http://kubernetes.io/docs/user-guide/compute-resources for more detail. [default=none]")
+	fs.StringSliceVar(&c.EnforceNodeAllocatable, "enforce-node-allocatable", c.EnforceNodeAllocatable, "A comma separated list of levels of node allocatable enforcement to be enforced by kubelet. Acceptible options are 'pods', 'system-reserved' & 'kube-reserved'. If the latter two options are specified, '--system-reserved-cgroup' & '--kube-reserved-cgroup' must also be set respectively. See https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/ for more details.")
 	fs.StringVar(&c.SystemReservedCgroup, "system-reserved-cgroup", c.SystemReservedCgroup, "Absolute name of the top level cgroup that is used to manage non-kubernetes components for which compute resources were reserved via '--system-reserved' flag. Ex. '/system-reserved'. [default='']")
 	fs.StringVar(&c.KubeReservedCgroup, "kube-reserved-cgroup", c.KubeReservedCgroup, "Absolute name of the top level cgroup that is used to manage kubernetes components for which compute resources were reserved via '--kube-reserved' flag. Ex. '/kube-reserved'. [default='']")
-	fs.BoolVar(&c.ExperimentalNodeAllocatableIgnoreEvictionThreshold, "experimental-allocatable-ignore-eviction", c.ExperimentalNodeAllocatableIgnoreEvictionThreshold, "When set to 'true', Hard Eviction Thresholds will be ignored while calculating Node Allocatable. See https://git.k8s.io/community/contributors/design-proposals/node-allocatable.md for more details. [default=false]")
+	fs.BoolVar(&c.ExperimentalNodeAllocatableIgnoreEvictionThreshold, "experimental-allocatable-ignore-eviction", c.ExperimentalNodeAllocatableIgnoreEvictionThreshold, "When set to 'true', Hard Eviction Thresholds will be ignored while calculating Node Allocatable. See https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/ for more details. [default=false]")
 
 	fs.Var(&c.ExperimentalQOSReserved, "experimental-qos-reserved", "A set of ResourceName=Percentage (e.g. memory=50%) pairs that describe how pod resource requests are reserved at the QoS level. Currently only memory is supported. [default=none]")
 }

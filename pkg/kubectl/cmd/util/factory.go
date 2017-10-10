@@ -37,7 +37,6 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
@@ -233,7 +232,7 @@ type ObjectMappingFactory interface {
 	AttachablePodForObject(object runtime.Object, timeout time.Duration) (*api.Pod, error)
 
 	// Returns a schema that can validate objects stored on disk.
-	Validator(validate bool, openapi bool, cacheDir string) (validation.Schema, error)
+	Validator(validate bool) (validation.Schema, error)
 	// SwaggerSchema returns the schema declaration for the provided group version kind.
 	SwaggerSchema(schema.GroupVersionKind) (*swagger.ApiDeclaration, error)
 	// OpenAPISchema returns the schema openapi schema definiton
@@ -296,8 +295,8 @@ func NewFactory(optionalClientConfig clientcmd.ClientConfig) Factory {
 
 // GetFirstPod returns a pod matching the namespace and label selector
 // and the number of all pods that match the label selector.
-func GetFirstPod(client coreclient.PodsGetter, namespace string, selector labels.Selector, timeout time.Duration, sortBy func([]*v1.Pod) sort.Interface) (*api.Pod, int, error) {
-	options := metav1.ListOptions{LabelSelector: selector.String()}
+func GetFirstPod(client coreclient.PodsGetter, namespace string, selector string, timeout time.Duration, sortBy func([]*v1.Pod) sort.Interface) (*api.Pod, int, error) {
+	options := metav1.ListOptions{LabelSelector: selector}
 
 	podList, err := client.Pods(namespace).List(options)
 	if err != nil {

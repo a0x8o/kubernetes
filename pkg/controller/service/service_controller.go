@@ -107,6 +107,7 @@ func New(
 	broadcaster := record.NewBroadcaster()
 	broadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(kubeClient.Core().RESTClient()).Events("")})
 	recorder := broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "service-controller"})
+	broadcaster.StartLogging(glog.Infof)
 
 	if kubeClient != nil && kubeClient.Core().RESTClient().GetRateLimiter() != nil {
 		metrics.RegisterMetricAndTrackRateLimiterUsage("service_controller", kubeClient.Core().RESTClient().GetRateLimiter())
@@ -595,6 +596,10 @@ func getNodeConditionPredicate() corelisters.NodeConditionPredicate {
 		// As of 1.6, we will taint the master, but not necessarily mark it unschedulable.
 		// Recognize nodes labeled as master, and filter them also, as we were doing previously.
 		if _, hasMasterRoleLabel := node.Labels[constants.LabelNodeRoleMaster]; hasMasterRoleLabel {
+			return false
+		}
+
+		if _, hasExcludeBalancerLabel := node.Labels[constants.LabelNodeRoleExcludeBalancer]; hasExcludeBalancerLabel {
 			return false
 		}
 

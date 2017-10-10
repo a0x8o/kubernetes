@@ -26,6 +26,7 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -52,6 +53,7 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/scheduler/schedulercache"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/util"
 
+	"encoding/json"
 	"github.com/golang/glog"
 )
 
@@ -207,7 +209,6 @@ func NewConfigFactory(
 	// they may need to call.
 	c.scheduledPodLister = assignedPodLister{podInformer.Lister()}
 
-	// Only nodes in the "Ready" condition with status == "True" are schedulable
 	nodeInformer.Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    c.addNodeToCache,
@@ -522,15 +523,6 @@ func (c *ConfigFactory) invalidateCachedPredicatesOnNodeUpdate(newNode *v1.Node,
 		// TODO(resouer): think about lazily initialize this set
 		invalidPredicates := sets.NewString()
 
-		oldTaints, oldErr := helper.GetTaintsFromNodeAnnotations(oldNode.GetAnnotations())
-		if oldErr != nil {
-			glog.Errorf("Failed to get taints from old node annotation for equivalence cache")
-		}
-		newTaints, newErr := helper.GetTaintsFromNodeAnnotations(newNode.GetAnnotations())
-		if newErr != nil {
-			glog.Errorf("Failed to get taints from new node annotation for equivalence cache")
-		}
-
 		if !reflect.DeepEqual(oldNode.Status.Allocatable, newNode.Status.Allocatable) {
 			invalidPredicates.Insert("GeneralPredicates") // "PodFitsResources"
 		}
@@ -549,9 +541,20 @@ func (c *ConfigFactory) invalidateCachedPredicatesOnNodeUpdate(newNode *v1.Node,
 				}
 			}
 		}
-		if !reflect.DeepEqual(oldTaints, newTaints) {
+
+		oldTaints, oldErr := helper.GetTaintsFromNodeAnnotations(oldNode.GetAnnotations())
+		if oldErr != nil {
+			glog.Errorf("Failed to get taints from old node annotation for equivalence cache")
+		}
+		newTaints, newErr := helper.GetTaintsFromNodeAnnotations(newNode.GetAnnotations())
+		if newErr != nil {
+			glog.Errorf("Failed to get taints from new node annotation for equivalence cache")
+		}
+		if !reflect.DeepEqual(oldTaints, newTaints) ||
+			!reflect.DeepEqual(oldNode.Spec.Taints, newNode.Spec.Taints) {
 			invalidPredicates.Insert("PodToleratesNodeTaints")
 		}
+
 		if !reflect.DeepEqual(oldNode.Status.Conditions, newNode.Status.Conditions) {
 			oldConditions := make(map[v1.NodeConditionType]v1.ConditionStatus)
 			newConditions := make(map[v1.NodeConditionType]v1.ConditionStatus)
@@ -1001,7 +1004,6 @@ func (p *podPreemptor) DeletePod(pod *v1.Pod) error {
 	return p.Client.CoreV1().Pods(pod.Namespace).Delete(pod.Name, &metav1.DeleteOptions{})
 }
 
-//TODO(bsalamat): change this to patch PodStatus to avoid overwriting potential pending status updates.
 func (p *podPreemptor) UpdatePodAnnotations(pod *v1.Pod, annotations map[string]string) error {
 	podCopy := pod.DeepCopy()
 	if podCopy.Annotations == nil {
@@ -1010,6 +1012,12 @@ func (p *podPreemptor) UpdatePodAnnotations(pod *v1.Pod, annotations map[string]
 	for k, v := range annotations {
 		podCopy.Annotations[k] = v
 	}
-	_, err := p.Client.CoreV1().Pods(podCopy.Namespace).UpdateStatus(podCopy)
-	return err
+	ret := &unstructured.Unstructured{}
+	ret.SetAnnotations(podCopy.Annotations)
+	patchData, err := json.Marshal(ret)
+	if err != nil {
+		return err
+	}
+	_, error := p.Client.CoreV1().Pods(podCopy.Namespace).Patch(podCopy.Name, types.MergePatchType, patchData)
+	return error
 }

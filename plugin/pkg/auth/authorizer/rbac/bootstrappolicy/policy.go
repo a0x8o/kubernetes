@@ -152,7 +152,16 @@ func ClusterRoles() []rbac.ClusterRole {
 			// a role which provides just enough power to determine if the server is ready and discover API versions for negotiation
 			ObjectMeta: metav1.ObjectMeta{Name: "system:discovery"},
 			Rules: []rbac.PolicyRule{
-				rbac.NewRule("get").URLs("/healthz", "/version", "/swaggerapi", "/swaggerapi/*", "/api", "/api/*", "/apis", "/apis/*").RuleOrDie(),
+				rbac.NewRule("get").URLs(
+					"/healthz", "/version",
+					// remove once swagger 1.2 support is removed
+					"/swaggerapi", "/swaggerapi/*",
+					// do not expand this pattern for openapi discovery docs
+					// move to a single openapi endpoint that takes accept/accept-encoding headers
+					"/swagger.json", "/swagger-2.0.0.pb-v1",
+					"/api", "/api/*",
+					"/apis", "/apis/*",
+				).RuleOrDie(),
 			},
 		},
 		{
@@ -189,6 +198,8 @@ func ClusterRoles() []rbac.ClusterRole {
 					"deployments", "deployments/scale", "deployments/rollback", "ingresses",
 					"replicasets", "replicasets/scale", "replicationcontrollers/scale").RuleOrDie(),
 
+				rbac.NewRule(ReadWrite...).Groups(policyGroup).Resources("poddisruptionbudgets").RuleOrDie(),
+
 				// additional admin powers
 				rbac.NewRule("create").Groups(authorizationGroup).Resources("localsubjectaccessreviews").RuleOrDie(),
 				rbac.NewRule(ReadWrite...).Groups(rbacGroup).Resources("roles", "rolebindings").RuleOrDie(),
@@ -220,6 +231,8 @@ func ClusterRoles() []rbac.ClusterRole {
 				rbac.NewRule(ReadWrite...).Groups(extensionsGroup).Resources("daemonsets",
 					"deployments", "deployments/scale", "deployments/rollback", "ingresses",
 					"replicasets", "replicasets/scale", "replicationcontrollers/scale").RuleOrDie(),
+
+				rbac.NewRule(ReadWrite...).Groups(policyGroup).Resources("poddisruptionbudgets").RuleOrDie(),
 			},
 		},
 		{
@@ -243,6 +256,8 @@ func ClusterRoles() []rbac.ClusterRole {
 
 				rbac.NewRule(Read...).Groups(extensionsGroup).Resources("daemonsets", "deployments", "deployments/scale",
 					"ingresses", "replicasets", "replicasets/scale", "replicationcontrollers/scale").RuleOrDie(),
+
+				rbac.NewRule(Read...).Groups(policyGroup).Resources("poddisruptionbudgets").RuleOrDie(),
 			},
 		},
 		{

@@ -487,6 +487,7 @@ def configure_worker_services(api_servers, dns, cluster_cidr):
     kubelet_opts.add('tls-cert-file', server_cert_path)
     kubelet_opts.add('tls-private-key-file', server_key_path)
     kubelet_opts.add('logtostderr', 'true')
+    kubelet_opts.add('fail-swap-on', 'false')
 
     kube_proxy_opts = FlagManager('kube-proxy')
     kube_proxy_opts.add('cluster-cidr', cluster_cidr)
@@ -567,6 +568,11 @@ def launch_default_ingress_controller():
         return
 
     # Render the ingress replication controller manifest
+    context['ingress_image'] = \
+        "gcr.io/google_containers/nginx-ingress-controller:0.9.0-beta.13"
+    if arch() == 's390x':
+        context['ingress_image'] = \
+            "docker.io/cdkbot/nginx-ingress-controller-s390x:0.9.0-beta.13"
     manifest = addon_path.format('ingress-replication-controller.yaml')
     render('ingress-replication-controller.yaml', manifest, context)
     hookenv.log('Creating the ingress replication controller.')

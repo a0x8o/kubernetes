@@ -38,10 +38,10 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/admission"
+	genericadmissioninit "k8s.io/apiserver/pkg/admission/initializer"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubernetes/pkg/api"
-	admissionv1alpha1helper "k8s.io/kubernetes/pkg/apis/admission/v1alpha1"
 	admissioninit "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 	"k8s.io/kubernetes/pkg/kubeapiserver/admission/configuration"
 
@@ -114,8 +114,8 @@ type GenericAdmissionWebhook struct {
 
 var (
 	_ = admissioninit.WantsServiceResolver(&GenericAdmissionWebhook{})
-	_ = admissioninit.WantsClientCert(&GenericAdmissionWebhook{})
-	_ = admissioninit.WantsExternalKubeClientSet(&GenericAdmissionWebhook{})
+	_ = genericadmissioninit.WantsClientCert(&GenericAdmissionWebhook{})
+	_ = genericadmissioninit.WantsExternalKubeClientSet(&GenericAdmissionWebhook{})
 )
 
 func (a *GenericAdmissionWebhook) SetProxyTransport(pt *http.Transport) {
@@ -140,6 +140,9 @@ func (a *GenericAdmissionWebhook) SetExternalKubeClientSet(client clientset.Inte
 }
 
 func (a *GenericAdmissionWebhook) Validate() error {
+	if a.clientCert == nil || a.clientKey == nil {
+		return fmt.Errorf("the GenericAdmissionWebhook admission plugin requires a client certificate and the private key to be provided")
+	}
 	if a.hookSource == nil {
 		return fmt.Errorf("the GenericAdmissionWebhook admission plugin requires a Kubernetes client to be provided")
 	}
@@ -226,7 +229,7 @@ func (a *GenericAdmissionWebhook) callHook(ctx context.Context, h *v1alpha1.Exte
 	}
 
 	// Make the webhook request
-	request := admissionv1alpha1helper.NewAdmissionReview(attr)
+	request := createAdmissionReview(attr)
 	client, err := a.hookClient(h)
 	if err != nil {
 		return &ErrCallingWebhook{WebhookName: h.Name, Reason: err}

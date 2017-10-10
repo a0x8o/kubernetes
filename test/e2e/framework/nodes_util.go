@@ -59,7 +59,7 @@ func etcdUpgradeGCE(target_storage, target_version string) error {
 		os.Environ(),
 		"TEST_ETCD_VERSION="+target_version,
 		"STORAGE_BACKEND="+target_storage,
-		"TEST_ETCD_IMAGE=3.0.17")
+		"TEST_ETCD_IMAGE=3.1.10")
 
 	_, _, err := RunCmdEnv(env, gceUpgradeScript(), "-l", "-M")
 	return err
@@ -78,7 +78,7 @@ func masterUpgradeGCE(rawV string, enableKubeProxyDaemonSet bool) error {
 		env = append(env,
 			"TEST_ETCD_VERSION="+TestContext.EtcdUpgradeVersion,
 			"STORAGE_BACKEND="+TestContext.EtcdUpgradeStorage,
-			"TEST_ETCD_IMAGE=3.0.17")
+			"TEST_ETCD_IMAGE=3.1.10")
 	}
 
 	v := "v" + rawV
@@ -114,23 +114,20 @@ func masterUpgradeKubernetesAnywhere(v string) error {
 	backupConfigPath := filepath.Join(kaPath, ".config.bak")
 	updatedConfigPath := filepath.Join(kaPath, fmt.Sprintf(".config-%s", v))
 
-	// backup .config to .config.bak
-	if err := os.Rename(originalConfigPath, backupConfigPath); err != nil {
+	// modify config with specified k8s version
+	if _, _, err := RunCmd("sed",
+		"-i.bak", // writes original to .config.bak
+		fmt.Sprintf(`s/kubernetes_version=.*$/kubernetes_version=%q/`, v),
+		originalConfigPath); err != nil {
 		return err
 	}
+
 	defer func() {
 		// revert .config.bak to .config
 		if err := os.Rename(backupConfigPath, originalConfigPath); err != nil {
 			Logf("Could not rename %s back to %s", backupConfigPath, originalConfigPath)
 		}
 	}()
-
-	// modify config with specified k8s version
-	if _, _, err := RunCmd("sed",
-		fmt.Sprintf(`s/kubernetes_version=.*$/kubernetes_version=%s/`, v),
-		backupConfigPath, ">", originalConfigPath); err != nil {
-		return err
-	}
 
 	// invoke ka upgrade
 	if _, _, err := RunCmd("make", "-C", TestContext.KubernetesAnywherePath,

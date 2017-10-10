@@ -693,7 +693,7 @@ function prepare-kube-proxy-manifest-variables {
   if [[ -n "${FEATURE_GATES:-}" ]]; then
     params+=" --feature-gates=${FEATURE_GATES}"
   fi
-  params+=" --iptables-sync-period=1m --iptables-min-sync-period=10s"
+  params+=" --iptables-sync-period=1m --iptables-min-sync-period=10s --ipvs-sync-period=1m --ipvs-min-sync-period=10s"
   if [[ -n "${KUBEPROXY_TEST_ARGS:-}" ]]; then
     params+=" ${KUBEPROXY_TEST_ARGS}"
   fi
@@ -1103,6 +1103,9 @@ function start-kube-controller-manager {
   if [[ -n "${SERVICE_CLUSTER_IP_RANGE:-}" ]]; then
     params+=" --service-cluster-ip-range=${SERVICE_CLUSTER_IP_RANGE}"
   fi
+  if [[ -n "${CONCURRENT_SERVICE_SYNCS:-}" ]]; then
+    params+=" --concurrent-service-syncs=${CONCURRENT_SERVICE_SYNCS}"
+  fi
   if [[ "${NETWORK_PROVIDER:-}" == "kubenet" ]]; then
     params+=" --allocate-node-cidrs=true"
   elif [[ -n "${ALLOCATE_NODE_CIDRS:-}" ]]; then
@@ -1295,13 +1298,11 @@ function start-kube-addons {
   fi
   if [[ "${ENABLE_CLUSTER_DNS:-}" == "true" ]]; then
     setup-addon-manifests "addons" "dns"
-    local -r dns_controller_file="${dst_dir}/dns/kubedns-controller.yaml"
-    local -r dns_svc_file="${dst_dir}/dns/kubedns-svc.yaml"
-    mv "${dst_dir}/dns/kubedns-controller.yaml.in" "${dns_controller_file}"
-    mv "${dst_dir}/dns/kubedns-svc.yaml.in" "${dns_svc_file}"
+    local -r kubedns_file="${dst_dir}/dns/kube-dns.yaml"
+    mv "${dst_dir}/dns/kube-dns.yaml.in" "${kubedns_file}"
     # Replace the salt configurations with variable values.
-    sed -i -e "s@{{ *pillar\['dns_domain'\] *}}@${DNS_DOMAIN}@g" "${dns_controller_file}"
-    sed -i -e "s@{{ *pillar\['dns_server'\] *}}@${DNS_SERVER_IP}@g" "${dns_svc_file}"
+    sed -i -e "s@{{ *pillar\['dns_domain'\] *}}@${DNS_DOMAIN}@g" "${kubedns_file}"
+    sed -i -e "s@{{ *pillar\['dns_server'\] *}}@${DNS_SERVER_IP}@g" "${kubedns_file}"
 
     if [[ "${ENABLE_DNS_HORIZONTAL_AUTOSCALER:-}" == "true" ]]; then
       setup-addon-manifests "addons" "dns-horizontal-autoscaler"

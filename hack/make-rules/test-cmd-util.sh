@@ -74,7 +74,6 @@ static="static"
 storageclass="storageclass"
 subjectaccessreviews="subjectaccessreviews"
 selfsubjectaccessreviews="selfsubjectaccessreviews"
-thirdpartyresources="thirdpartyresources"
 customresourcedefinitions="customresourcedefinitions"
 daemonsets="daemonsets"
 controllerrevisions="controllerrevisions"
@@ -1542,16 +1541,16 @@ run_non_native_resource_tests() {
   kube::log::status "Testing kubectl non-native resources"
   kube::util::non_native_resources
 
-  # Test that we can list this new third party resource (foos)
+  # Test that we can list this new CustomResource (foos)
   kube::test::get_object_assert foos "{{range.items}}{{$id_field}}:{{end}}" ''
 
-  # Test that we can list this new third party resource (bars)
+  # Test that we can list this new CustomResource (bars)
   kube::test::get_object_assert bars "{{range.items}}{{$id_field}}:{{end}}" ''
 
   # Test that we can create a new resource of type Foo
-  kubectl "${kube_flags[@]}" create -f hack/testdata/TPR/foo.yaml "${kube_flags[@]}"
+  kubectl "${kube_flags[@]}" create -f hack/testdata/CRD/foo.yaml "${kube_flags[@]}"
 
-  # Test that we can list this new third party resource
+  # Test that we can list this new custom resource
   kube::test::get_object_assert foos "{{range.items}}{{$id_field}}:{{end}}" 'test:'
 
   # Test alternate forms
@@ -1560,7 +1559,7 @@ run_non_native_resource_tests() {
   kube::test::get_object_assert foos.v1.company.com "{{range.items}}{{$id_field}}:{{end}}" 'test:'
 
   # Test all printers, with lists and individual items
-  kube::log::status "Testing ThirdPartyResource printing"
+  kube::log::status "Testing CustomResource printing"
   kubectl "${kube_flags[@]}" get foos
   kubectl "${kube_flags[@]}" get foos/test
   kubectl "${kube_flags[@]}" get foos      -o name
@@ -1579,7 +1578,7 @@ run_non_native_resource_tests() {
   kube::test::if_has_string "${output_message}" 'foos/test'
 
   # Test patching
-  kube::log::status "Testing ThirdPartyResource patching"
+  kube::log::status "Testing CustomResource patching"
   kubectl "${kube_flags[@]}" patch foos/test -p '{"patched":"value1"}' --type=merge
   kube::test::get_object_assert foos/test "{{.patched}}" 'value1'
   kubectl "${kube_flags[@]}" patch foos/test -p '{"patched":"value2"}' --type=merge --record
@@ -1587,37 +1586,37 @@ run_non_native_resource_tests() {
   kubectl "${kube_flags[@]}" patch foos/test -p '{"patched":null}' --type=merge --record
   kube::test::get_object_assert foos/test "{{.patched}}" '<no value>'
   # Get local version
-  TPR_RESOURCE_FILE="${KUBE_TEMP}/tpr-foos-test.json"
-  kubectl "${kube_flags[@]}" get foos/test -o json > "${TPR_RESOURCE_FILE}"
+  CRD_RESOURCE_FILE="${KUBE_TEMP}/crd-foos-test.json"
+  kubectl "${kube_flags[@]}" get foos/test -o json > "${CRD_RESOURCE_FILE}"
   # cannot apply strategic patch locally
-  TPR_PATCH_ERROR_FILE="${KUBE_TEMP}/tpr-foos-test-error"
-  ! kubectl "${kube_flags[@]}" patch --local -f "${TPR_RESOURCE_FILE}" -p '{"patched":"value3"}' 2> "${TPR_PATCH_ERROR_FILE}"
-  if grep -q "try --type merge" "${TPR_PATCH_ERROR_FILE}"; then
-    kube::log::status "\"kubectl patch --local\" returns error as expected for ThirdPartyResource: $(cat ${TPR_PATCH_ERROR_FILE})"
+  CRD_PATCH_ERROR_FILE="${KUBE_TEMP}/crd-foos-test-error"
+  ! kubectl "${kube_flags[@]}" patch --local -f "${CRD_RESOURCE_FILE}" -p '{"patched":"value3"}' 2> "${CRD_PATCH_ERROR_FILE}"
+  if grep -q "try --type merge" "${CRD_PATCH_ERROR_FILE}"; then
+    kube::log::status "\"kubectl patch --local\" returns error as expected for CustomResource: $(cat ${CRD_PATCH_ERROR_FILE})"
   else
-    kube::log::status "\"kubectl patch --local\" returns unexpected error or non-error: $(cat ${TPR_PATCH_ERROR_FILE})"
+    kube::log::status "\"kubectl patch --local\" returns unexpected error or non-error: $(cat ${CRD_PATCH_ERROR_FILE})"
     exit 1
   fi
   # can apply merge patch locally
-  kubectl "${kube_flags[@]}" patch --local -f "${TPR_RESOURCE_FILE}" -p '{"patched":"value3"}' --type=merge -o json
+  kubectl "${kube_flags[@]}" patch --local -f "${CRD_RESOURCE_FILE}" -p '{"patched":"value3"}' --type=merge -o json
   # can apply merge patch remotely
-  kubectl "${kube_flags[@]}" patch --record -f "${TPR_RESOURCE_FILE}" -p '{"patched":"value3"}' --type=merge -o json
+  kubectl "${kube_flags[@]}" patch --record -f "${CRD_RESOURCE_FILE}" -p '{"patched":"value3"}' --type=merge -o json
   kube::test::get_object_assert foos/test "{{.patched}}" 'value3'
-  rm "${TPR_RESOURCE_FILE}"
-  rm "${TPR_PATCH_ERROR_FILE}"
+  rm "${CRD_RESOURCE_FILE}"
+  rm "${CRD_PATCH_ERROR_FILE}"
 
   # Test labeling
-  kube::log::status "Testing ThirdPartyResource labeling"
+  kube::log::status "Testing CustomResource labeling"
   kubectl "${kube_flags[@]}" label foos --all listlabel=true
   kubectl "${kube_flags[@]}" label foo/test itemlabel=true
 
   # Test annotating
-  kube::log::status "Testing ThirdPartyResource annotating"
+  kube::log::status "Testing CustomResource annotating"
   kubectl "${kube_flags[@]}" annotate foos --all listannotation=true
   kubectl "${kube_flags[@]}" annotate foo/test itemannotation=true
 
   # Test describing
-  kube::log::status "Testing ThirdPartyResource describing"
+  kube::log::status "Testing CustomResource describing"
   kubectl "${kube_flags[@]}" describe foos
   kubectl "${kube_flags[@]}" describe foos/test
   kubectl "${kube_flags[@]}" describe foos | grep listlabel=true
@@ -1630,15 +1629,15 @@ run_non_native_resource_tests() {
   kube::test::get_object_assert foos "{{range.items}}{{$id_field}}:{{end}}" ''
 
   # Test that we can create a new resource of type Bar
-  kubectl "${kube_flags[@]}" create -f hack/testdata/TPR/bar.yaml "${kube_flags[@]}"
+  kubectl "${kube_flags[@]}" create -f hack/testdata/CRD/bar.yaml "${kube_flags[@]}"
 
-  # Test that we can list this new third party resource
+  # Test that we can list this new custom resource
   kube::test::get_object_assert bars "{{range.items}}{{$id_field}}:{{end}}" 'test:'
 
   # Test that we can watch the resource.
   # Start watcher in background with process substitution,
   # so we can read from stdout asynchronously.
-  kube::log::status "Testing ThirdPartyResource watching"
+  kube::log::status "Testing CustomResource watching"
   exec 3< <(kubectl "${kube_flags[@]}" get bars --request-timeout=1m --watch-only -o name & echo $! ; wait)
   local watch_pid
   read <&3 watch_pid
@@ -1668,7 +1667,7 @@ run_non_native_resource_tests() {
   kube::test::wait_object_assert bars "{{range.items}}{{$id_field}}:{{end}}" ''
 
   # Test that we can create single item via apply
-  kubectl "${kube_flags[@]}" apply -f hack/testdata/TPR/foo.yaml
+  kubectl "${kube_flags[@]}" apply -f hack/testdata/CRD/foo.yaml
 
   # Test that we have create a foo named test
   kube::test::get_object_assert foos "{{range.items}}{{$id_field}}:{{end}}" 'test:'
@@ -1677,7 +1676,7 @@ run_non_native_resource_tests() {
   kube::test::get_object_assert foos/test '{{.someField}}' 'field1'
 
   # Test that apply an empty patch doesn't change fields
-  kubectl "${kube_flags[@]}" apply -f hack/testdata/TPR/foo.yaml
+  kubectl "${kube_flags[@]}" apply -f hack/testdata/CRD/foo.yaml
 
   # Test that the field has the same value after re-apply
   kube::test::get_object_assert foos/test '{{.someField}}' 'field1'
@@ -1686,7 +1685,7 @@ run_non_native_resource_tests() {
   kube::test::get_object_assert foos/test '{{.nestedField.someSubfield}}' 'subfield1'
 
   # Update a subfield and then apply the change
-  kubectl "${kube_flags[@]}" apply -f hack/testdata/TPR/foo-updated-subfield.yaml
+  kubectl "${kube_flags[@]}" apply -f hack/testdata/CRD/foo-updated-subfield.yaml
 
   # Test that apply has updated the subfield
   kube::test::get_object_assert foos/test '{{.nestedField.someSubfield}}' 'modifiedSubfield'
@@ -1695,7 +1694,7 @@ run_non_native_resource_tests() {
   kube::test::get_object_assert foos/test '{{.nestedField.otherSubfield}}' 'subfield2'
 
   # Delete a subfield and then apply the change
-  kubectl "${kube_flags[@]}" apply -f hack/testdata/TPR/foo-deleted-subfield.yaml
+  kubectl "${kube_flags[@]}" apply -f hack/testdata/CRD/foo-deleted-subfield.yaml
 
   # Test that apply has deleted the field
   kube::test::get_object_assert foos/test '{{.nestedField.otherSubfield}}' '<no value>'
@@ -1704,19 +1703,19 @@ run_non_native_resource_tests() {
   kube::test::get_object_assert foos/test '{{.nestedField.newSubfield}}' '<no value>'
 
   # Add a field and then apply the change
-  kubectl "${kube_flags[@]}" apply -f hack/testdata/TPR/foo-added-subfield.yaml
+  kubectl "${kube_flags[@]}" apply -f hack/testdata/CRD/foo-added-subfield.yaml
 
   # Test that apply has added the field
   kube::test::get_object_assert foos/test '{{.nestedField.newSubfield}}' 'subfield3'
 
   # Delete the resource
-  kubectl "${kube_flags[@]}" delete -f hack/testdata/TPR/foo.yaml
+  kubectl "${kube_flags[@]}" delete -f hack/testdata/CRD/foo.yaml
 
   # Make sure it's gone
   kube::test::get_object_assert foos "{{range.items}}{{$id_field}}:{{end}}" ''
 
   # Test that we can create list via apply
-  kubectl "${kube_flags[@]}" apply -f hack/testdata/TPR/multi-tpr-list.yaml
+  kubectl "${kube_flags[@]}" apply -f hack/testdata/CRD/multi-crd-list.yaml
 
   # Test that we have create a foo and a bar from a list
   kube::test::get_object_assert foos "{{range.items}}{{$id_field}}:{{end}}" 'test-list:'
@@ -1727,7 +1726,7 @@ run_non_native_resource_tests() {
   kube::test::get_object_assert bars/test-list '{{.someField}}' 'field1'
 
   # Test that re-apply an list doesn't change anything
-  kubectl "${kube_flags[@]}" apply -f hack/testdata/TPR/multi-tpr-list.yaml
+  kubectl "${kube_flags[@]}" apply -f hack/testdata/CRD/multi-crd-list.yaml
 
   # Test that the field has the same value after re-apply
   kube::test::get_object_assert foos/test-list '{{.someField}}' 'field1'
@@ -1738,7 +1737,7 @@ run_non_native_resource_tests() {
   kube::test::get_object_assert bars/test-list '{{.someField}}' 'field1'
 
   # Update fields and then apply the change
-  kubectl "${kube_flags[@]}" apply -f hack/testdata/TPR/multi-tpr-list-updated-field.yaml
+  kubectl "${kube_flags[@]}" apply -f hack/testdata/CRD/multi-crd-list-updated-field.yaml
 
   # Test that apply has updated the fields
   kube::test::get_object_assert foos/test-list '{{.someField}}' 'modifiedField'
@@ -1749,7 +1748,7 @@ run_non_native_resource_tests() {
   kube::test::get_object_assert bars/test-list '{{.otherField}}' 'field2'
 
   # Delete fields and then apply the change
-  kubectl "${kube_flags[@]}" apply -f hack/testdata/TPR/multi-tpr-list-deleted-field.yaml
+  kubectl "${kube_flags[@]}" apply -f hack/testdata/CRD/multi-crd-list-deleted-field.yaml
 
   # Test that apply has deleted the fields
   kube::test::get_object_assert foos/test-list '{{.otherField}}' '<no value>'
@@ -1760,14 +1759,14 @@ run_non_native_resource_tests() {
   kube::test::get_object_assert bars/test-list '{{.newField}}' '<no value>'
 
   # Add a field and then apply the change
-  kubectl "${kube_flags[@]}" apply -f hack/testdata/TPR/multi-tpr-list-added-field.yaml
+  kubectl "${kube_flags[@]}" apply -f hack/testdata/CRD/multi-crd-list-added-field.yaml
 
   # Test that apply has added the field
   kube::test::get_object_assert foos/test-list '{{.newField}}' 'field3'
   kube::test::get_object_assert bars/test-list '{{.newField}}' 'field3'
 
   # Delete the resource
-  kubectl "${kube_flags[@]}" delete -f hack/testdata/TPR/multi-tpr-list.yaml
+  kubectl "${kube_flags[@]}" delete -f hack/testdata/CRD/multi-crd-list.yaml
 
   # Make sure it's gone
   kube::test::get_object_assert foos "{{range.items}}{{$id_field}}:{{end}}" ''
@@ -1779,19 +1778,19 @@ run_non_native_resource_tests() {
   kube::test::get_object_assert bars "{{range.items}}{{$id_field}}:{{end}}" ''
 
   # apply --prune on foo.yaml that has foo/test
-  kubectl apply --prune -l pruneGroup=true -f hack/testdata/TPR/foo.yaml "${kube_flags[@]}" --prune-whitelist=company.com/v1/Foo --prune-whitelist=company.com/v1/Bar
-  # check right tprs exist
+  kubectl apply --prune -l pruneGroup=true -f hack/testdata/CRD/foo.yaml "${kube_flags[@]}" --prune-whitelist=company.com/v1/Foo --prune-whitelist=company.com/v1/Bar
+  # check right crds exist
   kube::test::get_object_assert foos "{{range.items}}{{$id_field}}:{{end}}" 'test:'
   kube::test::get_object_assert bars "{{range.items}}{{$id_field}}:{{end}}" ''
 
   # apply --prune on bar.yaml that has bar/test
-  kubectl apply --prune -l pruneGroup=true -f hack/testdata/TPR/bar.yaml "${kube_flags[@]}" --prune-whitelist=company.com/v1/Foo --prune-whitelist=company.com/v1/Bar
-  # check right tprs exist
+  kubectl apply --prune -l pruneGroup=true -f hack/testdata/CRD/bar.yaml "${kube_flags[@]}" --prune-whitelist=company.com/v1/Foo --prune-whitelist=company.com/v1/Bar
+  # check right crds exist
   kube::test::get_object_assert foos "{{range.items}}{{$id_field}}:{{end}}" ''
   kube::test::get_object_assert bars "{{range.items}}{{$id_field}}:{{end}}" 'test:'
 
   # Delete the resource
-  kubectl "${kube_flags[@]}" delete -f hack/testdata/TPR/bar.yaml
+  kubectl "${kube_flags[@]}" delete -f hack/testdata/CRD/bar.yaml
 
   # Make sure it's gone
   kube::test::get_object_assert foos "{{range.items}}{{$id_field}}:{{end}}" ''
@@ -1799,7 +1798,7 @@ run_non_native_resource_tests() {
 
   # Test 'kubectl create' with namespace, and namespace cleanup.
   kubectl "${kube_flags[@]}" create namespace non-native-resources
-  kubectl "${kube_flags[@]}" create -f hack/testdata/TPR/bar.yaml --namespace=non-native-resources
+  kubectl "${kube_flags[@]}" create -f hack/testdata/CRD/bar.yaml --namespace=non-native-resources
   kube::test::get_object_assert bars '{{len .items}}' '1' --namespace=non-native-resources
   kubectl "${kube_flags[@]}" delete namespace non-native-resources
   # Make sure objects go away.
@@ -2967,8 +2966,27 @@ run_rs_tests() {
   kubectl scale --current-replicas=3 --replicas=2 replicasets frontend "${kube_flags[@]}"
   # Post-condition: 2 replicas
   kube::test::get_object_assert 'rs frontend' "{{$rs_replicas_field}}" '2'
+
+  # Set up three deploy, two deploy have same label
+  kubectl create -f hack/testdata/scale-deploy-1.yaml "${kube_flags[@]}"
+  kubectl create -f hack/testdata/scale-deploy-2.yaml "${kube_flags[@]}"
+  kubectl create -f hack/testdata/scale-deploy-3.yaml "${kube_flags[@]}"
+  kube::test::get_object_assert 'deploy scale-1' "{{.spec.replicas}}" '1'
+  kube::test::get_object_assert 'deploy scale-2' "{{.spec.replicas}}" '1'
+  kube::test::get_object_assert 'deploy scale-3' "{{.spec.replicas}}" '1'
+  # Test kubectl scale --selector
+  kubectl scale deploy --replicas=2 -l run=hello
+  kube::test::get_object_assert 'deploy scale-1' "{{.spec.replicas}}" '2'
+  kube::test::get_object_assert 'deploy scale-2' "{{.spec.replicas}}" '2'
+  kube::test::get_object_assert 'deploy scale-3' "{{.spec.replicas}}" '1'
+  # Test kubectl scale --all
+  kubectl scale deploy --replicas=3 --all
+  kube::test::get_object_assert 'deploy scale-1' "{{.spec.replicas}}" '3'
+  kube::test::get_object_assert 'deploy scale-2' "{{.spec.replicas}}" '3'
+  kube::test::get_object_assert 'deploy scale-3' "{{.spec.replicas}}" '3'
   # Clean-up
   kubectl delete rs frontend "${kube_flags[@]}"
+  kubectl delete deploy scale-1 scale-2 scale-3 "${kube_flags[@]}"
 
   ### Expose replica set as service
   kubectl create -f hack/testdata/frontend-replicaset.yaml "${kube_flags[@]}"
@@ -2984,6 +3002,16 @@ run_rs_tests() {
   kube::test::get_object_assert 'service frontend-2' "{{$port_name}} {{$port_field}}" 'default 80'
   # Cleanup services
   kubectl delete service frontend{,-2} "${kube_flags[@]}"
+
+  # Test set commands
+  # Pre-condition: frontend replica set exists at generation 1
+  kube::test::get_object_assert 'rs frontend' "{{${generation_field}}}" '1'
+  kubectl set image rs/frontend "${kube_flags[@]}" *=gcr.io/google-containers/pause:test-cmd
+  kube::test::get_object_assert 'rs frontend' "{{${generation_field}}}" '2'
+  kubectl set env rs/frontend "${kube_flags[@]}" foo=bar
+  kube::test::get_object_assert 'rs frontend' "{{${generation_field}}}" '3'
+  kubectl set resources rs/frontend "${kube_flags[@]}" --limits=cpu=200m,memory=512Mi
+  kube::test::get_object_assert 'rs frontend' "{{${generation_field}}}" '4'
 
   ### Delete replica set with id
   # Pre-condition: frontend replica set exists
@@ -3064,6 +3092,14 @@ run_daemonset_tests() {
   kubectl apply -f hack/testdata/rollingupdate-daemonset.yaml "${kube_flags[@]}"
   # Template Generation should stay 1
   kube::test::get_object_assert 'daemonsets bind' "{{${template_generation_field}}}" '1'
+  # Test set commands
+  kubectl set image daemonsets/bind "${kube_flags[@]}" *=gcr.io/google-containers/pause:test-cmd
+  kube::test::get_object_assert 'daemonsets bind' "{{${template_generation_field}}}" '2'
+  kubectl set env daemonsets/bind "${kube_flags[@]}" foo=bar
+  kube::test::get_object_assert 'daemonsets bind' "{{${template_generation_field}}}" '3'
+  kubectl set resources daemonsets/bind "${kube_flags[@]}" --limits=cpu=200m,memory=512Mi
+  kube::test::get_object_assert 'daemonsets bind' "{{${template_generation_field}}}" '4'
+
   # Clean up
   kubectl delete -f hack/testdata/rollingupdate-daemonset.yaml "${kube_flags[@]}"
 
@@ -4177,6 +4213,60 @@ run_certificates_tests() {
   set +o errexit
 }
 
+run_cluster_management_tests() {
+  set -o nounset
+  set -o errexit
+
+  kube::log::status "Testing cluster-management commands"
+
+  kube::test::get_object_assert nodes "{{range.items}}{{$id_field}}:{{end}}" '127.0.0.1:'
+
+  ### kubectl cordon update with --dry-run does not mark node unschedulable
+  # Pre-condition: node is schedulable
+  kube::test::get_object_assert "nodes 127.0.0.1" "{{.spec.unschedulable}}" '<no value>'
+  kubectl cordon "127.0.0.1" --dry-run
+  kube::test::get_object_assert "nodes 127.0.0.1" "{{.spec.unschedulable}}" '<no value>'
+
+  ### kubectl drain update with --dry-run does not mark node unschedulable
+  # Pre-condition: node is schedulable
+  kube::test::get_object_assert "nodes 127.0.0.1" "{{.spec.unschedulable}}" '<no value>'
+  kubectl drain "127.0.0.1" --dry-run
+  # Post-condition: node still exists, node is still schedulable
+  kube::test::get_object_assert nodes "{{range.items}}{{$id_field}}:{{end}}" '127.0.0.1:'
+  kube::test::get_object_assert "nodes 127.0.0.1" "{{.spec.unschedulable}}" '<no value>'
+
+  ### kubectl uncordon update with --dry-run is a no-op
+  # Pre-condition: node is already schedulable
+  kube::test::get_object_assert "nodes 127.0.0.1" "{{.spec.unschedulable}}" '<no value>'
+  response=$(kubectl uncordon "127.0.0.1" --dry-run)
+  kube::test::if_has_string "${response}" 'already uncordoned'
+  # Post-condition: node is still schedulable
+  kube::test::get_object_assert "nodes 127.0.0.1" "{{.spec.unschedulable}}" '<no value>'
+
+  ### kubectl drain command fails when both --selector and a node argument are given
+  # Pre-condition: node exists and contains label test=label
+  kubectl label node "127.0.0.1" "test=label"
+  kube::test::get_object_assert "nodes 127.0.0.1" '{{.metadata.labels.test}}' 'label'
+  response=$(! kubectl drain "127.0.0.1" --selector test=label 2>&1)
+  kube::test::if_has_string "${response}" 'cannot specify both a node name'
+
+  ### kubectl cordon command fails when no arguments are passed
+  # Pre-condition: node exists
+  response=$(! kubectl cordon 2>&1)
+  kube::test::if_has_string "${response}" 'error\: USAGE\: cordon NODE'
+
+  ### kubectl cordon selects all nodes with an empty --selector=
+  # Pre-condition: node "127.0.0.1" is uncordoned
+  kubectl uncordon "127.0.0.1"
+  response=$(kubectl cordon --selector=)
+  kube::test::if_has_string "${response}" 'node "127.0.0.1" cordoned'
+  # Post-condition: node "127.0.0.1" is cordoned
+  kube::test::get_object_assert "nodes 127.0.0.1" "{{.spec.unschedulable}}" 'true'
+
+  set +o nounset
+  set +o errexit
+}
+
 run_plugins_tests() {
   set -o nounset
   set -o errexit
@@ -4355,6 +4445,7 @@ runTests() {
   change_cause_annotation='.*kubernetes.io/change-cause.*'
   pdb_min_available=".spec.minAvailable"
   pdb_max_unavailable=".spec.maxUnavailable"
+  generation_field=".metadata.generation"
   template_generation_field=".spec.templateGeneration"
   container_len="(len .spec.template.spec.containers)"
   image_field0="(index .spec.template.spec.containers 0).image"
@@ -4480,10 +4571,10 @@ runTests() {
   fi
 
   #####################################
-  # Third Party Resources             #
+  # CustomResourceDefinitions         #
   #####################################
 
-  # customresourcedefinitions cleanup after themselves.  Run these first, then TPRs
+  # customresourcedefinitions cleanup after themselves.
   if kube::test::if_supports_resource "${customresourcedefinitions}" ; then
     record_command run_crd_tests
   fi
@@ -4764,6 +4855,13 @@ runTests() {
 
   if kube::test::if_supports_resource "${csr}" ; then
     record_command run_certificates_tests
+  fi
+
+  ######################
+  # Cluster Management #
+  ######################
+  if kube::test::if_supports_resource "${nodes}" ; then
+    record_command run_cluster_management_tests
   fi
 
   ###########

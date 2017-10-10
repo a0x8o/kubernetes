@@ -28,16 +28,6 @@ spec:
       hostNetwork: true
       nodeSelector:
         beta.kubernetes.io/kube-proxy-ds-ready: "true"
-      initContainers:
-      - name: touch-lock
-        image: busybox
-        command: ['/bin/touch', '/run/xtables.lock']
-        securityContext:
-          privileged: true
-        volumeMounts:
-        - mountPath: /run
-          name: run
-          readOnly: false
       containers:
       - name: kube-proxy
         image: {{pillar['kube_docker_registry']}}/kube-proxy:{{pillar['kube-proxy_docker_tag']}}
@@ -47,7 +37,7 @@ spec:
         command:
         - /bin/sh
         - -c
-        - echo -998 > /proc/$$$/oom_score_adj && kube-proxy {{kubeconfig}} {{cluster_cidr}} --resource-container="" {{params}} 1>>/var/log/kube-proxy.log 2>&1
+        - kube-proxy {{kubeconfig}} {{cluster_cidr}} --resource-container="" --oom-score-adj=-998 {{params}} 1>>/var/log/kube-proxy.log 2>&1
         {{container_env}}
         {{kube_cache_mutation_detector_env_name}}
           {{kube_cache_mutation_detector_env_value}}
@@ -73,7 +63,5 @@ spec:
       - name: xtables-lock
         hostPath:
           path: /run/xtables.lock
-      - name: run
-        hostPath:
-          path: /run
+          type: FileOrCreate
       serviceAccountName: kube-proxy

@@ -54,6 +54,7 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/certificate"
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/client-go/util/integer"
 	"k8s.io/kubernetes/cmd/kubelet/app/options"
@@ -64,7 +65,7 @@ import (
 	kubeletconfiginternal "k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
 	kubeletconfigv1alpha1 "k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/v1alpha1"
 	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
-	"k8s.io/kubernetes/pkg/kubelet/certificate"
+	kubeletcertificate "k8s.io/kubernetes/pkg/kubelet/certificate"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
 	"k8s.io/kubernetes/pkg/kubelet/config"
 	"k8s.io/kubernetes/pkg/kubelet/configmap"
@@ -516,16 +517,6 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	}
 	glog.Infof("Hairpin mode set to %q", hairpinMode)
 
-	// TODO(#36485) Remove this workaround once we fix the init-container issue.
-	// Touch iptables lock file, which will be shared among all processes accessing
-	// the iptables.
-	f, err := os.OpenFile(utilipt.LockfilePath16x, os.O_CREATE, 0600)
-	if err != nil {
-		glog.Warningf("Failed to open iptables lock file: %v", err)
-	} else if err = f.Close(); err != nil {
-		glog.Warningf("Failed to close iptables lock file: %v", err)
-	}
-
 	plug, err := network.InitNetworkPlugin(kubeDeps.NetworkPlugins, crOptions.NetworkPluginName, &criNetworkHost{&networkHost{klet}, &network.NoopPortMappingGetter{}}, hairpinMode, kubeCfg.NonMasqueradeCIDR, int(crOptions.NetworkPluginMTU))
 	if err != nil {
 		return nil, err
@@ -730,7 +721,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	klet.containerDeletor = newPodContainerDeletor(klet.containerRuntime, integer.IntMax(containerGCPolicy.MaxPerPodContainer, minDeadContainerInPod))
 
 	// setup imageManager
-	imageManager, err := images.NewImageGCManager(klet.containerRuntime, kubeDeps.CAdvisorInterface, kubeDeps.Recorder, nodeRef, imageGCPolicy)
+	imageManager, err := images.NewImageGCManager(klet.containerRuntime, klet.StatsProvider, kubeDeps.Recorder, nodeRef, imageGCPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize image manager: %v", err)
 	}
@@ -753,7 +744,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 
 		ips = append(ips, cloudIPs...)
 		names := append([]string{klet.GetHostname(), hostnameOverride}, cloudNames...)
-		klet.serverCertificateManager, err = certificate.NewKubeletServerCertificateManager(klet.kubeClient, kubeCfg, klet.nodeName, ips, names, certDirectory)
+		klet.serverCertificateManager, err = kubeletcertificate.NewKubeletServerCertificateManager(klet.kubeClient, kubeCfg, klet.nodeName, ips, names, certDirectory)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize certificate manager: %v", err)
 		}
@@ -1607,9 +1598,14 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 			}
 		}
 		if mirrorPod == nil || deleted {
-			glog.V(3).Infof("Creating a mirror pod for static pod %q", format.Pod(pod))
-			if err := kl.podManager.CreateMirrorPod(pod); err != nil {
-				glog.Errorf("Failed creating a mirror pod for %q: %v", format.Pod(pod), err)
+			node, err := kl.GetNode()
+			if err != nil || node.DeletionTimestamp != nil {
+				glog.V(4).Infof("No need to create a mirror pod, since node %q has been removed from the cluster", kl.nodeName)
+			} else {
+				glog.V(4).Infof("Creating a mirror pod for static pod %q", format.Pod(pod))
+				if err := kl.podManager.CreateMirrorPod(pod); err != nil {
+					glog.Errorf("Failed creating a mirror pod for %q: %v", format.Pod(pod), err)
+				}
 			}
 		}
 	}
@@ -1888,7 +1884,7 @@ func (kl *Kubelet) syncLoopIteration(configCh <-chan kubetypes.PodUpdate, handle
 			break
 		}
 		glog.V(4).Infof("SyncLoop (SYNC): %d pods; %s", len(podsToSync), format.Pods(podsToSync))
-		kl.HandlePodSyncs(podsToSync)
+		handler.HandlePodSyncs(podsToSync)
 	case update := <-kl.livenessManager.Updates():
 		if update.Result == proberesults.Failure {
 			// The liveness manager detected a failure; sync the pod.
@@ -2162,8 +2158,10 @@ func (kl *Kubelet) cleanUpContainersInPod(podID types.UID, exitedContainerID str
 	if podStatus, err := kl.podCache.Get(podID); err == nil {
 		removeAll := false
 		if syncedPod, ok := kl.podManager.GetPodByUID(podID); ok {
-			// When an evicted pod has already synced, all containers can be removed.
-			removeAll = eviction.PodIsEvicted(syncedPod.Status)
+			// generate the api status using the cached runtime status to get up-to-date ContainerStatuses
+			apiPodStatus := kl.generateAPIPodStatus(syncedPod, podStatus)
+			// When an evicted or deleted pod has already synced, all containers can be removed.
+			removeAll = eviction.PodIsEvicted(syncedPod.Status) || (syncedPod.DeletionTimestamp != nil && notRunning(apiPodStatus.ContainerStatuses))
 		}
 		kl.containerDeletor.deleteContainersInPod(exitedContainerID, podStatus, removeAll)
 	}

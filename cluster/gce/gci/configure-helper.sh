@@ -199,6 +199,12 @@ function append_or_replace_prefixed_line {
   mv "${tmpfile}" "${file}"
 }
 
+function write-pki-data {
+  local data="${1}"
+  local path="${2}"
+  (umask 077; echo "${data}" | base64 --decode > "${path}")
+}
+
 function create-node-pki {
   echo "Creating node pki files"
 
@@ -210,14 +216,14 @@ function create-node-pki {
   fi
 
   CA_CERT_BUNDLE_PATH="${pki_dir}/ca-certificates.crt"
-  echo "${CA_CERT_BUNDLE}" | base64 --decode > "${CA_CERT_BUNDLE_PATH}"
+  write-pki-data "${CA_CERT_BUNDLE}" "${CA_CERT_BUNDLE_PATH}"
 
   if [[ ! -z "${KUBELET_CERT:-}" && ! -z "${KUBELET_KEY:-}" ]]; then
     KUBELET_CERT_PATH="${pki_dir}/kubelet.crt"
-    echo "${KUBELET_CERT}" | base64 --decode > "${KUBELET_CERT_PATH}"
+    write-pki-data "${KUBELET_CERT}" "${KUBELET_CERT_PATH}"
 
     KUBELET_KEY_PATH="${pki_dir}/kubelet.key"
-    echo "${KUBELET_KEY}" | base64 --decode > "${KUBELET_KEY_PATH}"
+    write-pki-data "${KUBELET_KEY}" "${KUBELET_KEY_PATH}"
   fi
 
   # TODO(mikedanese): remove this when we don't support downgrading to versions
@@ -232,12 +238,12 @@ function create-master-pki {
   mkdir -p "${pki_dir}"
 
   CA_CERT_PATH="${pki_dir}/ca.crt"
-  echo "${CA_CERT}" | base64 --decode > "${CA_CERT_PATH}"
+  write-pki-data "${CA_CERT}" "${CA_CERT_PATH}"
 
   # this is not true on GKE
   if [[ ! -z "${CA_KEY:-}" ]]; then
     CA_KEY_PATH="${pki_dir}/ca.key"
-    echo "${CA_KEY}" | base64 --decode > "${CA_KEY_PATH}"
+    write-pki-data "${CA_KEY}" "${CA_KEY_PATH}"
   fi
 
   if [[ -z "${APISERVER_SERVER_CERT:-}" || -z "${APISERVER_SERVER_KEY:-}" ]]; then
@@ -246,10 +252,10 @@ function create-master-pki {
   fi
 
   APISERVER_SERVER_CERT_PATH="${pki_dir}/apiserver.crt"
-  echo "${APISERVER_SERVER_CERT}" | base64 --decode > "${APISERVER_SERVER_CERT_PATH}"
+  write-pki-data "${APISERVER_SERVER_CERT}" "${APISERVER_SERVER_CERT_PATH}"
 
   APISERVER_SERVER_KEY_PATH="${pki_dir}/apiserver.key"
-  echo "${APISERVER_SERVER_KEY}" | base64 --decode > "${APISERVER_SERVER_KEY_PATH}"
+  write-pki-data "${APISERVER_SERVER_KEY}" "${APISERVER_SERVER_KEY_PATH}"
 
   if [[ -z "${APISERVER_CLIENT_CERT:-}" || -z "${APISERVER_CLIENT_KEY:-}" ]]; then
     APISERVER_CLIENT_CERT="${KUBEAPISERVER_CERT}"
@@ -257,10 +263,10 @@ function create-master-pki {
   fi
 
   APISERVER_CLIENT_CERT_PATH="${pki_dir}/apiserver-client.crt"
-  echo "${APISERVER_CLIENT_CERT}" | base64 --decode > "${APISERVER_CLIENT_CERT_PATH}"
+  write-pki-data "${APISERVER_CLIENT_CERT}" "${APISERVER_CLIENT_CERT_PATH}"
 
   APISERVER_CLIENT_KEY_PATH="${pki_dir}/apiserver-client.key"
-  echo "${APISERVER_CLIENT_KEY}" | base64 --decode > "${APISERVER_CLIENT_KEY_PATH}"
+  write-pki-data "${APISERVER_CLIENT_KEY}" "${APISERVER_CLIENT_KEY_PATH}"
 
   if [[ -z "${SERVICEACCOUNT_CERT:-}" || -z "${SERVICEACCOUNT_KEY:-}" ]]; then
     SERVICEACCOUNT_CERT="${MASTER_CERT}"
@@ -268,10 +274,10 @@ function create-master-pki {
   fi
 
   SERVICEACCOUNT_CERT_PATH="${pki_dir}/serviceaccount.crt"
-  echo "${SERVICEACCOUNT_CERT}" | base64 --decode > "${SERVICEACCOUNT_CERT_PATH}"
+  write-pki-data "${SERVICEACCOUNT_CERT}" "${SERVICEACCOUNT_CERT_PATH}"
 
   SERVICEACCOUNT_KEY_PATH="${pki_dir}/serviceaccount.key"
-  echo "${SERVICEACCOUNT_KEY}" | base64 --decode > "${SERVICEACCOUNT_KEY_PATH}"
+  write-pki-data "${SERVICEACCOUNT_KEY}" "${SERVICEACCOUNT_KEY_PATH}"
 
   # TODO(mikedanese): remove this when we don't support downgrading to versions
   # < 1.6.
@@ -280,16 +286,16 @@ function create-master-pki {
 
   if [[ ! -z "${REQUESTHEADER_CA_CERT:-}" ]]; then
     AGGREGATOR_CA_KEY_PATH="${pki_dir}/aggr_ca.key"
-    echo "${AGGREGATOR_CA_KEY}" | base64 --decode > "${AGGREGATOR_CA_KEY_PATH}"
+    write-pki-data "${AGGREGATOR_CA_KEY}" "${AGGREGATOR_CA_KEY_PATH}"
 
     REQUESTHEADER_CA_CERT_PATH="${pki_dir}/aggr_ca.crt"
-    echo "${REQUESTHEADER_CA_CERT}" | base64 --decode > "${REQUESTHEADER_CA_CERT_PATH}"
+    write-pki-data "${REQUESTHEADER_CA_CERT}" "${REQUESTHEADER_CA_CERT_PATH}"
 
     PROXY_CLIENT_KEY_PATH="${pki_dir}/proxy_client.key"
-    echo "${PROXY_CLIENT_KEY}" | base64 --decode > "${PROXY_CLIENT_KEY_PATH}"
+    write-pki-data "${PROXY_CLIENT_KEY}" "${PROXY_CLIENT_KEY_PATH}"
 
     PROXY_CLIENT_CERT_PATH="${pki_dir}/proxy_client.crt"
-    echo "${PROXY_CLIENT_CERT}" | base64 --decode > "${PROXY_CLIENT_CERT_PATH}"
+    write-pki-data "${PROXY_CLIENT_CERT}" "${PROXY_CLIENT_CERT_PATH}"
   fi
 }
 
@@ -500,7 +506,7 @@ function create-master-audit-policy {
       - group: "batch"
       - group: "certificates.k8s.io"
       - group: "extensions"
-      - group: "metrics"
+      - group: "metrics.k8s.io"
       - group: "networking.k8s.io"
       - group: "policy"
       - group: "rbac.authorization.k8s.io"
@@ -520,7 +526,7 @@ rules:
       - group: "" # core
         resources: ["endpoints", "services", "services/status"]
   - level: None
-    # Ingress controller reads `configmaps/ingress-uid` through the unsecured port.
+    # Ingress controller reads 'configmaps/ingress-uid' through the unsecured port.
     # TODO(#46983): Change this to the ingress controller service account.
     users: ["system:unsecured"]
     namespaces: ["kube-system"]
@@ -562,7 +568,7 @@ rules:
       - system:kube-controller-manager
     verbs: ["get", "list"]
     resources:
-      - group: "metrics"
+      - group: "metrics.k8s.io"
 
   # Don't log these read-only URLs.
   - level: None
@@ -576,6 +582,31 @@ rules:
     resources:
       - group: "" # core
         resources: ["events"]
+
+  # node and pod status calls from nodes are high-volume and can be large, don't log responses for expected updates from nodes
+  - level: Request
+    users: ["kubelet", "system:node-problem-detector", "system:serviceaccount:kube-system:node-problem-detector"]
+    verbs: ["update","patch"]
+    resources:
+      - group: "" # core
+        resources: ["nodes/status", "pods/status"]
+    omitStages:
+      - "RequestReceived"
+  - level: Request
+    userGroups: ["system:nodes"]
+    verbs: ["update","patch"]
+    resources:
+      - group: "" # core
+        resources: ["nodes/status", "pods/status"]
+    omitStages:
+      - "RequestReceived"
+
+  # deletecollection calls can be large, don't log responses for expected namespace deletions
+  - level: Request
+    users: ["system:serviceaccount:kube-system:namespace-controller"]
+    verbs: ["deletecollection"]
+    omitStages:
+      - "RequestReceived"
 
   # Secrets, ConfigMaps, and TokenReviews can contain sensitive & binary data,
   # so only log at the Metadata level.
@@ -1062,7 +1093,7 @@ function prepare-kube-proxy-manifest-variables {
   if [[ -n "${FEATURE_GATES:-}" ]]; then
     params+=" --feature-gates=${FEATURE_GATES}"
   fi
-  params+=" --iptables-sync-period=1m --iptables-min-sync-period=10s"
+  params+=" --iptables-sync-period=1m --iptables-min-sync-period=10s --ipvs-sync-period=1m --ipvs-min-sync-period=10s"
   if [[ -n "${KUBEPROXY_TEST_ARGS:-}" ]]; then
     params+=" ${KUBEPROXY_TEST_ARGS}"
   fi
@@ -1340,6 +1371,12 @@ function start-kube-apiserver {
     # grows at 10MiB/s (~30K QPS), it will rotate after ~6 years if apiserver
     # never restarts. Please manually restart apiserver before this time.
     params+=" --audit-log-maxsize=2000000000"
+    # Disable AdvancedAuditing enabled by default
+    if [[ -z "${FEATURE_GATES:-}" ]]; then
+      FEATURE_GATES="AdvancedAuditing=false"
+    else
+      FEATURE_GATES="${FEATURE_GATES},AdvancedAuditing=false"
+    fi
   elif [[ "${ENABLE_APISERVER_ADVANCED_AUDIT:-}" == "true" ]]; then
     local -r audit_policy_file="/etc/audit_policy.config"
     params+=" --audit-policy-file=${audit_policy_file}"
@@ -1543,6 +1580,9 @@ function start-kube-controller-manager {
   fi
   if [[ -n "${SERVICE_CLUSTER_IP_RANGE:-}" ]]; then
     params+=" --service-cluster-ip-range=${SERVICE_CLUSTER_IP_RANGE}"
+  fi
+  if [[ -n "${CONCURRENT_SERVICE_SYNCS:-}" ]]; then
+    params+=" --concurrent-service-syncs=${CONCURRENT_SERVICE_SYNCS}"
   fi
   if [[ "${NETWORK_PROVIDER:-}" == "kubenet" ]]; then
     params+=" --allocate-node-cidrs=true"
@@ -1763,13 +1803,11 @@ function start-kube-addons {
   fi
   if [[ "${ENABLE_CLUSTER_DNS:-}" == "true" ]]; then
     setup-addon-manifests "addons" "dns"
-    local -r dns_controller_file="${dst_dir}/dns/kubedns-controller.yaml"
-    local -r dns_svc_file="${dst_dir}/dns/kubedns-svc.yaml"
-    mv "${dst_dir}/dns/kubedns-controller.yaml.in" "${dns_controller_file}"
-    mv "${dst_dir}/dns/kubedns-svc.yaml.in" "${dns_svc_file}"
+    local -r kubedns_file="${dst_dir}/dns/kube-dns.yaml"
+    mv "${dst_dir}/dns/kube-dns.yaml.in" "${kubedns_file}"
     # Replace the salt configurations with variable values.
-    sed -i -e "s@{{ *pillar\['dns_domain'\] *}}@${DNS_DOMAIN}@g" "${dns_controller_file}"
-    sed -i -e "s@{{ *pillar\['dns_server'\] *}}@${DNS_SERVER_IP}@g" "${dns_svc_file}"
+    sed -i -e "s@{{ *pillar\['dns_domain'\] *}}@${DNS_DOMAIN}@g" "${kubedns_file}"
+    sed -i -e "s@{{ *pillar\['dns_server'\] *}}@${DNS_SERVER_IP}@g" "${kubedns_file}"
 
     if [[ "${ENABLE_DNS_HORIZONTAL_AUTOSCALER:-}" == "true" ]]; then
       setup-addon-manifests "addons" "dns-horizontal-autoscaler"

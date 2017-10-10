@@ -65,6 +65,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/oom"
 	utilpointer "k8s.io/kubernetes/pkg/util/pointer"
 	"k8s.io/kubernetes/pkg/util/resourcecontainer"
+	"k8s.io/kubernetes/pkg/version"
 	"k8s.io/kubernetes/pkg/version/verflag"
 	"k8s.io/utils/exec"
 
@@ -120,7 +121,8 @@ type Options struct {
 func AddFlags(options *Options, fs *pflag.FlagSet) {
 	fs.StringVar(&options.ConfigFile, "config", options.ConfigFile, "The path to the configuration file.")
 	fs.StringVar(&options.WriteConfigTo, "write-config-to", options.WriteConfigTo, "If set, write the default configuration values to this file and exit.")
-	fs.MarkDeprecated("cleanup-iptables", "This flag is replaced by cleanup-proxyrules.")
+	fs.BoolVar(&options.CleanupAndExit, "cleanup-iptables", options.CleanupAndExit, "If true cleanup iptables and ipvs rules and exit.")
+	fs.MarkDeprecated("cleanup-iptables", "This flag is replaced by --cleanup.")
 	fs.BoolVar(&options.CleanupAndExit, "cleanup", options.CleanupAndExit, "If true cleanup iptables and ipvs rules and exit.")
 
 	// All flags below here are deprecated and will eventually be removed.
@@ -199,6 +201,10 @@ func (o *Options) Complete() error {
 func (o *Options) Validate(args []string) error {
 	if len(args) != 0 {
 		return errors.New("no arguments are supported")
+	}
+
+	if errs := Validate(o.config); len(errs) != 0 {
+		return errs.ToAggregate()
 	}
 
 	return nil
@@ -421,6 +427,8 @@ func createClients(config componentconfig.ClientConnectionConfiguration, masterO
 
 // Run runs the specified ProxyServer.  This should never exit (unless CleanupAndExit is set).
 func (s *ProxyServer) Run() error {
+	// To help debugging, immediately log version
+	glog.Infof("Version: %+v", version.Get())
 	// remove iptables rules and exit
 	if s.CleanupAndExit {
 		encounteredError := userspace.CleanupLeftovers(s.IptInterface)

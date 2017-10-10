@@ -71,7 +71,7 @@ const (
 
 	// ServiceAnnotationLoadBalancerInternal is the annotation used on the service
 	// to indicate that we want an internal loadbalancer service.
-	// If the value of ServiceAnnotationLoadBalancerInternal is false, it indicates that we want an external loadbalancer service. Default to true.
+	// If the value of ServiceAnnotationLoadBalancerInternal is false, it indicates that we want an external loadbalancer service. Default to false.
 	ServiceAnnotationLoadBalancerInternal = "service.beta.kubernetes.io/openstack-internal-load-balancer"
 )
 
@@ -623,6 +623,10 @@ func getSubnetIDForLB(compute *gophercloud.ServiceClient, node v1.Node) (string,
 func (lbaas *LbaasV2) EnsureLoadBalancer(clusterName string, apiService *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
 	glog.V(4).Infof("EnsureLoadBalancer(%v, %v, %v, %v, %v, %v, %v)", clusterName, apiService.Namespace, apiService.Name, apiService.Spec.LoadBalancerIP, apiService.Spec.Ports, nodes, apiService.Annotations)
 
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf("There are no available nodes for LoadBalancer service %s/%s", apiService.Namespace, apiService.Name)
+	}
+
 	if len(lbaas.opts.SubnetId) == 0 {
 		// Get SubnetId automatically.
 		// The LB needs to be configured with instance addresses on the same subnet, so get SubnetId by one node.
@@ -644,7 +648,7 @@ func (lbaas *LbaasV2) EnsureLoadBalancer(clusterName string, apiService *v1.Serv
 	glog.V(4).Infof("EnsureLoadBalancer using floatingPool: %v", floatingPool)
 
 	var internalAnnotation bool
-	internal := getStringFromServiceAnnotation(apiService, ServiceAnnotationLoadBalancerInternal, "true")
+	internal := getStringFromServiceAnnotation(apiService, ServiceAnnotationLoadBalancerInternal, "false")
 	switch internal {
 	case "true":
 		glog.V(4).Infof("Ensure an internal loadbalancer service.")
@@ -654,7 +658,7 @@ func (lbaas *LbaasV2) EnsureLoadBalancer(clusterName string, apiService *v1.Serv
 			glog.V(4).Infof("Ensure an external loadbalancer service.")
 			internalAnnotation = false
 		} else {
-			return nil, fmt.Errorf("floating-network-id or loadbalancer.openstack.org/floating-network-id should be specified when service.beta.kubernetes.io/openstack-internal-load-balancer is false")
+			return nil, fmt.Errorf("floating-network-id or loadbalancer.openstack.org/floating-network-id should be specified when ensuring an external loadbalancer service.")
 		}
 	default:
 		return nil, fmt.Errorf("unknow service.beta.kubernetes.io/openstack-internal-load-balancer annotation: %v, specify \"true\" or \"false\".",
@@ -1024,7 +1028,7 @@ func (lbaas *LbaasV2) UpdateLoadBalancer(clusterName string, service *v1.Service
 	loadBalancerName := cloudprovider.GetLoadBalancerName(service)
 	glog.V(4).Infof("UpdateLoadBalancer(%v, %v, %v)", clusterName, loadBalancerName, nodes)
 
-	if len(lbaas.opts.SubnetId) == 0 {
+	if len(lbaas.opts.SubnetId) == 0 && len(nodes) > 0 {
 		// Get SubnetId automatically.
 		// The LB needs to be configured with instance addresses on the same subnet, so get SubnetId by one node.
 		subnetID, err := getSubnetIDForLB(lbaas.compute, *nodes[0])
@@ -1322,6 +1326,10 @@ func (lb *LbaasV1) GetLoadBalancer(clusterName string, service *v1.Service) (*v1
 func (lb *LbaasV1) EnsureLoadBalancer(clusterName string, apiService *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
 	glog.V(4).Infof("EnsureLoadBalancer(%v, %v, %v, %v, %v, %v, %v)", clusterName, apiService.Namespace, apiService.Name, apiService.Spec.LoadBalancerIP, apiService.Spec.Ports, nodes, apiService.Annotations)
 
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf("There are no available nodes for LoadBalancer service %s/%s", apiService.Namespace, apiService.Name)
+	}
+
 	if len(lb.opts.SubnetId) == 0 {
 		// Get SubnetId automatically.
 		// The LB needs to be configured with instance addresses on the same subnet, so get SubnetId by one node.
@@ -1338,7 +1346,7 @@ func (lb *LbaasV1) EnsureLoadBalancer(clusterName string, apiService *v1.Service
 	glog.V(4).Infof("EnsureLoadBalancer using floatingPool: %v", floatingPool)
 
 	var internalAnnotation bool
-	internal := getStringFromServiceAnnotation(apiService, ServiceAnnotationLoadBalancerInternal, "true")
+	internal := getStringFromServiceAnnotation(apiService, ServiceAnnotationLoadBalancerInternal, "false")
 	switch internal {
 	case "true":
 		glog.V(4).Infof("Ensure an internal loadbalancer service.")
@@ -1348,7 +1356,7 @@ func (lb *LbaasV1) EnsureLoadBalancer(clusterName string, apiService *v1.Service
 			glog.V(4).Infof("Ensure an external loadbalancer service.")
 			internalAnnotation = false
 		} else {
-			return nil, fmt.Errorf("floating-network-id or loadbalancer.openstack.org/floating-network-id should be specified when service.beta.kubernetes.io/openstack-internal-load-balancer is false")
+			return nil, fmt.Errorf("floating-network-id or loadbalancer.openstack.org/floating-network-id should be specified when ensuring an external loadbalancer service.")
 		}
 	default:
 		return nil, fmt.Errorf("unknow service.beta.kubernetes.io/openstack-internal-load-balancer annotation: %v, specify \"true\" or \"false\".",

@@ -44,7 +44,7 @@ const (
 
 var (
 	zeroDuration = metav1.Duration{}
-	// Refer to [Node Allocatable](https://git.k8s.io/community/contributors/design-proposals/node-allocatable.md) doc for more information.
+	// Refer to [Node Allocatable](https://git.k8s.io/community/contributors/design-proposals/node/node-allocatable.md) doc for more information.
 	defaultNodeAllocatableEnforcement = []string{"pods"}
 )
 
@@ -229,7 +229,7 @@ func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
 		obj.HairpinMode = PromiscuousBridge
 	}
 	if obj.EvictionHard == nil {
-		temp := "memory.available<100Mi,nodefs.available<10%,nodefs.inodesFree<5%"
+		temp := "memory.available<100Mi,nodefs.available<10%,nodefs.inodesFree<5%,imagefs.available<15%"
 		obj.EvictionHard = &temp
 	}
 	if obj.EvictionPressureTransitionPeriod == zeroDuration {

@@ -65,6 +65,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -824,7 +825,7 @@ func WaitForPodCondition(c clientset.Interface, ns, podName, desc string, timeou
 		}
 		// log now so that current pod info is reported before calling `condition()`
 		Logf("Pod %q: Phase=%q, Reason=%q, readiness=%t. Elapsed: %v",
-			podName, pod.Status.Phase, pod.Status.Reason, testutil.PodReady(pod), time.Since(start))
+			podName, pod.Status.Phase, pod.Status.Reason, podutil.IsPodReady(pod), time.Since(start))
 		if done, err := condition(pod); done {
 			if err == nil {
 				Logf("Pod %q satisfied condition %q", podName, desc)
@@ -4502,15 +4503,22 @@ func LaunchWebserverPod(f *Framework, podName, nodeName string) (ip string) {
 	return
 }
 
+type PingCommand string
+
+const (
+	IPv4PingCommand PingCommand = "ping"
+	IPv6PingCommand PingCommand = "ping6"
+)
+
 // CheckConnectivityToHost launches a pod to test connectivity to the specified
 // host. An error will be returned if the host is not reachable from the pod.
 //
 // An empty nodeName will use the schedule to choose where the pod is executed.
-func CheckConnectivityToHost(f *Framework, nodeName, podName, host string, timeout int) error {
+func CheckConnectivityToHost(f *Framework, nodeName, podName, host string, pingCmd PingCommand, timeout int) error {
 	contName := fmt.Sprintf("%s-container", podName)
 
 	command := []string{
-		"ping",
+		string(pingCmd),
 		"-c", "3", // send 3 pings
 		"-W", "2", // wait at most 2 seconds for a reply
 		"-w", strconv.Itoa(timeout),
@@ -5046,4 +5054,45 @@ func DumpDebugInfo(c clientset.Interface, ns string) {
 
 func IsRetryableAPIError(err error) bool {
 	return apierrs.IsTimeout(err) || apierrs.IsServerTimeout(err) || apierrs.IsTooManyRequests(err) || apierrs.IsInternalError(err)
+}
+
+// DsFromManifest reads a .json/yaml file and returns the daemonset in it.
+func DsFromManifest(url string) (*extensions.DaemonSet, error) {
+	var controller extensions.DaemonSet
+	Logf("Parsing ds from %v", url)
+
+	var response *http.Response
+	var err error
+
+	for i := 1; i <= 5; i++ {
+		response, err = http.Get(url)
+		if err == nil && response.StatusCode == 200 {
+			break
+		}
+		time.Sleep(time.Duration(i) * time.Second)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get url: %v", err)
+	}
+	if response.StatusCode != 200 {
+		return nil, fmt.Errorf("invalid http response status: %v", response.StatusCode)
+	}
+	defer response.Body.Close()
+
+	data, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read html response body: %v", err)
+	}
+
+	json, err := utilyaml.ToJSON(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse data to json: %v", err)
+	}
+
+	err = runtime.DecodeInto(api.Codecs.UniversalDecoder(), json, &controller)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode DaemonSet spec: %v", err)
+	}
+	return &controller, nil
 }

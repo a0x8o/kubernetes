@@ -68,7 +68,7 @@ var _ = SIGDescribe("Aggregator", func() {
 		framework.SkipUnlessProviderIs("gce", "gke")
 
 		// Testing a 1.7 version of the sample-apiserver
-		TestSampleAPIServer(f, "gcr.io/kubernetes-e2e-test-images/k8s-aggregator-sample-apiserver-amd64:1.7", "sample-system")
+		TestSampleAPIServer(f, "gcr.io/kubernetes-e2e-test-images/k8s-aggregator-sample-apiserver-amd64:1.7v2", "sample-system")
 	})
 })
 
@@ -207,7 +207,7 @@ func TestSampleAPIServer(f *framework.Framework, image, namespaceName string) {
 
 	// kubectl create -f deploy.yaml
 	deploymentName := "sample-apiserver-deployment"
-	etcdImage := "quay.io/coreos/etcd:v3.0.17"
+	etcdImage := "quay.io/coreos/etcd:v3.1.10"
 	podLabels := map[string]string{"app": "sample-apiserver", "apiserver": "true"}
 	replicas := int32(1)
 	zero := int64(0)
