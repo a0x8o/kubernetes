@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -36,7 +37,6 @@ import (
 	"k8s.io/client-go/transport"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/apis/batch"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
@@ -288,9 +288,9 @@ var _ = framework.KubeDescribe("Load capacity", func() {
 	}
 })
 
-func createClients(numberOfClients int) ([]*clientset.Clientset, []*internalclientset.Clientset, error) {
-	clients := make([]*clientset.Clientset, numberOfClients)
-	internalClients := make([]*internalclientset.Clientset, numberOfClients)
+func createClients(numberOfClients int) ([]clientset.Interface, []internalclientset.Interface, error) {
+	clients := make([]clientset.Interface, numberOfClients)
+	internalClients := make([]internalclientset.Interface, numberOfClients)
 	for i := 0; i < numberOfClients; i++ {
 		config, err := framework.LoadConfig()
 		Expect(err).NotTo(HaveOccurred())

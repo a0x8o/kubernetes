@@ -26,8 +26,8 @@ import (
 
 	"k8s.io/client-go/tools/cache"
 
-	"k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	"k8s.io/api/core/v1"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
 	testutils "k8s.io/kubernetes/test/utils"
 
@@ -116,12 +116,12 @@ func createTestController(cs clientset.Interface, observedDeletions chan struct{
 		&cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 				options.FieldSelector = fields.SelectorFromSet(fields.Set{"metadata.name": podName}).String()
-				obj, err := cs.Core().Pods(ns).List(options)
+				obj, err := cs.CoreV1().Pods(ns).List(options)
 				return runtime.Object(obj), err
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				options.FieldSelector = fields.SelectorFromSet(fields.Set{"metadata.name": podName}).String()
-				return cs.Core().Pods(ns).Watch(options)
+				return cs.CoreV1().Pods(ns).Watch(options)
 			},
 		},
 		&v1.Pod{},

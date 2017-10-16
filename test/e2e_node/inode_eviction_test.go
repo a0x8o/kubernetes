@@ -21,10 +21,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/api/v1"
 	nodeutil "k8s.io/kubernetes/pkg/api/v1/node"
-	"k8s.io/kubernetes/pkg/apis/componentconfig"
+	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
 	kubeletmetrics "k8s.io/kubernetes/pkg/kubelet/metrics"
 	"k8s.io/kubernetes/test/e2e/framework"
 
@@ -56,7 +56,11 @@ var _ = framework.KubeDescribe("InodeEviction [Slow] [Serial] [Disruptive] [Flak
 					RestartPolicy: v1.RestartPolicyNever,
 					Containers: []v1.Container{
 						{
+<<<<<<< HEAD
 							Image:   "gcr.io/google_containers/busybox:1.24",
+=======
+							Image:   busyboxImage,
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 							Name:    "container-inode-hog-container",
 							Command: getInodeConsumingCommand(""),
 						},
@@ -72,7 +76,11 @@ var _ = framework.KubeDescribe("InodeEviction [Slow] [Serial] [Disruptive] [Flak
 					RestartPolicy: v1.RestartPolicyNever,
 					Containers: []v1.Container{
 						{
+<<<<<<< HEAD
 							Image:   "gcr.io/google_containers/busybox:1.24",
+=======
+							Image:   busyboxImage,
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 							Name:    "volume-inode-hog-container",
 							Command: getInodeConsumingCommand(volumeMountPath),
 							VolumeMounts: []v1.VolumeMount{
@@ -95,7 +103,11 @@ var _ = framework.KubeDescribe("InodeEviction [Slow] [Serial] [Disruptive] [Flak
 	testCondition := "Disk Pressure due to Inodes"
 
 	Context(fmt.Sprintf("when we run containers that should cause %s", testCondition), func() {
+<<<<<<< HEAD
 		tempSetCurrentKubeletConfig(f, func(initialConfig *componentconfig.KubeletConfiguration) {
+=======
+		tempSetCurrentKubeletConfig(f, func(initialConfig *kubeletconfig.KubeletConfiguration) {
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 			initialConfig.EvictionHard = "nodefs.inodesFree<70%"
 		})
 		// Place the remainder of the test within a context so that the kubelet config is set before and after the test.
@@ -329,7 +341,11 @@ func getInnocentPod() *v1.Pod {
 			RestartPolicy: v1.RestartPolicyNever,
 			Containers: []v1.Container{
 				{
+<<<<<<< HEAD
 					Image: "gcr.io/google_containers/busybox:1.24",
+=======
+					Image: busyboxImage,
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 					Name:  "innocent-container",
 					Command: []string{
 						"sh",

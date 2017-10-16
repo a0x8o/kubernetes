@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/kubernetes/pkg/api/v1"
 	utilversion "k8s.io/kubernetes/pkg/util/version"
 	"k8s.io/kubernetes/plugin/pkg/admission/serviceaccount"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -356,7 +356,7 @@ var _ = framework.KubeDescribe("ServiceAccounts", func() {
 			pod := &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{Name: tc.PodName},
 				Spec: v1.PodSpec{
-					Containers:                   []v1.Container{{Name: "token-test", Image: "gcr.io/google_containers/mounttest:0.7"}},
+					Containers:                   []v1.Container{{Name: "token-test", Image: "gcr.io/google_containers/mounttest:0.8"}},
 					RestartPolicy:                v1.RestartPolicyNever,
 					ServiceAccountName:           tc.ServiceAccountName,
 					AutomountServiceAccountToken: tc.AutomountPodSpec,
