@@ -23,18 +23,21 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest/fake"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	federationapi "k8s.io/kubernetes/federation/apis/federation"
+	fedv1beta1 "k8s.io/kubernetes/federation/apis/federation/v1beta1"
 	kubefedtesting "k8s.io/kubernetes/federation/pkg/kubefed/testing"
 	"k8s.io/kubernetes/federation/pkg/kubefed/util"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
-	"k8s.io/kubernetes/pkg/api/v1"
 	cmdtesting "k8s.io/kubernetes/pkg/kubectl/cmd/testing"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 )
@@ -179,7 +182,7 @@ func testUnjoinFederationFactory(name, server, secret string) cmdutil.Factory {
 	f, tf, _, _ := cmdtesting.NewAPIFactory()
 	codec := testapi.Federation.Codec()
 	tf.ClientConfig = kubefedtesting.DefaultClientConfig()
-	ns := testapi.Federation.NegotiatedSerializer()
+	ns := serializer.NegotiatedSerializerWrapper(runtime.SerializerInfo{Serializer: runtime.NewCodec(f.JSONEncoder(), api.Codecs.UniversalDecoder(fedv1beta1.SchemeGroupVersion))})
 	tf.Client = &fake.RESTClient{
 		APIRegistry:          api.Registry,
 		NegotiatedSerializer: ns,
@@ -214,9 +217,9 @@ func testUnjoinFederationFactory(name, server, secret string) cmdutil.Factory {
 
 func fakeUnjoinHostFactory(clusterName string) cmdutil.Factory {
 	secretsPrefix := "/api/v1/namespaces/federation-system/secrets/"
-	clusterRolePrefix := "/apis/rbac.authorization.k8s.io/v1beta1/clusterroles/"
+	clusterRolePrefix := "/apis/rbac.authorization.k8s.io/v1/clusterroles/"
 	serviceAccountPrefix := "/api/v1/namespaces/federation-system/serviceaccounts/"
-	clusterRoleBindingPrefix := "/apis/rbac.authorization.k8s.io/v1beta1/clusterrolebindings/"
+	clusterRoleBindingPrefix := "/apis/rbac.authorization.k8s.io/v1/clusterrolebindings/"
 
 	// Using dummy bytes for now
 	configBytes, _ := clientcmd.Write(clientcmdapi.Config{})

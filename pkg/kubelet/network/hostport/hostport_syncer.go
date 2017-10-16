@@ -27,8 +27,6 @@ import (
 	"github.com/golang/glog"
 
 	iptablesproxy "k8s.io/kubernetes/pkg/proxy/iptables"
-	utildbus "k8s.io/kubernetes/pkg/util/dbus"
-	utilexec "k8s.io/kubernetes/pkg/util/exec"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
 )
 
@@ -49,11 +47,10 @@ type hostportSyncer struct {
 	portOpener  hostportOpener
 }
 
-func NewHostportSyncer() HostportSyncer {
-	iptInterface := utiliptables.New(utilexec.New(), utildbus.New(), utiliptables.ProtocolIpv4)
+func NewHostportSyncer(iptables utiliptables.Interface) HostportSyncer {
 	return &hostportSyncer{
 		hostPortMap: make(map[hostport]closeable),
-		iptables:    iptInterface,
+		iptables:    iptables,
 		portOpener:  openLocalPort,
 	}
 }
@@ -67,7 +64,7 @@ func (hp *hostport) String() string {
 	return fmt.Sprintf("%s:%d", hp.protocol, hp.port)
 }
 
-//openPodHostports opens all hostport for pod and returns the map of hostport and socket
+// openHostports opens all hostport for pod and returns the map of hostport and socket
 func (h *hostportSyncer) openHostports(podHostportMapping *PodPortMapping) error {
 	var retErr error
 	ports := make(map[hostport]closeable)

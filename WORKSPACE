@@ -1,15 +1,25 @@
 http_archive(
     name = "io_bazel_rules_go",
-    sha256 = "a1596c14c799d5a1b5f49ca28fa948414c2242110d69ef324d6ed160ec890dbf",
-    strip_prefix = "rules_go-03c634753160632c00f506afeafc819fbea4c422",
-    urls = ["https://github.com/bazelbuild/rules_go/archive/03c634753160632c00f506afeafc819fbea4c422.tar.gz"],
+    sha256 = "a4ea00b71a6fc3bd381cbbf6eb83ec91fe8b32b1c622c048f1e6f0d965bb1a2d",
+    strip_prefix = "rules_go-a280fbac1a0a4c67b0eee660b4fd1b3db7c9f058",
+    urls = ["https://github.com/bazelbuild/rules_go/archive/a280fbac1a0a4c67b0eee660b4fd1b3db7c9f058.tar.gz"],
 )
 
 http_archive(
     name = "io_kubernetes_build",
-    sha256 = "a9fb7027f060b868cdbd235a0de0971b557b9d26f9c89e422feb80f48d8c0e90",
-    strip_prefix = "repo-infra-9dedd5f4093884c133ad5ea73695b28338b954ab",
-    urls = ["https://github.com/kubernetes/repo-infra/archive/9dedd5f4093884c133ad5ea73695b28338b954ab.tar.gz"],
+    sha256 = "8e49ac066fbaadd475bd63762caa90f81cd1880eba4cc25faa93355ef5fa2739",
+    strip_prefix = "repo-infra-e26fc85d14a1d3dc25569831acc06919673c545a",
+    urls = ["https://github.com/kubernetes/repo-infra/archive/e26fc85d14a1d3dc25569831acc06919673c545a.tar.gz"],
+)
+
+ETCD_VERSION = "3.1.10"
+
+new_http_archive(
+    name = "com_coreos_etcd",
+    build_file = "third_party/etcd.BUILD",
+    sha256 = "2d335f298619c6fb02b1124773a56966e448ad9952b26fea52909da4fe80d2be",
+    strip_prefix = "etcd-v%s-linux-amd64" % ETCD_VERSION,
+    urls = ["https://github.com/coreos/etcd/releases/download/v%s/etcd-v%s-linux-amd64.tar.gz" % (ETCD_VERSION, ETCD_VERSION)],
 )
 
 # This contains a patch to not prepend ./ to tarfiles produced by pkg_tar.
@@ -17,42 +27,32 @@ http_archive(
 # https://bazel-review.googlesource.com/#/c/10390/
 http_archive(
     name = "io_bazel",
-    sha256 = "667d32da016b1e2f63cf345cd3583989ec4a165034df383a01996d93635753a0",
+    sha256 = "892a84aa1e7c1f99fb57bb056cb648745c513077252815324579a012d263defb",
     strip_prefix = "bazel-df2c687c22bdd7c76f3cdcc85f38fefd02f0b844",
     urls = ["https://github.com/ixdy/bazel/archive/df2c687c22bdd7c76f3cdcc85f38fefd02f0b844.tar.gz"],
 )
 
 http_archive(
     name = "io_bazel_rules_docker",
-    sha256 = "261fbd8fda1d06a12a0479019b46acd302c6aaa8df8e49383dc37917f20492a1",
-    strip_prefix = "rules_docker-52d9faf209ff6d16eb850b6b66d03483735e0633",
-    urls = ["https://github.com/bazelbuild/rules_docker/archive/52d9faf209ff6d16eb850b6b66d03483735e0633.tar.gz"],
+    sha256 = "c440717ee9b1b2f4a1e9bf5622539feb5aef9db83fc1fa1517818f13c041b0be",
+    strip_prefix = "rules_docker-8bbe2a8abd382641e65ff7127a3700a8530f02ce",
+    urls = ["https://github.com/bazelbuild/rules_docker/archive/8bbe2a8abd382641e65ff7127a3700a8530f02ce.tar.gz"],
 )
 
-load("@io_bazel_rules_go//go:def.bzl", "go_repositories")
+load("@io_kubernetes_build//defs:bazel_version.bzl", "check_version")
+
+check_version("0.6.0")
+
+load("@io_bazel_rules_go//go:def.bzl", "go_rules_dependencies", "go_register_toolchains")
 load("@io_bazel_rules_docker//docker:docker.bzl", "docker_repositories", "docker_pull")
 
-go_repositories(
+go_rules_dependencies()
+
+go_register_toolchains(
     go_version = "1.8.3",
 )
 
 docker_repositories()
-
-# for building docker base images
-debs = (
-    (
-        "busybox_deb",
-        "5f81f140777454e71b9e5bfdce9c89993de5ddf4a7295ea1cfda364f8f630947",
-        "http://ftp.us.debian.org/debian/pool/main/b/busybox/busybox-static_1.22.0-19+b3_amd64.deb",
-        "https://storage.googleapis.com/kubernetes-release/debs/busybox-static_1.22.0-19+b3_amd64.deb",
-    ),
-)
-
-[http_file(
-    name = name,
-    sha256 = sha256,
-    url = url,
-) for name, sha256, origin, url in debs]
 
 http_file(
     name = "kubernetes_cni",
@@ -62,7 +62,24 @@ http_file(
 
 docker_pull(
     name = "debian-iptables-amd64",
-    digest = "sha256:bfc7cc030258f53495b5dacf1e1d750db9b8687577a8648a3c8e245f8d7d2c52",  # v7
+    digest = "sha256:2e747bc7455b46350d8e57f05c03e109fa306861e7b2a2e8e1cd563932170cf1",
     registry = "gcr.io",
     repository = "google-containers/debian-iptables-amd64",
+    tag = "v8",  # ignored, but kept here for documentation
+)
+
+docker_pull(
+    name = "debian-hyperkube-base-amd64",
+    digest = "sha256:f3a37c4d8700a5ff454d94a2bef7d165d287759cea737a621c20e4aa3891dbbb",
+    registry = "gcr.io",
+    repository = "google-containers/debian-hyperkube-base-amd64",
+    tag = "0.4",  # ignored, but kept here for documentation
+)
+
+docker_pull(
+    name = "official_busybox",
+    digest = "sha256:be3c11fdba7cfe299214e46edc642e09514dbb9bbefcd0d3836c05a1e0cd0642",
+    registry = "index.docker.io",
+    repository = "library/busybox",
+    tag = "latest",  # ignored, but kept here for documentation
 )

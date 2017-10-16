@@ -25,7 +25,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
-	"k8s.io/kubernetes/pkg/util/i18n"
+	"k8s.io/kubernetes/pkg/kubectl/util/i18n"
 
 	"github.com/spf13/cobra"
 )
@@ -90,8 +90,7 @@ func RunAutoscale(f cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []s
 		return err
 	}
 
-	mapper, typer := f.Object()
-	r := f.NewBuilder(true).
+	r := f.NewBuilder().
 		ContinueOnError().
 		NamespaceParam(namespace).DefaultNamespace().
 		FilenameParam(enforceNamespace, options).
@@ -108,7 +107,7 @@ func RunAutoscale(f cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []s
 	generators := f.Generators("autoscale")
 	generator, found := generators[generatorName]
 	if !found {
-		return cmdutil.UsageError(cmd, fmt.Sprintf("generator %q not found.", generatorName))
+		return cmdutil.UsageErrorf(cmd, "generator %q not found.", generatorName)
 	}
 	names := generator.ParamNames()
 
@@ -145,6 +144,7 @@ func RunAutoscale(f cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []s
 			return err
 		}
 
+		mapper, typer := f.Object()
 		resourceMapper := &resource.Mapper{
 			ObjectTyper:  typer,
 			RESTMapper:   mapper,

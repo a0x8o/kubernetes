@@ -420,6 +420,7 @@ enable_node_problem_detector: '$(echo "$ENABLE_NODE_PROBLEM_DETECTOR" | sed -e "
 enable_l7_loadbalancing: '$(echo "$ENABLE_L7_LOADBALANCING" | sed -e "s/'/''/g")'
 enable_node_logging: '$(echo "$ENABLE_NODE_LOGGING" | sed -e "s/'/''/g")'
 enable_metadata_proxy: '$(echo "$ENABLE_METADATA_PROXY" | sed -e "s/'/''/g")'
+enable_metrics_server: '$(echo "$ENABLE_METRICS_SERVER" | sed -e "s/'/''/g")'
 enable_rescheduler: '$(echo "$ENABLE_RESCHEDULER" | sed -e "s/'/''/g")'
 logging_destination: '$(echo "$LOGGING_DESTINATION" | sed -e "s/'/''/g")'
 elasticsearch_replicas: '$(echo "$ELASTICSEARCH_LOGGING_REPLICAS" | sed -e "s/'/''/g")'
@@ -447,7 +448,9 @@ initial_etcd_cluster: '$(echo "${INITIAL_ETCD_CLUSTER:-}" | sed -e "s/'/''/g")'
 initial_etcd_cluster_state: '$(echo "${INITIAL_ETCD_CLUSTER_STATE:-}" | sed -e "s/'/''/g")'
 ca_cert_bundle_path: '$(echo "${CA_CERT_BUNDLE_PATH:-}" | sed -e "s/'/''/g")'
 hostname: $(hostname -s)
+enable_pod_priority: '$(echo "${ENABLE_POD_PRIORITY:-}" | sed -e "s/'/''/g")'
 enable_default_storage_class: '$(echo "$ENABLE_DEFAULT_STORAGE_CLASS" | sed -e "s/'/''/g")'
+kube_proxy_daemonset: '$(echo "$KUBE_PROXY_DAEMONSET" | sed -e "s/'/''/g")'
 EOF
     if [ -n "${STORAGE_BACKEND:-}" ]; then
       cat <<EOF >>/srv/salt-overlay/pillar/cluster-params.sls
@@ -457,6 +460,11 @@ EOF
     if [ -n "${STORAGE_MEDIA_TYPE:-}" ]; then
       cat <<EOF >>/srv/salt-overlay/pillar/cluster-params.sls
 storage_media_type: '$(echo "$STORAGE_MEDIA_TYPE" | sed -e "s/'/''/g")'
+EOF
+    fi
+    if [ -n "${KUBE_APISERVER_REQUEST_TIMEOUT_SEC:-}" ]; then
+      cat <<EOF >>/srv/salt-overlay/pillar/cluster-params.sls
+kube_apiserver_request_timeout_sec: '$(echo "$KUBE_APISERVER_REQUEST_TIMEOUT_SEC" | sed -e "s/'/''/g")'
 EOF
     fi
     if [ -n "${ADMISSION_CONTROL:-}" ] && [ ${ADMISSION_CONTROL} == *"ImagePolicyWebhook"* ]; then
@@ -472,6 +480,11 @@ EOF
     if [ -n "${ETCD_IMAGE:-}" ]; then
       cat <<EOF >>/srv/salt-overlay/pillar/cluster-params.sls
 etcd_docker_tag: '$(echo "$ETCD_IMAGE" | sed -e "s/'/''/g")'
+EOF
+    fi
+    if [ -n "${ETCD_DOCKER_REPOSITORY:-}" ]; then
+      cat <<EOF >>/srv/salt-overlay/pillar/cluster-params.sls
+etcd_docker_repository: '$(echo "$ETCD_DOCKER_REPOSITORY" | sed -e "s/'/''/g")'
 EOF
     fi
     if [ -n "${ETCD_VERSION:-}" ]; then
@@ -572,6 +585,11 @@ EOF
 node_labels: '$(echo "${NODE_LABELS}" | sed -e "s/'/''/g")'
 EOF
     fi
+    if [ -n "${NODE_TAINTS:-}" ]; then
+      cat <<EOF >>/srv/salt-overlay/pillar/cluster-params.sls
+node_taints: '$(echo "${NODE_TAINTS}" | sed -e "s/'/''/g")'
+EOF
+    fi
     if [ -n "${EVICTION_HARD:-}" ]; then
       cat <<EOF >>/srv/salt-overlay/pillar/cluster-params.sls
 eviction_hard: '$(echo "${EVICTION_HARD}" | sed -e "s/'/''/g")'
@@ -581,6 +599,7 @@ EOF
       cat <<EOF >>/srv/salt-overlay/pillar/cluster-params.sls
 enable_cluster_autoscaler: '$(echo "${ENABLE_CLUSTER_AUTOSCALER}" | sed -e "s/'/''/g")'
 autoscaler_mig_config: '$(echo "${AUTOSCALER_MIG_CONFIG}" | sed -e "s/'/''/g")'
+autoscaler_expander_config: '$(echo "${AUTOSCALER_EXPANDER_CONFIG}" | sed -e "s/'/''/g")'
 EOF
     fi
     if [ -n "${SCHEDULING_ALGORITHM_PROVIDER:-}" ]; then
@@ -646,8 +665,8 @@ EOF
 
 # This should happen both on cluster initialization and node upgrades.
 #
-#  - Uses the CA_CERT and KUBE_PROXY_TOKEN to generate a kubeconfig file for
-#    the kube-proxy to securely connect to the apiserver.
+#  - When run as static pods, use the CA_CERT and KUBE_PROXY_TOKEN to generate a
+#    kubeconfig file for the kube-proxy to securely connect to the apiserver.
 function create-salt-kubeproxy-auth() {
   local -r kube_proxy_kubeconfig_file="/srv/salt-overlay/salt/kube-proxy/kubeconfig"
   if [ ! -e "${kube_proxy_kubeconfig_file}" ]; then
@@ -747,12 +766,16 @@ EOF
 }
 
 function salt-node-role() {
+  local -r kubelet_bootstrap_kubeconfig="/srv/salt-overlay/salt/kubelet/bootstrap-kubeconfig"
+  local -r kubelet_kubeconfig="/srv/salt-overlay/salt/kubelet/kubeconfig"
   cat <<EOF >/etc/salt/minion.d/grains.conf
 grains:
   roles:
     - kubernetes-pool
   cloud: gce
   api_servers: '${KUBERNETES_MASTER_NAME}'
+  kubelet_bootstrap_kubeconfig: /var/lib/kubelet/bootstrap-kubeconfig
+  kubelet_kubeconfig: /var/lib/kubelet/kubeconfig
 EOF
 }
 
@@ -841,7 +864,9 @@ if [[ -z "${is_push}" ]]; then
   create-node-pki
   create-salt-pillar
   create-salt-kubelet-auth
-  create-salt-kubeproxy-auth
+  if [[ "${KUBE_PROXY_DAEMONSET:-}" != "true" ]]; then
+    create-salt-kubeproxy-auth
+  fi
   download-release
   configure-salt
   remove-docker-artifacts

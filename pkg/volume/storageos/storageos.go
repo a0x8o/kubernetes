@@ -26,12 +26,11 @@ import (
 
 	"github.com/golang/glog"
 
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/kubernetes/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
-	"k8s.io/kubernetes/pkg/util/exec"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/pkg/util/mount"
 	kstrings "k8s.io/kubernetes/pkg/util/strings"
 	"k8s.io/kubernetes/pkg/volume"
@@ -111,10 +110,10 @@ func (plugin *storageosPlugin) NewMounter(spec *volume.Spec, pod *v1.Pod, _ volu
 		return nil, err
 	}
 
-	return plugin.newMounterInternal(spec, pod, apiCfg, &storageosUtil{}, plugin.host.GetMounter())
+	return plugin.newMounterInternal(spec, pod, apiCfg, &storageosUtil{}, plugin.host.GetMounter(plugin.GetPluginName()), plugin.host.GetExec(plugin.GetPluginName()))
 }
 
-func (plugin *storageosPlugin) newMounterInternal(spec *volume.Spec, pod *v1.Pod, apiCfg *storageosAPIConfig, manager storageosManager, mounter mount.Interface) (volume.Mounter, error) {
+func (plugin *storageosPlugin) newMounterInternal(spec *volume.Spec, pod *v1.Pod, apiCfg *storageosAPIConfig, manager storageosManager, mounter mount.Interface, exec mount.Exec) (volume.Mounter, error) {
 
 	volName, volNamespace, fsType, readOnly, err := getVolumeInfoFromSpec(spec)
 	if err != nil {
@@ -133,19 +132,20 @@ func (plugin *storageosPlugin) newMounterInternal(spec *volume.Spec, pod *v1.Pod
 			apiCfg:          apiCfg,
 			manager:         manager,
 			mounter:         mounter,
+			exec:            exec,
 			plugin:          plugin,
 			MetricsProvider: volume.NewMetricsStatFS(getPath(pod.UID, volNamespace, volName, spec.Name(), plugin.host)),
 		},
 		devicePath:  storageosDevicePath,
-		diskMounter: &mount.SafeFormatAndMount{Interface: mounter, Runner: exec.New()},
+		diskMounter: &mount.SafeFormatAndMount{Interface: mounter, Exec: exec},
 	}, nil
 }
 
 func (plugin *storageosPlugin) NewUnmounter(pvName string, podUID types.UID) (volume.Unmounter, error) {
-	return plugin.newUnmounterInternal(pvName, podUID, &storageosUtil{}, plugin.host.GetMounter())
+	return plugin.newUnmounterInternal(pvName, podUID, &storageosUtil{}, plugin.host.GetMounter(plugin.GetPluginName()), plugin.host.GetExec(plugin.GetPluginName()))
 }
 
-func (plugin *storageosPlugin) newUnmounterInternal(pvName string, podUID types.UID, manager storageosManager, mounter mount.Interface) (volume.Unmounter, error) {
+func (plugin *storageosPlugin) newUnmounterInternal(pvName string, podUID types.UID, manager storageosManager, mounter mount.Interface, exec mount.Exec) (volume.Unmounter, error) {
 
 	// Parse volume namespace & name from mountpoint if mounted
 	volNamespace, volName, err := getVolumeInfo(pvName, podUID, plugin.host)
@@ -161,6 +161,7 @@ func (plugin *storageosPlugin) newUnmounterInternal(pvName string, podUID types.
 			volNamespace:    volNamespace,
 			manager:         manager,
 			mounter:         mounter,
+			exec:            exec,
 			plugin:          plugin,
 			MetricsProvider: volume.NewMetricsStatFS(getPath(podUID, volNamespace, volName, pvName, plugin.host)),
 		},
@@ -304,6 +305,7 @@ type storageos struct {
 	apiCfg       *storageosAPIConfig
 	manager      storageosManager
 	mounter      mount.Interface
+	exec         mount.Exec
 	plugin       *storageosPlugin
 	volume.MetricsProvider
 }
@@ -333,7 +335,7 @@ func (b *storageosMounter) CanMount() error {
 }
 
 // SetUp attaches the disk and bind mounts to the volume path.
-func (b *storageosMounter) SetUp(fsGroup *types.UnixGroupID) error {
+func (b *storageosMounter) SetUp(fsGroup *int64) error {
 	// Need a namespace to find the volume, try pod's namespace if not set.
 	if b.volNamespace == "" {
 		glog.V(2).Infof("Setting StorageOS volume namespace to pod namespace: %s", b.podNamespace)
@@ -360,7 +362,7 @@ func (b *storageosMounter) SetUp(fsGroup *types.UnixGroupID) error {
 }
 
 // SetUp bind mounts the disk global mount to the give volume path.
-func (b *storageosMounter) SetUpAt(dir string, fsGroup *types.UnixGroupID) error {
+func (b *storageosMounter) SetUpAt(dir string, fsGroup *int64) error {
 	notMnt, err := b.mounter.IsLikelyNotMountPoint(dir)
 	glog.V(4).Infof("StorageOS volume set up: %s %v %v", dir, !notMnt, err)
 	if err != nil && !os.IsNotExist(err) {

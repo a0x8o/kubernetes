@@ -26,6 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/kubectl/util"
+	"k8s.io/kubernetes/pkg/kubectl/util/hash"
 )
 
 // SecretGeneratorV1 supports stable generation of an opaque secret
@@ -40,6 +42,8 @@ type SecretGeneratorV1 struct {
 	LiteralSources []string
 	// EnvFileSource to derive the secret from (optional)
 	EnvFileSource string
+	// AppendHash; if true, derive a hash from the Secret data and type and append it to the name
+	AppendHash bool
 }
 
 // Ensure it supports the generator pattern that uses parameter injection
@@ -82,6 +86,17 @@ func (s SecretGeneratorV1) Generate(genericParams map[string]interface{}) (runti
 		delegate.EnvFileSource = fromEnvFile
 		delete(genericParams, "from-env-file")
 	}
+
+	hashParam, found := genericParams["append-hash"]
+	if found {
+		hashBool, isBool := hashParam.(bool)
+		if !isBool {
+			return nil, fmt.Errorf("expected bool, found :%v", hashParam)
+		}
+		delegate.AppendHash = hashBool
+		delete(genericParams, "append-hash")
+	}
+
 	params := map[string]string{}
 	for key, value := range genericParams {
 		strVal, isString := value.(string)
@@ -92,6 +107,7 @@ func (s SecretGeneratorV1) Generate(genericParams map[string]interface{}) (runti
 	}
 	delegate.Name = params["name"]
 	delegate.Type = params["type"]
+
 	return delegate.StructuredGenerate()
 }
 
@@ -104,6 +120,7 @@ func (s SecretGeneratorV1) ParamNames() []GeneratorParam {
 		{"from-literal", false},
 		{"from-env-file", false},
 		{"force", false},
+		{"append-hash", false},
 	}
 }
 
@@ -133,6 +150,13 @@ func (s SecretGeneratorV1) StructuredGenerate() (runtime.Object, error) {
 			return nil, err
 		}
 	}
+	if s.AppendHash {
+		h, err := hash.SecretHash(secret)
+		if err != nil {
+			return nil, err
+		}
+		secret.Name = fmt.Sprintf("%s-%s", secret.Name, h)
+	}
 	return secret, nil
 }
 
@@ -150,7 +174,7 @@ func (s SecretGeneratorV1) validate() error {
 // handleFromLiteralSources adds the specified literal source information into the provided secret
 func handleFromLiteralSources(secret *api.Secret, literalSources []string) error {
 	for _, literalSource := range literalSources {
-		keyName, value, err := parseLiteralSource(literalSource)
+		keyName, value, err := util.ParseLiteralSource(literalSource)
 		if err != nil {
 			return err
 		}
@@ -164,7 +188,7 @@ func handleFromLiteralSources(secret *api.Secret, literalSources []string) error
 // handleFromFileSources adds the specified file source information into the provided secret
 func handleFromFileSources(secret *api.Secret, fileSources []string) error {
 	for _, fileSource := range fileSources {
-		keyName, filePath, err := parseFileSource(fileSource)
+		keyName, filePath, err := util.ParseFileSource(fileSource)
 		if err != nil {
 			return err
 		}
@@ -217,7 +241,7 @@ func handleFromEnvFileSource(secret *api.Secret, envFileSource string) error {
 		}
 	}
 	if info.IsDir() {
-		return fmt.Errorf("must be a file")
+		return fmt.Errorf("env secret file cannot be a directory")
 	}
 
 	return addFromEnvFile(envFileSource, func(key, value string) error {

@@ -20,10 +20,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
-	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/admissionregistration"
 	"k8s.io/kubernetes/pkg/registry/admissionregistration/externaladmissionhookconfiguration"
-	"k8s.io/kubernetes/pkg/registry/cachesize"
 )
 
 // rest implements a RESTStorage for pod disruption budgets against etcd
@@ -34,21 +32,18 @@ type REST struct {
 // NewREST returns a RESTStorage object that will work against pod disruption budgets.
 func NewREST(optsGetter generic.RESTOptionsGetter) *REST {
 	store := &genericregistry.Store{
-		Copier:      api.Scheme,
 		NewFunc:     func() runtime.Object { return &admissionregistration.ExternalAdmissionHookConfiguration{} },
 		NewListFunc: func() runtime.Object { return &admissionregistration.ExternalAdmissionHookConfigurationList{} },
 		ObjectNameFunc: func(obj runtime.Object) (string, error) {
 			return obj.(*admissionregistration.ExternalAdmissionHookConfiguration).Name, nil
 		},
-		PredicateFunc:     externaladmissionhookconfiguration.MatchExternalAdmissionHookConfiguration,
-		QualifiedResource: admissionregistration.Resource("externaladmissionhookconfigurations"),
-		WatchCacheSize:    cachesize.GetWatchCacheSizeByResource("externaladmissionhookconfigurations"),
+		DefaultQualifiedResource: admissionregistration.Resource("externaladmissionhookconfigurations"),
 
 		CreateStrategy: externaladmissionhookconfiguration.Strategy,
 		UpdateStrategy: externaladmissionhookconfiguration.Strategy,
 		DeleteStrategy: externaladmissionhookconfiguration.Strategy,
 	}
-	options := &generic.StoreOptions{RESTOptions: optsGetter, AttrFunc: externaladmissionhookconfiguration.GetAttrs}
+	options := &generic.StoreOptions{RESTOptions: optsGetter}
 	if err := store.CompleteWithOptions(options); err != nil {
 		panic(err) // TODO: Propagate error up
 	}

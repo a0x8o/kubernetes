@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -45,7 +46,6 @@ import (
 	"k8s.io/kubernetes/federation/pkg/dnsprovider/providers/coredns"
 	"k8s.io/kubernetes/federation/pkg/kubefed/util"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/apis/rbac"
 	client "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
@@ -84,6 +84,7 @@ const (
 
 	apiserverServiceTypeFlag      = "api-server-service-type"
 	apiserverAdvertiseAddressFlag = "api-server-advertise-address"
+	apiserverPortFlag             = "api-server-port"
 
 	dnsProviderSecretName = "federation-dns-provider.conf"
 
@@ -96,7 +97,7 @@ const (
 
 var (
 	init_long = templates.LongDesc(`
-		Initialize a federation control plane.
+		Init initializes a federation control plane.
 
         Federation control plane is hosted inside a Kubernetes
         cluster. The host cluster must be specified using the
@@ -149,8 +150,12 @@ type initFederationOptions struct {
 	apiServerServiceTypeString       string
 	apiServerServiceType             v1.ServiceType
 	apiServerAdvertiseAddress        string
+	apiServerNodePortPort            int32
+	apiServerNodePortPortPtr         *int32
 	apiServerEnableHTTPBasicAuth     bool
 	apiServerEnableTokenAuth         bool
+	nodeSelector                     map[string]string
+	nodeSelectorString               string
 }
 
 func (o *initFederationOptions) Bind(flags *pflag.FlagSet, defaultServerImage, defaultEtcdImage string) {
@@ -167,8 +172,10 @@ func (o *initFederationOptions) Bind(flags *pflag.FlagSet, defaultServerImage, d
 	flags.StringVar(&o.controllerManagerOverridesString, "controllermanager-arg-overrides", "", "comma separated list of federation-controller-manager arguments to override: Example \"--arg1=value1,--arg2=value2...\"")
 	flags.StringVar(&o.apiServerServiceTypeString, apiserverServiceTypeFlag, string(v1.ServiceTypeLoadBalancer), "The type of service to create for federation API server. Options: 'LoadBalancer' (default), 'NodePort'.")
 	flags.StringVar(&o.apiServerAdvertiseAddress, apiserverAdvertiseAddressFlag, "", "Preferred address to advertise api server nodeport service. Valid only if '"+apiserverServiceTypeFlag+"=NodePort'.")
+	flags.Int32Var(&o.apiServerNodePortPort, apiserverPortFlag, 0, "Preferred port to use for api server nodeport service (0 for random port assignment). Valid only if '"+apiserverServiceTypeFlag+"=NodePort'.")
 	flags.BoolVar(&o.apiServerEnableHTTPBasicAuth, "apiserver-enable-basic-auth", false, "Enables HTTP Basic authentication for the federation-apiserver. Defaults to false.")
 	flags.BoolVar(&o.apiServerEnableTokenAuth, "apiserver-enable-token-auth", false, "Enables token authentication for the federation-apiserver. Defaults to false.")
+	flags.StringVar(&o.nodeSelectorString, "node-selector", "", "comma separated list of nodeSelector arguments: Example \"arg1=value1,arg2=value2...\"")
 }
 
 // NewCmdInit defines the `init` command that bootstraps a federation
@@ -178,7 +185,7 @@ func NewCmdInit(cmdOut io.Writer, config util.AdminConfig, defaultServerImage, d
 
 	cmd := &cobra.Command{
 		Use:     "init FEDERATION_NAME --host-cluster-context=HOST_CONTEXT",
-		Short:   "init initializes a federation control plane",
+		Short:   "Initialize a federation control plane",
 		Long:    init_long,
 		Example: init_example,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -233,6 +240,18 @@ func (i *initFederation) Complete(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if i.options.apiServerNodePortPort != 0 {
+		if i.options.apiServerServiceType != v1.ServiceTypeNodePort {
+			return fmt.Errorf("%s should be passed only with '%s=NodePort'", apiserverPortFlag, apiserverServiceTypeFlag)
+		}
+		i.options.apiServerNodePortPortPtr = &i.options.apiServerNodePortPort
+	} else {
+		i.options.apiServerNodePortPortPtr = nil
+	}
+	if i.options.apiServerNodePortPort < 0 || i.options.apiServerNodePortPort > 65535 {
+		return fmt.Errorf("Please provide a valid port number for %s", apiserverPortFlag)
+	}
+
 	i.options.apiServerOverrides, err = marshallOverrides(i.options.apiServerOverridesString)
 	if err != nil {
 		return fmt.Errorf("error marshalling --apiserver-arg-overrides: %v", err)
@@ -240,6 +259,10 @@ func (i *initFederation) Complete(cmd *cobra.Command, args []string) error {
 	i.options.controllerManagerOverrides, err = marshallOverrides(i.options.controllerManagerOverridesString)
 	if err != nil {
 		return fmt.Errorf("error marshalling --controllermanager-arg-overrides: %v", err)
+	}
+	i.options.nodeSelector, err = marshallOverrides(i.options.nodeSelectorString)
+	if err != nil {
+		return fmt.Errorf("error marshalling --node-selector: %v", err)
 	}
 
 	if i.options.dnsProviderConfig != "" {
@@ -268,7 +291,7 @@ func (i *initFederation) Run(cmdOut io.Writer, config util.AdminConfig) error {
 			return err
 		}
 		// If the error is type NoRBACAPIError, We continue to create the rest of
-		// the resources, without the SA and roles (in the abscense of RBAC support).
+		// the resources, without the SA and roles (in the absence of RBAC support).
 		rbacAvailable = false
 	}
 
@@ -296,7 +319,7 @@ func (i *initFederation) Run(cmdOut io.Writer, config util.AdminConfig) error {
 
 	fmt.Fprint(cmdOut, "Creating federation control plane service...")
 	glog.V(4).Info("Creating federation control plane service")
-	svc, ips, hostnames, err := createService(cmdOut, hostClientset, i.commonOptions.FederationSystemNamespace, serverName, i.commonOptions.Name, i.options.apiServerAdvertiseAddress, i.options.apiServerServiceType, i.options.dryRun)
+	svc, ips, hostnames, err := createService(cmdOut, hostClientset, i.commonOptions.FederationSystemNamespace, serverName, i.commonOptions.Name, i.options.apiServerAdvertiseAddress, i.options.apiServerNodePortPortPtr, i.options.apiServerServiceType, i.options.dryRun)
 	if err != nil {
 		return err
 	}
@@ -324,16 +347,16 @@ func (i *initFederation) Run(cmdOut io.Writer, config util.AdminConfig) error {
 	}
 	glog.V(4).Info("Credentials secret successfully created")
 
-	glog.V(4).Info("Creating a persistent volume and a claim to store the federation API server's state, including etcd data")
 	var pvc *api.PersistentVolumeClaim
 	if i.options.etcdPersistentStorage {
+		glog.V(4).Info("Creating a persistent volume and a claim to store the federation API server's state, including etcd data")
 		pvc, err = createPVC(hostClientset, i.commonOptions.FederationSystemNamespace, svc.Name, i.commonOptions.Name, i.options.etcdPVCapacity, i.options.etcdPVStorageClass, i.options.dryRun)
 		if err != nil {
 			return err
 		}
+		glog.V(4).Info("Persistent volume and claim created")
+		fmt.Fprintln(cmdOut, " done")
 	}
-	glog.V(4).Info("Persistent volume and claim created")
-	fmt.Fprintln(cmdOut, " done")
 
 	// Since only one IP address can be specified as advertise address,
 	// we arbitrarily pick the first available IP address
@@ -345,7 +368,7 @@ func (i *initFederation) Run(cmdOut io.Writer, config util.AdminConfig) error {
 
 	fmt.Fprint(cmdOut, "Creating federation component deployments...")
 	glog.V(4).Info("Creating federation control plane components")
-	_, err = createAPIServer(hostClientset, i.commonOptions.FederationSystemNamespace, serverName, i.commonOptions.Name, i.options.serverImage, i.options.etcdImage, advertiseAddress, serverCredName, i.options.apiServerEnableHTTPBasicAuth, i.options.apiServerEnableTokenAuth, i.options.apiServerOverrides, pvc, i.options.dryRun)
+	_, err = createAPIServer(hostClientset, i.commonOptions.FederationSystemNamespace, serverName, i.commonOptions.Name, i.options.serverImage, i.options.etcdImage, advertiseAddress, serverCredName, i.options.apiServerEnableHTTPBasicAuth, i.options.apiServerEnableTokenAuth, i.options.apiServerOverrides, pvc, i.options.dryRun, i.options.nodeSelector)
 	if err != nil {
 		return err
 	}
@@ -380,7 +403,7 @@ func (i *initFederation) Run(cmdOut io.Writer, config util.AdminConfig) error {
 
 	glog.V(4).Info("Creating federation controller manager deployment")
 
-	_, err = createControllerManager(hostClientset, i.commonOptions.FederationSystemNamespace, i.commonOptions.Name, svc.Name, cmName, i.options.serverImage, cmKubeconfigName, i.options.dnsZoneName, i.options.dnsProvider, i.options.dnsProviderConfig, sa.Name, dnsProviderSecret, i.options.controllerManagerOverrides, i.options.dryRun)
+	_, err = createControllerManager(hostClientset, i.commonOptions.FederationSystemNamespace, i.commonOptions.Name, svc.Name, cmName, i.options.serverImage, cmKubeconfigName, i.options.dnsZoneName, i.options.dnsProvider, i.options.dnsProviderConfig, sa.Name, dnsProviderSecret, i.options.controllerManagerOverrides, i.options.dryRun, i.options.nodeSelector)
 	if err != nil {
 		return err
 	}
@@ -446,7 +469,16 @@ func createNamespace(clientset client.Interface, federationName, namespace strin
 	return clientset.Core().Namespaces().Create(ns)
 }
 
-func createService(cmdOut io.Writer, clientset client.Interface, namespace, svcName, federationName, apiserverAdvertiseAddress string, apiserverServiceType v1.ServiceType, dryRun bool) (*api.Service, []string, []string, error) {
+func createService(cmdOut io.Writer, clientset client.Interface, namespace, svcName, federationName, apiserverAdvertiseAddress string, apiserverPort *int32, apiserverServiceType v1.ServiceType, dryRun bool) (*api.Service, []string, []string, error) {
+	port := api.ServicePort{
+		Name:       "https",
+		Protocol:   "TCP",
+		Port:       443,
+		TargetPort: intstr.FromString(apiServerSecurePortName),
+	}
+	if apiserverServiceType == v1.ServiceTypeNodePort && apiserverPort != nil {
+		port.NodePort = *apiserverPort
+	}
 	svc := &api.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        svcName,
@@ -457,14 +489,7 @@ func createService(cmdOut io.Writer, clientset client.Interface, namespace, svcN
 		Spec: api.ServiceSpec{
 			Type:     api.ServiceType(apiserverServiceType),
 			Selector: apiserverSvcSelector,
-			Ports: []api.ServicePort{
-				{
-					Name:       "https",
-					Protocol:   "TCP",
-					Port:       443,
-					TargetPort: intstr.FromString(apiServerSecurePortName),
-				},
-			},
+			Ports:    []api.ServicePort{port},
 		},
 	}
 
@@ -474,6 +499,9 @@ func createService(cmdOut io.Writer, clientset client.Interface, namespace, svcN
 
 	var err error
 	svc, err = clientset.Core().Services(namespace).Create(svc)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	ips := []string{}
 	hostnames := []string{}
@@ -681,7 +709,7 @@ func createPVC(clientset client.Interface, namespace, svcName, federationName, e
 	return clientset.Core().PersistentVolumeClaims(namespace).Create(pvc)
 }
 
-func createAPIServer(clientset client.Interface, namespace, name, federationName, serverImage, etcdImage, advertiseAddress, credentialsName string, hasHTTPBasicAuthFile, hasTokenAuthFile bool, argOverrides map[string]string, pvc *api.PersistentVolumeClaim, dryRun bool) (*extensions.Deployment, error) {
+func createAPIServer(clientset client.Interface, namespace, name, federationName, serverImage, etcdImage, advertiseAddress, credentialsName string, hasHTTPBasicAuthFile, hasTokenAuthFile bool, argOverrides map[string]string, pvc *api.PersistentVolumeClaim, dryRun bool, nodeSelector map[string]string) (*extensions.Deployment, error) {
 	command := []string{
 		"/hyperkube",
 		"federation-apiserver",
@@ -758,6 +786,7 @@ func createAPIServer(clientset client.Interface, namespace, name, federationName
 							},
 						},
 					},
+					NodeSelector: nodeSelector,
 					Volumes: []api.Volume{
 						{
 							Name: credentialsName,
@@ -855,7 +884,7 @@ func createRoleBindings(clientset client.Interface, namespace, saName, federatio
 	return newRole, newRolebinding, err
 }
 
-func createControllerManager(clientset client.Interface, namespace, name, svcName, cmName, image, kubeconfigName, dnsZoneName, dnsProvider, dnsProviderConfig, saName string, dnsProviderSecret *api.Secret, argOverrides map[string]string, dryRun bool) (*extensions.Deployment, error) {
+func createControllerManager(clientset client.Interface, namespace, name, svcName, cmName, image, kubeconfigName, dnsZoneName, dnsProvider, dnsProviderConfig, saName string, dnsProviderSecret *api.Secret, argOverrides map[string]string, dryRun bool, nodeSelector map[string]string) (*extensions.Deployment, error) {
 	command := []string{
 		"/hyperkube",
 		"federation-controller-manager",
@@ -924,6 +953,7 @@ func createControllerManager(clientset client.Interface, namespace, name, svcNam
 							},
 						},
 					},
+					NodeSelector: nodeSelector,
 					Volumes: []api.Volume{
 						{
 							Name: kubeconfigName,

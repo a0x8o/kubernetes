@@ -75,6 +75,22 @@
         "allowMultiple": false
        },
        {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
         "type": "string",
         "paramType": "path",
         "name": "namespace",
@@ -136,6 +152,16 @@
        {
         "code": 200,
         "message": "OK",
+        "responseModel": "v1beta1.DaemonSet"
+       },
+       {
+        "code": 201,
+        "message": "Created",
+        "responseModel": "v1beta1.DaemonSet"
+       },
+       {
+        "code": 202,
+        "message": "Accepted",
         "responseModel": "v1beta1.DaemonSet"
        }
       ],
@@ -207,6 +233,22 @@
         "paramType": "query",
         "name": "timeoutSeconds",
         "description": "Timeout for the list/watch call.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
         "required": false,
         "allowMultiple": false
        },
@@ -300,6 +342,22 @@
         "paramType": "query",
         "name": "timeoutSeconds",
         "description": "Timeout for the list/watch call.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
         "required": false,
         "allowMultiple": false
        },
@@ -442,6 +500,11 @@
        {
         "code": 200,
         "message": "OK",
+        "responseModel": "v1beta1.DaemonSet"
+       },
+       {
+        "code": 201,
+        "message": "Created",
         "responseModel": "v1beta1.DaemonSet"
        }
       ],
@@ -659,6 +722,22 @@
         "allowMultiple": false
        },
        {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
         "type": "string",
         "paramType": "path",
         "name": "namespace",
@@ -760,6 +839,22 @@
         "description": "Timeout for the list/watch call.",
         "required": false,
         "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
        }
       ],
       "responseMessages": [
@@ -845,6 +940,22 @@
         "paramType": "query",
         "name": "timeoutSeconds",
         "description": "Timeout for the list/watch call.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
         "required": false,
         "allowMultiple": false
        }
@@ -963,6 +1074,11 @@
        {
         "code": 200,
         "message": "OK",
+        "responseModel": "v1beta1.DaemonSet"
+       },
+       {
+        "code": 201,
+        "message": "Created",
         "responseModel": "v1beta1.DaemonSet"
        }
       ],
@@ -1101,6 +1217,22 @@
         "allowMultiple": false
        },
        {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
         "type": "string",
         "paramType": "path",
         "name": "namespace",
@@ -1162,6 +1294,16 @@
        {
         "code": 200,
         "message": "OK",
+        "responseModel": "v1beta1.Deployment"
+       },
+       {
+        "code": 201,
+        "message": "Created",
+        "responseModel": "v1beta1.Deployment"
+       },
+       {
+        "code": 202,
+        "message": "Accepted",
         "responseModel": "v1beta1.Deployment"
        }
       ],
@@ -1233,6 +1375,22 @@
         "paramType": "query",
         "name": "timeoutSeconds",
         "description": "Timeout for the list/watch call.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
         "required": false,
         "allowMultiple": false
        },
@@ -1326,6 +1484,22 @@
         "paramType": "query",
         "name": "timeoutSeconds",
         "description": "Timeout for the list/watch call.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
         "required": false,
         "allowMultiple": false
        },
@@ -1468,6 +1642,11 @@
        {
         "code": 200,
         "message": "OK",
+        "responseModel": "v1beta1.Deployment"
+       },
+       {
+        "code": 201,
+        "message": "Created",
         "responseModel": "v1beta1.Deployment"
        }
       ],
@@ -1685,6 +1864,22 @@
         "allowMultiple": false
        },
        {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
         "type": "string",
         "paramType": "path",
         "name": "namespace",
@@ -1786,6 +1981,22 @@
         "description": "Timeout for the list/watch call.",
         "required": false,
         "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
        }
       ],
       "responseMessages": [
@@ -1873,6 +2084,22 @@
         "description": "Timeout for the list/watch call.",
         "required": false,
         "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
        }
       ],
       "responseMessages": [
@@ -1902,8 +2129,8 @@
      {
       "type": "v1beta1.DeploymentRollback",
       "method": "POST",
-      "summary": "create rollback of a DeploymentRollback",
-      "nickname": "createNamespacedDeploymentRollbackRollback",
+      "summary": "create rollback of a Deployment",
+      "nickname": "createNamespacedDeploymentRollback",
       "parameters": [
        {
         "type": "string",
@@ -1943,6 +2170,16 @@
         "code": 200,
         "message": "OK",
         "responseModel": "v1beta1.DeploymentRollback"
+       },
+       {
+        "code": 201,
+        "message": "Created",
+        "responseModel": "v1beta1.DeploymentRollback"
+       },
+       {
+        "code": 202,
+        "message": "Accepted",
+        "responseModel": "v1beta1.DeploymentRollback"
        }
       ],
       "produces": [
@@ -1963,8 +2200,8 @@
      {
       "type": "v1beta1.Scale",
       "method": "GET",
-      "summary": "read scale of the specified Scale",
-      "nickname": "readNamespacedScaleScale",
+      "summary": "read scale of the specified Deployment",
+      "nickname": "readNamespacedDeploymentScale",
       "parameters": [
        {
         "type": "string",
@@ -2010,8 +2247,8 @@
      {
       "type": "v1beta1.Scale",
       "method": "PUT",
-      "summary": "replace scale of the specified Scale",
-      "nickname": "replaceNamespacedScaleScale",
+      "summary": "replace scale of the specified Deployment",
+      "nickname": "replaceNamespacedDeploymentScale",
       "parameters": [
        {
         "type": "string",
@@ -2051,6 +2288,11 @@
         "code": 200,
         "message": "OK",
         "responseModel": "v1beta1.Scale"
+       },
+       {
+        "code": 201,
+        "message": "Created",
+        "responseModel": "v1beta1.Scale"
        }
       ],
       "produces": [
@@ -2065,8 +2307,8 @@
      {
       "type": "v1beta1.Scale",
       "method": "PATCH",
-      "summary": "partially update scale of the specified Scale",
-      "nickname": "patchNamespacedScaleScale",
+      "summary": "partially update scale of the specified Deployment",
+      "nickname": "patchNamespacedDeploymentScale",
       "parameters": [
        {
         "type": "string",
@@ -2216,6 +2458,11 @@
         "code": 200,
         "message": "OK",
         "responseModel": "v1beta1.Deployment"
+       },
+       {
+        "code": 201,
+        "message": "Created",
+        "responseModel": "v1beta1.Deployment"
        }
       ],
       "produces": [
@@ -2353,6 +2600,22 @@
         "allowMultiple": false
        },
        {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
         "type": "string",
         "paramType": "path",
         "name": "namespace",
@@ -2414,6 +2677,16 @@
        {
         "code": 200,
         "message": "OK",
+        "responseModel": "v1beta1.Ingress"
+       },
+       {
+        "code": 201,
+        "message": "Created",
+        "responseModel": "v1beta1.Ingress"
+       },
+       {
+        "code": 202,
+        "message": "Accepted",
         "responseModel": "v1beta1.Ingress"
        }
       ],
@@ -2485,6 +2758,22 @@
         "paramType": "query",
         "name": "timeoutSeconds",
         "description": "Timeout for the list/watch call.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
         "required": false,
         "allowMultiple": false
        },
@@ -2578,6 +2867,22 @@
         "paramType": "query",
         "name": "timeoutSeconds",
         "description": "Timeout for the list/watch call.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
         "required": false,
         "allowMultiple": false
        },
@@ -2720,6 +3025,11 @@
        {
         "code": 200,
         "message": "OK",
+        "responseModel": "v1beta1.Ingress"
+       },
+       {
+        "code": 201,
+        "message": "Created",
         "responseModel": "v1beta1.Ingress"
        }
       ],
@@ -2937,6 +3247,22 @@
         "allowMultiple": false
        },
        {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
         "type": "string",
         "paramType": "path",
         "name": "namespace",
@@ -3038,6 +3364,22 @@
         "description": "Timeout for the list/watch call.",
         "required": false,
         "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
        }
       ],
       "responseMessages": [
@@ -3123,6 +3465,22 @@
         "paramType": "query",
         "name": "timeoutSeconds",
         "description": "Timeout for the list/watch call.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
         "required": false,
         "allowMultiple": false
        }
@@ -3241,6 +3599,11 @@
        {
         "code": 200,
         "message": "OK",
+        "responseModel": "v1beta1.Ingress"
+       },
+       {
+        "code": 201,
+        "message": "Created",
         "responseModel": "v1beta1.Ingress"
        }
       ],
@@ -3379,6 +3742,22 @@
         "allowMultiple": false
        },
        {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
         "type": "string",
         "paramType": "path",
         "name": "namespace",
@@ -3440,6 +3819,16 @@
        {
         "code": 200,
         "message": "OK",
+        "responseModel": "v1beta1.NetworkPolicy"
+       },
+       {
+        "code": 201,
+        "message": "Created",
+        "responseModel": "v1beta1.NetworkPolicy"
+       },
+       {
+        "code": 202,
+        "message": "Accepted",
         "responseModel": "v1beta1.NetworkPolicy"
        }
       ],
@@ -3511,6 +3900,22 @@
         "paramType": "query",
         "name": "timeoutSeconds",
         "description": "Timeout for the list/watch call.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
         "required": false,
         "allowMultiple": false
        },
@@ -3604,6 +4009,22 @@
         "paramType": "query",
         "name": "timeoutSeconds",
         "description": "Timeout for the list/watch call.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
         "required": false,
         "allowMultiple": false
        },
@@ -3746,6 +4167,11 @@
        {
         "code": 200,
         "message": "OK",
+        "responseModel": "v1beta1.NetworkPolicy"
+       },
+       {
+        "code": 201,
+        "message": "Created",
         "responseModel": "v1beta1.NetworkPolicy"
        }
       ],
@@ -3963,6 +4389,22 @@
         "allowMultiple": false
        },
        {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
         "type": "string",
         "paramType": "path",
         "name": "namespace",
@@ -4064,6 +4506,22 @@
         "description": "Timeout for the list/watch call.",
         "required": false,
         "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
        }
       ],
       "responseMessages": [
@@ -4149,6 +4607,22 @@
         "paramType": "query",
         "name": "timeoutSeconds",
         "description": "Timeout for the list/watch call.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
         "required": false,
         "allowMultiple": false
        }
@@ -4238,6 +4712,22 @@
         "description": "Timeout for the list/watch call.",
         "required": false,
         "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
        }
       ],
       "responseMessages": [
@@ -4285,6 +4775,16 @@
        {
         "code": 200,
         "message": "OK",
+        "responseModel": "v1beta1.PodSecurityPolicy"
+       },
+       {
+        "code": 201,
+        "message": "Created",
+        "responseModel": "v1beta1.PodSecurityPolicy"
+       },
+       {
+        "code": 202,
+        "message": "Accepted",
         "responseModel": "v1beta1.PodSecurityPolicy"
        }
       ],
@@ -4356,6 +4856,22 @@
         "paramType": "query",
         "name": "timeoutSeconds",
         "description": "Timeout for the list/watch call.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
         "required": false,
         "allowMultiple": false
        }
@@ -4441,6 +4957,22 @@
         "paramType": "query",
         "name": "timeoutSeconds",
         "description": "Timeout for the list/watch call.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
         "required": false,
         "allowMultiple": false
        }
@@ -4559,6 +5091,11 @@
        {
         "code": 200,
         "message": "OK",
+        "responseModel": "v1beta1.PodSecurityPolicy"
+       },
+       {
+        "code": 201,
+        "message": "Created",
         "responseModel": "v1beta1.PodSecurityPolicy"
        }
       ],
@@ -4760,6 +5297,22 @@
         "allowMultiple": false
        },
        {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
         "type": "string",
         "paramType": "path",
         "name": "name",
@@ -4855,6 +5408,22 @@
         "allowMultiple": false
        },
        {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
         "type": "string",
         "paramType": "path",
         "name": "namespace",
@@ -4916,6 +5485,16 @@
        {
         "code": 200,
         "message": "OK",
+        "responseModel": "v1beta1.ReplicaSet"
+       },
+       {
+        "code": 201,
+        "message": "Created",
+        "responseModel": "v1beta1.ReplicaSet"
+       },
+       {
+        "code": 202,
+        "message": "Accepted",
         "responseModel": "v1beta1.ReplicaSet"
        }
       ],
@@ -4987,6 +5566,22 @@
         "paramType": "query",
         "name": "timeoutSeconds",
         "description": "Timeout for the list/watch call.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
         "required": false,
         "allowMultiple": false
        },
@@ -5080,6 +5675,22 @@
         "paramType": "query",
         "name": "timeoutSeconds",
         "description": "Timeout for the list/watch call.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
         "required": false,
         "allowMultiple": false
        },
@@ -5222,6 +5833,11 @@
        {
         "code": 200,
         "message": "OK",
+        "responseModel": "v1beta1.ReplicaSet"
+       },
+       {
+        "code": 201,
+        "message": "Created",
         "responseModel": "v1beta1.ReplicaSet"
        }
       ],
@@ -5439,6 +6055,22 @@
         "allowMultiple": false
        },
        {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
         "type": "string",
         "paramType": "path",
         "name": "namespace",
@@ -5540,6 +6172,22 @@
         "description": "Timeout for the list/watch call.",
         "required": false,
         "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
        }
       ],
       "responseMessages": [
@@ -5627,6 +6275,22 @@
         "description": "Timeout for the list/watch call.",
         "required": false,
         "allowMultiple": false
+       },
+       {
+        "type": "integer",
+        "paramType": "query",
+        "name": "limit",
+        "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "continue",
+        "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+        "required": false,
+        "allowMultiple": false
        }
       ],
       "responseMessages": [
@@ -5656,8 +6320,8 @@
      {
       "type": "v1beta1.Scale",
       "method": "GET",
-      "summary": "read scale of the specified Scale",
-      "nickname": "readNamespacedScaleScale",
+      "summary": "read scale of the specified ReplicaSet",
+      "nickname": "readNamespacedReplicaSetScale",
       "parameters": [
        {
         "type": "string",
@@ -5703,8 +6367,8 @@
      {
       "type": "v1beta1.Scale",
       "method": "PUT",
-      "summary": "replace scale of the specified Scale",
-      "nickname": "replaceNamespacedScaleScale",
+      "summary": "replace scale of the specified ReplicaSet",
+      "nickname": "replaceNamespacedReplicaSetScale",
       "parameters": [
        {
         "type": "string",
@@ -5744,6 +6408,11 @@
         "code": 200,
         "message": "OK",
         "responseModel": "v1beta1.Scale"
+       },
+       {
+        "code": 201,
+        "message": "Created",
+        "responseModel": "v1beta1.Scale"
        }
       ],
       "produces": [
@@ -5758,8 +6427,8 @@
      {
       "type": "v1beta1.Scale",
       "method": "PATCH",
-      "summary": "partially update scale of the specified Scale",
-      "nickname": "patchNamespacedScaleScale",
+      "summary": "partially update scale of the specified ReplicaSet",
+      "nickname": "patchNamespacedReplicaSetScale",
       "parameters": [
        {
         "type": "string",
@@ -5909,6 +6578,11 @@
         "code": 200,
         "message": "OK",
         "responseModel": "v1beta1.ReplicaSet"
+       },
+       {
+        "code": 201,
+        "message": "Created",
+        "responseModel": "v1beta1.ReplicaSet"
        }
       ],
       "produces": [
@@ -5986,8 +6660,8 @@
      {
       "type": "v1beta1.Scale",
       "method": "GET",
-      "summary": "read scale of the specified Scale",
-      "nickname": "readNamespacedScaleScale",
+      "summary": "read scale of the specified ReplicationControllerDummy",
+      "nickname": "readNamespacedReplicationControllerDummyScale",
       "parameters": [
        {
         "type": "string",
@@ -6033,8 +6707,8 @@
      {
       "type": "v1beta1.Scale",
       "method": "PUT",
-      "summary": "replace scale of the specified Scale",
-      "nickname": "replaceNamespacedScaleScale",
+      "summary": "replace scale of the specified ReplicationControllerDummy",
+      "nickname": "replaceNamespacedReplicationControllerDummyScale",
       "parameters": [
        {
         "type": "string",
@@ -6074,6 +6748,11 @@
         "code": 200,
         "message": "OK",
         "responseModel": "v1beta1.Scale"
+       },
+       {
+        "code": 201,
+        "message": "Created",
+        "responseModel": "v1beta1.Scale"
        }
       ],
       "produces": [
@@ -6088,8 +6767,8 @@
      {
       "type": "v1beta1.Scale",
       "method": "PATCH",
-      "summary": "partially update scale of the specified Scale",
-      "nickname": "patchNamespacedScaleScale",
+      "summary": "partially update scale of the specified ReplicationControllerDummy",
+      "nickname": "patchNamespacedReplicationControllerDummyScale",
       "parameters": [
        {
         "type": "string",
@@ -6140,621 +6819,6 @@
        "application/json-patch+json",
        "application/merge-patch+json",
        "application/strategic-merge-patch+json"
-      ]
-     }
-    ]
-   },
-   {
-    "path": "/apis/extensions/v1beta1/thirdpartyresources",
-    "description": "API at /apis/extensions/v1beta1",
-    "operations": [
-     {
-      "type": "v1beta1.ThirdPartyResourceList",
-      "method": "GET",
-      "summary": "list or watch objects of kind ThirdPartyResource",
-      "nickname": "listThirdPartyResource",
-      "parameters": [
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "pretty",
-        "description": "If 'true', then the output is pretty printed.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "labelSelector",
-        "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "fieldSelector",
-        "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "boolean",
-        "paramType": "query",
-        "name": "includeUninitialized",
-        "description": "If true, partially initialized resources are included in the response.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "boolean",
-        "paramType": "query",
-        "name": "watch",
-        "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "resourceVersion",
-        "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "integer",
-        "paramType": "query",
-        "name": "timeoutSeconds",
-        "description": "Timeout for the list/watch call.",
-        "required": false,
-        "allowMultiple": false
-       }
-      ],
-      "responseMessages": [
-       {
-        "code": 200,
-        "message": "OK",
-        "responseModel": "v1beta1.ThirdPartyResourceList"
-       }
-      ],
-      "produces": [
-       "application/json",
-       "application/yaml",
-       "application/vnd.kubernetes.protobuf",
-       "application/json;stream=watch",
-       "application/vnd.kubernetes.protobuf;stream=watch"
-      ],
-      "consumes": [
-       "*/*"
-      ]
-     },
-     {
-      "type": "v1beta1.ThirdPartyResource",
-      "method": "POST",
-      "summary": "create a ThirdPartyResource",
-      "nickname": "createThirdPartyResource",
-      "parameters": [
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "pretty",
-        "description": "If 'true', then the output is pretty printed.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "v1beta1.ThirdPartyResource",
-        "paramType": "body",
-        "name": "body",
-        "description": "",
-        "required": true,
-        "allowMultiple": false
-       }
-      ],
-      "responseMessages": [
-       {
-        "code": 200,
-        "message": "OK",
-        "responseModel": "v1beta1.ThirdPartyResource"
-       }
-      ],
-      "produces": [
-       "application/json",
-       "application/yaml",
-       "application/vnd.kubernetes.protobuf"
-      ],
-      "consumes": [
-       "*/*"
-      ]
-     },
-     {
-      "type": "v1.Status",
-      "method": "DELETE",
-      "summary": "delete collection of ThirdPartyResource",
-      "nickname": "deletecollectionThirdPartyResource",
-      "parameters": [
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "pretty",
-        "description": "If 'true', then the output is pretty printed.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "labelSelector",
-        "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "fieldSelector",
-        "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "boolean",
-        "paramType": "query",
-        "name": "includeUninitialized",
-        "description": "If true, partially initialized resources are included in the response.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "boolean",
-        "paramType": "query",
-        "name": "watch",
-        "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "resourceVersion",
-        "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "integer",
-        "paramType": "query",
-        "name": "timeoutSeconds",
-        "description": "Timeout for the list/watch call.",
-        "required": false,
-        "allowMultiple": false
-       }
-      ],
-      "responseMessages": [
-       {
-        "code": 200,
-        "message": "OK",
-        "responseModel": "v1.Status"
-       }
-      ],
-      "produces": [
-       "application/json",
-       "application/yaml",
-       "application/vnd.kubernetes.protobuf"
-      ],
-      "consumes": [
-       "*/*"
-      ]
-     }
-    ]
-   },
-   {
-    "path": "/apis/extensions/v1beta1/watch/thirdpartyresources",
-    "description": "API at /apis/extensions/v1beta1",
-    "operations": [
-     {
-      "type": "v1.WatchEvent",
-      "method": "GET",
-      "summary": "watch individual changes to a list of ThirdPartyResource",
-      "nickname": "watchThirdPartyResourceList",
-      "parameters": [
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "pretty",
-        "description": "If 'true', then the output is pretty printed.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "labelSelector",
-        "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "fieldSelector",
-        "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "boolean",
-        "paramType": "query",
-        "name": "includeUninitialized",
-        "description": "If true, partially initialized resources are included in the response.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "boolean",
-        "paramType": "query",
-        "name": "watch",
-        "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "resourceVersion",
-        "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "integer",
-        "paramType": "query",
-        "name": "timeoutSeconds",
-        "description": "Timeout for the list/watch call.",
-        "required": false,
-        "allowMultiple": false
-       }
-      ],
-      "responseMessages": [
-       {
-        "code": 200,
-        "message": "OK",
-        "responseModel": "v1.WatchEvent"
-       }
-      ],
-      "produces": [
-       "application/json",
-       "application/yaml",
-       "application/vnd.kubernetes.protobuf",
-       "application/json;stream=watch",
-       "application/vnd.kubernetes.protobuf;stream=watch"
-      ],
-      "consumes": [
-       "*/*"
-      ]
-     }
-    ]
-   },
-   {
-    "path": "/apis/extensions/v1beta1/thirdpartyresources/{name}",
-    "description": "API at /apis/extensions/v1beta1",
-    "operations": [
-     {
-      "type": "v1beta1.ThirdPartyResource",
-      "method": "GET",
-      "summary": "read the specified ThirdPartyResource",
-      "nickname": "readThirdPartyResource",
-      "parameters": [
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "pretty",
-        "description": "If 'true', then the output is pretty printed.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "boolean",
-        "paramType": "query",
-        "name": "export",
-        "description": "Should this value be exported.  Export strips fields that a user can not specify.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "boolean",
-        "paramType": "query",
-        "name": "exact",
-        "description": "Should the export be exact.  Exact export maintains cluster-specific fields like 'Namespace'.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "path",
-        "name": "name",
-        "description": "name of the ThirdPartyResource",
-        "required": true,
-        "allowMultiple": false
-       }
-      ],
-      "responseMessages": [
-       {
-        "code": 200,
-        "message": "OK",
-        "responseModel": "v1beta1.ThirdPartyResource"
-       }
-      ],
-      "produces": [
-       "application/json",
-       "application/yaml",
-       "application/vnd.kubernetes.protobuf"
-      ],
-      "consumes": [
-       "*/*"
-      ]
-     },
-     {
-      "type": "v1beta1.ThirdPartyResource",
-      "method": "PUT",
-      "summary": "replace the specified ThirdPartyResource",
-      "nickname": "replaceThirdPartyResource",
-      "parameters": [
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "pretty",
-        "description": "If 'true', then the output is pretty printed.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "v1beta1.ThirdPartyResource",
-        "paramType": "body",
-        "name": "body",
-        "description": "",
-        "required": true,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "path",
-        "name": "name",
-        "description": "name of the ThirdPartyResource",
-        "required": true,
-        "allowMultiple": false
-       }
-      ],
-      "responseMessages": [
-       {
-        "code": 200,
-        "message": "OK",
-        "responseModel": "v1beta1.ThirdPartyResource"
-       }
-      ],
-      "produces": [
-       "application/json",
-       "application/yaml",
-       "application/vnd.kubernetes.protobuf"
-      ],
-      "consumes": [
-       "*/*"
-      ]
-     },
-     {
-      "type": "v1beta1.ThirdPartyResource",
-      "method": "PATCH",
-      "summary": "partially update the specified ThirdPartyResource",
-      "nickname": "patchThirdPartyResource",
-      "parameters": [
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "pretty",
-        "description": "If 'true', then the output is pretty printed.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "v1.Patch",
-        "paramType": "body",
-        "name": "body",
-        "description": "",
-        "required": true,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "path",
-        "name": "name",
-        "description": "name of the ThirdPartyResource",
-        "required": true,
-        "allowMultiple": false
-       }
-      ],
-      "responseMessages": [
-       {
-        "code": 200,
-        "message": "OK",
-        "responseModel": "v1beta1.ThirdPartyResource"
-       }
-      ],
-      "produces": [
-       "application/json",
-       "application/yaml",
-       "application/vnd.kubernetes.protobuf"
-      ],
-      "consumes": [
-       "application/json-patch+json",
-       "application/merge-patch+json",
-       "application/strategic-merge-patch+json"
-      ]
-     },
-     {
-      "type": "v1.Status",
-      "method": "DELETE",
-      "summary": "delete a ThirdPartyResource",
-      "nickname": "deleteThirdPartyResource",
-      "parameters": [
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "pretty",
-        "description": "If 'true', then the output is pretty printed.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "v1.DeleteOptions",
-        "paramType": "body",
-        "name": "body",
-        "description": "",
-        "required": true,
-        "allowMultiple": false
-       },
-       {
-        "type": "integer",
-        "paramType": "query",
-        "name": "gracePeriodSeconds",
-        "description": "The duration in seconds before the object should be deleted. Value must be non-negative integer. The value zero indicates delete immediately. If this value is nil, the default grace period for the specified type will be used. Defaults to a per object value if not specified. zero means delete immediately.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "boolean",
-        "paramType": "query",
-        "name": "orphanDependents",
-        "description": "Deprecated: please use the PropagationPolicy, this field will be deprecated in 1.7. Should the dependent objects be orphaned. If true/false, the \"orphan\" finalizer will be added to/removed from the object's finalizers list. Either this field or PropagationPolicy may be set, but not both.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "propagationPolicy",
-        "description": "Whether and how garbage collection will be performed. Either this field or OrphanDependents may be set, but not both. The default policy is decided by the existing finalizer set in the metadata.finalizers and the resource-specific default policy.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "path",
-        "name": "name",
-        "description": "name of the ThirdPartyResource",
-        "required": true,
-        "allowMultiple": false
-       }
-      ],
-      "responseMessages": [
-       {
-        "code": 200,
-        "message": "OK",
-        "responseModel": "v1.Status"
-       }
-      ],
-      "produces": [
-       "application/json",
-       "application/yaml",
-       "application/vnd.kubernetes.protobuf"
-      ],
-      "consumes": [
-       "*/*"
-      ]
-     }
-    ]
-   },
-   {
-    "path": "/apis/extensions/v1beta1/watch/thirdpartyresources/{name}",
-    "description": "API at /apis/extensions/v1beta1",
-    "operations": [
-     {
-      "type": "v1.WatchEvent",
-      "method": "GET",
-      "summary": "watch changes to an object of kind ThirdPartyResource",
-      "nickname": "watchThirdPartyResource",
-      "parameters": [
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "pretty",
-        "description": "If 'true', then the output is pretty printed.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "labelSelector",
-        "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "fieldSelector",
-        "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "boolean",
-        "paramType": "query",
-        "name": "includeUninitialized",
-        "description": "If true, partially initialized resources are included in the response.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "boolean",
-        "paramType": "query",
-        "name": "watch",
-        "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "query",
-        "name": "resourceVersion",
-        "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "integer",
-        "paramType": "query",
-        "name": "timeoutSeconds",
-        "description": "Timeout for the list/watch call.",
-        "required": false,
-        "allowMultiple": false
-       },
-       {
-        "type": "string",
-        "paramType": "path",
-        "name": "name",
-        "description": "name of the ThirdPartyResource",
-        "required": true,
-        "allowMultiple": false
-       }
-      ],
-      "responseMessages": [
-       {
-        "code": 200,
-        "message": "OK",
-        "responseModel": "v1.WatchEvent"
-       }
-      ],
-      "produces": [
-       "application/json",
-       "application/yaml",
-       "application/vnd.kubernetes.protobuf",
-       "application/json;stream=watch",
-       "application/vnd.kubernetes.protobuf;stream=watch"
-      ],
-      "consumes": [
-       "*/*"
       ]
      }
     ]
@@ -6818,17 +6882,21 @@
     "properties": {
      "selfLink": {
       "type": "string",
-      "description": "SelfLink is a URL representing this object. Populated by the system. Read-only."
+      "description": "selfLink is a URL representing this object. Populated by the system. Read-only."
      },
      "resourceVersion": {
       "type": "string",
       "description": "String that identifies the server's internal version of this object that can be used by clients to determine when objects have changed. Value must be treated as opaque by clients and passed unmodified back to the server. Populated by the system. Read-only. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#concurrency-control-and-consistency"
+     },
+     "continue": {
+      "type": "string",
+      "description": "continue may be set if the user set a limit on the number of items returned, and indicates that the server has more data available. The value is opaque and may be used to issue another request to the endpoint that served this list to retrieve the next set of available objects. Continuing a list may not be possible if the server configuration has changed or more than a few minutes have passed. The resourceVersion field returned when using this continue value will be identical to the value in the first response."
      }
     }
    },
    "v1beta1.DaemonSet": {
     "id": "v1beta1.DaemonSet",
-    "description": "DaemonSet represents the configuration of a daemon set.",
+    "description": "DEPRECATED - This group version of DaemonSet is deprecated by apps/v1beta2/DaemonSet. See the release notes for more information. DaemonSet represents the configuration of a daemon set.",
     "properties": {
      "kind": {
       "type": "string",
@@ -7068,7 +7136,7 @@
      "retryAfterSeconds": {
       "type": "integer",
       "format": "int32",
-      "description": "If specified, the time in seconds before the operation should be retried."
+      "description": "If specified, the time in seconds before the operation should be retried. Some errors may indicate the client must take an alternate action - for those errors this field may indicate how long to wait before taking the alternate action."
      }
     }
    },
@@ -7157,7 +7225,7 @@
      },
      "operator": {
       "type": "string",
-      "description": "operator represents a key's relationship to a set of values. Valid operators ard In, NotIn, Exists and DoesNotExist."
+      "description": "operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist."
      },
      "values": {
       "type": "array",
@@ -7294,12 +7362,21 @@
       },
       "description": "If specified, the pod's tolerations."
      },
-     "hostMappings": {
+     "hostAliases": {
       "type": "array",
       "items": {
        "$ref": "v1.HostAlias"
       },
       "description": "HostAliases is an optional list of hosts and IPs that will be injected into the pod's hosts file if specified. This is only valid for non-hostNetwork pods."
+     },
+     "priorityClassName": {
+      "type": "string",
+      "description": "If specified, indicates the pod's priority. \"SYSTEM\" is a special keyword which indicates the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default."
+     },
+     "priority": {
+      "type": "integer",
+      "format": "int32",
+      "description": "The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority."
      }
     }
    },
@@ -7433,9 +7510,17 @@
     "properties": {
      "path": {
       "type": "string",
-      "description": "Path of the directory on the host. More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath"
+      "description": "Path of the directory on the host. If the path is a symlink, it will follow the link to the real path. More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath"
+     },
+     "type": {
+      "$ref": "v1.HostPathType",
+      "description": "Type for HostPath Volume Defaults to \"\" More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath"
      }
     }
+   },
+   "v1.HostPathType": {
+    "id": "v1.HostPathType",
+    "properties": {}
    },
    "v1.EmptyDirVolumeSource": {
     "id": "v1.EmptyDirVolumeSource",
@@ -7647,6 +7732,10 @@
      "secretRef": {
       "$ref": "v1.LocalObjectReference",
       "description": "CHAP secret for iSCSI target and initiator authentication"
+     },
+     "initiatorName": {
+      "type": "string",
+      "description": "Custom iSCSI initiator name. If initiatorName is specified with iscsiInterface simultaneously, new iSCSI interface \u003ctarget portal\u003e:\u003cvolume name\u003e will be created for the connection."
      }
     }
    },
@@ -7929,22 +8018,18 @@
    "v1.FCVolumeSource": {
     "id": "v1.FCVolumeSource",
     "description": "Represents a Fibre Channel volume. Fibre Channel volumes can only be mounted as read/write once. Fibre Channel volumes support ownership management and SELinux relabeling.",
-    "required": [
-     "targetWWNs",
-     "lun"
-    ],
     "properties": {
      "targetWWNs": {
       "type": "array",
       "items": {
        "type": "string"
       },
-      "description": "Required: FC target worldwide names (WWNs)"
+      "description": "Optional: FC target worldwide names (WWNs)"
      },
      "lun": {
       "type": "integer",
       "format": "int32",
-      "description": "Required: FC target lun number"
+      "description": "Optional: FC target lun number"
      },
      "fsType": {
       "type": "string",
@@ -7953,6 +8038,13 @@
      "readOnly": {
       "type": "boolean",
       "description": "Optional: Defaults to false (read/write). ReadOnly here will force the ReadOnly setting in VolumeMounts."
+     },
+     "wwids": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Optional: FC volume world wide identifiers (wwids) Either wwids or combination of targetWWNs and lun must be set, but not both simultaneously."
      }
     }
    },
@@ -8089,7 +8181,7 @@
      },
      "kind": {
       "$ref": "v1.AzureDataDiskKind",
-      "description": "Expected values Shared: mulitple blob disks per storage account  Dedicated: single blob disk per storage account  Managed: azure managed data disk (only in managed availability set). defaults to shared"
+      "description": "Expected values Shared: multiple blob disks per storage account  Dedicated: single blob disk per storage account  Managed: azure managed data disk (only in managed availability set). defaults to shared"
      }
     }
    },
@@ -8314,8 +8406,7 @@
     "id": "v1.Container",
     "description": "A single application container that you want to run within a pod.",
     "required": [
-     "name",
-     "image"
+     "name"
     ],
     "properties": {
      "name": {
@@ -8324,7 +8415,7 @@
      },
      "image": {
       "type": "string",
-      "description": "Docker image name. More info: https://kubernetes.io/docs/concepts/containers/images"
+      "description": "Docker image name. More info: https://kubernetes.io/docs/concepts/containers/images This field is optional to allow higher level config management to default or override container images in workload controllers like Deployments and StatefulSets."
      },
      "command": {
       "type": "array",
@@ -8526,7 +8617,7 @@
      },
      "resourceFieldRef": {
       "$ref": "v1.ResourceFieldSelector",
-      "description": "Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported."
+      "description": "Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported."
      },
      "configMapKeyRef": {
       "$ref": "v1.ConfigMapKeySelector",
@@ -8617,8 +8708,16 @@
      "subPath": {
       "type": "string",
       "description": "Path within the volume from which the container's volume should be mounted. Defaults to \"\" (volume's root)."
+     },
+     "mountPropagation": {
+      "$ref": "v1.MountPropagationMode",
+      "description": "mountPropagation determines how mounts are propagated from the host to container and the other way around. When not set, MountPropagationHostToContainer is used. This field is alpha in 1.8 and can be reworked or removed in a future release."
      }
     }
+   },
+   "v1.MountPropagationMode": {
+    "id": "v1.MountPropagationMode",
+    "properties": {}
    },
    "v1.Probe": {
     "id": "v1.Probe",
@@ -8792,7 +8891,8 @@
       "description": "The SELinux context to be applied to the container. If unspecified, the container runtime will allocate a random SELinux context for each container.  May also be set in PodSecurityContext.  If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence."
      },
      "runAsUser": {
-      "$ref": "types.UnixUserID",
+      "type": "integer",
+      "format": "int64",
       "description": "The UID to run the entrypoint of the container process. Defaults to user specified in image metadata if unspecified. May also be set in PodSecurityContext.  If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence."
      },
      "runAsNonRoot": {
@@ -8802,6 +8902,10 @@
      "readOnlyRootFilesystem": {
       "type": "boolean",
       "description": "Whether this container has a read-only root filesystem. Default is false."
+     },
+     "allowPrivilegeEscalation": {
+      "type": "boolean",
+      "description": "AllowPrivilegeEscalation controls whether a process can gain more privileges than its parent process. This bool directly controls if the no_new_privs flag will be set on the container process. AllowPrivilegeEscalation is true always when the container is: 1) run as Privileged 2) has CAP_SYS_ADMIN"
      }
     }
    },
@@ -8851,10 +8955,6 @@
      }
     }
    },
-   "types.UnixUserID": {
-    "id": "types.UnixUserID",
-    "properties": {}
-   },
    "v1.PodSecurityContext": {
     "id": "v1.PodSecurityContext",
     "description": "PodSecurityContext holds pod-level security attributes and common container settings. Some fields are also present in container.securityContext.  Field values of container.securityContext take precedence over field values of PodSecurityContext.",
@@ -8864,7 +8964,8 @@
       "description": "The SELinux context to be applied to all containers. If unspecified, the container runtime will allocate a random SELinux context for each container.  May also be set in SecurityContext.  If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence for that container."
      },
      "runAsUser": {
-      "$ref": "types.UnixUserID",
+      "type": "integer",
+      "format": "int64",
       "description": "The UID to run the entrypoint of the container process. Defaults to user specified in image metadata if unspecified. May also be set in SecurityContext.  If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence for that container."
      },
      "runAsNonRoot": {
@@ -8874,19 +8975,16 @@
      "supplementalGroups": {
       "type": "array",
       "items": {
-       "$ref": "types.UnixGroupID"
+       "type": "integer"
       },
       "description": "A list of groups applied to the first process run in each container, in addition to the container's primary GID.  If unspecified, no groups will be added to any container."
      },
      "fsGroup": {
-      "$ref": "types.UnixGroupID",
+      "type": "integer",
+      "format": "int64",
       "description": "A special supplemental group that applies to all containers in a pod. Some volume types allow the Kubelet to change the ownership of that volume to be owned by the pod:\n\n1. The owning GID will be the FSGroup 2. The setgid bit is set (new files created in the volume will be owned by FSGroup) 3. The permission bits are OR'd with rw-rw "
      }
     }
-   },
-   "types.UnixGroupID": {
-    "id": "types.UnixGroupID",
-    "properties": {}
    },
    "v1.Affinity": {
     "id": "v1.Affinity",
@@ -9008,7 +9106,7 @@
       "items": {
        "$ref": "v1.PodAffinityTerm"
       },
-      "description": "NOT YET IMPLEMENTED. TODO: Uncomment field once it is implemented. If the affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system will try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied. RequiredDuringSchedulingRequiredDuringExecution []PodAffinityTerm  `json:\"requiredDuringSchedulingRequiredDuringExecution,omitempty\"` If the affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system may or may not try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied."
+      "description": "If the affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system may or may not try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied."
      },
      "preferredDuringSchedulingIgnoredDuringExecution": {
       "type": "array",
@@ -9068,7 +9166,7 @@
       "items": {
        "$ref": "v1.PodAffinityTerm"
       },
-      "description": "NOT YET IMPLEMENTED. TODO: Uncomment field once it is implemented. If the anti-affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the anti-affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system will try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied. RequiredDuringSchedulingRequiredDuringExecution []PodAffinityTerm  `json:\"requiredDuringSchedulingRequiredDuringExecution,omitempty\"` If the anti-affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the anti-affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system may or may not try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied."
+      "description": "If the anti-affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the anti-affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to a pod label update), the system may or may not try to eventually evict the pod from its node. When there are multiple elements, the lists of nodes corresponding to each podAffinityTerm are intersected, i.e. all terms must be satisfied."
      },
      "preferredDuringSchedulingIgnoredDuringExecution": {
       "type": "array",
@@ -9198,7 +9296,7 @@
      },
      "collisionCount": {
       "type": "integer",
-      "format": "int64",
+      "format": "int32",
       "description": "Count of hash collisions for the DaemonSet. The DaemonSet controller uses this field as a collision avoidance mechanism when it needs to create the name for the newest ControllerRevision."
      }
     }
@@ -9302,7 +9400,7 @@
    },
    "v1beta1.Deployment": {
     "id": "v1beta1.Deployment",
-    "description": "Deployment enables declarative updates for Pods and ReplicaSets.",
+    "description": "DEPRECATED - This group version of Deployment is deprecated by apps/v1beta2/Deployment. See the release notes for more information. Deployment enables declarative updates for Pods and ReplicaSets.",
     "properties": {
      "kind": {
       "type": "string",
@@ -9366,12 +9464,12 @@
      },
      "rollbackTo": {
       "$ref": "v1beta1.RollbackConfig",
-      "description": "The config this deployment is rolling back to. Will be cleared after rollback is done."
+      "description": "DEPRECATED. The config this deployment is rolling back to. Will be cleared after rollback is done."
      },
      "progressDeadlineSeconds": {
       "type": "integer",
       "format": "int32",
-      "description": "The maximum time in seconds for a deployment to make progress before it is considered to be failed. The deployment controller will continue to process failed deployments and a condition with a ProgressDeadlineExceeded reason will be surfaced in the deployment status. Once autoRollback is implemented, the deployment controller will automatically rollback failed deployments. Note that progress will not be estimated during the time a deployment is paused. This is not set by default."
+      "description": "The maximum time in seconds for a deployment to make progress before it is considered to be failed. The deployment controller will continue to process failed deployments and a condition with a ProgressDeadlineExceeded reason will be surfaced in the deployment status. Note that progress will not be estimated during the time a deployment is paused. This is not set by default."
      }
     }
    },
@@ -9405,6 +9503,7 @@
    },
    "v1beta1.RollbackConfig": {
     "id": "v1beta1.RollbackConfig",
+    "description": "DEPRECATED.",
     "properties": {
      "revision": {
       "type": "integer",
@@ -9445,7 +9544,7 @@
      "unavailableReplicas": {
       "type": "integer",
       "format": "int32",
-      "description": "Total number of unavailable pods targeted by this deployment."
+      "description": "Total number of unavailable pods targeted by this deployment. This is the total number of pods that are still required for the deployment to have 100% available capacity. They may either be pods that are running but not yet available or pods that still have not been created."
      },
      "conditions": {
       "type": "array",
@@ -9456,7 +9555,7 @@
      },
      "collisionCount": {
       "type": "integer",
-      "format": "int64",
+      "format": "int32",
       "description": "Count of hash collisions for the Deployment. The Deployment controller uses this field as a collision avoidance mechanism when it needs to create the name for the newest ReplicaSet."
      }
     }
@@ -9497,7 +9596,7 @@
    },
    "v1beta1.DeploymentRollback": {
     "id": "v1beta1.DeploymentRollback",
-    "description": "DeploymentRollback stores the information required to rollback a deployment.",
+    "description": "DEPRECATED. DeploymentRollback stores the information required to rollback a deployment.",
     "required": [
      "name",
      "rollbackTo"
@@ -9846,6 +9945,20 @@
        "$ref": "v1beta1.NetworkPolicyIngressRule"
       },
       "description": "List of ingress rules to be applied to the selected pods. Traffic is allowed to a pod if there are no NetworkPolicies selecting the pod OR if the traffic source is the pod's local node, OR if the traffic matches at least one ingress rule across all of the NetworkPolicy objects whose podSelector matches the pod. If this field is empty then this NetworkPolicy does not allow any traffic (and serves solely to ensure that the pods it selects are isolated by default)."
+     },
+     "egress": {
+      "type": "array",
+      "items": {
+       "$ref": "v1beta1.NetworkPolicyEgressRule"
+      },
+      "description": "List of egress rules to be applied to the selected pods. Outgoing traffic is allowed if there are no NetworkPolicies selecting the pod (and cluster policy otherwise allows the traffic), OR if the traffic matches at least one egress rule across all of the NetworkPolicy objects whose podSelector matches the pod. If this field is empty then this NetworkPolicy limits all outgoing traffic (and serves solely to ensure that the pods it selects are isolated by default). This field is beta-level in 1.8"
+     },
+     "policyTypes": {
+      "type": "array",
+      "items": {
+       "$ref": "v1beta1.PolicyType"
+      },
+      "description": "List of rule types that the NetworkPolicy relates to. Valid options are Ingress, Egress, or Ingress,Egress. If this field is not specified, it will default based on the existence of Ingress or Egress rules; policies that contain an Egress section are assumed to affect Egress, and all policies (whether or not they contain an Ingress section) are assumed to affect Ingress. If you want to write an egress-only policy, you must explicitly specify policyTypes [ \"Egress\" ]. Likewise, if you want to write a policy that specifies that no egress is allowed, you must specify a policyTypes value that include \"Egress\" (since such a policy would not include an Egress section and would otherwise default to just [ \"Ingress\" ]). This field is beta-level in 1.8"
      }
     }
    },
@@ -9896,8 +10009,56 @@
      "namespaceSelector": {
       "$ref": "v1.LabelSelector",
       "description": "Selects Namespaces using cluster scoped-labels.  This matches all pods in all namespaces selected by this label selector. This field follows standard label selector semantics. If present but empty, this selector selects all namespaces."
+     },
+     "ipBlock": {
+      "$ref": "v1beta1.IPBlock",
+      "description": "IPBlock defines policy on a particular IPBlock"
      }
     }
+   },
+   "v1beta1.IPBlock": {
+    "id": "v1beta1.IPBlock",
+    "description": "IPBlock describes a particular CIDR (Ex. \"192.168.1.1/24\") that is allowed to the pods matched by a NetworkPolicySpec's podSelector. The except entry describes CIDRs that should not be included within this rule.",
+    "required": [
+     "cidr"
+    ],
+    "properties": {
+     "cidr": {
+      "type": "string",
+      "description": "CIDR is a string representing the IP Block Valid examples are \"192.168.1.1/24\""
+     },
+     "except": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Except is a slice of CIDRs that should not be included within an IP Block Valid examples are \"192.168.1.1/24\" Except values will be rejected if they are outside the CIDR range"
+     }
+    }
+   },
+   "v1beta1.NetworkPolicyEgressRule": {
+    "id": "v1beta1.NetworkPolicyEgressRule",
+    "description": "NetworkPolicyEgressRule describes a particular set of traffic that is allowed out of pods matched by a NetworkPolicySpec's podSelector. The traffic must match both ports and to. This type is beta-level in 1.8",
+    "properties": {
+     "ports": {
+      "type": "array",
+      "items": {
+       "$ref": "v1beta1.NetworkPolicyPort"
+      },
+      "description": "List of destination ports for outgoing traffic. Each item in this list is combined using a logical OR. If this field is empty or missing, this rule matches all ports (traffic not restricted by port). If this field is present and contains at least one item, then this rule allows traffic only if the traffic matches at least one port in the list."
+     },
+     "to": {
+      "type": "array",
+      "items": {
+       "$ref": "v1beta1.NetworkPolicyPeer"
+      },
+      "description": "List of destinations for outgoing traffic of pods selected for this rule. Items in this list are combined using a logical OR operation. If this field is empty or missing, this rule matches all destinations (traffic not restricted by destination). If this field is present and contains at least one item, this rule allows traffic only if the traffic matches at least one item in the to list."
+     }
+    }
+   },
+   "v1beta1.PolicyType": {
+    "id": "v1beta1.PolicyType",
+    "properties": {}
    },
    "v1beta1.PodSecurityPolicyList": {
     "id": "v1beta1.PodSecurityPolicyList",
@@ -10030,12 +10191,20 @@
       "type": "boolean",
       "description": "ReadOnlyRootFilesystem when set to true will force containers to run with a read only root file system.  If the container specifically requests to run with a non-read only root file system the PSP should deny the pod. If set to false the container may run with a read only root file system if it wishes but it will not be forced to."
      },
+     "defaultAllowPrivilegeEscalation": {
+      "type": "boolean",
+      "description": "DefaultAllowPrivilegeEscalation controls the default setting for whether a process can gain more privileges than its parent process."
+     },
+     "allowPrivilegeEscalation": {
+      "type": "boolean",
+      "description": "AllowPrivilegeEscalation determines if a pod can request to allow privilege escalation. If unspecified, defaults to true."
+     },
      "allowedHostPaths": {
       "type": "array",
       "items": {
-       "type": "string"
+       "$ref": "v1beta1.AllowedHostPath"
       },
-      "description": "AllowedHostPaths is a white list of allowed host path prefixes. Empty indicates that all host paths may be used."
+      "description": "is a white list of allowed host paths. Empty indicates that all host paths may be used."
      }
     }
    },
@@ -10154,6 +10323,16 @@
      }
     }
    },
+   "v1beta1.AllowedHostPath": {
+    "id": "v1beta1.AllowedHostPath",
+    "description": "defines the host volume conditions that will be enabled by a policy for pods to use. It requires the path prefix to be defined.",
+    "properties": {
+     "pathPrefix": {
+      "type": "string",
+      "description": "is the path prefix that the host volume must match. It does not support `*`. Trailing slashes are trimmed when validating the path prefix with a host path.\n\nExamples: `/foo` would allow `/foo`, `/foo/` and `/foo/bar` `/foo` would not allow `/food` or `/etc/foo`"
+     }
+    }
+   },
    "v1beta1.ReplicaSetList": {
     "id": "v1beta1.ReplicaSetList",
     "description": "ReplicaSetList is a collection of ReplicaSets.",
@@ -10184,7 +10363,7 @@
    },
    "v1beta1.ReplicaSet": {
     "id": "v1beta1.ReplicaSet",
-    "description": "ReplicaSet represents the configuration of a ReplicaSet.",
+    "description": "DEPRECATED - This group version of ReplicaSet is deprecated by apps/v1beta2/ReplicaSet. See the release notes for more information. ReplicaSet ensures that a specified number of pod replicas are running at any given time.",
     "properties": {
      "kind": {
       "type": "string",
@@ -10303,73 +10482,6 @@
      }
     }
    },
-   "v1beta1.ThirdPartyResourceList": {
-    "id": "v1beta1.ThirdPartyResourceList",
-    "description": "ThirdPartyResourceList is a list of ThirdPartyResources.",
-    "required": [
-     "items"
-    ],
-    "properties": {
-     "kind": {
-      "type": "string",
-      "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds"
-     },
-     "apiVersion": {
-      "type": "string",
-      "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources"
-     },
-     "metadata": {
-      "$ref": "v1.ListMeta",
-      "description": "Standard list metadata."
-     },
-     "items": {
-      "type": "array",
-      "items": {
-       "$ref": "v1beta1.ThirdPartyResource"
-      },
-      "description": "Items is the list of ThirdPartyResources."
-     }
-    }
-   },
-   "v1beta1.ThirdPartyResource": {
-    "id": "v1beta1.ThirdPartyResource",
-    "description": "A ThirdPartyResource is a generic representation of a resource, it is used by add-ons and plugins to add new resource types to the API.  It consists of one or more Versions of the api.",
-    "properties": {
-     "kind": {
-      "type": "string",
-      "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds"
-     },
-     "apiVersion": {
-      "type": "string",
-      "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources"
-     },
-     "metadata": {
-      "$ref": "v1.ObjectMeta",
-      "description": "Standard object metadata"
-     },
-     "description": {
-      "type": "string",
-      "description": "Description is the description of this object."
-     },
-     "versions": {
-      "type": "array",
-      "items": {
-       "$ref": "v1beta1.APIVersion"
-      },
-      "description": "Versions are versions for this third party object"
-     }
-    }
-   },
-   "v1beta1.APIVersion": {
-    "id": "v1beta1.APIVersion",
-    "description": "An APIVersion represents a single concrete version of an object model.",
-    "properties": {
-     "name": {
-      "type": "string",
-      "description": "Name of this version (e.g. 'v1')."
-     }
-    }
-   },
    "v1.APIResourceList": {
     "id": "v1.APIResourceList",
     "description": "APIResourceList is a list of APIResource, it is used to expose the name of the resources supported in a specific group and version, and if the resource is namespaced.",
@@ -10421,6 +10533,14 @@
      "namespaced": {
       "type": "boolean",
       "description": "namespaced indicates if a resource is namespaced or not."
+     },
+     "group": {
+      "type": "string",
+      "description": "group is the preferred group of the resource.  Empty implies the group of the containing resource list. For subresources, this may have a different value, for example: Scale\"."
+     },
+     "version": {
+      "type": "string",
+      "description": "version is the preferred version of the resource.  Empty implies the version of the containing resource list For subresources, this may have a different value, for example: v1 (while inside a v1beta1 version of the core resource's group)\"."
      },
      "kind": {
       "type": "string",

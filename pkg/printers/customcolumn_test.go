@@ -22,10 +22,10 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -284,6 +284,26 @@ bar
 			obj: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}, TypeMeta: metav1.TypeMeta{APIVersion: "baz"}},
 			expectedOutput: `NAME      API_VERSION
 foo       baz
+`,
+		},
+		{
+			columns: []printers.Column{
+				{
+					Header:    "NAME",
+					FieldSpec: "{.metadata.name}",
+				},
+				{
+					Header:    "API_VERSION",
+					FieldSpec: "{.apiVersion}",
+				},
+				{
+					Header:    "NOT_FOUND",
+					FieldSpec: "{.notFound}",
+				},
+			},
+			obj: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}, TypeMeta: metav1.TypeMeta{APIVersion: "baz"}},
+			expectedOutput: `NAME      API_VERSION   NOT_FOUND
+foo       baz           <none>
 `,
 		},
 	}

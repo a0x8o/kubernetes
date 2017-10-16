@@ -22,13 +22,13 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/v1"
 )
 
 func TestGroupVersions(t *testing.T) {
@@ -73,6 +73,7 @@ func TestTypeTags(t *testing.T) {
 var typesAllowedTags = map[reflect.Type]bool{
 	reflect.TypeOf(intstr.IntOrString{}):          true,
 	reflect.TypeOf(metav1.Time{}):                 true,
+	reflect.TypeOf(metav1.MicroTime{}):            true,
 	reflect.TypeOf(metav1.Duration{}):             true,
 	reflect.TypeOf(metav1.TypeMeta{}):             true,
 	reflect.TypeOf(metav1.ListMeta{}):             true,
@@ -105,6 +106,9 @@ func ensureNoTags(t *testing.T, gvk schema.GroupVersionKind, tp reflect.Type, pa
 	case reflect.Struct:
 		for i := 0; i < tp.NumField(); i++ {
 			f := tp.Field(i)
+			if f.PkgPath != "" {
+				continue // Ignore unexported fields
+			}
 			jsonTag := f.Tag.Get("json")
 			protoTag := f.Tag.Get("protobuf")
 			if len(jsonTag) > 0 || len(protoTag) > 0 {

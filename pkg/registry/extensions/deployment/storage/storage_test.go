@@ -17,6 +17,7 @@ limitations under the License.
 package storage
 
 import (
+	"net/http"
 	"reflect"
 	"testing"
 
@@ -250,7 +251,7 @@ func TestScaleUpdate(t *testing.T) {
 		},
 	}
 
-	if _, _, err := storage.Scale.Update(ctx, update.Name, rest.DefaultUpdatedObjectInfo(&update, api.Scheme)); err != nil {
+	if _, _, err := storage.Scale.Update(ctx, update.Name, rest.DefaultUpdatedObjectInfo(&update)); err != nil {
 		t.Fatalf("error updating scale %v: %v", update, err)
 	}
 	obj, err := storage.Scale.Get(ctx, name, &metav1.GetOptions{})
@@ -265,7 +266,7 @@ func TestScaleUpdate(t *testing.T) {
 	update.ResourceVersion = deployment.ResourceVersion
 	update.Spec.Replicas = 15
 
-	if _, _, err = storage.Scale.Update(ctx, update.Name, rest.DefaultUpdatedObjectInfo(&update, api.Scheme)); err != nil && !errors.IsConflict(err) {
+	if _, _, err = storage.Scale.Update(ctx, update.Name, rest.DefaultUpdatedObjectInfo(&update)); err != nil && !errors.IsConflict(err) {
 		t.Fatalf("unexpected error, expecting an update conflict but got %v", err)
 	}
 }
@@ -289,7 +290,7 @@ func TestStatusUpdate(t *testing.T) {
 		},
 	}
 
-	if _, _, err := storage.Status.Update(ctx, update.Name, rest.DefaultUpdatedObjectInfo(&update, api.Scheme)); err != nil {
+	if _, _, err := storage.Status.Update(ctx, update.Name, rest.DefaultUpdatedObjectInfo(&update)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	obj, err := storage.Deployment.Get(ctx, name, &metav1.GetOptions{})
@@ -343,10 +344,18 @@ func TestEtcdCreateDeploymentRollback(t *testing.T) {
 		if _, err := storage.Deployment.Create(ctx, validNewDeployment(), false); err != nil {
 			t.Fatalf("%s: unexpected error: %v", k, err)
 		}
-		if _, err := rollbackStorage.Create(ctx, &test.rollback, false); !test.errOK(err) {
+		rollbackRespStatus, err := rollbackStorage.Create(ctx, &test.rollback, false)
+		if !test.errOK(err) {
 			t.Errorf("%s: unexpected error: %v", k, err)
 		} else if err == nil {
-			// If rollback succeeded, verify Rollback field of deployment
+			// If rollback succeeded, verify Rollback response and Rollback field of deployment
+			status, ok := rollbackRespStatus.(*metav1.Status)
+			if !ok {
+				t.Errorf("%s: unexpected response format", k)
+			}
+			if status.Code != http.StatusOK || status.Status != metav1.StatusSuccess {
+				t.Errorf("%s: unexpected response, code: %d, status: %s", k, status.Code, status.Status)
+			}
 			d, err := storage.Deployment.Get(ctx, validNewDeployment().ObjectMeta.Name, &metav1.GetOptions{})
 			if err != nil {
 				t.Errorf("%s: unexpected error: %v", k, err)

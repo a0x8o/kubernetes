@@ -20,10 +20,11 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
-	dockertypes "github.com/docker/engine-api/types"
-	dockercontainer "github.com/docker/engine-api/types/container"
-	dockerfilters "github.com/docker/engine-api/types/filters"
+	dockertypes "github.com/docker/docker/api/types"
+	dockercontainer "github.com/docker/docker/api/types/container"
+	dockerfilters "github.com/docker/docker/api/types/filters"
 	"github.com/golang/glog"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -41,11 +42,13 @@ const (
 	// Various default sandbox resources requests/limits.
 	defaultSandboxCPUshares int64 = 2
 
-	// Termination grace period
-	defaultSandboxGracePeriod int = 10
-
 	// Name of the underlying container runtime
 	runtimeName = "docker"
+)
+
+var (
+	// Termination grace period
+	defaultSandboxGracePeriod = time.Duration(10) * time.Second
 )
 
 // Returns whether the sandbox network is ready, and whether the sandbox is known
@@ -171,14 +174,14 @@ func (ds *dockerService) RunPodSandbox(config *runtimeapi.PodSandboxConfig) (id 
 // after us?
 func (ds *dockerService) StopPodSandbox(podSandboxID string) error {
 	var namespace, name string
+	var hostNetwork bool
 	var checkpointErr, statusErr error
-	needNetworkTearDown := false
 
 	// Try to retrieve sandbox information from docker daemon or sandbox checkpoint
 	status, statusErr := ds.PodSandboxStatus(podSandboxID)
 	if statusErr == nil {
 		nsOpts := status.GetLinux().GetNamespaces().GetOptions()
-		needNetworkTearDown = nsOpts != nil && !nsOpts.HostNetwork
+		hostNetwork = nsOpts != nil && nsOpts.HostNetwork
 		m := status.GetMetadata()
 		namespace = m.Namespace
 		name = m.Name
@@ -211,10 +214,8 @@ func (ds *dockerService) StopPodSandbox(podSandboxID string) error {
 		} else {
 			namespace = checkpoint.Namespace
 			name = checkpoint.Name
+			hostNetwork = checkpoint.Data != nil && checkpoint.Data.HostNetwork
 		}
-
-		// Always trigger network plugin to tear down
-		needNetworkTearDown = true
 	}
 
 	// WARNING: The following operations made the following assumption:
@@ -226,7 +227,9 @@ func (ds *dockerService) StopPodSandbox(podSandboxID string) error {
 	// since it is stopped. With empty network namespcae, CNI bridge plugin will conduct best
 	// effort clean up and will not return error.
 	errList := []error{}
-	if needNetworkTearDown {
+	ready, ok := ds.getNetworkReady(podSandboxID)
+	if !hostNetwork && (ready || !ok) {
+		// Only tear down the pod network if we haven't done so already
 		cID := kubecontainer.BuildContainerID(runtimeName, podSandboxID)
 		err := ds.network.TearDownPod(namespace, name, cID)
 		if err == nil {
@@ -252,8 +255,8 @@ func (ds *dockerService) RemovePodSandbox(podSandboxID string) error {
 	var errs []error
 	opts := dockertypes.ContainerListOptions{All: true}
 
-	opts.Filter = dockerfilters.NewArgs()
-	f := newDockerFilter(&opts.Filter)
+	opts.Filters = dockerfilters.NewArgs()
+	f := newDockerFilter(&opts.Filters)
 	f.AddLabel(sandboxIDLabelKey, podSandboxID)
 
 	containers, err := ds.client.ListContainers(opts)
@@ -269,11 +272,14 @@ func (ds *dockerService) RemovePodSandbox(podSandboxID string) error {
 	}
 
 	// Remove the sandbox container.
-	if err := ds.client.RemoveContainer(podSandboxID, dockertypes.ContainerRemoveOptions{RemoveVolumes: true, Force: true}); err != nil && !libdocker.IsContainerNotFoundError(err) {
+	err = ds.client.RemoveContainer(podSandboxID, dockertypes.ContainerRemoveOptions{RemoveVolumes: true, Force: true})
+	if err == nil || libdocker.IsContainerNotFoundError(err) {
+		// Only clear network ready when the sandbox has actually been
+		// removed from docker or doesn't exist
+		ds.clearNetworkReady(podSandboxID)
+	} else {
 		errs = append(errs, err)
 	}
-
-	ds.clearNetworkReady(podSandboxID)
 
 	// Remove the checkpoint of the sandbox.
 	if err := ds.checkpointHandler.RemoveCheckpoint(podSandboxID); err != nil {
@@ -372,17 +378,6 @@ func (ds *dockerService) PodSandboxStatus(podSandboxID string) (*runtimeapi.PodS
 	}
 	hostNetwork := sharesHostNetwork(r)
 
-	// If the sandbox has no containerTypeLabelKey label, treat it as a legacy sandbox.
-	if _, ok := r.Config.Labels[containerTypeLabelKey]; !ok {
-		names, labels, err := convertLegacyNameAndLabels([]string{r.Name}, r.Config.Labels)
-		if err != nil {
-			return nil, err
-		}
-		r.Name, r.Config.Labels = names[0], labels
-		// Forcibly trigger infra container restart.
-		hostNetwork = !hostNetwork
-	}
-
 	metadata, err := parseSandboxName(r.Name)
 	if err != nil {
 		return nil, err
@@ -416,8 +411,8 @@ func (ds *dockerService) ListPodSandbox(filter *runtimeapi.PodSandboxFilter) ([]
 	opts := dockertypes.ContainerListOptions{All: true}
 	filterOutReadySandboxes := false
 
-	opts.Filter = dockerfilters.NewArgs()
-	f := newDockerFilter(&opts.Filter)
+	opts.Filters = dockerfilters.NewArgs()
+	f := newDockerFilter(&opts.Filters)
 	// Add filter to select only sandbox containers.
 	f.AddLabel(containerTypeLabelKey, containerTypeLabelSandbox)
 
@@ -502,15 +497,6 @@ func (ds *dockerService) ListPodSandbox(filter *runtimeapi.PodSandboxFilter) ([]
 		result = append(result, checkpointToRuntimeAPISandbox(id, checkpoint))
 	}
 
-	// Include legacy sandboxes if there are still legacy sandboxes not cleaned up yet.
-	if !ds.legacyCleanup.Done() {
-		legacySandboxes, err := ds.ListLegacyPodSandbox(filter)
-		if err != nil {
-			return nil, err
-		}
-		// Legacy sandboxes are always older, so we can safely append them to the end.
-		result = append(result, legacySandboxes...)
-	}
 	return result, nil
 }
 
@@ -587,7 +573,7 @@ func (ds *dockerService) makeSandboxDockerConfig(c *runtimeapi.PodSandboxConfig,
 	}
 
 	// Set security options.
-	securityOpts, err := ds.getSecurityOpts(sandboxContainerName, c, securityOptSep)
+	securityOpts, err := ds.getSecurityOpts(c.GetLinux().GetSecurityContext().GetSeccompProfilePath(), securityOptSep)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate sandbox security options for sandbox %q: %v", c.Metadata.Name, err)
 	}
@@ -641,6 +627,9 @@ func constructPodSandboxCheckpoint(config *runtimeapi.PodSandboxConfig) *PodSand
 			ContainerPort: &pm.ContainerPort,
 			Protocol:      &proto,
 		})
+	}
+	if nsOptions := config.GetLinux().GetSecurityContext().GetNamespaceOptions(); nsOptions != nil {
+		checkpoint.Data.HostNetwork = nsOptions.HostNetwork
 	}
 	return checkpoint
 }

@@ -19,13 +19,12 @@ package kubemark
 import (
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientset "k8s.io/client-go/kubernetes"
 	kubeletapp "k8s.io/kubernetes/cmd/kubelet/app"
 	"k8s.io/kubernetes/cmd/kubelet/app/options"
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/apis/componentconfig"
-	"k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/kubelet"
+	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
 	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
 	containertest "k8s.io/kubernetes/pkg/kubelet/container/testing"
@@ -43,8 +42,8 @@ import (
 
 type HollowKubelet struct {
 	KubeletFlags         *options.KubeletFlags
-	KubeletConfiguration *componentconfig.KubeletConfiguration
-	KubeletDeps          *kubelet.KubeletDeps
+	KubeletConfiguration *kubeletconfig.KubeletConfiguration
+	KubeletDeps          *kubelet.Dependencies
 }
 
 func NewHollowKubelet(
@@ -66,8 +65,9 @@ func NewHollowKubelet(
 	// -----------------
 	volumePlugins := empty_dir.ProbeVolumePlugins()
 	volumePlugins = append(volumePlugins, secret.ProbeVolumePlugins()...)
-	d := &kubelet.KubeletDeps{
+	d := &kubelet.Dependencies{
 		KubeClient:        client,
+		HeartbeatClient:   client.CoreV1(),
 		DockerClient:      dockerClient,
 		CAdvisorInterface: cadvisorInterface,
 		Cloud:             nil,
@@ -89,7 +89,7 @@ func NewHollowKubelet(
 
 // Starts this HollowKubelet and blocks.
 func (hk *HollowKubelet) Run() {
-	if err := kubeletapp.RunKubelet(hk.KubeletFlags, hk.KubeletConfiguration, hk.KubeletDeps, false, false); err != nil {
+	if err := kubeletapp.RunKubelet(hk.KubeletFlags, hk.KubeletConfiguration, hk.KubeletDeps, false); err != nil {
 		glog.Fatalf("Failed to run HollowKubelet: %v. Exiting.", err)
 	}
 	select {}
@@ -102,28 +102,27 @@ func GetHollowKubeletConfig(
 	kubeletPort int,
 	kubeletReadOnlyPort int,
 	maxPods int,
-	podsPerCore int) (*options.KubeletFlags, *componentconfig.KubeletConfiguration) {
+	podsPerCore int) (*options.KubeletFlags, *kubeletconfig.KubeletConfiguration) {
 
 	testRootDir := utils.MakeTempDirOrDie("hollow-kubelet.", "")
 	manifestFilePath := utils.MakeTempDirOrDie("manifest", testRootDir)
 	glog.Infof("Using %s as root dir for hollow-kubelet", testRootDir)
 
 	// Flags struct
-	f := &options.KubeletFlags{
-		HostnameOverride: nodeName,
-		// Use the default runtime options.
-		ContainerRuntimeOptions: *options.NewContainerRuntimeOptions(),
-	}
+	f := options.NewKubeletFlags()
+	f.RootDirectory = testRootDir
+	f.HostnameOverride = nodeName
+	f.MinimumGCAge = metav1.Duration{Duration: 1 * time.Minute}
+	f.MaxContainerCount = 100
+	f.MaxPerPodContainerCount = 2
+	f.RegisterSchedulable = true
 
 	// Config struct
-	// Do the external -> internal conversion to make sure that defaults
-	// are set for fields not overridden in NewHollowKubelet.
-	tmp := &v1alpha1.KubeletConfiguration{}
-	api.Scheme.Default(tmp)
-	c := &componentconfig.KubeletConfiguration{}
-	api.Scheme.Convert(tmp, c, nil)
+	c, err := options.NewKubeletConfiguration()
+	if err != nil {
+		panic(err)
+	}
 
-	c.RootDirectory = testRootDir
 	c.ManifestURL = ""
 	c.Address = "0.0.0.0" /* bind address */
 	c.Port = int32(kubeletPort)
@@ -131,20 +130,17 @@ func GetHollowKubeletConfig(
 	c.PodManifestPath = manifestFilePath
 	c.FileCheckFrequency.Duration = 20 * time.Second
 	c.HTTPCheckFrequency.Duration = 20 * time.Second
-	c.MinimumGCAge.Duration = 1 * time.Minute
 	c.NodeStatusUpdateFrequency.Duration = 10 * time.Second
 	c.SyncFrequency.Duration = 10 * time.Second
-	c.OutOfDiskTransitionFrequency.Duration = 5 * time.Minute
 	c.EvictionPressureTransitionPeriod.Duration = 5 * time.Minute
 	c.MaxPods = int32(maxPods)
 	c.PodsPerCore = int32(podsPerCore)
 	c.ClusterDNS = []string{}
 	c.ImageGCHighThresholdPercent = 90
 	c.ImageGCLowThresholdPercent = 80
-	c.LowDiskSpaceThresholdMB = 256
 	c.VolumeStatsAggPeriod.Duration = time.Minute
 	c.CgroupRoot = ""
-	c.ContainerRuntime = "docker"
+	c.ContainerRuntime = kubetypes.DockerContainerRuntime
 	c.CPUCFSQuota = true
 	c.RuntimeCgroups = ""
 	c.EnableControllerAttachDetach = false
@@ -155,12 +151,9 @@ func GetHollowKubeletConfig(
 	// hairpin-veth is used to allow hairpin packets. Note that this deviates from
 	// what the "real" kubelet currently does, because there's no way to
 	// set promiscuous mode on docker0.
-	c.HairpinMode = componentconfig.HairpinVeth
-	c.MaxContainerCount = 100
+	c.HairpinMode = kubeletconfig.HairpinVeth
 	c.MaxOpenFiles = 1024
-	c.MaxPerPodContainerCount = 2
 	c.RegisterNode = true
-	c.RegisterSchedulable = true
 	c.RegistryBurst = 10
 	c.RegistryPullQPS = 5.0
 	c.ResolverConfig = kubetypes.ResolvConfDefault

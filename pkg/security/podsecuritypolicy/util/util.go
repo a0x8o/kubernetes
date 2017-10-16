@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/extensions"
@@ -164,18 +163,18 @@ func PSPAllowsFSType(psp *extensions.PodSecurityPolicy, fsType extensions.FSType
 }
 
 // UserFallsInRange is a utility to determine it the id falls in the valid range.
-func UserFallsInRange(id types.UnixUserID, rng extensions.UserIDRange) bool {
+func UserFallsInRange(id int64, rng extensions.UserIDRange) bool {
 	return id >= rng.Min && id <= rng.Max
 }
 
 // GroupFallsInRange is a utility to determine it the id falls in the valid range.
-func GroupFallsInRange(id types.UnixGroupID, rng extensions.GroupIDRange) bool {
+func GroupFallsInRange(id int64, rng extensions.GroupIDRange) bool {
 	return id >= rng.Min && id <= rng.Max
 }
 
-// PSPAllowsHostVolumePath is a utility for checking if a PSP allows the host volume path.
+// AllowsHostVolumePath is a utility for checking if a PSP allows the host volume path.
 // This only checks the path. You should still check to make sure the host volume fs type is allowed.
-func PSPAllowsHostVolumePath(psp *extensions.PodSecurityPolicy, hostPath string) bool {
+func AllowsHostVolumePath(psp *extensions.PodSecurityPolicy, hostPath string) bool {
 	if psp == nil {
 		return false
 	}
@@ -186,7 +185,7 @@ func PSPAllowsHostVolumePath(psp *extensions.PodSecurityPolicy, hostPath string)
 	}
 
 	for _, allowedPath := range psp.Spec.AllowedHostPaths {
-		if hasPathPrefix(hostPath, allowedPath) {
+		if hasPathPrefix(hostPath, allowedPath.PathPrefix) {
 			return true
 		}
 	}
@@ -216,6 +215,7 @@ func hasPathPrefix(s, pathPrefix string) bool {
 	if s[pathPrefixLength:pathPrefixLength+1] == "/" {
 		// The next character in s is a path segment boundary
 		// Check this instead of normalizing pathPrefix to avoid allocating on every call
+		// Example where this check applies: s=/foo/bar and pathPrefix=/foo
 		return true
 	}
 

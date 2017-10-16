@@ -18,9 +18,6 @@ package openstack
 
 import (
 	"fmt"
-	"github.com/gophercloud/gophercloud"
-	"github.com/gophercloud/gophercloud/openstack/blockstorage/v1/apiversions"
-	"github.com/gophercloud/gophercloud/openstack/compute/v2/servers"
 	"os"
 	"reflect"
 	"sort"
@@ -28,10 +25,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gophercloud/gophercloud"
+	"github.com/gophercloud/gophercloud/openstack/compute/v2/servers"
+	"k8s.io/api/core/v1"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/kubernetes/pkg/api/v1"
 )
 
 const (
@@ -100,7 +100,9 @@ func TestReadConfig(t *testing.T) {
  [BlockStorage]
  bs-version = auto
  trust-device-path = yes
-
+ ignore-volume-az = yes
+ [Metadata]
+ search-order = configDrive, metadataService
  `))
 	if err != nil {
 		t.Fatalf("Should succeed when a valid config is provided: %s", err)
@@ -127,6 +129,12 @@ func TestReadConfig(t *testing.T) {
 	if cfg.BlockStorage.BSVersion != "auto" {
 		t.Errorf("incorrect bs.bs-version: %v", cfg.BlockStorage.BSVersion)
 	}
+	if cfg.BlockStorage.IgnoreVolumeAZ != true {
+		t.Errorf("incorrect bs.IgnoreVolumeAZ: %v", cfg.BlockStorage.IgnoreVolumeAZ)
+	}
+	if cfg.Metadata.SearchOrder != "configDrive, metadataService" {
+		t.Errorf("incorrect md.search-order: %v", cfg.Metadata.SearchOrder)
+	}
 }
 
 func TestToAuthOptions(t *testing.T) {
@@ -141,6 +149,119 @@ func TestToAuthOptions(t *testing.T) {
 	}
 	if ao.Username != cfg.Global.Username {
 		t.Errorf("Username %s != %s", ao.Username, cfg.Global.Username)
+	}
+}
+
+func TestCheckOpenStackOpts(t *testing.T) {
+	delay := MyDuration{60 * time.Second}
+	timeout := MyDuration{30 * time.Second}
+	tests := []struct {
+		name          string
+		openstackOpts *OpenStack
+		expectedError error
+	}{
+		{
+			name: "test1",
+			openstackOpts: &OpenStack{
+				provider: nil,
+				lbOpts: LoadBalancerOpts{
+					LBVersion:            "v2",
+					SubnetId:             "6261548e-ffde-4bc7-bd22-59c83578c5ef",
+					FloatingNetworkId:    "38b8b5f9-64dc-4424-bf86-679595714786",
+					LBMethod:             "ROUND_ROBIN",
+					CreateMonitor:        true,
+					MonitorDelay:         delay,
+					MonitorTimeout:       timeout,
+					MonitorMaxRetries:    uint(3),
+					ManageSecurityGroups: true,
+				},
+				metadataOpts: MetadataOpts{
+					SearchOrder: configDriveID,
+				},
+			},
+			expectedError: nil,
+		},
+		{
+			name: "test2",
+			openstackOpts: &OpenStack{
+				provider: nil,
+				lbOpts: LoadBalancerOpts{
+					LBVersion:            "v2",
+					FloatingNetworkId:    "38b8b5f9-64dc-4424-bf86-679595714786",
+					LBMethod:             "ROUND_ROBIN",
+					CreateMonitor:        true,
+					MonitorDelay:         delay,
+					MonitorTimeout:       timeout,
+					MonitorMaxRetries:    uint(3),
+					ManageSecurityGroups: true,
+				},
+				metadataOpts: MetadataOpts{
+					SearchOrder: configDriveID,
+				},
+			},
+			expectedError: nil,
+		},
+		{
+			name: "test3",
+			openstackOpts: &OpenStack{
+				provider: nil,
+				lbOpts: LoadBalancerOpts{
+					LBVersion:            "v2",
+					SubnetId:             "6261548e-ffde-4bc7-bd22-59c83578c5ef",
+					FloatingNetworkId:    "38b8b5f9-64dc-4424-bf86-679595714786",
+					LBMethod:             "ROUND_ROBIN",
+					CreateMonitor:        true,
+					ManageSecurityGroups: true,
+				},
+				metadataOpts: MetadataOpts{
+					SearchOrder: configDriveID,
+				},
+			},
+			expectedError: fmt.Errorf("monitor-delay not set in cloud provider config"),
+		},
+		{
+			name: "test4",
+			openstackOpts: &OpenStack{
+				provider: nil,
+				metadataOpts: MetadataOpts{
+					SearchOrder: "",
+				},
+			},
+			expectedError: fmt.Errorf("Invalid value in section [Metadata] with key `search-order`. Value cannot be empty"),
+		},
+		{
+			name: "test5",
+			openstackOpts: &OpenStack{
+				provider: nil,
+				metadataOpts: MetadataOpts{
+					SearchOrder: "value1,value2,value3",
+				},
+			},
+			expectedError: fmt.Errorf("Invalid value in section [Metadata] with key `search-order`. Value cannot contain more than 2 elements"),
+		},
+		{
+			name: "test6",
+			openstackOpts: &OpenStack{
+				provider: nil,
+				metadataOpts: MetadataOpts{
+					SearchOrder: "value1",
+				},
+			},
+			expectedError: fmt.Errorf("Invalid element '%s' found in section [Metadata] with key `search-order`."+
+				"Supported elements include '%s' and '%s'", "value1", configDriveID, metadataID),
+		},
+	}
+
+	for _, testcase := range tests {
+		err := checkOpenStackOpts(testcase.openstackOpts)
+
+		if err == nil && testcase.expectedError == nil {
+			continue
+		}
+		if (err != nil && testcase.expectedError == nil) || (err == nil && testcase.expectedError != nil) || err.Error() != testcase.expectedError.Error() {
+			t.Errorf("%s failed: expected err=%q, got %q",
+				testcase.name, testcase.expectedError, err)
+		}
 	}
 }
 
@@ -270,14 +391,34 @@ func configFromEnv() (cfg Config, ok bool) {
 	cfg.Global.Username = os.Getenv("OS_USERNAME")
 	cfg.Global.Password = os.Getenv("OS_PASSWORD")
 	cfg.Global.Region = os.Getenv("OS_REGION_NAME")
+
+	cfg.Global.TenantName = os.Getenv("OS_TENANT_NAME")
+	if cfg.Global.TenantName == "" {
+		cfg.Global.TenantName = os.Getenv("OS_PROJECT_NAME")
+	}
+
+	cfg.Global.TenantId = os.Getenv("OS_TENANT_ID")
+	if cfg.Global.TenantId == "" {
+		cfg.Global.TenantId = os.Getenv("OS_PROJECT_ID")
+	}
+
 	cfg.Global.DomainId = os.Getenv("OS_DOMAIN_ID")
+	if cfg.Global.DomainId == "" {
+		cfg.Global.DomainId = os.Getenv("OS_USER_DOMAIN_ID")
+	}
+
 	cfg.Global.DomainName = os.Getenv("OS_DOMAIN_NAME")
+	if cfg.Global.DomainName == "" {
+		cfg.Global.DomainName = os.Getenv("OS_USER_DOMAIN_NAME")
+	}
 
 	ok = (cfg.Global.AuthUrl != "" &&
 		cfg.Global.Username != "" &&
 		cfg.Global.Password != "" &&
 		(cfg.Global.TenantId != "" || cfg.Global.TenantName != "" ||
 			cfg.Global.DomainId != "" || cfg.Global.DomainName != ""))
+
+	cfg.Metadata.SearchOrder = fmt.Sprintf("%s,%s", configDriveID, metadataID)
 
 	return
 }
@@ -370,7 +511,7 @@ func TestVolumes(t *testing.T) {
 	tags := map[string]string{
 		"test": "value",
 	}
-	vol, _, err := os.CreateVolume("kubernetes-test-volume-"+rand.String(10), 1, "", "", &tags)
+	vol, _, _, err := os.CreateVolume("kubernetes-test-volume-"+rand.String(10), 1, "", "", &tags)
 	if err != nil {
 		t.Fatalf("Cannot create a new Cinder volume: %v", err)
 	}
@@ -378,7 +519,12 @@ func TestVolumes(t *testing.T) {
 
 	WaitForVolumeStatus(t, os, vol, volumeAvailableStatus)
 
-	diskId, err := os.AttachDisk(os.localInstanceID, vol)
+	id, err := os.InstanceID()
+	if err != nil {
+		t.Fatalf("Cannot find instance id: %v", err)
+	}
+
+	diskId, err := os.AttachDisk(id, vol)
 	if err != nil {
 		t.Fatalf("Cannot AttachDisk Cinder volume %s: %v", vol, err)
 	}
@@ -392,7 +538,7 @@ func TestVolumes(t *testing.T) {
 	}
 	t.Logf("Volume (%s) found at path: %s\n", vol, devicePath)
 
-	err = os.DetachDisk(os.localInstanceID, vol)
+	err = os.DetachDisk(id, vol)
 	if err != nil {
 		t.Fatalf("Cannot DetachDisk Cinder volume %s: %v", vol, err)
 	}
@@ -408,44 +554,46 @@ func TestVolumes(t *testing.T) {
 
 }
 
-func TestCinderAutoDetectApiVersion(t *testing.T) {
-	updated := "" // not relevant to this test, can be set to any value
-	status_current := "CURRENT"
-	status_supported := "SUPpORTED" // lowercase to test regression resitance if api returns different case
-	status_deprecated := "DEPRECATED"
-
-	var result_version, api_version [4]string
-
-	for ver := 0; ver <= 3; ver++ {
-		api_version[ver] = fmt.Sprintf("v%d.0", ver)
-		result_version[ver] = fmt.Sprintf("v%d", ver)
-	}
-	result_version[0] = ""
-	api_current_v1 := apiversions.APIVersion{ID: api_version[1], Status: status_current, Updated: updated}
-	api_current_v2 := apiversions.APIVersion{ID: api_version[2], Status: status_current, Updated: updated}
-	api_current_v3 := apiversions.APIVersion{ID: api_version[3], Status: status_current, Updated: updated}
-
-	api_supported_v1 := apiversions.APIVersion{ID: api_version[1], Status: status_supported, Updated: updated}
-	api_supported_v2 := apiversions.APIVersion{ID: api_version[2], Status: status_supported, Updated: updated}
-
-	api_deprecated_v1 := apiversions.APIVersion{ID: api_version[1], Status: status_deprecated, Updated: updated}
-	api_deprecated_v2 := apiversions.APIVersion{ID: api_version[2], Status: status_deprecated, Updated: updated}
-
-	var testCases = []struct {
-		test_case     []apiversions.APIVersion
-		wanted_result string
+func TestInstanceIDFromProviderID(t *testing.T) {
+	testCases := []struct {
+		providerID string
+		instanceID string
+		fail       bool
 	}{
-		{[]apiversions.APIVersion{api_current_v1}, result_version[1]},
-		{[]apiversions.APIVersion{api_current_v2}, result_version[2]},
-		{[]apiversions.APIVersion{api_supported_v1, api_current_v2}, result_version[2]},                     // current always selected
-		{[]apiversions.APIVersion{api_current_v1, api_supported_v2}, result_version[1]},                     // current always selected
-		{[]apiversions.APIVersion{api_current_v3, api_supported_v2, api_deprecated_v1}, result_version[2]},  // with current v3, but should fall back to v2
-		{[]apiversions.APIVersion{api_current_v3, api_deprecated_v2, api_deprecated_v1}, result_version[0]}, // v3 is not supported
+		{
+			providerID: ProviderName + "://" + "/" + "7b9cf879-7146-417c-abfd-cb4272f0c935",
+			instanceID: "7b9cf879-7146-417c-abfd-cb4272f0c935",
+			fail:       false,
+		},
+		{
+			providerID: "openstack://7b9cf879-7146-417c-abfd-cb4272f0c935",
+			instanceID: "",
+			fail:       true,
+		},
+		{
+			providerID: "7b9cf879-7146-417c-abfd-cb4272f0c935",
+			instanceID: "",
+			fail:       true,
+		},
+		{
+			providerID: "other-provider:///7b9cf879-7146-417c-abfd-cb4272f0c935",
+			instanceID: "",
+			fail:       true,
+		},
 	}
 
-	for _, suite := range testCases {
-		if autodetectedVersion := doBsApiVersionAutodetect(suite.test_case); autodetectedVersion != suite.wanted_result {
-			t.Fatalf("Autodetect for suite: %s, failed with result: '%s', wanted '%s'", suite.test_case, autodetectedVersion, suite.wanted_result)
+	for _, test := range testCases {
+		instanceID, err := instanceIDFromProviderID(test.providerID)
+		if (err != nil) != test.fail {
+			t.Errorf("%s yielded `err != nil` as %t. expected %t", test.providerID, (err != nil), test.fail)
+		}
+
+		if test.fail {
+			continue
+		}
+
+		if instanceID != test.instanceID {
+			t.Errorf("%s yielded %s. expected %s", test.providerID, instanceID, test.instanceID)
 		}
 	}
 }

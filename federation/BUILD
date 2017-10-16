@@ -1,7 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
-
 load("@io_bazel//tools/build_defs/pkg:pkg.bzl", "pkg_tar")
 
 filegroup(
@@ -19,7 +17,6 @@ filegroup(
         "//federation/apis/federation:all-srcs",
         "//federation/client/cache:all-srcs",
         "//federation/client/clientset_generated/federation_clientset:all-srcs",
-        "//federation/client/clientset_generated/federation_internalclientset:all-srcs",
         "//federation/cluster:all-srcs",
         "//federation/cmd/federation-apiserver:all-srcs",
         "//federation/cmd/federation-controller-manager:all-srcs",
@@ -32,6 +29,8 @@ filegroup(
         "//federation/pkg/kubefed:all-srcs",
         "//federation/plugin/pkg/admission/schedulingpolicy:all-srcs",
         "//federation/registry/cluster:all-srcs",
+        "//federation/test/e2e:all-srcs",
+        "//federation/test/integration:all-srcs",
     ],
     tags = ["automanaged"],
 )
@@ -40,7 +39,6 @@ pkg_tar(
     name = "release",
     files = glob([
         "deploy/**",
-        "manifests/**",
     ]) + ["//federation/cluster:all-srcs"],
     package_dir = "federation",
 )

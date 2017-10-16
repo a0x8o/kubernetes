@@ -64,7 +64,13 @@ type TestPatchSubType struct {
 	StringField string `json:"theField"`
 }
 
-func (obj *testPatchType) GetObjectKind() schema.ObjectKind { return &obj.TypeMeta }
+func (obj *testPatchType) DeepCopyObject() runtime.Object {
+	if obj == nil {
+		return nil
+	}
+	clone := *obj
+	return &clone
+}
 
 func TestPatchAnonymousField(t *testing.T) {
 	testGV := schema.GroupVersion{Group: "", Version: "v"}
@@ -206,7 +212,6 @@ func (tc *patchTestCase) Run(t *testing.T) {
 	ctx = request.WithNamespace(ctx, namespace)
 
 	namer := &testNamer{namespace, name}
-	copier := runtime.ObjectCopier(scheme)
 	creater := runtime.ObjectCreater(scheme)
 	defaulter := runtime.ObjectDefaulter(scheme)
 	convertor := runtime.UnsafeObjectConvertor(scheme)
@@ -260,7 +265,7 @@ func (tc *patchTestCase) Run(t *testing.T) {
 
 		}
 
-		resultObj, err := patchResource(ctx, admit, 1*time.Second, versionedObj, testPatcher, name, patchType, patch, namer, copier, creater, defaulter, convertor, kind, resource, codec)
+		resultObj, err := patchResource(ctx, admit, 1*time.Second, versionedObj, testPatcher, name, patchType, patch, namer, creater, defaulter, convertor, kind, resource, codec)
 		if len(tc.expectedError) != 0 {
 			if err == nil || err.Error() != tc.expectedError {
 				t.Errorf("%s: expected error %v, but got %v", tc.name, tc.expectedError, err)

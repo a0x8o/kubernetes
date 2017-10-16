@@ -17,16 +17,17 @@ limitations under the License.
 package common
 
 import (
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 
 	. "github.com/onsi/ginkgo"
 )
 
 // These tests exercise the Kubernetes expansion syntax $(VAR).
-// For more information, see: docs/design/expansion.md
+// For more information, see:
+// https://github.com/kubernetes/community/blob/master/contributors/design-proposals/node/expansion.md
 var _ = framework.KubeDescribe("Variable Expansion", func() {
 	f := framework.NewDefaultFramework("var-expansion")
 
@@ -41,7 +42,7 @@ var _ = framework.KubeDescribe("Variable Expansion", func() {
 				Containers: []v1.Container{
 					{
 						Name:    "dapi-container",
-						Image:   "gcr.io/google_containers/busybox:1.24",
+						Image:   busyboxImage,
 						Command: []string{"sh", "-c", "env"},
 						Env: []v1.EnvVar{
 							{
@@ -81,7 +82,7 @@ var _ = framework.KubeDescribe("Variable Expansion", func() {
 				Containers: []v1.Container{
 					{
 						Name:    "dapi-container",
-						Image:   "gcr.io/google_containers/busybox:1.24",
+						Image:   busyboxImage,
 						Command: []string{"sh", "-c", "TEST_VAR=wrong echo \"$(TEST_VAR)\""},
 						Env: []v1.EnvVar{
 							{
@@ -111,7 +112,7 @@ var _ = framework.KubeDescribe("Variable Expansion", func() {
 				Containers: []v1.Container{
 					{
 						Name:    "dapi-container",
-						Image:   "gcr.io/google_containers/busybox:1.24",
+						Image:   busyboxImage,
 						Command: []string{"sh", "-c"},
 						Args:    []string{"TEST_VAR=wrong echo \"$(TEST_VAR)\""},
 						Env: []v1.EnvVar{

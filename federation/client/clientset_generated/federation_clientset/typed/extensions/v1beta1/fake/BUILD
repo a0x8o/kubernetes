@@ -1,7 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
-
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -18,10 +16,10 @@ go_library(
         "fake_ingress.go",
         "fake_replicaset.go",
     ],
-    tags = ["automanaged"],
+    importpath = "k8s.io/kubernetes/federation/client/clientset_generated/federation_clientset/typed/extensions/v1beta1/fake",
     deps = [
         "//federation/client/clientset_generated/federation_clientset/typed/extensions/v1beta1:go_default_library",
-        "//pkg/apis/extensions/v1beta1:go_default_library",
+        "//vendor/k8s.io/api/extensions/v1beta1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/labels:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",

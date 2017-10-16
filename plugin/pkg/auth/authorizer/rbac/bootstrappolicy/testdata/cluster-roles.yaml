@@ -1,6 +1,6 @@
 apiVersion: v1
 items:
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -112,7 +112,6 @@ items:
     resources:
     - cronjobs
     - jobs
-    - scheduledjobs
     verbs:
     - create
     - delete
@@ -143,6 +142,19 @@ items:
     - update
     - watch
   - apiGroups:
+    - policy
+    resources:
+    - poddisruptionbudgets
+    verbs:
+    - create
+    - delete
+    - deletecollection
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
     - authorization.k8s.io
     resources:
     - localsubjectaccessreviews
@@ -162,7 +174,7 @@ items:
     - patch
     - update
     - watch
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -182,7 +194,7 @@ items:
     - '*'
     verbs:
     - '*'
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -294,7 +306,6 @@ items:
     resources:
     - cronjobs
     - jobs
-    - scheduledjobs
     verbs:
     - create
     - delete
@@ -324,7 +335,20 @@ items:
     - patch
     - update
     - watch
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+  - apiGroups:
+    - policy
+    resources:
+    - poddisruptionbudgets
+    verbs:
+    - create
+    - delete
+    - deletecollection
+    - get
+    - list
+    - patch
+    - update
+    - watch
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -346,7 +370,7 @@ items:
     - subjectaccessreviews
     verbs:
     - create
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -362,7 +386,39 @@ items:
     - selfsubjectaccessreviews
     verbs:
     - create
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRole
+  metadata:
+    annotations:
+      rbac.authorization.kubernetes.io/autoupdate: "true"
+    creationTimestamp: null
+    labels:
+      kubernetes.io/bootstrapping: rbac-defaults
+    name: system:certificates.k8s.io:certificatesigningrequests:nodeclient
+  rules:
+  - apiGroups:
+    - certificates.k8s.io
+    resources:
+    - certificatesigningrequests/nodeclient
+    verbs:
+    - create
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRole
+  metadata:
+    annotations:
+      rbac.authorization.kubernetes.io/autoupdate: "true"
+    creationTimestamp: null
+    labels:
+      kubernetes.io/bootstrapping: rbac-defaults
+    name: system:certificates.k8s.io:certificatesigningrequests:selfnodeclient
+  rules:
+  - apiGroups:
+    - certificates.k8s.io
+    resources:
+    - certificatesigningrequests/selfnodeclient
+    verbs:
+    - create
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -378,12 +434,14 @@ items:
     - /apis
     - /apis/*
     - /healthz
+    - /swagger-2.0.0.pb-v1
+    - /swagger.json
     - /swaggerapi
     - /swaggerapi/*
     - /version
     verbs:
     - get
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -404,7 +462,15 @@ items:
     - get
     - list
     - watch
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+  - apiGroups:
+    - extensions
+    resources:
+    - deployments
+    verbs:
+    - get
+    - list
+    - watch
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -423,7 +489,7 @@ items:
     - get
     - list
     - watch
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -485,7 +551,7 @@ items:
     verbs:
     - list
     - watch
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -503,7 +569,7 @@ items:
     verbs:
     - list
     - watch
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -542,8 +608,16 @@ items:
     - ""
     resources:
     - nodes
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - ""
+    resources:
     - pods
     verbs:
+    - delete
     - get
     - list
     - watch
@@ -594,7 +668,7 @@ items:
     - get
     - list
     - watch
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -681,6 +755,12 @@ items:
   - apiGroups:
     - ""
     resources:
+    - pods/eviction
+    verbs:
+    - create
+  - apiGroups:
+    - ""
+    resources:
     - configmaps
     - secrets
     verbs:
@@ -707,7 +787,7 @@ items:
     - get
     - list
     - watch
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -726,7 +806,7 @@ items:
     - get
     - list
     - watch
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -756,7 +836,7 @@ items:
     - create
     - patch
     - update
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -788,7 +868,7 @@ items:
     - create
     - patch
     - update
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -839,7 +919,7 @@ items:
     - create
     - patch
     - update
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     annotations:
@@ -911,7 +991,6 @@ items:
     resources:
     - cronjobs
     - jobs
-    - scheduledjobs
     verbs:
     - get
     - list
@@ -926,6 +1005,14 @@ items:
     - replicasets
     - replicasets/scale
     - replicationcontrollers/scale
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - policy
+    resources:
+    - poddisruptionbudgets
     verbs:
     - get
     - list

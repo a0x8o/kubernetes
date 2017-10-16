@@ -22,9 +22,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/generic"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/registry/rest"
-	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/certificates"
-	"k8s.io/kubernetes/pkg/registry/cachesize"
 	csrregistry "k8s.io/kubernetes/pkg/registry/certificates/certificates"
 )
 
@@ -36,18 +34,16 @@ type REST struct {
 // NewREST returns a registry which will store CertificateSigningRequest in the given helper
 func NewREST(optsGetter generic.RESTOptionsGetter) (*REST, *StatusREST, *ApprovalREST) {
 	store := &genericregistry.Store{
-		Copier:            api.Scheme,
-		NewFunc:           func() runtime.Object { return &certificates.CertificateSigningRequest{} },
-		NewListFunc:       func() runtime.Object { return &certificates.CertificateSigningRequestList{} },
-		PredicateFunc:     csrregistry.Matcher,
-		QualifiedResource: certificates.Resource("certificatesigningrequests"),
-		WatchCacheSize:    cachesize.GetWatchCacheSizeByResource("certificatesigningrequests"),
+		NewFunc:                  func() runtime.Object { return &certificates.CertificateSigningRequest{} },
+		NewListFunc:              func() runtime.Object { return &certificates.CertificateSigningRequestList{} },
+		DefaultQualifiedResource: certificates.Resource("certificatesigningrequests"),
 
 		CreateStrategy: csrregistry.Strategy,
 		UpdateStrategy: csrregistry.Strategy,
 		DeleteStrategy: csrregistry.Strategy,
+		ExportStrategy: csrregistry.Strategy,
 	}
-	options := &generic.StoreOptions{RESTOptions: optsGetter, AttrFunc: csrregistry.GetAttrs}
+	options := &generic.StoreOptions{RESTOptions: optsGetter}
 	if err := store.CompleteWithOptions(options); err != nil {
 		panic(err) // TODO: Propagate error up
 	}

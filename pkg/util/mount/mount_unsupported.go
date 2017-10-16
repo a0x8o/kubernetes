@@ -1,4 +1,4 @@
-// +build !linux
+// +build !linux,!windows
 
 /*
 Copyright 2014 The Kubernetes Authors.
@@ -18,8 +18,21 @@ limitations under the License.
 
 package mount
 
+import (
+	"errors"
+)
+
 type Mounter struct {
 	mounterPath string
+}
+
+// New returns a mount.Interface for the current system.
+// It provides options to override the default mounter behavior.
+// mounterPath allows using an alternative to `/bin/mount` for mounting.
+func New(mounterPath string) Interface {
+	return &Mounter{
+		mounterPath: mounterPath,
+	}
 }
 
 func (mounter *Mounter) Mount(source string, target string, fstype string, options []string) error {
@@ -32,6 +45,14 @@ func (mounter *Mounter) Unmount(target string) error {
 
 func (mounter *Mounter) List() ([]MountPoint, error) {
 	return []MountPoint{}, nil
+}
+
+func (mounter *Mounter) IsMountPointMatch(mp MountPoint, dir string) bool {
+	return (mp.Path == dir)
+}
+
+func (mounter *Mounter) IsNotMountPoint(dir string) (bool, error) {
+	return IsNotMountPoint(mounter, dir)
 }
 
 func (mounter *Mounter) IsLikelyNotMountPoint(file string) (bool, error) {
@@ -50,6 +71,10 @@ func (mounter *Mounter) PathIsDevice(pathname string) (bool, error) {
 	return true, nil
 }
 
+func (mounter *Mounter) MakeRShared(path string) error {
+	return nil
+}
+
 func (mounter *SafeFormatAndMount) formatAndMount(source string, target string, fstype string, options []string) error {
 	return nil
 }
@@ -58,6 +83,18 @@ func (mounter *SafeFormatAndMount) diskLooksUnformatted(disk string) (bool, erro
 	return true, nil
 }
 
-func IsNotMountPoint(file string) (bool, error) {
-	return true, nil
+func (mounter *Mounter) GetFileType(pathname string) (FileType, error) {
+	return FileType("fake"), errors.New("not implemented")
+}
+
+func (mounter *Mounter) MakeDir(pathname string) error {
+	return nil
+}
+
+func (mounter *Mounter) MakeFile(pathname string) error {
+	return nil
+}
+
+func (mounter *Mounter) ExistsPath(pathname string) bool {
+	return true
 }

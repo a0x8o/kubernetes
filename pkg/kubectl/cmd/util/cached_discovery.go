@@ -24,13 +24,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/emicklei/go-restful-swagger12"
-	"github.com/go-openapi/spec"
 	"github.com/golang/glog"
+	"github.com/googleapis/gnostic/OpenAPIv2"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/discovery"
 	restclient "k8s.io/client-go/rest"
@@ -69,7 +67,7 @@ func (d *CachedDiscoveryClient) ServerResourcesForGroupVersion(groupVersion stri
 	if err == nil {
 		cachedResources := &metav1.APIResourceList{}
 		if err := runtime.DecodeInto(api.Codecs.UniversalDecoder(), cachedBytes, cachedResources); err == nil {
-			glog.V(6).Infof("returning cached discovery info from %v", filename)
+			glog.V(10).Infof("returning cached discovery info from %v", filename)
 			return cachedResources, nil
 		}
 	}
@@ -116,7 +114,7 @@ func (d *CachedDiscoveryClient) ServerGroups() (*metav1.APIGroupList, error) {
 	if err == nil {
 		cachedGroups := &metav1.APIGroupList{}
 		if err := runtime.DecodeInto(api.Codecs.UniversalDecoder(), cachedBytes, cachedGroups); err == nil {
-			glog.V(6).Infof("returning cached discovery info from %v", filename)
+			glog.V(10).Infof("returning cached discovery info from %v", filename)
 			return cachedGroups, nil
 		}
 	}
@@ -233,11 +231,7 @@ func (d *CachedDiscoveryClient) ServerVersion() (*version.Info, error) {
 	return d.delegate.ServerVersion()
 }
 
-func (d *CachedDiscoveryClient) SwaggerSchema(version schema.GroupVersion) (*swagger.ApiDeclaration, error) {
-	return d.delegate.SwaggerSchema(version)
-}
-
-func (d *CachedDiscoveryClient) OpenAPISchema() (*spec.Swagger, error) {
+func (d *CachedDiscoveryClient) OpenAPISchema() (*openapi_v2.Document, error) {
 	return d.delegate.OpenAPISchema()
 }
 

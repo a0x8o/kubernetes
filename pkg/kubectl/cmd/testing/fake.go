@@ -23,32 +23,33 @@ import (
 	"path/filepath"
 	"time"
 
-	swagger "github.com/emicklei/go-restful-swagger12"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
-	fedclientset "k8s.io/kubernetes/federation/client/clientset_generated/federation_internalclientset"
+	fedclientset "k8s.io/kubernetes/federation/client/clientset_generated/federation_clientset"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
-	"k8s.io/kubernetes/pkg/api/validation"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/kubectl"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util/openapi"
 	"k8s.io/kubernetes/pkg/kubectl/plugins"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
+	"k8s.io/kubernetes/pkg/kubectl/validation"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
+// +k8s:deepcopy-gen=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type InternalType struct {
 	Kind       string
 	APIVersion string
@@ -56,6 +57,8 @@ type InternalType struct {
 	Name string
 }
 
+// +k8s:deepcopy-gen=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type ExternalType struct {
 	Kind       string `json:"kind"`
 	APIVersion string `json:"apiVersion"`
@@ -63,6 +66,8 @@ type ExternalType struct {
 	Name string `json:"name"`
 }
 
+// +k8s:deepcopy-gen=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type ExternalType2 struct {
 	Kind       string `json:"kind"`
 	APIVersion string `json:"apiVersion"`
@@ -99,6 +104,8 @@ func NewInternalType(kind, apiversion, name string) *InternalType {
 	return &item
 }
 
+// +k8s:deepcopy-gen=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type InternalNamespacedType struct {
 	Kind       string
 	APIVersion string
@@ -107,6 +114,8 @@ type InternalNamespacedType struct {
 	Namespace string
 }
 
+// +k8s:deepcopy-gen=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type ExternalNamespacedType struct {
 	Kind       string `json:"kind"`
 	APIVersion string `json:"apiVersion"`
@@ -115,6 +124,8 @@ type ExternalNamespacedType struct {
 	Namespace string `json:"namespace"`
 }
 
+// +k8s:deepcopy-gen=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type ExternalNamespacedType2 struct {
 	Kind       string `json:"kind"`
 	APIVersion string `json:"apiVersion"`
@@ -228,10 +239,11 @@ type TestFactory struct {
 	Err                error
 	Command            string
 	TmpDir             string
+	CategoryExpander   resource.CategoryExpander
 
 	ClientForMappingFunc             func(mapping *meta.RESTMapping) (resource.RESTClient, error)
 	UnstructuredClientForMappingFunc func(mapping *meta.RESTMapping) (resource.RESTClient, error)
-	OpenAPISchemaFunc                func() (*openapi.Resources, error)
+	OpenAPISchemaFunc                func() (openapi.Resources, error)
 }
 
 type FakeFactory struct {
@@ -292,6 +304,10 @@ func (f *FakeFactory) JSONEncoder() runtime.Encoder {
 }
 
 func (f *FakeFactory) RESTClient() (*restclient.RESTClient, error) {
+	return nil, nil
+}
+
+func (f *FakeFactory) KubernetesClientSet() (*kubernetes.Clientset, error) {
 	return nil, nil
 }
 
@@ -398,16 +414,12 @@ func (f *FakeFactory) ResolveImage(name string) (string, error) {
 	return name, nil
 }
 
-func (f *FakeFactory) Validator(validate bool, cacheDir string) (validation.Schema, error) {
+func (f *FakeFactory) Validator(validate bool) (validation.Schema, error) {
 	return f.tf.Validator, f.tf.Err
 }
 
-func (f *FakeFactory) SwaggerSchema(schema.GroupVersionKind) (*swagger.ApiDeclaration, error) {
+func (f *FakeFactory) OpenAPISchema() (openapi.Resources, error) {
 	return nil, nil
-}
-
-func (f *FakeFactory) OpenAPISchema(cacheDir string) (*openapi.Resources, error) {
-	return &openapi.Resources{}, nil
 }
 
 func (f *FakeFactory) DefaultNamespace() (string, bool, error) {
@@ -435,6 +447,10 @@ func (f *FakeFactory) CanBeAutoscaled(schema.GroupKind) error {
 
 func (f *FakeFactory) AttachablePodForObject(ob runtime.Object, timeout time.Duration) (*api.Pod, error) {
 	return nil, nil
+}
+
+func (f *FakeFactory) ApproximatePodTemplateForObject(obj runtime.Object) (*api.PodTemplateSpec, error) {
+	return f.ApproximatePodTemplateForObject(obj)
 }
 
 func (f *FakeFactory) UpdatePodSpecForObject(obj runtime.Object, fn func(*api.PodSpec) error) (bool, error) {
@@ -466,21 +482,9 @@ func (f *FakeFactory) PrinterForMapping(cmd *cobra.Command, isLocal bool, output
 	return f.tf.Printer, f.tf.Err
 }
 
-func (f *FakeFactory) NewBuilder(allowRemoteCalls bool) *resource.Builder {
-	return nil
-}
-
-func (f *FakeFactory) NewUnstructuredBuilder(allowRemoteCalls bool) (*resource.Builder, error) {
-	if !allowRemoteCalls {
-		return f.NewBuilder(allowRemoteCalls), nil
-	}
-
-	mapper, typer, err := f.UnstructuredObject()
-	if err != nil {
-		return nil, err
-	}
-
-	return resource.NewBuilder(mapper, f.CategoryExpander(), typer, resource.ClientMapperFunc(f.UnstructuredClientForMapping), unstructured.UnstructuredJSONScheme), nil
+func (f *FakeFactory) NewBuilder() *resource.Builder {
+	mapper, typer := f.Object()
+	return resource.NewBuilder(mapper, f.CategoryExpander(), typer, resource.ClientMapperFunc(f.ClientForMapping), f.Decoder(true))
 }
 
 func (f *FakeFactory) DefaultResourceFilterOptions(cmd *cobra.Command, withNamespace bool) *printers.PrintOptions {
@@ -570,22 +574,49 @@ func (f *fakeAPIFactory) JSONEncoder() runtime.Encoder {
 	return testapi.Default.Codec()
 }
 
+func (f *fakeAPIFactory) KubernetesClientSet() (*kubernetes.Clientset, error) {
+	fakeClient := f.tf.Client.(*fake.RESTClient)
+	clientset := kubernetes.NewForConfigOrDie(f.tf.ClientConfig)
+
+	clientset.CoreV1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AuthorizationV1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AuthorizationV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AuthorizationV1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AuthorizationV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AutoscalingV1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AutoscalingV2beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.BatchV1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.BatchV2alpha1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.CertificatesV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.ExtensionsV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.RbacV1alpha1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.RbacV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.StorageV1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.StorageV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AppsV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.AppsV1beta2().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.PolicyV1beta1().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.DiscoveryClient.RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+
+	return clientset, f.tf.Err
+}
+
 func (f *fakeAPIFactory) ClientSet() (internalclientset.Interface, error) {
 	// Swap the HTTP client out of the REST client with the fake
 	// version.
 	fakeClient := f.tf.Client.(*fake.RESTClient)
 	clientset := internalclientset.NewForConfigOrDie(f.tf.ClientConfig)
-	clientset.CoreClient.RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
-	clientset.AuthenticationClient.RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
-	clientset.AuthorizationClient.RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
-	clientset.AutoscalingClient.RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
-	clientset.BatchClient.RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
-	clientset.CertificatesClient.RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
-	clientset.ExtensionsClient.RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
-	clientset.RbacClient.RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
-	clientset.StorageClient.RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
-	clientset.AppsClient.RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
-	clientset.PolicyClient.RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.Core().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.Authentication().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.Authorization().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.Autoscaling().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.Batch().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.Certificates().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.Extensions().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.Rbac().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.Storage().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.Apps().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
+	clientset.Policy().RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
 	clientset.DiscoveryClient.RESTClient().(*restclient.RESTClient).Client = fakeClient.Client
 	return clientset, f.tf.Err
 }
@@ -608,6 +639,13 @@ func (f *fakeAPIFactory) DiscoveryClient() (discovery.CachedDiscoveryInterface, 
 
 	cacheDir := filepath.Join(f.tf.TmpDir, ".kube", "cache", "discovery")
 	return cmdutil.NewCachedDiscoveryClient(discoveryClient, cacheDir, time.Duration(10*time.Minute)), nil
+}
+
+func (f *fakeAPIFactory) CategoryExpander() resource.CategoryExpander {
+	if f.tf.CategoryExpander != nil {
+		return f.tf.CategoryExpander
+	}
+	return f.Factory.CategoryExpander()
 }
 
 func (f *fakeAPIFactory) ClientSetForVersion(requiredVersion *schema.GroupVersion) (internalclientset.Interface, error) {
@@ -679,7 +717,11 @@ func (f *fakeAPIFactory) AttachablePodForObject(object runtime.Object, timeout t
 	}
 }
 
-func (f *fakeAPIFactory) Validator(validate bool, cacheDir string) (validation.Schema, error) {
+func (f *fakeAPIFactory) ApproximatePodTemplateForObject(obj runtime.Object) (*api.PodTemplateSpec, error) {
+	return f.Factory.ApproximatePodTemplateForObject(obj)
+}
+
+func (f *fakeAPIFactory) Validator(validate bool) (validation.Schema, error) {
 	return f.tf.Validator, f.tf.Err
 }
 
@@ -717,38 +759,20 @@ func (f *fakeAPIFactory) PrinterForMapping(cmd *cobra.Command, isLocal bool, out
 	return f.tf.Printer, f.tf.Err
 }
 
-func (f *fakeAPIFactory) NewBuilder(allowRemoteCalls bool) *resource.Builder {
+func (f *fakeAPIFactory) NewBuilder() *resource.Builder {
 	mapper, typer := f.Object()
-
 	return resource.NewBuilder(mapper, f.CategoryExpander(), typer, resource.ClientMapperFunc(f.ClientForMapping), f.Decoder(true))
-}
-
-func (f *fakeAPIFactory) NewUnstructuredBuilder(allowRemoteCalls bool) (*resource.Builder, error) {
-	if !allowRemoteCalls {
-		return f.NewBuilder(allowRemoteCalls), nil
-	}
-
-	mapper, typer, err := f.UnstructuredObject()
-	if err != nil {
-		return nil, err
-	}
-
-	return resource.NewBuilder(mapper, f.CategoryExpander(), typer, resource.ClientMapperFunc(f.UnstructuredClientForMapping), unstructured.UnstructuredJSONScheme), nil
 }
 
 func (f *fakeAPIFactory) SuggestedPodTemplateResources() []schema.GroupResource {
 	return []schema.GroupResource{}
 }
 
-func (f *fakeAPIFactory) SwaggerSchema(schema.GroupVersionKind) (*swagger.ApiDeclaration, error) {
-	return nil, nil
-}
-
-func (f *fakeAPIFactory) OpenAPISchema(cacheDir string) (*openapi.Resources, error) {
+func (f *fakeAPIFactory) OpenAPISchema() (openapi.Resources, error) {
 	if f.tf.OpenAPISchemaFunc != nil {
 		return f.tf.OpenAPISchemaFunc()
 	}
-	return &openapi.Resources{}, nil
+	return nil, nil
 }
 
 func NewAPIFactory() (cmdutil.Factory, *TestFactory, runtime.Codec, runtime.NegotiatedSerializer) {

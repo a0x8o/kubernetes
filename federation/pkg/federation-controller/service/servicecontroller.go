@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -33,7 +34,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
-	clientv1 "k8s.io/client-go/pkg/api/v1"
+	kubeclientset "k8s.io/client-go/kubernetes"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	cache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/flowcontrol"
@@ -47,9 +49,6 @@ import (
 	"k8s.io/kubernetes/federation/pkg/federation-controller/util/deletionhelper"
 	"k8s.io/kubernetes/federation/pkg/federation-controller/util/eventsink"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/v1"
-	kubeclientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
-	corelisters "k8s.io/kubernetes/pkg/client/listers/core/v1"
 	"k8s.io/kubernetes/pkg/controller"
 )
 
@@ -102,7 +101,7 @@ type ServiceController struct {
 func New(federationClient fedclientset.Interface) *ServiceController {
 	broadcaster := record.NewBroadcaster()
 	broadcaster.StartRecordingToSink(eventsink.NewFederatedEventSink(federationClient))
-	recorder := broadcaster.NewRecorder(api.Scheme, clientv1.EventSource{Component: UserAgentName})
+	recorder := broadcaster.NewRecorder(api.Scheme, v1.EventSource{Component: UserAgentName})
 
 	s := &ServiceController{
 		federationClient:      federationClient,
@@ -400,7 +399,7 @@ func (s *ServiceController) isSynced() bool {
 }
 
 // reconcileService triggers reconciliation of a federated service with corresponding services in federated clusters.
-// This function is called on service Addition/Deletion/Updation either in federated cluster or in federation.
+// This function is called on service Addition/Deletion/Update either in federated cluster or in federation.
 func (s *ServiceController) reconcileService(key string) reconciliationStatus {
 	if !s.isSynced() {
 		glog.V(4).Infof("Data store not synced, delaying reconcilation: %v", key)
@@ -409,7 +408,7 @@ func (s *ServiceController) reconcileService(key string) reconciliationStatus {
 
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
-		runtime.HandleError(fmt.Errorf("Invalid key %q recieved, unable to split key to namespace and name, err: %v", key, err))
+		runtime.HandleError(fmt.Errorf("Invalid key %q received, unable to split key to namespace and name, err: %v", key, err))
 		return statusNonRecoverableError
 	}
 
@@ -425,16 +424,7 @@ func (s *ServiceController) reconcileService(key string) reconciliationStatus {
 	glog.V(3).Infof("Reconciling federated service: %s", key)
 
 	// Create a copy before modifying the service to prevent race condition with other readers of service from store
-	fedServiceObj, err := api.Scheme.DeepCopy(service)
-	if err != nil {
-		runtime.HandleError(fmt.Errorf("Error in copying obj: %s, %v", key, err))
-		return statusNonRecoverableError
-	}
-	fedService, ok := fedServiceObj.(*v1.Service)
-	if err != nil || !ok {
-		runtime.HandleError(fmt.Errorf("Unknown obj recieved from store: %#v, %v", fedServiceObj, err))
-		return statusNonRecoverableError
-	}
+	fedService := service.DeepCopy()
 
 	// Handle deletion of federated service
 	if fedService.DeletionTimestamp != nil {
@@ -547,7 +537,7 @@ func getOperationsToPerformOnCluster(informer fedutil.FederatedInformer, cluster
 
 	desiredService := &v1.Service{
 		ObjectMeta: fedutil.DeepCopyRelevantObjectMeta(fedService.ObjectMeta),
-		Spec:       *(fedutil.DeepCopyApiTypeOrPanic(&fedService.Spec).(*v1.ServiceSpec)),
+		Spec:       *fedService.Spec.DeepCopy(),
 	}
 	switch {
 	case found && send:
@@ -565,11 +555,6 @@ func getOperationsToPerformOnCluster(informer fedutil.FederatedInformer, cluster
 					desiredService.Spec.Ports[i].NodePort = cPort.NodePort
 				}
 			}
-		}
-		// If ExternalTrafficPolicy is not set in federated service, use the ExternalTrafficPolicy
-		// defaulted to in federated cluster.
-		if desiredService.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyType("") {
-			desiredService.Spec.ExternalTrafficPolicy = clusterService.Spec.ExternalTrafficPolicy
 		}
 
 		// Update existing service, if needed.
@@ -627,7 +612,7 @@ func (s *ServiceController) getServiceStatusInCluster(cluster *v1beta1.Cluster, 
 	return lbStatus, nil
 }
 
-// getServiceEndpointsInCluster returns ready endpoints corresonding to service in federated cluster
+// getServiceEndpointsInCluster returns ready endpoints corresponding to service in federated cluster
 func (s *ServiceController) getServiceEndpointsInCluster(cluster *v1beta1.Cluster, key string) ([]v1.EndpointAddress, error) {
 	addresses := []v1.EndpointAddress{}
 

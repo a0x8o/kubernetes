@@ -19,8 +19,8 @@ package util
 import (
 	"reflect"
 
+	extensions_v1 "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	extensions_v1 "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	deputils "k8s.io/kubernetes/pkg/controller/deployment/util"
 )
 
@@ -70,6 +70,6 @@ func DeepCopyDeploymentObjectMeta(meta metav1.ObjectMeta) metav1.ObjectMeta {
 func DeepCopyDeployment(a *extensions_v1.Deployment) *extensions_v1.Deployment {
 	return &extensions_v1.Deployment{
 		ObjectMeta: DeepCopyDeploymentObjectMeta(a.ObjectMeta),
-		Spec:       *(DeepCopyApiTypeOrPanic(&a.Spec).(*extensions_v1.DeploymentSpec)),
+		Spec:       *a.Spec.DeepCopy(),
 	}
 }
