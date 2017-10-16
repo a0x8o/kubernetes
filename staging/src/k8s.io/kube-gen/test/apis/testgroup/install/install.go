@@ -32,7 +32,10 @@ func Install(groupFactoryRegistry announced.APIGroupFactoryRegistry, registry *r
 		&announced.GroupMetaFactoryArgs{
 			GroupName:                  testgroup.SchemeGroupVersion.Group,
 			VersionPreferenceOrder:     []string{v1.SchemeGroupVersion.Version},
+<<<<<<< HEAD
 			ImportPrefix:               "k8s.io/kube-gen/test/apis/testgroup",
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 			AddInternalObjectsToScheme: testgroup.AddToScheme,
 		},
 		announced.VersionToSchemeFunc{

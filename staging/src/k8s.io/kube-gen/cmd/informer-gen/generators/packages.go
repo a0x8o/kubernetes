@@ -172,7 +172,11 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 		var typesToGenerate []*types.Type
 		for _, t := range p.Types {
 			tags := util.MustParseClientGenTags(t.SecondClosestCommentLines)
+<<<<<<< HEAD
 			if !tags.GenerateClient || tags.NoVerbs {
+=======
+			if !tags.GenerateClient || tags.NoVerbs || !tags.HasVerb("list") || !tags.HasVerb("watch") {
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 				continue
 			}
 
@@ -304,7 +308,12 @@ func groupPackage(basePackage string, groupVersions clientgentypes.GroupVersions
 			return generators
 		},
 		FilterFunc: func(c *generator.Context, t *types.Type) bool {
+<<<<<<< HEAD
 			return util.MustParseClientGenTags(t.SecondClosestCommentLines).GenerateClient
+=======
+			tags := util.MustParseClientGenTags(t.SecondClosestCommentLines)
+			return tags.GenerateClient && tags.HasVerb("list") && tags.HasVerb("watch")
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 		},
 	}
 }
@@ -344,7 +353,12 @@ func versionPackage(basePackage string, gv clientgentypes.GroupVersion, boilerpl
 			return generators
 		},
 		FilterFunc: func(c *generator.Context, t *types.Type) bool {
+<<<<<<< HEAD
 			return util.MustParseClientGenTags(t.SecondClosestCommentLines).GenerateClient
+=======
+			tags := util.MustParseClientGenTags(t.SecondClosestCommentLines)
+			return tags.GenerateClient && tags.HasVerb("list") && tags.HasVerb("watch")
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 		},
 	}
 }

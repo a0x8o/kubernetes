@@ -18,6 +18,7 @@ go_library(
         "token.go",
         "version.go",
     ],
+    importpath = "k8s.io/kubernetes/cmd/kubeadm/app/cmd",
     deps = [
         "//cmd/kubeadm/app/apis/kubeadm:go_default_library",
         "//cmd/kubeadm/app/apis/kubeadm/v1alpha1:go_default_library",
@@ -29,7 +30,6 @@ go_library(
         "//cmd/kubeadm/app/discovery:go_default_library",
         "//cmd/kubeadm/app/features:go_default_library",
         "//cmd/kubeadm/app/images:go_default_library",
-        "//cmd/kubeadm/app/node:go_default_library",
         "//cmd/kubeadm/app/phases/addons/dns:go_default_library",
         "//cmd/kubeadm/app/phases/addons/proxy:go_default_library",
         "//cmd/kubeadm/app/phases/bootstraptoken/clusterinfo:go_default_library",
@@ -81,6 +81,7 @@ go_test(
         "reset_test.go",
         "token_test.go",
     ],
+    importpath = "k8s.io/kubernetes/cmd/kubeadm/app/cmd",
     library = ":go_default_library",
     deps = [
         "//cmd/kubeadm/app/constants:go_default_library",

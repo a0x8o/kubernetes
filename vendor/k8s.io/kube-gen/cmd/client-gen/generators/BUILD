@@ -1,7 +1,10 @@
 package(default_visibility = ["//visibility:public"])
 
+<<<<<<< HEAD
 licenses(["notice"])
 
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -17,7 +20,10 @@ go_library(
         "generator_for_type.go",
         "tags.go",
     ],
+<<<<<<< HEAD
     tags = ["automanaged"],
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
     deps = [
         "//vendor/github.com/golang/glog:go_default_library",
         "//vendor/k8s.io/gengo/args:go_default_library",

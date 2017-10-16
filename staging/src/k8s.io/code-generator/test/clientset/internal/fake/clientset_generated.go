@@ -41,10 +41,16 @@ func NewSimpleClientset(objects ...runtime.Object) *Clientset {
 
 	fakePtr := testing.Fake{}
 	fakePtr.AddReactor("*", "*", testing.ObjectReaction(o))
+<<<<<<< HEAD
 
 	fakePtr.AddWatchReactor("*", testing.DefaultWatchReactor(watch.NewFake(), nil))
 
 	return &Clientset{fakePtr}
+=======
+	fakePtr.AddWatchReactor("*", testing.DefaultWatchReactor(watch.NewFake(), nil))
+
+	return &Clientset{fakePtr, &fakediscovery.FakeDiscovery{Fake: &fakePtr}}
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 }
 
 // Clientset implements clientset.Interface. Meant to be embedded into a
@@ -52,10 +58,18 @@ func NewSimpleClientset(objects ...runtime.Object) *Clientset {
 // you want to test easier.
 type Clientset struct {
 	testing.Fake
+<<<<<<< HEAD
 }
 
 func (c *Clientset) Discovery() discovery.DiscoveryInterface {
 	return &fakediscovery.FakeDiscovery{Fake: &c.Fake}
+=======
+	discovery *fakediscovery.FakeDiscovery
+}
+
+func (c *Clientset) Discovery() discovery.DiscoveryInterface {
+	return c.discovery
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 }
 
 var _ clientset.Interface = &Clientset{}

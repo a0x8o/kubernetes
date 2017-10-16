@@ -24,6 +24,8 @@ import (
 	"sync"
 	"testing"
 
+	"k8s.io/api/core/v1"
+	extensions "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -37,9 +39,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
-	"k8s.io/kubernetes/pkg/api/v1"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
-	extensions "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset/fake"
 	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/externalversions"
 	"k8s.io/kubernetes/pkg/controller"
@@ -60,6 +60,7 @@ var (
 var (
 	noScheduleTolerations = []v1.Toleration{{Key: "dedicated", Value: "user1", Effect: "NoSchedule"}}
 	noScheduleTaints      = []v1.Taint{{Key: "dedicated", Value: "user1", Effect: "NoSchedule"}}
+	noExecuteTaints       = []v1.Taint{{Key: "dedicated", Value: "user1", Effect: "NoExecute"}}
 )
 
 var (
@@ -1079,10 +1080,46 @@ func TestDaemonKillFailedPods(t *testing.T) {
 	}
 }
 
-// DaemonSet should not launch a pod on a tainted node when the pod doesn't tolerate that taint.
-func TestTaintedNodeDaemonDoesNotLaunchUntoleratePod(t *testing.T) {
+// Daemonset should not remove a running pod from a node if the pod doesn't
+// tolerate the nodes NoSchedule taint
+func TestNoScheduleTaintedDoesntEvicitRunningIntolerantPod(t *testing.T) {
 	for _, strategy := range updateStrategies() {
-		ds := newDaemonSet("untolerate")
+		ds := newDaemonSet("intolerant")
+		ds.Spec.UpdateStrategy = *strategy
+		manager, podControl, _ := newTestController(ds)
+
+		node := newNode("tainted", nil)
+		manager.nodeStore.Add(node)
+		setNodeTaint(node, noScheduleTaints)
+		manager.podStore.Add(newPod("keep-running-me", "tainted", simpleDaemonSetLabel, ds))
+		manager.dsStore.Add(ds)
+
+		syncAndValidateDaemonSets(t, manager, ds, podControl, 0, 0)
+	}
+}
+
+// Daemonset should remove a running pod from a node if the pod doesn't
+// tolerate the nodes NoExecute taint
+func TestNoExecuteTaintedDoesEvicitRunningIntolerantPod(t *testing.T) {
+	for _, strategy := range updateStrategies() {
+		ds := newDaemonSet("intolerant")
+		ds.Spec.UpdateStrategy = *strategy
+		manager, podControl, _ := newTestController(ds)
+
+		node := newNode("tainted", nil)
+		manager.nodeStore.Add(node)
+		setNodeTaint(node, noExecuteTaints)
+		manager.podStore.Add(newPod("stop-running-me", "tainted", simpleDaemonSetLabel, ds))
+		manager.dsStore.Add(ds)
+
+		syncAndValidateDaemonSets(t, manager, ds, podControl, 0, 1)
+	}
+}
+
+// DaemonSet should not launch a pod on a tainted node when the pod doesn't tolerate that taint.
+func TestTaintedNodeDaemonDoesNotLaunchIntolerantPod(t *testing.T) {
+	for _, strategy := range updateStrategies() {
+		ds := newDaemonSet("intolerant")
 		ds.Spec.UpdateStrategy = *strategy
 		manager, podControl, _ := newTestController(ds)
 

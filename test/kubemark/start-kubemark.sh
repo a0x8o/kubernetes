@@ -52,6 +52,7 @@ function create-master-environment-file {
 # Generic variables.
 INSTANCE_PREFIX="${INSTANCE_PREFIX:-}"
 SERVICE_CLUSTER_IP_RANGE="${SERVICE_CLUSTER_IP_RANGE:-}"
+EVENT_PD="${EVENT_PD:-}"
 
 # Etcd related variables.
 ETCD_IMAGE="${ETCD_IMAGE:-3.1.10}"
@@ -211,6 +212,25 @@ function create-and-upload-hollow-node-image {
   done
   rm kubemark
   cd $CURR_DIR
+  echo "Created and uploaded the kubemark hollow-node image to docker registry."
+}
+
+# Use bazel rule to create a docker image for hollow-node and upload
+# it to the appropriate docker container registry for the cloud provider.
+function create-and-upload-hollow-node-image-bazel {
+  RETRIES=3
+  for attempt in $(seq 1 ${RETRIES}); do
+    if ! bazel run //cluster/images/kubemark:push --define PROJECT="${PROJECT}"; then
+      if [[ $((attempt)) -eq "${RETRIES}" ]]; then
+        echo "${color_red}Image push failed. Exiting.${color_norm}"
+        exit 1
+      fi
+      echo -e "${color_yellow}Make attempt $(($attempt)) failed. Retrying.${color_norm}" >& 2
+      sleep $(($attempt * 5))
+    else
+      break
+    fi
+  done
   echo "Created and uploaded the kubemark hollow-node image to docker registry."
 }
 
@@ -439,7 +459,11 @@ start-master-components
 # Setup for hollow-nodes.
 echo ""
 echo -e "${color_yellow}STARTING SETUP FOR HOLLOW-NODES${color_norm}"
-create-and-upload-hollow-node-image
+if [[ "${KUBEMARK_BAZEL_BUILD:-}" =~ ^[yY]$ ]]; then
+  create-and-upload-hollow-node-image-bazel
+else
+  create-and-upload-hollow-node-image
+fi
 create-kube-hollow-node-resources
 wait-for-hollow-nodes-to-run-or-timeout
 

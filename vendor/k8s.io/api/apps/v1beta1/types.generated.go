@@ -2812,13 +2812,21 @@ func (x *StatefulSetStatus) codecDecodeSelfFromMap(l int, d *codec1978.Decoder) 
 				}
 			} else {
 				if x.CollisionCount == nil {
+<<<<<<< HEAD
 					x.CollisionCount = new(int32)
+=======
+					x.CollisionCount = new(int64)
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 				}
 				yym19 := z.DecBinary()
 				_ = yym19
 				if false {
 				} else {
+<<<<<<< HEAD
 					*((*int32)(x.CollisionCount)) = int32(r.DecodeInt(32))
+=======
+					*((*int64)(x.CollisionCount)) = int64(r.DecodeInt(64))
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 				}
 			}
 		default:
@@ -3010,13 +3018,21 @@ func (x *StatefulSetStatus) codecDecodeSelfFromArray(l int, d *codec1978.Decoder
 		}
 	} else {
 		if x.CollisionCount == nil {
+<<<<<<< HEAD
 			x.CollisionCount = new(int32)
+=======
+			x.CollisionCount = new(int64)
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 		}
 		yym36 := z.DecBinary()
 		_ = yym36
 		if false {
 		} else {
+<<<<<<< HEAD
 			*((*int32)(x.CollisionCount)) = int32(r.DecodeInt(32))
+=======
+			*((*int64)(x.CollisionCount)) = int64(r.DecodeInt(64))
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 		}
 	}
 	for {
@@ -6008,13 +6024,21 @@ func (x *DeploymentStatus) codecDecodeSelfFromMap(l int, d *codec1978.Decoder) {
 				}
 			} else {
 				if x.CollisionCount == nil {
+<<<<<<< HEAD
 					x.CollisionCount = new(int32)
+=======
+					x.CollisionCount = new(int64)
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 				}
 				yym19 := z.DecBinary()
 				_ = yym19
 				if false {
 				} else {
+<<<<<<< HEAD
 					*((*int32)(x.CollisionCount)) = int32(r.DecodeInt(32))
+=======
+					*((*int64)(x.CollisionCount)) = int64(r.DecodeInt(64))
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 				}
 			}
 		default:
@@ -6202,13 +6226,21 @@ func (x *DeploymentStatus) codecDecodeSelfFromArray(l int, d *codec1978.Decoder)
 		}
 	} else {
 		if x.CollisionCount == nil {
+<<<<<<< HEAD
 			x.CollisionCount = new(int32)
+=======
+			x.CollisionCount = new(int64)
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 		}
 		yym36 := z.DecBinary()
 		_ = yym36
 		if false {
 		} else {
+<<<<<<< HEAD
 			*((*int32)(x.CollisionCount)) = int32(r.DecodeInt(32))
+=======
+			*((*int64)(x.CollisionCount)) = int64(r.DecodeInt(64))
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 		}
 	}
 	for {

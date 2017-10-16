@@ -16,8 +16,8 @@ go_library(
         "master.go",
         "services.go",
     ],
+    importpath = "k8s.io/kubernetes/pkg/master",
     deps = [
-        "//cmd/kube-apiserver/app/options:go_default_library",
         "//pkg/api:go_default_library",
         "//pkg/api/install:go_default_library",
         "//pkg/apis/admission/install:go_default_library",
@@ -38,6 +38,7 @@ go_library(
         "//pkg/apis/settings/install:go_default_library",
         "//pkg/apis/storage/install:go_default_library",
         "//pkg/client/clientset_generated/internalclientset/typed/core/internalversion:go_default_library",
+        "//pkg/kubeapiserver/options:go_default_library",
         "//pkg/kubelet/client:go_default_library",
         "//pkg/master/reconcilers:go_default_library",
         "//pkg/master/tunneler:go_default_library",
@@ -114,6 +115,7 @@ go_test(
         "master_test.go",
     ],
     features = ["-race"],
+    importpath = "k8s.io/kubernetes/pkg/master",
     library = ":go_default_library",
     deps = [
         "//pkg/api:go_default_library",

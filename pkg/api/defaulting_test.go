@@ -99,16 +99,22 @@ func TestDefaulting(t *testing.T) {
 		{Group: "extensions", Version: "v1beta1", Kind: "DaemonSetList"}:                                             {},
 		{Group: "apps", Version: "v1beta2", Kind: "DaemonSet"}:                                                       {},
 		{Group: "apps", Version: "v1beta2", Kind: "DaemonSetList"}:                                                   {},
+<<<<<<< HEAD
 		{Group: "apps", Version: "v1", Kind: "DaemonSet"}:                                                            {},
 		{Group: "apps", Version: "v1", Kind: "DaemonSetList"}:                                                        {},
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 		{Group: "extensions", Version: "v1beta1", Kind: "Deployment"}:                                                {},
 		{Group: "extensions", Version: "v1beta1", Kind: "DeploymentList"}:                                            {},
 		{Group: "apps", Version: "v1beta1", Kind: "Deployment"}:                                                      {},
 		{Group: "apps", Version: "v1beta1", Kind: "DeploymentList"}:                                                  {},
 		{Group: "apps", Version: "v1beta2", Kind: "Deployment"}:                                                      {},
 		{Group: "apps", Version: "v1beta2", Kind: "DeploymentList"}:                                                  {},
+<<<<<<< HEAD
 		{Group: "extensions", Version: "v1beta1", Kind: "PodSecurityPolicy"}:                                         {},
 		{Group: "extensions", Version: "v1beta1", Kind: "PodSecurityPolicyList"}:                                     {},
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 		{Group: "apps", Version: "v1beta2", Kind: "ReplicaSet"}:                                                      {},
 		{Group: "apps", Version: "v1beta2", Kind: "ReplicaSetList"}:                                                  {},
 		{Group: "extensions", Version: "v1beta1", Kind: "ReplicaSet"}:                                                {},

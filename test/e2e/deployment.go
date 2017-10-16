@@ -150,7 +150,10 @@ func failureTrap(c clientset.Interface, ns string) {
 		testutil.LogPodsOfDeployment(c, &d, rsList, framework.Logf)
 	}
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 	// We need print all the ReplicaSets if there are no Deployment object created
 	if len(deployments.Items) != 0 {
 		return
@@ -173,7 +176,10 @@ func failureTrap(c clientset.Interface, ns string) {
 			framework.Logf(spew.Sprintf("pod: %q:\n%+v\n", pod.Name, pod))
 		}
 	}
+<<<<<<< HEAD
 >>>>>>> axbaretto
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 }
 
 func intOrStrP(num int) *intstr.IntOrString {

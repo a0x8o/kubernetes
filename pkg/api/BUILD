@@ -15,6 +15,7 @@ go_library(
         "types.go",
         "zz_generated.deepcopy.go",
     ],
+    importpath = "k8s.io/kubernetes/pkg/api",
     visibility = ["//visibility:public"],
     deps = [
         "//vendor/k8s.io/apimachinery/pkg/api/resource:go_default_library",
@@ -36,6 +37,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = ["taint_test.go"],
+    importpath = "k8s.io/kubernetes/pkg/api",
     library = ":go_default_library",
 )
 
@@ -63,7 +65,6 @@ filegroup(
         "//pkg/api/testapi:all-srcs",
         "//pkg/api/testing:all-srcs",
         "//pkg/api/unversioned:all-srcs",
-        "//pkg/api/util:all-srcs",
         "//pkg/api/v1:all-srcs",
         "//pkg/api/validation:all-srcs",
     ],

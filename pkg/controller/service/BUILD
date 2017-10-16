@@ -12,8 +12,8 @@ go_library(
         "doc.go",
         "service_controller.go",
     ],
+    importpath = "k8s.io/kubernetes/pkg/controller/service",
     deps = [
-        "//cmd/kubeadm/app/constants:go_default_library",
         "//pkg/api/v1/helper:go_default_library",
         "//pkg/cloudprovider:go_default_library",
         "//pkg/controller:go_default_library",
@@ -37,6 +37,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = ["service_controller_test.go"],
+    importpath = "k8s.io/kubernetes/pkg/controller/service",
     library = ":go_default_library",
     deps = [
         "//pkg/api/testapi:go_default_library",

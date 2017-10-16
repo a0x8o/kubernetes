@@ -28,8 +28,8 @@ go_library(
         "util.go",
         "volume_host.go",
     ],
+    importpath = "k8s.io/kubernetes/pkg/kubelet",
     deps = [
-        "//cmd/kubelet/app/options:go_default_library",
         "//pkg/api:go_default_library",
         "//pkg/api/v1:go_default_library",
         "//pkg/api/v1/helper:go_default_library",
@@ -164,6 +164,7 @@ go_test(
         ],
         "//conditions:default": [],
     }),
+    importpath = "k8s.io/kubernetes/pkg/kubelet",
     library = ":go_default_library",
     deps = [
         "//pkg/api:go_default_library",

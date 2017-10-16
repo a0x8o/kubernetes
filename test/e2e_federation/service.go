@@ -184,6 +184,7 @@ var _ = framework.KubeDescribe("Federated Services [Feature:Federation]", func()
 				backendPods = createBackendPodsOrFail(clusters, nsName, FederatedServicePodName)
 
 				service = createLBServiceOrFail(f.FederationClientset, nsName, FederatedServiceName, clusters)
+<<<<<<< HEAD
 				obj, err := scheme.Scheme.DeepCopy(service)
 				// Cloning shouldn't fail. On the off-chance it does, we
 				// should shallow copy service to serviceShard before
@@ -211,6 +212,9 @@ var _ = framework.KubeDescribe("Federated Services [Feature:Federation]", func()
 					serviceShard = &serviceCopy
 					framework.ExpectNoError(err, fmt.Sprintf("Unexpected service object copied %T", obj))
 				}
+=======
+				serviceShard := service.DeepCopy()
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 
 				waitForServiceShardsOrFail(nsName, serviceShard, clusters)
 			})
