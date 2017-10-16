@@ -26,11 +26,12 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/util/csr"
 )
 
+// CSRContextAndUser defines the context to use for the client certs in the kubelet kubeconfig file
 const CSRContextAndUser = "kubelet-csr"
 
 // PerformTLSBootstrap executes a node certificate signing request.
 func PerformTLSBootstrap(cfg *clientcmdapi.Config, hostName string) error {
-	client, err := kubeconfigutil.KubeConfigToClientSet(cfg)
+	client, err := kubeconfigutil.ToClientSet(cfg)
 	if err != nil {
 		return err
 	}
