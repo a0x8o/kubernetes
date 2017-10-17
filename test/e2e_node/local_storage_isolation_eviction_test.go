@@ -173,6 +173,11 @@ var _ = framework.KubeDescribe("LocalStorageCapacityIsolationEviction [Slow] [Se
 								"sh",
 								"-c",
 								"sleep 5; dd if=/dev/urandom of=target-file bs=50000 count=1; while true; do sleep 5; done",
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> v1.8-updates
 							},
 							Resources: v1.ResourceRequirements{
 								Limits: v1.ResourceList{
@@ -284,6 +289,10 @@ var _ = framework.KubeDescribe("LocalStorageCapacityIsolationEviction [Slow] [Se
 								"sh",
 								"-c",
 								"sleep 5; dd if=/dev/urandom of=target-file of=/cache/target-file bs=50000 count=1; while true; do sleep 5; done",
+<<<<<<< HEAD
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+>>>>>>> v1.8-updates
 							},
 							Resources: v1.ResourceRequirements{
 								Limits: v1.ResourceList{
@@ -361,7 +370,15 @@ var _ = framework.KubeDescribe("LocalStorageCapacityIsolationEviction [Slow] [Se
 	}
 
 	evictionTestTimeout := 10 * time.Minute
+<<<<<<< HEAD
+<<<<<<< HEAD
+	testCondition := "EmptyDir/ContainerOverlay usage limit violation"
+=======
 	testCondition := "PodLocalEphemeralStorage/ContainerLocalEphemeralStorage usage limit violation"
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+	testCondition := "PodLocalEphemeralStorage/ContainerLocalEphemeralStorage usage limit violation"
+>>>>>>> v1.8-updates
 	Context(fmt.Sprintf("EmptyDirEviction when we run containers that should cause %s", testCondition), func() {
 		tempSetCurrentKubeletConfig(f, func(initialConfig *kubeletconfig.KubeletConfiguration) {
 			initialConfig.FeatureGates += ", LocalStorageCapacityIsolation=true"

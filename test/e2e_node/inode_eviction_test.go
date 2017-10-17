@@ -56,7 +56,15 @@ var _ = framework.KubeDescribe("InodeEviction [Slow] [Serial] [Disruptive] [Flak
 					RestartPolicy: v1.RestartPolicyNever,
 					Containers: []v1.Container{
 						{
+<<<<<<< HEAD
+<<<<<<< HEAD
+							Image:   "gcr.io/google_containers/busybox:1.24",
+=======
 							Image:   busyboxImage,
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+							Image:   busyboxImage,
+>>>>>>> v1.8-updates
 							Name:    "container-inode-hog-container",
 							Command: getInodeConsumingCommand(""),
 						},
@@ -72,7 +80,15 @@ var _ = framework.KubeDescribe("InodeEviction [Slow] [Serial] [Disruptive] [Flak
 					RestartPolicy: v1.RestartPolicyNever,
 					Containers: []v1.Container{
 						{
+<<<<<<< HEAD
+<<<<<<< HEAD
+							Image:   "gcr.io/google_containers/busybox:1.24",
+=======
 							Image:   busyboxImage,
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+							Image:   busyboxImage,
+>>>>>>> v1.8-updates
 							Name:    "volume-inode-hog-container",
 							Command: getInodeConsumingCommand(volumeMountPath),
 							VolumeMounts: []v1.VolumeMount{
@@ -95,7 +111,15 @@ var _ = framework.KubeDescribe("InodeEviction [Slow] [Serial] [Disruptive] [Flak
 	testCondition := "Disk Pressure due to Inodes"
 
 	Context(fmt.Sprintf("when we run containers that should cause %s", testCondition), func() {
+<<<<<<< HEAD
+<<<<<<< HEAD
+		tempSetCurrentKubeletConfig(f, func(initialConfig *componentconfig.KubeletConfiguration) {
+=======
 		tempSetCurrentKubeletConfig(f, func(initialConfig *kubeletconfig.KubeletConfiguration) {
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+		tempSetCurrentKubeletConfig(f, func(initialConfig *kubeletconfig.KubeletConfiguration) {
+>>>>>>> v1.8-updates
 			initialConfig.EvictionHard = "nodefs.inodesFree<70%"
 		})
 		// Place the remainder of the test within a context so that the kubelet config is set before and after the test.
@@ -329,7 +353,15 @@ func getInnocentPod() *v1.Pod {
 			RestartPolicy: v1.RestartPolicyNever,
 			Containers: []v1.Container{
 				{
+<<<<<<< HEAD
+<<<<<<< HEAD
+					Image: "gcr.io/google_containers/busybox:1.24",
+=======
 					Image: busyboxImage,
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+					Image: busyboxImage,
+>>>>>>> v1.8-updates
 					Name:  "innocent-container",
 					Command: []string{
 						"sh",

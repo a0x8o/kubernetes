@@ -38,6 +38,50 @@ func TestHandleVersionUpdate(t *testing.T) {
 		expectedRemoved []string
 	}{
 		{
+<<<<<<< HEAD
+<<<<<<< HEAD
+			name: "simple add tpr",
+			startingTPRs: []*extensions.ThirdPartyResource{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "resource.group.com"},
+					Versions: []extensions.APIVersion{
+						{Name: "v1"},
+					},
+				},
+			},
+			version: schema.GroupVersion{Group: "group.com", Version: "v1"},
+
+			expectedAdded: []*apiregistration.APIService{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "v1.group.com"},
+					Spec: apiregistration.APIServiceSpec{
+						Group:                "group.com",
+						Version:              "v1",
+						GroupPriorityMinimum: 1000,
+						VersionPriority:      100,
+					},
+				},
+			},
+		},
+		{
+			name: "simple remove tpr",
+			startingTPRs: []*extensions.ThirdPartyResource{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "resource.group.com"},
+					Versions: []extensions.APIVersion{
+						{Name: "v1"},
+					},
+				},
+			},
+			version: schema.GroupVersion{Group: "group.com", Version: "v2"},
+
+			expectedRemoved: []string{"v2.group.com"},
+		},
+		{
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+>>>>>>> v1.8-updates
 			name: "simple add crd",
 			startingCRDs: []*apiextensions.CustomResourceDefinition{
 				{
