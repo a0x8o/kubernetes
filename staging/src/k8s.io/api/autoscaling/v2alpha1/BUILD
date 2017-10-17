@@ -11,18 +11,30 @@ go_library(
         "doc.go",
         "generated.pb.go",
         "register.go",
+<<<<<<< HEAD
+        "types.generated.go",
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
         "types.go",
         "types_swagger_doc_generated.go",
         "zz_generated.deepcopy.go",
     ],
     deps = [
         "//vendor/github.com/gogo/protobuf/proto:go_default_library",
+<<<<<<< HEAD
+        "//vendor/github.com/ugorji/go/codec:go_default_library",
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
         "//vendor/k8s.io/api/core/v1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/api/resource:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/conversion:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/runtime:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
+<<<<<<< HEAD
+        "//vendor/k8s.io/apimachinery/pkg/types:go_default_library",
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
     ],
 )
 

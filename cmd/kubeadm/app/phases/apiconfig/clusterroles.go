@@ -25,10 +25,13 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 <<<<<<< HEAD
+<<<<<<< HEAD
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
 	bootstrapapi "k8s.io/kubernetes/pkg/bootstrap/api"
 =======
 >>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+>>>>>>> v1.8-updates
 	"k8s.io/kubernetes/pkg/util/version"
 )
 
@@ -65,12 +68,16 @@ func deletePermissiveNodesBindingWhenUsingNodeAuthorization(client clientset.Int
 	}
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 	// If the server version is higher than the Node Authorizer's minimum, try to delete the Group=system:nodes->ClusterRole=system:node binding
 	// which is much more permissive than the Node Authorizer
 	if kubeadmutil.IsNodeAuthorizerSupported(k8sVersion) {
 =======
 	nodesRoleBinding.Subjects = newSubjects
 >>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+	nodesRoleBinding.Subjects = newSubjects
+>>>>>>> v1.8-updates
 
 	if _, err := client.RbacV1beta1().ClusterRoleBindings().Update(nodesRoleBinding); err != nil {
 		return err

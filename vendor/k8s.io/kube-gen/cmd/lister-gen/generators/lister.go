@@ -117,15 +117,22 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 
 		var typesToGenerate []*types.Type
 		for _, t := range p.Types {
+<<<<<<< HEAD
+			if !util.MustParseClientGenTags(t.SecondClosestCommentLines).GenerateClient {
+=======
 			tags := util.MustParseClientGenTags(t.SecondClosestCommentLines)
 			if !tags.GenerateClient || !tags.HasVerb("list") || !tags.HasVerb("get") {
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 				continue
 			}
 			typesToGenerate = append(typesToGenerate, t)
 		}
+<<<<<<< HEAD
+=======
 		if len(typesToGenerate) == 0 {
 			continue
 		}
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 		orderer := namer.Orderer{Namer: namer.NewPrivateNamer(0)}
 		typesToGenerate = orderer.OrderTypes(typesToGenerate)
 
@@ -159,8 +166,12 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 				return generators
 			},
 			FilterFunc: func(c *generator.Context, t *types.Type) bool {
+<<<<<<< HEAD
+				return util.MustParseClientGenTags(t.SecondClosestCommentLines).GenerateClient
+=======
 				tags := util.MustParseClientGenTags(t.SecondClosestCommentLines)
 				return tags.GenerateClient && tags.HasVerb("list") && tags.HasVerb("get")
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 			},
 		})
 	}

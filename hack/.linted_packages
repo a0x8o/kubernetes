@@ -465,9 +465,13 @@ staging/src/k8s.io/sample-apiserver
 staging/src/k8s.io/sample-apiserver/pkg/apis/wardle/install
 test/e2e/framework/ginkgowrapper
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 test/e2e/manifest
 >>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+test/e2e/manifest
+>>>>>>> v1.8-updates
 test/e2e/perftype
 test/e2e_node/perftype
 test/e2e_node/runner/local

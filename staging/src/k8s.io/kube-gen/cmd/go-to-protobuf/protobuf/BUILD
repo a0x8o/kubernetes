@@ -1,5 +1,10 @@
 package(default_visibility = ["//visibility:public"])
 
+<<<<<<< HEAD
+licenses(["notice"])
+
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -17,6 +22,10 @@ go_library(
         "parser.go",
         "tags.go",
     ],
+<<<<<<< HEAD
+    tags = ["automanaged"],
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
     deps = [
         "//vendor/github.com/golang/glog:go_default_library",
         "//vendor/github.com/spf13/pflag:go_default_library",
@@ -33,6 +42,10 @@ go_test(
     name = "go_default_test",
     srcs = ["namer_test.go"],
     library = ":go_default_library",
+<<<<<<< HEAD
+    tags = ["automanaged"],
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
 )
 
 filegroup(

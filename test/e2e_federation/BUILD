@@ -49,6 +49,10 @@ go_library(
         "//vendor/k8s.io/apimachinery/pkg/util/uuid:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/wait:go_default_library",
         "//vendor/k8s.io/client-go/kubernetes:go_default_library",
+<<<<<<< HEAD
+        "//vendor/k8s.io/client-go/kubernetes/scheme:go_default_library",
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
         "//vendor/k8s.io/client-go/tools/clientcmd:go_default_library",
     ],
 )

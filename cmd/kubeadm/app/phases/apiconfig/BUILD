@@ -18,12 +18,15 @@ go_library(
     deps = [
         "//cmd/kubeadm/app/constants:go_default_library",
 <<<<<<< HEAD
+<<<<<<< HEAD
         "//cmd/kubeadm/app/util:go_default_library",
         "//pkg/bootstrap/api:go_default_library",
         "//pkg/kubelet/apis:go_default_library",
         "//pkg/util/node:go_default_library",
 =======
 >>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+>>>>>>> v1.8-updates
         "//pkg/util/version:go_default_library",
         "//vendor/k8s.io/api/rbac/v1beta1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/api/errors:go_default_library",

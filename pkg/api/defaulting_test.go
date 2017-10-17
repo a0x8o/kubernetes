@@ -99,12 +99,28 @@ func TestDefaulting(t *testing.T) {
 		{Group: "extensions", Version: "v1beta1", Kind: "DaemonSetList"}:                                             {},
 		{Group: "apps", Version: "v1beta2", Kind: "DaemonSet"}:                                                       {},
 		{Group: "apps", Version: "v1beta2", Kind: "DaemonSetList"}:                                                   {},
+<<<<<<< 292d034ebb3b4075476abe65d43f708ef4ebaa19
+<<<<<<< HEAD
+		{Group: "apps", Version: "v1", Kind: "DaemonSet"}:                                                            {},
+		{Group: "apps", Version: "v1", Kind: "DaemonSetList"}:                                                        {},
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+>>>>>>> k8 1.8 updates
 		{Group: "extensions", Version: "v1beta1", Kind: "Deployment"}:                                                {},
 		{Group: "extensions", Version: "v1beta1", Kind: "DeploymentList"}:                                            {},
 		{Group: "apps", Version: "v1beta1", Kind: "Deployment"}:                                                      {},
 		{Group: "apps", Version: "v1beta1", Kind: "DeploymentList"}:                                                  {},
 		{Group: "apps", Version: "v1beta2", Kind: "Deployment"}:                                                      {},
 		{Group: "apps", Version: "v1beta2", Kind: "DeploymentList"}:                                                  {},
+<<<<<<< 292d034ebb3b4075476abe65d43f708ef4ebaa19
+<<<<<<< HEAD
+		{Group: "extensions", Version: "v1beta1", Kind: "PodSecurityPolicy"}:                                         {},
+		{Group: "extensions", Version: "v1beta1", Kind: "PodSecurityPolicyList"}:                                     {},
+=======
+>>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+>>>>>>> k8 1.8 updates
 		{Group: "apps", Version: "v1beta2", Kind: "ReplicaSet"}:                                                      {},
 		{Group: "apps", Version: "v1beta2", Kind: "ReplicaSetList"}:                                                  {},
 		{Group: "extensions", Version: "v1beta1", Kind: "ReplicaSet"}:                                                {},

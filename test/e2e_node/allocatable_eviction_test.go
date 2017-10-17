@@ -21,12 +21,17 @@ import (
 	"time"
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/kubernetes/pkg/api/v1"
 =======
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 >>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+>>>>>>> v1.8-updates
 	nodeutil "k8s.io/kubernetes/pkg/api/v1/node"
 	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
@@ -57,20 +62,28 @@ var _ = framework.KubeDescribe("MemoryAllocatableEviction [Slow] [Serial] [Disru
 
 	Context(fmt.Sprintf("when we run containers that should cause %s", testCondition), func() {
 <<<<<<< HEAD
+<<<<<<< HEAD
 		tempSetCurrentKubeletConfig(f, func(initialConfig *componentconfig.KubeletConfiguration) {
 =======
 		tempSetCurrentKubeletConfig(f, func(initialConfig *kubeletconfig.KubeletConfiguration) {
 >>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+		tempSetCurrentKubeletConfig(f, func(initialConfig *kubeletconfig.KubeletConfiguration) {
+>>>>>>> v1.8-updates
 			// Set large system and kube reserved values to trigger allocatable thresholds far before hard eviction thresholds.
 			kubeReserved := getNodeCPUAndMemoryCapacity(f)[v1.ResourceMemory]
 			// The default hard eviction threshold is 250Mb, so Allocatable = Capacity - Reserved - 250Mb
 			// We want Allocatable = 50Mb, so set Reserved = Capacity - Allocatable - 250Mb = Capacity - 300Mb
 			kubeReserved.Sub(resource.MustParse("300Mi"))
 <<<<<<< HEAD
+<<<<<<< HEAD
 			initialConfig.KubeReserved = componentconfig.ConfigurationMap(map[string]string{"memory": kubeReserved.String()})
 =======
 			initialConfig.KubeReserved = kubeletconfig.ConfigurationMap(map[string]string{string(v1.ResourceMemory): kubeReserved.String()})
 >>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+			initialConfig.KubeReserved = kubeletconfig.ConfigurationMap(map[string]string{string(v1.ResourceMemory): kubeReserved.String()})
+>>>>>>> v1.8-updates
 			initialConfig.EnforceNodeAllocatable = []string{cm.NodeAllocatableEnforcementKey}
 			initialConfig.ExperimentalNodeAllocatableIgnoreEvictionThreshold = false
 			initialConfig.CgroupsPerQOS = true

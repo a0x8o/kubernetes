@@ -39,6 +39,7 @@ func TestHandleVersionUpdate(t *testing.T) {
 	}{
 		{
 <<<<<<< HEAD
+<<<<<<< HEAD
 			name: "simple add tpr",
 			startingTPRs: []*extensions.ThirdPartyResource{
 				{
@@ -79,6 +80,8 @@ func TestHandleVersionUpdate(t *testing.T) {
 		{
 =======
 >>>>>>> 66f5f2bce071b09222a7a83d1f196f60c34cd224
+=======
+>>>>>>> v1.8-updates
 			name: "simple add crd",
 			startingCRDs: []*apiextensions.CustomResourceDefinition{
 				{
