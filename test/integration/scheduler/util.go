@@ -33,7 +33,7 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	"k8s.io/kubernetes/plugin/pkg/scheduler"
 	_ "k8s.io/kubernetes/plugin/pkg/scheduler/algorithmprovider"
@@ -85,7 +85,7 @@ func initTest(t *testing.T, nsPrefix string) *TestContext {
 		t.Fatalf("Couldn't create scheduler config: %v", err)
 	}
 	eventBroadcaster := record.NewBroadcaster()
-	context.schedulerConfig.Recorder = eventBroadcaster.NewRecorder(api.Scheme, v1.EventSource{Component: v1.DefaultSchedulerName})
+	context.schedulerConfig.Recorder = eventBroadcaster.NewRecorder(legacyscheme.Scheme, v1.EventSource{Component: v1.DefaultSchedulerName})
 	eventBroadcaster.StartRecordingToSink(&clientv1core.EventSinkImpl{Interface: clientv1core.New(context.clientSet.CoreV1().RESTClient()).Events("")})
 	context.informerFactory.Start(context.schedulerConfig.StopEverything)
 	context.scheduler, err = scheduler.NewFromConfigurator(&scheduler.FakeConfigurator{Config: context.schedulerConfig}, nil...)
@@ -332,13 +332,13 @@ func podScheduled(c clientset.Interface, podNamespace, podName string) wait.Cond
 // waitForPodToScheduleWithTimeout waits for a pod to get scheduled and returns
 // an error if it does not scheduled within the given timeout.
 func waitForPodToScheduleWithTimeout(cs clientset.Interface, pod *v1.Pod, timeout time.Duration) error {
-	return wait.Poll(time.Second, timeout, podScheduled(cs, pod.Namespace, pod.Name))
+	return wait.Poll(100*time.Millisecond, timeout, podScheduled(cs, pod.Namespace, pod.Name))
 }
 
 // waitForPodToSchedule waits for a pod to get scheduled and returns an error if
-// it does not scheduled within the timeout duration (30 seconds).
+// it does not get scheduled within the timeout duration (30 seconds).
 func waitForPodToSchedule(cs clientset.Interface, pod *v1.Pod) error {
-	return waitForPodToScheduleWithTimeout(cs, pod, wait.ForeverTestTimeout)
+	return waitForPodToScheduleWithTimeout(cs, pod, 30*time.Second)
 }
 
 // deletePod deletes the given pod in the given namespace.

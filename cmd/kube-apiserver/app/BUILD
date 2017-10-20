@@ -16,6 +16,7 @@ go_library(
     deps = [
         "//cmd/kube-apiserver/app/options:go_default_library",
         "//pkg/api:go_default_library",
+        "//pkg/api/legacyscheme:go_default_library",
         "//pkg/apis/apps:go_default_library",
         "//pkg/apis/batch:go_default_library",
         "//pkg/apis/extensions:go_default_library",
@@ -69,6 +70,7 @@ go_library(
         "//vendor/k8s.io/apiserver/pkg/storage/etcd3/preflight:go_default_library",
         "//vendor/k8s.io/client-go/informers:go_default_library",
         "//vendor/k8s.io/client-go/kubernetes:go_default_library",
+        "//vendor/k8s.io/client-go/rest:go_default_library",
         "//vendor/k8s.io/client-go/tools/cache:go_default_library",
         "//vendor/k8s.io/kube-aggregator/pkg/apis/apiregistration:go_default_library",
         "//vendor/k8s.io/kube-aggregator/pkg/apis/apiregistration/v1beta1:go_default_library",
