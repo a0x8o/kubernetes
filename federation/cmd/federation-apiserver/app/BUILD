@@ -30,6 +30,7 @@ go_library(
         "//federation/registry/cluster/etcd:go_default_library",
         "//pkg/api:go_default_library",
         "//pkg/api/install:go_default_library",
+        "//pkg/api/legacyscheme:go_default_library",
         "//pkg/apis/autoscaling:go_default_library",
         "//pkg/apis/autoscaling/install:go_default_library",
         "//pkg/apis/batch:go_default_library",
@@ -83,6 +84,7 @@ go_library(
         "//vendor/k8s.io/apiserver/pkg/server/storage:go_default_library",
         "//vendor/k8s.io/client-go/informers:go_default_library",
         "//vendor/k8s.io/client-go/kubernetes:go_default_library",
+        "//vendor/k8s.io/client-go/rest:go_default_library",
         "//vendor/k8s.io/kube-openapi/pkg/common:go_default_library",
     ],
 )
