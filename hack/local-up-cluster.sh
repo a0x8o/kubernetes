@@ -57,6 +57,7 @@ EVICTION_PRESSURE_TRANSITION_PERIOD=${EVICTION_PRESSURE_TRANSITION_PERIOD:-"1m"}
 # and we don't know the IP of the DNS pod to pass in as --cluster-dns.
 # To set this up by hand, set this flag and change DNS_SERVER_IP.
 # Note also that you need API_HOST (defined above) for correct DNS.
+KUBEPROXY_MODE=${KUBEPROXY_MODE:-""}
 ENABLE_CLUSTER_DNS=${KUBE_ENABLE_CLUSTER_DNS:-true}
 DNS_SERVER_IP=${KUBE_DNS_SERVER_IP:-10.0.0.10}
 DNS_DOMAIN=${KUBE_DNS_NAME:-"cluster.local"}
@@ -112,6 +113,11 @@ if [ "${CLOUD_PROVIDER}" == "openstack" ]; then
         echo "Cloud config ${CLOUD_CONFIG} doesn't exist"
         exit 1
     fi
+fi
+
+#set feature gates if using ipvs mode
+if [ "${KUBEPROXY_MODE}" == "ipvs" ]; then
+    FEATURE_GATES="$FEATURE_GATES,SupportIPVSProxyMode=true"
 fi
 
 # warn if users are running with swap allowed
@@ -413,7 +419,7 @@ function start_apiserver {
     fi
 
     # Admission Controllers to invoke prior to persisting objects in cluster
-    ADMISSION_CONTROL=Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount${security_admission},DefaultStorageClass,DefaultTolerationSeconds,ResourceQuota,GenericAdmissionWebhook
+    ADMISSION_CONTROL=Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount${security_admission},DefaultStorageClass,DefaultTolerationSeconds,ResourceQuota
     # This is the default dir and filename where the apiserver will generate a self-signed cert
     # which should be able to be used as the CA to verify itself
 
@@ -738,6 +744,16 @@ clientConnection:
 hostnameOverride: ${HOSTNAME_OVERRIDE}
 featureGates: ${FEATURE_GATES}
 EOF
+    if [ "${KUBEPROXY_MODE}" == "ipvs" ]; then
+        cat <<EOF >> /tmp/kube-proxy.yaml
+mode: ipvs
+EOF
+        sudo modprobe ip_vs
+        sudo modprobe ip_vs_rr
+        sudo modprobe ip_vs_wrr
+        sudo modprobe ip_vs_sh
+        sudo modprobe nf_conntrack_ipv4
+    fi
 
     sudo "${GO_OUT}/hyperkube" proxy \
       --config=/tmp/kube-proxy.yaml \
