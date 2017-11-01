@@ -19,7 +19,6 @@ package internalversion
 import (
 	"bytes"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -622,6 +621,10 @@ func describePod(pod *api.Pod, events *api.EventList) (string, error) {
 		w := NewPrefixWriter(out)
 		w.Write(LEVEL_0, "Name:\t%s\n", pod.Name)
 		w.Write(LEVEL_0, "Namespace:\t%s\n", pod.Namespace)
+		if pod.Spec.Priority != nil {
+			w.Write(LEVEL_0, "Priority:\t%d\n", *pod.Spec.Priority)
+			w.Write(LEVEL_0, "PriorityClassName:\t%s\n", stringOrNone(pod.Spec.PriorityClassName))
+		}
 		if pod.Spec.NodeName == "" {
 			w.Write(LEVEL_0, "Node:\t<none>\n")
 		} else {
@@ -645,9 +648,6 @@ func describePod(pod *api.Pod, events *api.EventList) (string, error) {
 			w.Write(LEVEL_0, "Message:\t%s\n", pod.Status.Message)
 		}
 		w.Write(LEVEL_0, "IP:\t%s\n", pod.Status.PodIP)
-		if createdBy := printCreator(pod.Annotations); len(createdBy) > 0 {
-			w.Write(LEVEL_0, "Created By:\t%s\n", createdBy)
-		}
 		if controlledBy := printController(pod); len(controlledBy) > 0 {
 			w.Write(LEVEL_0, "Controlled By:\t%s\n", controlledBy)
 		}
@@ -682,18 +682,6 @@ func describePod(pod *api.Pod, events *api.EventList) (string, error) {
 func printController(controllee metav1.Object) string {
 	if controllerRef := metav1.GetControllerOf(controllee); controllerRef != nil {
 		return fmt.Sprintf("%s/%s", controllerRef.Kind, controllerRef.Name)
-	}
-	return ""
-}
-
-func printCreator(annotation map[string]string) string {
-	value, ok := annotation[api.CreatedByAnnotation]
-	if ok {
-		var r api.SerializedReference
-		err := json.Unmarshal([]byte(value), &r)
-		if err == nil {
-			return fmt.Sprintf("%s/%s", r.Reference.Kind, r.Reference.Name)
-		}
 	}
 	return ""
 }
@@ -1704,8 +1692,8 @@ func describeJob(job *batch.Job, events *api.EventList) (string, error) {
 		w.Write(LEVEL_0, "Selector:\t%s\n", selector)
 		printLabelsMultiline(w, "Labels", job.Labels)
 		printAnnotationsMultiline(w, "Annotations", job.Annotations)
-		if createdBy := printCreator(job.Annotations); len(createdBy) > 0 {
-			w.Write(LEVEL_0, "Created By:\t%s\n", createdBy)
+		if controlledBy := printController(job); len(controlledBy) > 0 {
+			w.Write(LEVEL_0, "Controlled By:\t%s\n", controlledBy)
 		}
 		w.Write(LEVEL_0, "Parallelism:\t%d\n", *job.Spec.Parallelism)
 		if job.Spec.Completions != nil {
@@ -3092,11 +3080,61 @@ func describeNetworkPolicy(networkPolicy *networking.NetworkPolicy) (string, err
 		w := NewPrefixWriter(out)
 		w.Write(LEVEL_0, "Name:\t%s\n", networkPolicy.Name)
 		w.Write(LEVEL_0, "Namespace:\t%s\n", networkPolicy.Namespace)
+		w.Write(LEVEL_0, "Created on:\t%s\n", networkPolicy.CreationTimestamp)
 		printLabelsMultiline(w, "Labels", networkPolicy.Labels)
 		printAnnotationsMultiline(w, "Annotations", networkPolicy.Annotations)
-
+		describeNetworkPolicySpec(networkPolicy.Spec, w)
 		return nil
 	})
+}
+
+func describeNetworkPolicySpec(nps networking.NetworkPolicySpec, w PrefixWriter) {
+	w.Write(LEVEL_0, "Spec:\n")
+	w.Write(LEVEL_1, "Pod Selector: ")
+	if len(nps.PodSelector.MatchLabels) == 0 && len(nps.PodSelector.MatchExpressions) == 0 {
+		w.Write(LEVEL_2, "<none> (Allowing the specific traffic to all pods in this namespace)\n")
+	} else {
+		w.Write(LEVEL_2, "%s\n", metav1.FormatLabelSelector(&nps.PodSelector))
+	}
+	w.Write(LEVEL_1, "Allowing ingress traffic:\n")
+	printNetworkPolicySpecIngressFrom(nps.Ingress, "    ", w)
+}
+
+func printNetworkPolicySpecIngressFrom(npirs []networking.NetworkPolicyIngressRule, initialIndent string, w PrefixWriter) {
+	if len(npirs) == 0 {
+		w.WriteLine("<none> (Selected pods are isolated for ingress connectivity)")
+		return
+	}
+	for i, npir := range npirs {
+		if len(npir.Ports) == 0 {
+			w.Write(LEVEL_0, "%s%s\n", initialIndent, "To Port: <any> (traffic allowed to all ports)")
+		} else {
+			for _, port := range npir.Ports {
+				var proto api.Protocol
+				if port.Protocol != nil {
+					proto = *port.Protocol
+				} else {
+					proto = api.ProtocolTCP
+				}
+				w.Write(LEVEL_0, "%s%s: %s/%s\n", initialIndent, "To Port", port.Port, proto)
+			}
+		}
+		if len(npir.From) == 0 {
+			w.Write(LEVEL_0, "%s%s\n", initialIndent, "From: <any> (traffic not restricted by source)")
+		} else {
+			for _, from := range npir.From {
+				w.Write(LEVEL_0, "%s", initialIndent)
+				if from.PodSelector != nil {
+					w.Write(LEVEL_0, "%s: %s\n", "From Pod Selector", metav1.FormatLabelSelector(from.PodSelector))
+				} else if from.NamespaceSelector != nil {
+					w.Write(LEVEL_0, "%s: %s\n", "From Namespace Selector", metav1.FormatLabelSelector(from.NamespaceSelector))
+				}
+			}
+		}
+		if i != len(npirs)-1 {
+			w.Write(LEVEL_0, "%s%s\n", initialIndent, "----------")
+		}
+	}
 }
 
 type StorageClassDescriber struct {
