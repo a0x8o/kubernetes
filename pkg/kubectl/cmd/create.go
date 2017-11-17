@@ -108,6 +108,7 @@ func NewCmdCreate(f cmdutil.Factory, out, errOut io.Writer) *cobra.Command {
 	cmd.AddCommand(NewCmdCreateRole(f, out))
 	cmd.AddCommand(NewCmdCreateRoleBinding(f, out))
 	cmd.AddCommand(NewCmdCreatePodDisruptionBudget(f, out))
+	cmd.AddCommand(NewCmdCreatePriorityClass(f, out))
 	return cmd
 }
 
@@ -183,13 +184,12 @@ func RunCreate(f cmdutil.Factory, cmd *cobra.Command, out, errOut io.Writer, opt
 		return err
 	}
 
-	mapper, typer, err := f.UnstructuredObject()
+	mapper, _, err := f.UnstructuredObject()
 	if err != nil {
 		return err
 	}
 
-	r := f.NewBuilder().
-		Unstructured(f.UnstructuredClientForMapping, mapper, typer).
+	r := f.NewUnstructuredBuilder().
 		Schema(schema).
 		ContinueOnError().
 		NamespaceParam(cmdNamespace).DefaultNamespace().
@@ -230,7 +230,7 @@ func RunCreate(f cmdutil.Factory, cmd *cobra.Command, out, errOut io.Writer, opt
 
 		shortOutput := output == "name"
 		if len(output) > 0 && !shortOutput {
-			return cmdutil.PrintResourceInfoForCommand(cmd, info, f, out)
+			return f.PrintResourceInfoForCommand(cmd, info, out)
 		}
 		if !shortOutput {
 			f.PrintObjectSpecificMessage(info.Object, out)

@@ -33,8 +33,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	versionedfake "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/autoscaling"
+	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/apis/networking"
 	"k8s.io/kubernetes/pkg/apis/policy"
@@ -682,7 +682,7 @@ func TestDescribers(t *testing.T) {
 		t.Errorf("unexpected result: %s %v", out, err)
 	} else {
 		if noDescriber, ok := err.(printers.ErrNoDescriber); ok {
-			if !reflect.DeepEqual(noDescriber.Types, []string{"*api.Event", "*api.Pod", "*api.Pod"}) {
+			if !reflect.DeepEqual(noDescriber.Types, []string{"*core.Event", "*core.Pod", "*core.Pod"}) {
 				t.Errorf("unexpected describer: %v", err)
 			}
 		} else {
@@ -943,6 +943,7 @@ func TestDescribeDeployment(t *testing.T) {
 
 func TestDescribeStorageClass(t *testing.T) {
 	reclaimPolicy := api.PersistentVolumeReclaimRetain
+	bindingMode := storage.VolumeBindingMode("bindingmode")
 	f := fake.NewSimpleClientset(&storage.StorageClass{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "foo",
@@ -956,14 +957,22 @@ func TestDescribeStorageClass(t *testing.T) {
 			"param1": "value1",
 			"param2": "value2",
 		},
-		ReclaimPolicy: &reclaimPolicy,
+		ReclaimPolicy:     &reclaimPolicy,
+		VolumeBindingMode: &bindingMode,
 	})
 	s := StorageClassDescriber{f}
 	out, err := s.Describe("", "foo", printers.DescriberSettings{ShowEvents: true})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(out, "foo") {
+	if !strings.Contains(out, "foo") ||
+		!strings.Contains(out, "my-provisioner") ||
+		!strings.Contains(out, "param1") ||
+		!strings.Contains(out, "param2") ||
+		!strings.Contains(out, "value1") ||
+		!strings.Contains(out, "value2") ||
+		!strings.Contains(out, "Retain") ||
+		!strings.Contains(out, "bindingmode") {
 		t.Errorf("unexpected out: %s", out)
 	}
 }

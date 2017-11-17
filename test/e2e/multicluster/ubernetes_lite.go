@@ -58,7 +58,7 @@ var _ = SIGDescribe("Multi-AZ Clusters", func() {
 		SpreadRCOrFail(f, int32((2*zoneCount)+1), image)
 	})
 
-	It("should schedule pods in the same zones as statically provisioned PVs", func() {
+	It("should schedule pods in the same zones as statically provisioned PVs [sig-storage]", func() {
 		PodsUseStaticPVsOrFail(f, (2*zoneCount)+1, image)
 	})
 })
@@ -309,8 +309,8 @@ func PodsUseStaticPVsOrFail(f *framework.Framework, podCount int, image string) 
 
 	By("Creating pods for each static PV")
 	for _, config := range configs {
-		podConfig := framework.MakePod(ns, []*v1.PersistentVolumeClaim{config.pvc}, false, "")
-		config.pod, err = c.CoreV1().Pods(ns).Create(podConfig)
+		podConfig := framework.MakePod(ns, nil, []*v1.PersistentVolumeClaim{config.pvc}, false, "")
+		config.pod, err = c.Core().Pods(ns).Create(podConfig)
 		Expect(err).NotTo(HaveOccurred())
 	}
 

@@ -26,8 +26,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -35,11 +37,12 @@ import (
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
-	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/api/testapi"
+	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/kubectl"
+	"k8s.io/kubernetes/pkg/kubectl/categories"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util/openapi"
 	"k8s.io/kubernetes/pkg/kubectl/plugins"
@@ -239,7 +242,7 @@ type TestFactory struct {
 	Err                error
 	Command            string
 	TmpDir             string
-	CategoryExpander   resource.CategoryExpander
+	CategoryExpander   categories.CategoryExpander
 
 	ClientForMappingFunc             func(mapping *meta.RESTMapping) (resource.RESTClient, error)
 	UnstructuredClientForMappingFunc func(mapping *meta.RESTMapping) (resource.RESTClient, error)
@@ -291,8 +294,8 @@ func (f *FakeFactory) UnstructuredObject() (meta.RESTMapper, runtime.ObjectTyper
 	return expander, typer, err
 }
 
-func (f *FakeFactory) CategoryExpander() resource.CategoryExpander {
-	return resource.LegacyCategoryExpander
+func (f *FakeFactory) CategoryExpander() categories.CategoryExpander {
+	return categories.LegacyCategoryExpander
 }
 
 func (f *FakeFactory) Decoder(bool) runtime.Decoder {
@@ -350,6 +353,20 @@ func (f *FakeFactory) Describer(*meta.RESTMapping) (printers.Describer, error) {
 
 func (f *FakeFactory) PrinterForCommand(cmd *cobra.Command, isLocal bool, outputOpts *printers.OutputOptions, options printers.PrintOptions) (printers.ResourcePrinter, error) {
 	return f.tf.Printer, f.tf.Err
+}
+
+func (f *FakeFactory) PrintResourceInfoForCommand(cmd *cobra.Command, info *resource.Info, out io.Writer) error {
+	printer, err := f.PrinterForCommand(cmd, false, nil, printers.PrintOptions{})
+	if err != nil {
+		return err
+	}
+	if !printer.IsGeneric() {
+		printer, err = f.PrinterForMapping(cmd, false, nil, nil, false)
+		if err != nil {
+			return err
+		}
+	}
+	return printer.PrintObj(info.Object, out)
 }
 
 func (f *FakeFactory) Printer(mapping *meta.RESTMapping, options printers.PrintOptions) (printers.ResourcePrinter, error) {
@@ -447,7 +464,7 @@ func (f *FakeFactory) ApproximatePodTemplateForObject(obj runtime.Object) (*api.
 	return f.ApproximatePodTemplateForObject(obj)
 }
 
-func (f *FakeFactory) UpdatePodSpecForObject(obj runtime.Object, fn func(*api.PodSpec) error) (bool, error) {
+func (f *FakeFactory) UpdatePodSpecForObject(obj runtime.Object, fn func(*v1.PodSpec) error) (bool, error) {
 	return false, nil
 }
 
@@ -479,6 +496,19 @@ func (f *FakeFactory) PrinterForMapping(cmd *cobra.Command, isLocal bool, output
 func (f *FakeFactory) NewBuilder() *resource.Builder {
 	mapper, typer := f.Object()
 	return resource.NewBuilder(mapper, f.CategoryExpander(), typer, resource.ClientMapperFunc(f.ClientForMapping), f.Decoder(true))
+}
+
+func (f *FakeFactory) NewUnstructuredBuilder() *resource.Builder {
+	mapper, typer, err := f.UnstructuredObject()
+	if err != nil {
+		cmdutil.CheckErr(err)
+	}
+	return resource.NewBuilder(
+		mapper,
+		f.CategoryExpander(),
+		typer,
+		resource.ClientMapperFunc(f.UnstructuredClientForMapping),
+		unstructured.UnstructuredJSONScheme)
 }
 
 func (f *FakeFactory) DefaultResourceFilterOptions(cmd *cobra.Command, withNamespace bool) *printers.PrintOptions {
@@ -635,7 +665,7 @@ func (f *fakeAPIFactory) DiscoveryClient() (discovery.CachedDiscoveryInterface, 
 	return cmdutil.NewCachedDiscoveryClient(discoveryClient, cacheDir, time.Duration(10*time.Minute)), nil
 }
 
-func (f *fakeAPIFactory) CategoryExpander() resource.CategoryExpander {
+func (f *fakeAPIFactory) CategoryExpander() categories.CategoryExpander {
 	if f.tf.CategoryExpander != nil {
 		return f.tf.CategoryExpander
 	}
@@ -666,6 +696,20 @@ func (f *fakeAPIFactory) UnstructuredClientForMapping(m *meta.RESTMapping) (reso
 
 func (f *fakeAPIFactory) PrinterForCommand(cmd *cobra.Command, isLocal bool, outputOpts *printers.OutputOptions, options printers.PrintOptions) (printers.ResourcePrinter, error) {
 	return f.tf.Printer, f.tf.Err
+}
+
+func (f *fakeAPIFactory) PrintResourceInfoForCommand(cmd *cobra.Command, info *resource.Info, out io.Writer) error {
+	printer, err := f.PrinterForCommand(cmd, false, nil, printers.PrintOptions{})
+	if err != nil {
+		return err
+	}
+	if !printer.IsGeneric() {
+		printer, err = f.PrinterForMapping(cmd, false, nil, nil, false)
+		if err != nil {
+			return err
+		}
+	}
+	return printer.PrintObj(info.Object, out)
 }
 
 func (f *fakeAPIFactory) Describer(*meta.RESTMapping) (printers.Describer, error) {
@@ -756,6 +800,19 @@ func (f *fakeAPIFactory) PrinterForMapping(cmd *cobra.Command, isLocal bool, out
 func (f *fakeAPIFactory) NewBuilder() *resource.Builder {
 	mapper, typer := f.Object()
 	return resource.NewBuilder(mapper, f.CategoryExpander(), typer, resource.ClientMapperFunc(f.ClientForMapping), f.Decoder(true))
+}
+
+func (f *fakeAPIFactory) NewUnstructuredBuilder() *resource.Builder {
+	mapper, typer, err := f.UnstructuredObject()
+	if err != nil {
+		cmdutil.CheckErr(err)
+	}
+	return resource.NewBuilder(
+		mapper,
+		f.CategoryExpander(),
+		typer,
+		resource.ClientMapperFunc(f.UnstructuredClientForMapping),
+		unstructured.UnstructuredJSONScheme)
 }
 
 func (f *fakeAPIFactory) SuggestedPodTemplateResources() []schema.GroupResource {

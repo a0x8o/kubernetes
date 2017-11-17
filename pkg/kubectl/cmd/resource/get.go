@@ -33,7 +33,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/kubernetes/pkg/api"
+	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/kubectl"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
@@ -145,7 +145,7 @@ func NewCmdGet(f cmdutil.Factory, out io.Writer, errOut io.Writer) *cobra.Comman
 		Example: getExample,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(options.Complete(f, cmd, args))
-			cmdutil.CheckErr(options.Validate())
+			cmdutil.CheckErr(options.Validate(cmd))
 			cmdutil.CheckErr(options.Run(f, cmd, args))
 		},
 		SuggestFor: []string{"list", "ps"},
@@ -209,9 +209,15 @@ func (options *GetOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args 
 }
 
 // Validate checks the set of flags provided by the user.
-func (options *GetOptions) Validate() error {
+func (options *GetOptions) Validate(cmd *cobra.Command) error {
 	if len(options.Raw) > 0 && (options.Watch || options.WatchOnly || len(options.LabelSelector) > 0 || options.Export) {
 		return fmt.Errorf("--raw may not be specified with other flags that filter the server request or alter the output")
+	}
+	if cmdutil.GetFlagBool(cmd, "show-labels") {
+		outputOption := cmd.Flags().Lookup("output").Value.String()
+		if outputOption != "" && outputOption != "wide" {
+			return fmt.Errorf("--show-labels option cannot be used with %s printer", outputOption)
+		}
 	}
 	return nil
 }
@@ -226,13 +232,7 @@ func (options *GetOptions) Run(f cmdutil.Factory, cmd *cobra.Command, args []str
 		return options.watch(f, cmd, args)
 	}
 
-	mapper, typer, err := f.UnstructuredObject()
-	if err != nil {
-		return err
-	}
-
-	r := f.NewBuilder().
-		Unstructured(f.UnstructuredClientForMapping, mapper, typer).
+	r := f.NewUnstructuredBuilder().
 		NamespaceParam(options.Namespace).DefaultNamespace().AllNamespaces(options.AllNamespaces).
 		FilenameParam(options.ExplicitNamespace, &options.FilenameOptions).
 		LabelSelectorParam(options.LabelSelector).
@@ -439,18 +439,12 @@ func (options *GetOptions) raw(f cmdutil.Factory) error {
 // watch starts a client-side watch of one or more resources.
 // TODO: remove the need for arguments here.
 func (options *GetOptions) watch(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
-	mapper, typer, err := f.UnstructuredObject()
-	if err != nil {
-		return err
-	}
-
 	// TODO: this could be better factored
 	// include uninitialized objects when watching on a single object
 	// unless explicitly set --include-uninitialized=false
 	includeUninitialized := cmdutil.ShouldIncludeUninitialized(cmd, len(args) == 2)
 
-	r := f.NewBuilder().
-		Unstructured(f.UnstructuredClientForMapping, mapper, typer).
+	r := f.NewUnstructuredBuilder().
 		NamespaceParam(options.Namespace).DefaultNamespace().AllNamespaces(options.AllNamespaces).
 		FilenameParam(options.ExplicitNamespace, &options.FilenameOptions).
 		LabelSelectorParam(options.LabelSelector).
@@ -462,7 +456,7 @@ func (options *GetOptions) watch(f cmdutil.Factory, cmd *cobra.Command, args []s
 		SingleResourceType().
 		Latest().
 		Do()
-	err = r.Err()
+	err := r.Err()
 	if err != nil {
 		return err
 	}

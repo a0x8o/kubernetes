@@ -244,10 +244,6 @@ function create-node-pki {
     KUBELET_KEY_PATH="${pki_dir}/kubelet.key"
     write-pki-data "${KUBELET_KEY}" "${KUBELET_KEY_PATH}"
   fi
-
-  # TODO(mikedanese): remove this when we don't support downgrading to versions
-  # < 1.6.
-  ln -sf "${CA_CERT_BUNDLE_PATH}" /etc/srv/kubernetes/ca.crt
 }
 
 function create-master-pki {
@@ -297,11 +293,6 @@ function create-master-pki {
 
   SERVICEACCOUNT_KEY_PATH="${pki_dir}/serviceaccount.key"
   write-pki-data "${SERVICEACCOUNT_KEY}" "${SERVICEACCOUNT_KEY_PATH}"
-
-  # TODO(mikedanese): remove this when we don't support downgrading to versions
-  # < 1.6.
-  ln -sf "${APISERVER_SERVER_KEY_PATH}" /etc/srv/kubernetes/server.key
-  ln -sf "${APISERVER_SERVER_CERT_PATH}" /etc/srv/kubernetes/server.cert
 
   if [[ ! -z "${REQUESTHEADER_CA_CERT:-}" ]]; then
     AGGREGATOR_CA_KEY_PATH="${pki_dir}/aggr_ca.key"
@@ -854,6 +845,12 @@ function assemble-docker-flags {
   docker_opts+=" --log-driver=${DOCKER_LOG_DRIVER:-json-file}"
   docker_opts+=" --log-opt=max-size=${DOCKER_LOG_MAX_SIZE:-10m}"
   docker_opts+=" --log-opt=max-file=${DOCKER_LOG_MAX_FILE:-5}"
+
+  # Disable live-restore if the environment variable is set.
+
+  if [[ "${DISABLE_DOCKER_LIVE_RESTORE:-false}" == "true" ]]; then
+    docker_opts+=" --live-restore=false"
+  fi
 
   echo "DOCKER_OPTS=\"${docker_opts} ${EXTRA_DOCKER_OPTS:-}\"" > /etc/default/docker
 
@@ -1699,14 +1696,35 @@ function start-cluster-autoscaler {
   fi
 }
 
-# A helper function for copying addon manifests and set dir/files
-# permissions.
+# A helper function for setting up addon manifests.
 #
 # $1: addon category under /etc/kubernetes
 # $2: manifest source dir
+# $3: (optional) auxilary manifest source dir
 function setup-addon-manifests {
-  local -r src_dir="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/$2"
+  local -r src_dir="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty"
   local -r dst_dir="/etc/kubernetes/$1/$2"
+
+  copy-manifests "${src_dir}/$2" "${dst_dir}"
+
+  # If the PodSecurityPolicy admission controller is enabled,
+  # set up the corresponding addon policies.
+  if [[ "${ENABLE_POD_SECURITY_POLICY:-}" == "true" ]]; then
+    local -r psp_dir="${src_dir}/${3:-$2}/podsecuritypolicies"
+    if [[ -d "${psp_dir}" ]]; then
+      copy-manifests "${psp_dir}" "${dst_dir}"
+    fi
+  fi
+}
+
+# A helper function for copying manifests and setting dir/files
+# permissions.
+#
+# $1: absolute source dir
+# $2: absolute destination dir
+function copy-manifests {
+  local -r src_dir="$1"
+  local -r dst_dir="$2"
   if [[ ! -d "${dst_dir}" ]]; then
     mkdir -p "${dst_dir}"
   fi
@@ -1773,11 +1791,11 @@ function start-kube-addons {
   if [[ "${REGISTER_MASTER_KUBELET:-false}" == "true" ]]; then
     setup-addon-manifests "addons" "rbac/legacy-kubelet-user"
   else
-    setup-addon-manifests "addons" "rbac/legacy-kubelet-user-disabled"
+    setup-addon-manifests "addons" "rbac/legacy-kubelet-user-disable"
   fi
 
   if [[ "${ENABLE_POD_SECURITY_POLICY:-}" == "true" ]]; then
-      setup-addon-manifests "addons" "podsecuritypolicies"
+    setup-addon-manifests "addons" "podsecuritypolicies"
   fi
 
   # Set up manifests of other addons.
@@ -1833,6 +1851,9 @@ EOF
   if [[ "${ENABLE_METRICS_SERVER:-}" == "true" ]]; then
     setup-addon-manifests "addons" "metrics-server"
   fi
+  if [[ "${ENABLE_NVIDIA_GPU_DEVICE_PLUGIN:-}" == "true" ]]; then
+    setup-addon-manifests "addons" "device-plugins/nvidia-gpu"
+  fi
   if [[ "${ENABLE_CLUSTER_DNS:-}" == "true" ]]; then
     setup-addon-manifests "addons" "dns"
     local -r kubedns_file="${dst_dir}/dns/kube-dns.yaml"
@@ -1886,7 +1907,7 @@ EOF
   fi
   if [[ "${ENABLE_NODE_PROBLEM_DETECTOR:-}" == "standalone" ]]; then
     # Setup role binding for standalone node problem detector.
-    setup-addon-manifests "addons" "node-problem-detector/standalone"
+    setup-addon-manifests "addons" "node-problem-detector/standalone" "node-problem-detector"
   fi
   if echo "${ADMISSION_CONTROL:-}" | grep -q "LimitRanger"; then
     setup-addon-manifests "admission-controls" "limit-range"
@@ -2053,7 +2074,7 @@ fi
 
 override-kubectl
 # Run the containerized mounter once to pre-cache the container image.
-if [[ "${CONTAINER_RUNTIME:-}" == "docker" ]]; then
+if [[ "${CONTAINER_RUNTIME:-docker}" == "docker" ]]; then
   assemble-docker-flags
 fi
 start-kubelet

@@ -26,12 +26,12 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/kubernetes/pkg/kubectl/categories"
 	"k8s.io/kubernetes/pkg/kubectl/validation"
 )
 
@@ -45,7 +45,7 @@ const defaultHttpGetAttempts int = 3
 // over using the Visitor interface.
 type Builder struct {
 	mapper           *Mapper
-	categoryExpander CategoryExpander
+	categoryExpander categories.CategoryExpander
 
 	errs []error
 
@@ -116,7 +116,7 @@ type resourceTuple struct {
 }
 
 // NewBuilder creates a builder that operates on generic objects.
-func NewBuilder(mapper meta.RESTMapper, categoryExpander CategoryExpander, typer runtime.ObjectTyper, clientMapper ClientMapper, decoder runtime.Decoder) *Builder {
+func NewBuilder(mapper meta.RESTMapper, categoryExpander categories.CategoryExpander, typer runtime.ObjectTyper, clientMapper ClientMapper, decoder runtime.Decoder) *Builder {
 	return &Builder{
 		mapper:           &Mapper{typer, mapper, clientMapper, decoder},
 		categoryExpander: categoryExpander,
@@ -167,17 +167,6 @@ func (b *Builder) FilenameParam(enforceNamespace bool, filenameOptions *Filename
 // Local wraps the builder's clientMapper in a DisabledClientMapperForMapping
 func (b *Builder) Local(mapperFunc ClientMapperFunc) *Builder {
 	b.mapper.ClientMapper = DisabledClientForMapping{ClientMapper: ClientMapperFunc(mapperFunc)}
-	return b
-}
-
-// Unstructured updates the builder's ClientMapper, RESTMapper,
-// ObjectTyper, and codec for working with unstructured api objects
-func (b *Builder) Unstructured(mapperFunc ClientMapperFunc, mapper meta.RESTMapper, typer runtime.ObjectTyper) *Builder {
-	b.mapper.RESTMapper = mapper
-	b.mapper.ObjectTyper = typer
-	b.mapper.Decoder = unstructured.UnstructuredJSONScheme
-	b.mapper.ClientMapper = ClientMapperFunc(mapperFunc)
-
 	return b
 }
 
