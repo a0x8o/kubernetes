@@ -33,7 +33,7 @@ import (
 	"k8s.io/kubernetes/cmd/kubeadm/app/features"
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
 	tokenutil "k8s.io/kubernetes/cmd/kubeadm/app/util/token"
-	apivalidation "k8s.io/kubernetes/pkg/api/validation"
+	apivalidation "k8s.io/kubernetes/pkg/apis/core/validation"
 	authzmodes "k8s.io/kubernetes/pkg/kubeapiserver/authorizer/modes"
 	"k8s.io/kubernetes/pkg/registry/core/service/ipallocator"
 	"k8s.io/kubernetes/pkg/util/node"
@@ -120,12 +120,6 @@ func ValidateDiscovery(c *kubeadm.NodeConfiguration, fldPath *field.Path) field.
 	allErrs = append(allErrs, ValidateToken(c.TLSBootstrapToken, fldPath)...)
 	allErrs = append(allErrs, ValidateJoinDiscoveryTokenAPIServer(c, fldPath)...)
 
-	if len(c.DiscoveryToken) != 0 {
-		allErrs = append(allErrs, ValidateToken(c.DiscoveryToken, fldPath)...)
-	}
-	if len(c.DiscoveryFile) != 0 {
-		allErrs = append(allErrs, ValidateDiscoveryFile(c.DiscoveryFile, fldPath)...)
-	}
 	return allErrs
 }
 
@@ -146,10 +140,8 @@ func ValidateArgSelection(cfg *kubeadm.NodeConfiguration, fldPath *field.Path) f
 		allErrs = append(allErrs, field.Invalid(fldPath, "", "DiscoveryTokenCACertHashes cannot be used with DiscoveryFile"))
 	}
 
-	// TODO: convert this warning to an error after v1.8
 	if len(cfg.DiscoveryFile) == 0 && len(cfg.DiscoveryTokenCACertHashes) == 0 && !cfg.DiscoveryTokenUnsafeSkipCAVerification {
-		fmt.Println("[validation] WARNING: using token-based discovery without DiscoveryTokenCACertHashes can be unsafe (see https://kubernetes.io/docs/admin/kubeadm/#kubeadm-join).")
-		fmt.Println("[validation] WARNING: Pass --discovery-token-unsafe-skip-ca-verification to disable this warning. This warning will become an error in Kubernetes 1.9.")
+		allErrs = append(allErrs, field.Invalid(fldPath, "", "using token-based discovery without DiscoveryTokenCACertHashes can be unsafe. set --discovery-token-unsafe-skip-ca-verification to continue"))
 	}
 
 	// TODO remove once we support multiple api servers

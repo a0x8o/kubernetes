@@ -40,7 +40,6 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
-	clientgoclientset "k8s.io/client-go/kubernetes"
 	clientset "k8s.io/client-go/kubernetes"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	restclient "k8s.io/client-go/rest"
@@ -122,11 +121,11 @@ func AddFlags(options *Options, fs *pflag.FlagSet) {
 	fs.StringVar(&options.config.ClientConnection.KubeConfigFile, "kubeconfig", options.config.ClientConnection.KubeConfigFile, "Path to kubeconfig file with authorization and master location information.")
 	fs.StringVar(&options.config.ClientConnection.ContentType, "kube-api-content-type", options.config.ClientConnection.ContentType, "Content type of requests sent to apiserver.")
 	fs.Float32Var(&options.config.ClientConnection.QPS, "kube-api-qps", options.config.ClientConnection.QPS, "QPS to use while talking with kubernetes apiserver")
-	fs.IntVar(&options.config.ClientConnection.Burst, "kube-api-burst", options.config.ClientConnection.Burst, "Burst to use while talking with kubernetes apiserver")
+	fs.Int32Var(&options.config.ClientConnection.Burst, "kube-api-burst", options.config.ClientConnection.Burst, "Burst to use while talking with kubernetes apiserver")
 	fs.StringVar(&options.config.SchedulerName, "scheduler-name", options.config.SchedulerName, "Name of the scheduler, used to select which pods will be processed by this scheduler, based on pod's \"spec.SchedulerName\".")
 	fs.StringVar(&options.config.LeaderElection.LockObjectNamespace, "lock-object-namespace", options.config.LeaderElection.LockObjectNamespace, "Define the namespace of the lock object.")
 	fs.StringVar(&options.config.LeaderElection.LockObjectName, "lock-object-name", options.config.LeaderElection.LockObjectName, "Define the name of the lock object.")
-	fs.IntVar(&options.config.HardPodAffinitySymmetricWeight, "hard-pod-affinity-symmetric-weight", options.config.HardPodAffinitySymmetricWeight,
+	fs.Int32Var(&options.config.HardPodAffinitySymmetricWeight, "hard-pod-affinity-symmetric-weight", options.config.HardPodAffinitySymmetricWeight,
 		"RequiredDuringScheduling affinity is not symmetric, but there is an implicit PreferredDuringScheduling affinity rule corresponding "+
 			"to every RequiredDuringScheduling affinity rule. --hard-pod-affinity-symmetric-weight represents the weight of implicit PreferredDuringScheduling affinity rule.")
 	fs.MarkDeprecated("hard-pod-affinity-symmetric-weight", "This option was moved to the policy configuration file")
@@ -258,7 +257,7 @@ func (o *Options) loadConfigFromFile(file string) (*componentconfig.KubeSchedule
 	return o.loadConfig(data)
 }
 
-// loadConfig decodes data as a KubeProxyConfiguration object.
+// loadConfig decodes data as a KubeSchedulerConfiguration object.
 func (o *Options) loadConfig(data []byte) (*componentconfig.KubeSchedulerConfiguration, error) {
 	configObj, gvk, err := o.codecs.UniversalDecoder().Decode(data, nil, nil)
 	if err != nil {
@@ -358,7 +357,7 @@ type SchedulerServer struct {
 	InformerFactory                informers.SharedInformerFactory
 	PodInformer                    coreinformers.PodInformer
 	AlgorithmSource                componentconfig.SchedulerAlgorithmSource
-	HardPodAffinitySymmetricWeight int
+	HardPodAffinitySymmetricWeight int32
 	EventClient                    v1core.EventsGetter
 	Recorder                       record.EventRecorder
 	Broadcaster                    record.EventBroadcaster
@@ -537,7 +536,7 @@ func createClients(config componentconfig.ClientConnectionConfiguration, masterO
 		return nil, nil, nil, err
 	}
 
-	eventClient, err := clientgoclientset.NewForConfig(kubeConfig)
+	eventClient, err := clientset.NewForConfig(kubeConfig)
 	if err != nil {
 		return nil, nil, nil, err
 	}

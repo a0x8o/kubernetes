@@ -57,14 +57,13 @@ import (
 	"k8s.io/client-go/informers"
 	extinformers "k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
-	extclient "k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	"k8s.io/kubernetes/pkg/apis/batch"
-	policy "k8s.io/kubernetes/pkg/apis/policy/v1alpha1"
+	api "k8s.io/kubernetes/pkg/apis/core"
+	policy "k8s.io/kubernetes/pkg/apis/policy/v1beta1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/controller"
 	replicationcontroller "k8s.io/kubernetes/pkg/controller/replication"
@@ -246,7 +245,7 @@ func startMasterOrDie(masterConfig *master.Config, incomingServer *httptest.Serv
 
 	masterConfig.GenericConfig.LoopbackClientConfig.BearerToken = privilegedLoopbackToken
 
-	clientset, err := extclient.NewForConfig(masterConfig.GenericConfig.LoopbackClientConfig)
+	clientset, err := clientset.NewForConfig(masterConfig.GenericConfig.LoopbackClientConfig)
 	if err != nil {
 		glog.Fatal(err)
 	}

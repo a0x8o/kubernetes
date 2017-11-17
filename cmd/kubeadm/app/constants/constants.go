@@ -73,7 +73,7 @@ const (
 	FrontProxyCACertAndKeyBaseName = "front-proxy-ca"
 	// FrontProxyCACertName defines front proxy CA certificate name
 	FrontProxyCACertName = "front-proxy-ca.crt"
-	// FrontProxyCAKeyName defaines front proxy CA key name
+	// FrontProxyCAKeyName defines front proxy CA key name
 	FrontProxyCAKeyName = "front-proxy-ca.key"
 
 	// FrontProxyClientCertAndKeyBaseName defines front proxy certificate and key base name
@@ -171,6 +171,11 @@ const (
 
 	// DefaultCIImageRepository points to image registry where CI uploads images from ci-cross build job
 	DefaultCIImageRepository = "gcr.io/kubernetes-ci-images"
+
+	// CoreDNS defines a variable used internally when referring to the CoreDNS addon for a cluster
+	CoreDNS = "CoreDNS"
+	// KubeDNS defines a variable used internally when referring to the kube-dns addon for a cluster
+	KubeDNS = "kube-dns"
 )
 
 var (

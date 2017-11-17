@@ -23,8 +23,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/kubernetes/pkg/api"
 	scheme "k8s.io/kubernetes/pkg/api/legacyscheme"
+	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
@@ -129,14 +129,14 @@ func (o *ConvertOptions) Complete(f cmdutil.Factory, out io.Writer, cmd *cobra.C
 
 	// build the builder
 	o.builder = f.NewBuilder()
-	if !o.local {
+	if o.local {
+		o.builder = o.builder.Local(f.ClientForMapping)
+	} else {
 		schema, err := f.Validator(cmdutil.GetFlagBool(cmd, "validate"))
 		if err != nil {
 			return err
 		}
 		o.builder = o.builder.Schema(schema)
-	} else {
-		o.builder = o.builder.Local(f.ClientForMapping)
 	}
 
 	cmdNamespace, _, err := f.DefaultNamespace()

@@ -17,6 +17,7 @@ limitations under the License.
 package validation
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/kubernetes/pkg/proxy/apis/kubeproxyconfig"
+	"k8s.io/kubernetes/pkg/util/pointer"
 )
 
 func TestValidateKubeProxyConfiguration(t *testing.T) {
@@ -40,12 +42,16 @@ func TestValidateKubeProxyConfiguration(t *testing.T) {
 				SyncPeriod:    metav1.Duration{Duration: 5 * time.Second},
 				MinSyncPeriod: metav1.Duration{Duration: 2 * time.Second},
 			},
+			IPVS: kubeproxyconfig.KubeProxyIPVSConfiguration{
+				SyncPeriod:    metav1.Duration{Duration: 10 * time.Second},
+				MinSyncPeriod: metav1.Duration{Duration: 5 * time.Second},
+			},
 			Conntrack: kubeproxyconfig.KubeProxyConntrackConfiguration{
-				Max:        int32(2),
-				MaxPerCore: int32(1),
-				Min:        int32(1),
-				TCPEstablishedTimeout: metav1.Duration{Duration: 5 * time.Second},
-				TCPCloseWaitTimeout:   metav1.Duration{Duration: 5 * time.Second},
+				Max:        pointer.Int32Ptr(2),
+				MaxPerCore: pointer.Int32Ptr(1),
+				Min:        pointer.Int32Ptr(1),
+				TCPEstablishedTimeout: &metav1.Duration{Duration: 5 * time.Second},
+				TCPCloseWaitTimeout:   &metav1.Duration{Duration: 5 * time.Second},
 			},
 		},
 	}
@@ -74,12 +80,16 @@ func TestValidateKubeProxyConfiguration(t *testing.T) {
 					SyncPeriod:    metav1.Duration{Duration: 5 * time.Second},
 					MinSyncPeriod: metav1.Duration{Duration: 2 * time.Second},
 				},
+				IPVS: kubeproxyconfig.KubeProxyIPVSConfiguration{
+					SyncPeriod:    metav1.Duration{Duration: 10 * time.Second},
+					MinSyncPeriod: metav1.Duration{Duration: 5 * time.Second},
+				},
 				Conntrack: kubeproxyconfig.KubeProxyConntrackConfiguration{
-					Max:        int32(2),
-					MaxPerCore: int32(1),
-					Min:        int32(1),
-					TCPEstablishedTimeout: metav1.Duration{Duration: 5 * time.Second},
-					TCPCloseWaitTimeout:   metav1.Duration{Duration: 5 * time.Second},
+					Max:        pointer.Int32Ptr(2),
+					MaxPerCore: pointer.Int32Ptr(1),
+					Min:        pointer.Int32Ptr(1),
+					TCPEstablishedTimeout: &metav1.Duration{Duration: 5 * time.Second},
+					TCPCloseWaitTimeout:   &metav1.Duration{Duration: 5 * time.Second},
 				},
 			},
 			msg: "not a valid textual representation of an IP address",
@@ -98,12 +108,16 @@ func TestValidateKubeProxyConfiguration(t *testing.T) {
 					SyncPeriod:    metav1.Duration{Duration: 5 * time.Second},
 					MinSyncPeriod: metav1.Duration{Duration: 2 * time.Second},
 				},
+				IPVS: kubeproxyconfig.KubeProxyIPVSConfiguration{
+					SyncPeriod:    metav1.Duration{Duration: 10 * time.Second},
+					MinSyncPeriod: metav1.Duration{Duration: 5 * time.Second},
+				},
 				Conntrack: kubeproxyconfig.KubeProxyConntrackConfiguration{
-					Max:        int32(2),
-					MaxPerCore: int32(1),
-					Min:        int32(1),
-					TCPEstablishedTimeout: metav1.Duration{Duration: 5 * time.Second},
-					TCPCloseWaitTimeout:   metav1.Duration{Duration: 5 * time.Second},
+					Max:        pointer.Int32Ptr(2),
+					MaxPerCore: pointer.Int32Ptr(1),
+					Min:        pointer.Int32Ptr(1),
+					TCPEstablishedTimeout: &metav1.Duration{Duration: 5 * time.Second},
+					TCPCloseWaitTimeout:   &metav1.Duration{Duration: 5 * time.Second},
 				},
 			},
 			msg: "must be IP:port",
@@ -122,12 +136,16 @@ func TestValidateKubeProxyConfiguration(t *testing.T) {
 					SyncPeriod:    metav1.Duration{Duration: 5 * time.Second},
 					MinSyncPeriod: metav1.Duration{Duration: 2 * time.Second},
 				},
+				IPVS: kubeproxyconfig.KubeProxyIPVSConfiguration{
+					SyncPeriod:    metav1.Duration{Duration: 10 * time.Second},
+					MinSyncPeriod: metav1.Duration{Duration: 5 * time.Second},
+				},
 				Conntrack: kubeproxyconfig.KubeProxyConntrackConfiguration{
-					Max:        int32(2),
-					MaxPerCore: int32(1),
-					Min:        int32(1),
-					TCPEstablishedTimeout: metav1.Duration{Duration: 5 * time.Second},
-					TCPCloseWaitTimeout:   metav1.Duration{Duration: 5 * time.Second},
+					Max:        pointer.Int32Ptr(2),
+					MaxPerCore: pointer.Int32Ptr(1),
+					Min:        pointer.Int32Ptr(1),
+					TCPEstablishedTimeout: &metav1.Duration{Duration: 5 * time.Second},
+					TCPCloseWaitTimeout:   &metav1.Duration{Duration: 5 * time.Second},
 				},
 			},
 			msg: "must be IP:port",
@@ -146,12 +164,16 @@ func TestValidateKubeProxyConfiguration(t *testing.T) {
 					SyncPeriod:    metav1.Duration{Duration: 5 * time.Second},
 					MinSyncPeriod: metav1.Duration{Duration: 2 * time.Second},
 				},
+				IPVS: kubeproxyconfig.KubeProxyIPVSConfiguration{
+					SyncPeriod:    metav1.Duration{Duration: 10 * time.Second},
+					MinSyncPeriod: metav1.Duration{Duration: 5 * time.Second},
+				},
 				Conntrack: kubeproxyconfig.KubeProxyConntrackConfiguration{
-					Max:        int32(2),
-					MaxPerCore: int32(1),
-					Min:        int32(1),
-					TCPEstablishedTimeout: metav1.Duration{Duration: 5 * time.Second},
-					TCPCloseWaitTimeout:   metav1.Duration{Duration: 5 * time.Second},
+					Max:        pointer.Int32Ptr(2),
+					MaxPerCore: pointer.Int32Ptr(1),
+					Min:        pointer.Int32Ptr(1),
+					TCPEstablishedTimeout: &metav1.Duration{Duration: 5 * time.Second},
+					TCPCloseWaitTimeout:   &metav1.Duration{Duration: 5 * time.Second},
 				},
 			},
 			msg: "must be a valid CIDR block (e.g. 10.100.0.0/16)",
@@ -170,12 +192,16 @@ func TestValidateKubeProxyConfiguration(t *testing.T) {
 					SyncPeriod:    metav1.Duration{Duration: 5 * time.Second},
 					MinSyncPeriod: metav1.Duration{Duration: 2 * time.Second},
 				},
+				IPVS: kubeproxyconfig.KubeProxyIPVSConfiguration{
+					SyncPeriod:    metav1.Duration{Duration: 10 * time.Second},
+					MinSyncPeriod: metav1.Duration{Duration: 5 * time.Second},
+				},
 				Conntrack: kubeproxyconfig.KubeProxyConntrackConfiguration{
-					Max:        int32(2),
-					MaxPerCore: int32(1),
-					Min:        int32(1),
-					TCPEstablishedTimeout: metav1.Duration{Duration: 5 * time.Second},
-					TCPCloseWaitTimeout:   metav1.Duration{Duration: 5 * time.Second},
+					Max:        pointer.Int32Ptr(2),
+					MaxPerCore: pointer.Int32Ptr(1),
+					Min:        pointer.Int32Ptr(1),
+					TCPEstablishedTimeout: &metav1.Duration{Duration: 5 * time.Second},
+					TCPCloseWaitTimeout:   &metav1.Duration{Duration: 5 * time.Second},
 				},
 			},
 			msg: "must be greater than 0",
@@ -194,12 +220,16 @@ func TestValidateKubeProxyConfiguration(t *testing.T) {
 					SyncPeriod:    metav1.Duration{Duration: 5 * time.Second},
 					MinSyncPeriod: metav1.Duration{Duration: 2 * time.Second},
 				},
+				IPVS: kubeproxyconfig.KubeProxyIPVSConfiguration{
+					SyncPeriod:    metav1.Duration{Duration: 10 * time.Second},
+					MinSyncPeriod: metav1.Duration{Duration: 5 * time.Second},
+				},
 				Conntrack: kubeproxyconfig.KubeProxyConntrackConfiguration{
-					Max:        int32(2),
-					MaxPerCore: int32(1),
-					Min:        int32(1),
-					TCPEstablishedTimeout: metav1.Duration{Duration: 5 * time.Second},
-					TCPCloseWaitTimeout:   metav1.Duration{Duration: 5 * time.Second},
+					Max:        pointer.Int32Ptr(2),
+					MaxPerCore: pointer.Int32Ptr(1),
+					Min:        pointer.Int32Ptr(1),
+					TCPEstablishedTimeout: &metav1.Duration{Duration: 5 * time.Second},
+					TCPCloseWaitTimeout:   &metav1.Duration{Duration: 5 * time.Second},
 				},
 			},
 			msg: "must be greater than 0",
@@ -268,6 +298,16 @@ func TestValidateKubeProxyIPTablesConfiguration(t *testing.T) {
 			},
 			msg: "must be within the range [0, 31]",
 		},
+		// SyncPeriod must be >= MinSyncPeriod
+		{
+			config: kubeproxyconfig.KubeProxyIPTablesConfiguration{
+				MasqueradeBit: &valid,
+				MasqueradeAll: true,
+				SyncPeriod:    metav1.Duration{Duration: 1 * time.Second},
+				MinSyncPeriod: metav1.Duration{Duration: 5 * time.Second},
+			},
+			msg: fmt.Sprintf("must be greater than or equal to %s", newPath.Child("KubeProxyIPTablesConfiguration").Child("MinSyncPeriod").String()),
+		},
 	}
 
 	for _, errorCase := range errorCases {
@@ -279,21 +319,97 @@ func TestValidateKubeProxyIPTablesConfiguration(t *testing.T) {
 	}
 }
 
+func TestValidateKubeProxyIPVSConfiguration(t *testing.T) {
+	newPath := field.NewPath("KubeProxyConfiguration")
+	testCases := []struct {
+		config    kubeproxyconfig.KubeProxyIPVSConfiguration
+		expectErr bool
+		reason    string
+	}{
+		{
+			config: kubeproxyconfig.KubeProxyIPVSConfiguration{
+				SyncPeriod:    metav1.Duration{Duration: -5 * time.Second},
+				MinSyncPeriod: metav1.Duration{Duration: 2 * time.Second},
+			},
+			expectErr: true,
+			reason:    "SyncPeriod must be greater than 0",
+		},
+		{
+			config: kubeproxyconfig.KubeProxyIPVSConfiguration{
+				SyncPeriod:    metav1.Duration{Duration: 0 * time.Second},
+				MinSyncPeriod: metav1.Duration{Duration: 10 * time.Second},
+			},
+			expectErr: true,
+			reason:    "SyncPeriod must be greater than 0",
+		},
+		{
+			config: kubeproxyconfig.KubeProxyIPVSConfiguration{
+				SyncPeriod:    metav1.Duration{Duration: 5 * time.Second},
+				MinSyncPeriod: metav1.Duration{Duration: -1 * time.Second},
+			},
+			expectErr: true,
+			reason:    "MinSyncPeriod must be greater than or equal to 0",
+		},
+		{
+			config: kubeproxyconfig.KubeProxyIPVSConfiguration{
+				SyncPeriod:    metav1.Duration{Duration: 1 * time.Second},
+				MinSyncPeriod: metav1.Duration{Duration: 5 * time.Second},
+			},
+			expectErr: true,
+			reason:    "SyncPeriod must be greater than or equal to MinSyncPeriod",
+		},
+		// SyncPeriod == MinSyncPeriod
+		{
+			config: kubeproxyconfig.KubeProxyIPVSConfiguration{
+				SyncPeriod:    metav1.Duration{Duration: 10 * time.Second},
+				MinSyncPeriod: metav1.Duration{Duration: 10 * time.Second},
+			},
+			expectErr: false,
+		},
+		// SyncPeriod > MinSyncPeriod
+		{
+			config: kubeproxyconfig.KubeProxyIPVSConfiguration{
+				SyncPeriod:    metav1.Duration{Duration: 10 * time.Second},
+				MinSyncPeriod: metav1.Duration{Duration: 5 * time.Second},
+			},
+			expectErr: false,
+		},
+		// SyncPeriod can be 0
+		{
+			config: kubeproxyconfig.KubeProxyIPVSConfiguration{
+				SyncPeriod:    metav1.Duration{Duration: 5 * time.Second},
+				MinSyncPeriod: metav1.Duration{Duration: 0 * time.Second},
+			},
+			expectErr: false,
+		},
+	}
+
+	for _, test := range testCases {
+		errs := validateKubeProxyIPVSConfiguration(test.config, newPath.Child("KubeProxyIPVSConfiguration"))
+		if len(errs) == 0 && test.expectErr {
+			t.Errorf("Expect error, got nil, reason: %s", test.reason)
+		}
+		if len(errs) > 0 && !test.expectErr {
+			t.Errorf("Unexpected error: %v", errs)
+		}
+	}
+}
+
 func TestValidateKubeProxyConntrackConfiguration(t *testing.T) {
 	successCases := []kubeproxyconfig.KubeProxyConntrackConfiguration{
 		{
-			Max:        int32(2),
-			MaxPerCore: int32(1),
-			Min:        int32(1),
-			TCPEstablishedTimeout: metav1.Duration{Duration: 5 * time.Second},
-			TCPCloseWaitTimeout:   metav1.Duration{Duration: 5 * time.Second},
+			Max:        pointer.Int32Ptr(2),
+			MaxPerCore: pointer.Int32Ptr(1),
+			Min:        pointer.Int32Ptr(1),
+			TCPEstablishedTimeout: &metav1.Duration{Duration: 5 * time.Second},
+			TCPCloseWaitTimeout:   &metav1.Duration{Duration: 5 * time.Second},
 		},
 		{
-			Max:        0,
-			MaxPerCore: 0,
-			Min:        0,
-			TCPEstablishedTimeout: metav1.Duration{Duration: 5 * time.Second},
-			TCPCloseWaitTimeout:   metav1.Duration{Duration: 60 * time.Second},
+			Max:        pointer.Int32Ptr(0),
+			MaxPerCore: pointer.Int32Ptr(0),
+			Min:        pointer.Int32Ptr(0),
+			TCPEstablishedTimeout: &metav1.Duration{Duration: 0 * time.Second},
+			TCPCloseWaitTimeout:   &metav1.Duration{Duration: 0 * time.Second},
 		},
 	}
 	newPath := field.NewPath("KubeProxyConfiguration")
@@ -309,53 +425,53 @@ func TestValidateKubeProxyConntrackConfiguration(t *testing.T) {
 	}{
 		{
 			config: kubeproxyconfig.KubeProxyConntrackConfiguration{
-				Max:        int32(-1),
-				MaxPerCore: int32(1),
-				Min:        int32(1),
-				TCPEstablishedTimeout: metav1.Duration{Duration: 5 * time.Second},
-				TCPCloseWaitTimeout:   metav1.Duration{Duration: 5 * time.Second},
+				Max:        pointer.Int32Ptr(-1),
+				MaxPerCore: pointer.Int32Ptr(1),
+				Min:        pointer.Int32Ptr(1),
+				TCPEstablishedTimeout: &metav1.Duration{Duration: 5 * time.Second},
+				TCPCloseWaitTimeout:   &metav1.Duration{Duration: 5 * time.Second},
 			},
 			msg: "must be greater than or equal to 0",
 		},
 		{
 			config: kubeproxyconfig.KubeProxyConntrackConfiguration{
-				Max:        int32(2),
-				MaxPerCore: int32(-1),
-				Min:        int32(1),
-				TCPEstablishedTimeout: metav1.Duration{Duration: 5 * time.Second},
-				TCPCloseWaitTimeout:   metav1.Duration{Duration: 5 * time.Second},
+				Max:        pointer.Int32Ptr(2),
+				MaxPerCore: pointer.Int32Ptr(-1),
+				Min:        pointer.Int32Ptr(1),
+				TCPEstablishedTimeout: &metav1.Duration{Duration: 5 * time.Second},
+				TCPCloseWaitTimeout:   &metav1.Duration{Duration: 5 * time.Second},
 			},
 			msg: "must be greater than or equal to 0",
 		},
 		{
 			config: kubeproxyconfig.KubeProxyConntrackConfiguration{
-				Max:        int32(2),
-				MaxPerCore: int32(1),
-				Min:        int32(-1),
-				TCPEstablishedTimeout: metav1.Duration{Duration: 5 * time.Second},
-				TCPCloseWaitTimeout:   metav1.Duration{Duration: 5 * time.Second},
+				Max:        pointer.Int32Ptr(2),
+				MaxPerCore: pointer.Int32Ptr(1),
+				Min:        pointer.Int32Ptr(-1),
+				TCPEstablishedTimeout: &metav1.Duration{Duration: 5 * time.Second},
+				TCPCloseWaitTimeout:   &metav1.Duration{Duration: 5 * time.Second},
 			},
 			msg: "must be greater than or equal to 0",
 		},
 		{
 			config: kubeproxyconfig.KubeProxyConntrackConfiguration{
-				Max:        int32(4),
-				MaxPerCore: int32(1),
-				Min:        int32(3),
-				TCPEstablishedTimeout: metav1.Duration{Duration: -5 * time.Second},
-				TCPCloseWaitTimeout:   metav1.Duration{Duration: 5 * time.Second},
+				Max:        pointer.Int32Ptr(4),
+				MaxPerCore: pointer.Int32Ptr(1),
+				Min:        pointer.Int32Ptr(3),
+				TCPEstablishedTimeout: &metav1.Duration{Duration: -5 * time.Second},
+				TCPCloseWaitTimeout:   &metav1.Duration{Duration: 5 * time.Second},
 			},
-			msg: "must be greater than 0",
+			msg: "must be greater than or equal to 0",
 		},
 		{
 			config: kubeproxyconfig.KubeProxyConntrackConfiguration{
-				Max:        int32(4),
-				MaxPerCore: int32(1),
-				Min:        int32(3),
-				TCPEstablishedTimeout: metav1.Duration{Duration: 5 * time.Second},
-				TCPCloseWaitTimeout:   metav1.Duration{Duration: -5 * time.Second},
+				Max:        pointer.Int32Ptr(4),
+				MaxPerCore: pointer.Int32Ptr(1),
+				Min:        pointer.Int32Ptr(3),
+				TCPEstablishedTimeout: &metav1.Duration{Duration: 5 * time.Second},
+				TCPCloseWaitTimeout:   &metav1.Duration{Duration: -5 * time.Second},
 			},
-			msg: "must be greater than 0",
+			msg: "must be greater than or equal to 0",
 		},
 	}
 
@@ -370,7 +486,6 @@ func TestValidateKubeProxyConntrackConfiguration(t *testing.T) {
 
 func TestValidateProxyMode(t *testing.T) {
 	newPath := field.NewPath("KubeProxyConfiguration")
-
 	successCases := []kubeproxyconfig.ProxyMode{
 		kubeproxyconfig.ProxyModeUserspace,
 		kubeproxyconfig.ProxyModeIPTables,

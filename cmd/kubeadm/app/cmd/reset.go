@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -34,7 +35,9 @@ import (
 )
 
 var (
-	crictlParamsFormat = "%s -r %s sandboxes --quiet | xargs -r %s -r %s rms"
+	crictlSandboxesParamsFormat = "%s -r %s sandboxes --quiet | xargs -r"
+	crictlStopParamsFormat      = "%s -r %s stops %s"
+	crictlRemoveParamsFormat    = "%s -r %s rms %s"
 )
 
 // NewCmdReset returns the "kubeadm reset" command
@@ -54,7 +57,7 @@ func NewCmdReset(out io.Writer) *cobra.Command {
 
 	cmd.PersistentFlags().BoolVar(
 		&skipPreFlight, "skip-preflight-checks", false,
-		"Skip preflight checks normally run before modifying the system.",
+		"Skip preflight checks which normally run before modifying the system.",
 	)
 
 	cmd.PersistentFlags().StringVar(
@@ -100,12 +103,12 @@ func (r *Reset) Run(out io.Writer) error {
 	// Try to stop the kubelet service
 	initSystem, err := initsystem.GetInitSystem()
 	if err != nil {
-		fmt.Println("[reset] WARNING: The kubelet service couldn't be stopped by kubeadm because no supported init system was detected.")
+		fmt.Println("[reset] WARNING: The kubelet service could not be stopped by kubeadm. Unable to detect a supported init system!")
 		fmt.Println("[reset] WARNING: Please ensure kubelet is stopped manually.")
 	} else {
 		fmt.Println("[reset] Stopping the kubelet service.")
 		if err := initSystem.ServiceStop("kubelet"); err != nil {
-			fmt.Printf("[reset] WARNING: The kubelet service couldn't be stopped by kubeadm: [%v]\n", err)
+			fmt.Printf("[reset] WARNING: The kubelet service could not be stopped by kubeadm: [%v]\n", err)
 			fmt.Println("[reset] WARNING: Please ensure kubelet is stopped manually.")
 		}
 	}
@@ -132,7 +135,7 @@ func (r *Reset) Run(out io.Writer) error {
 	if _, err := os.Stat(etcdManifestPath); err == nil {
 		dirsToClean = append(dirsToClean, "/var/lib/etcd")
 	} else {
-		fmt.Printf("[reset] No etcd manifest found in %q, assuming external etcd.\n", etcdManifestPath)
+		fmt.Printf("[reset] No etcd manifest found in %q. Assuming external etcd.\n", etcdManifestPath)
 	}
 
 	// Then clean contents from the stateful kubelet, etcd and cni directories
@@ -172,10 +175,27 @@ func resetWithDocker(execer utilsexec.Interface, dockerCheck preflight.Checker) 
 func resetWithCrictl(execer utilsexec.Interface, dockerCheck preflight.Checker, criSocketPath, crictlPath string) {
 	if criSocketPath != "" {
 		fmt.Printf("[reset] Cleaning up running containers using crictl with socket %s\n", criSocketPath)
-		cmd := fmt.Sprintf(crictlParamsFormat, crictlPath, criSocketPath, crictlPath, criSocketPath)
-		if err := execer.Command("sh", "-c", cmd).Run(); err != nil {
-			fmt.Println("[reset] Failed to stop the running containers using crictl. Trying using docker instead.")
+		listcmd := fmt.Sprintf(crictlSandboxesParamsFormat, crictlPath, criSocketPath)
+		output, err := execer.Command("sh", "-c", listcmd).CombinedOutput()
+		if err != nil {
+			fmt.Println("[reset] Failed to list running pods using crictl. Trying using docker instead.")
 			resetWithDocker(execer, dockerCheck)
+			return
+		}
+		sandboxes := strings.Split(string(output), " ")
+		for _, s := range sandboxes {
+			stopcmd := fmt.Sprintf(crictlStopParamsFormat, crictlPath, criSocketPath, s)
+			if err := execer.Command("sh", "-c", stopcmd).Run(); err != nil {
+				fmt.Println("[reset] Failed to stop the running containers using crictl. Trying using docker instead.")
+				resetWithDocker(execer, dockerCheck)
+				return
+			}
+			removecmd := fmt.Sprintf(crictlRemoveParamsFormat, crictlPath, criSocketPath, s)
+			if err := execer.Command("sh", "-c", removecmd).Run(); err != nil {
+				fmt.Println("[reset] Failed to remove the running containers using crictl. Trying using docker instead.")
+				resetWithDocker(execer, dockerCheck)
+				return
+			}
 		}
 	} else {
 		fmt.Println("[reset] CRI socket path not provided for crictl. Trying docker instead.")

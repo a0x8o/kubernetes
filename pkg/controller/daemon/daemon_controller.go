@@ -48,8 +48,8 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/integer"
 	"k8s.io/client-go/util/workqueue"
-	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
+	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/daemon/util"
 	"k8s.io/kubernetes/pkg/features"
@@ -1071,7 +1071,7 @@ func (dsc *DaemonSetsController) updateDaemonSetStatus(ds *extensions.DaemonSet,
 	}
 	numberUnavailable := desiredNumberScheduled - numberAvailable
 
-	err = storeDaemonSetStatus(dsc.kubeClient.Extensions().DaemonSets(ds.Namespace), ds, desiredNumberScheduled, currentNumberScheduled, numberMisscheduled, numberReady, updatedNumberScheduled, numberAvailable, numberUnavailable)
+	err = storeDaemonSetStatus(dsc.kubeClient.ExtensionsV1beta1().DaemonSets(ds.Namespace), ds, desiredNumberScheduled, currentNumberScheduled, numberMisscheduled, numberReady, updatedNumberScheduled, numberAvailable, numberUnavailable)
 	if err != nil {
 		return fmt.Errorf("error storing status for daemon set %#v: %v", ds, err)
 	}

@@ -37,6 +37,11 @@ var (
 var _ = Describe("[sig-api-machinery] Downward API", func() {
 	f := framework.NewDefaultFramework("downward-api")
 
+	/*
+		    Testname: downwardapi-env-name-namespace
+		    Description: Ensure that downward API can provide pod's name and
+			namespaces as environment variables.
+	*/
 	framework.ConformanceIt("should provide pod name and namespace as env vars ", func() {
 		podName := "downward-api-" + string(uuid.NewUUID())
 		env := []v1.EnvVar{
@@ -68,6 +73,11 @@ var _ = Describe("[sig-api-machinery] Downward API", func() {
 		testDownwardAPI(f, podName, env, expectations)
 	})
 
+	/*
+		    Testname: downwardapi-env-pod-ip
+		    Description: Ensure that downward API can provide an IP address for
+			pod as an environment variable.
+	*/
 	framework.ConformanceIt("should provide pod IP as an env var ", func() {
 		podName := "downward-api-" + string(uuid.NewUUID())
 		env := []v1.EnvVar{
@@ -89,6 +99,11 @@ var _ = Describe("[sig-api-machinery] Downward API", func() {
 		testDownwardAPI(f, podName, env, expectations)
 	})
 
+	/*
+		    Testname: downwardapi-env-host-ip
+		    Description: Ensure that downward API can provide an IP address for
+			host node as an environment variable.
+	*/
 	framework.ConformanceIt("should provide host IP as an env var ", func() {
 		framework.SkipUnlessServerVersionGTE(hostIPVersion, f.ClientSet.Discovery())
 		podName := "downward-api-" + string(uuid.NewUUID())
@@ -111,6 +126,11 @@ var _ = Describe("[sig-api-machinery] Downward API", func() {
 		testDownwardAPI(f, podName, env, expectations)
 	})
 
+	/*
+		    Testname: downwardapi-env-limits-requests
+		    Description: Ensure that downward API can provide CPU/memory limit
+			and CPU/memory request as environment variables.
+	*/
 	framework.ConformanceIt("should provide container's limits.cpu/memory and requests.cpu/memory as env vars ", func() {
 		podName := "downward-api-" + string(uuid.NewUUID())
 		env := []v1.EnvVar{
@@ -157,6 +177,12 @@ var _ = Describe("[sig-api-machinery] Downward API", func() {
 		testDownwardAPI(f, podName, env, expectations)
 	})
 
+	/*
+		    Testname: downwardapi-env-default-allocatable
+		    Description: Ensure that downward API can provide default node
+			allocatable values for CPU and memory as environment variables if CPU
+			and memory limits are not specified for a container.
+	*/
 	framework.ConformanceIt("should provide default limits.cpu/memory from node allocatable ", func() {
 		podName := "downward-api-" + string(uuid.NewUUID())
 		env := []v1.EnvVar{
@@ -202,6 +228,11 @@ var _ = Describe("[sig-api-machinery] Downward API", func() {
 		testDownwardAPIUsingPod(f, pod, env, expectations)
 	})
 
+	/*
+		    Testname: downwardapi-env-pod-uid
+		    Description: Ensure that downward API can provide pod UID as an
+			environment variable.
+	*/
 	framework.ConformanceIt("should provide pod UID as env vars ", func() {
 		framework.SkipUnlessServerVersionGTE(podUIDVersion, f.ClientSet.Discovery())
 		podName := "downward-api-" + string(uuid.NewUUID())
@@ -225,6 +256,81 @@ var _ = Describe("[sig-api-machinery] Downward API", func() {
 	})
 })
 
+var _ = framework.KubeDescribe("Downward API [Serial] [Disruptive]", func() {
+	f := framework.NewDefaultFramework("downward-api")
+
+	Context("Downward API tests for local ephemeral storage", func() {
+		BeforeEach(func() {
+			framework.SkipUnlessLocalEphemeralStorageEnabled()
+		})
+
+		It("should provide container's limits.ephemeral-storage and requests.ephemeral-storage as env vars", func() {
+			podName := "downward-api-" + string(uuid.NewUUID())
+			env := []v1.EnvVar{
+				{
+					Name: "EPHEMERAL_STORAGE_LIMIT",
+					ValueFrom: &v1.EnvVarSource{
+						ResourceFieldRef: &v1.ResourceFieldSelector{
+							Resource: "limits.ephemeral-storage",
+						},
+					},
+				},
+				{
+					Name: "EPHEMERAL_STORAGE_REQUEST",
+					ValueFrom: &v1.EnvVarSource{
+						ResourceFieldRef: &v1.ResourceFieldSelector{
+							Resource: "requests.ephemeral-storage",
+						},
+					},
+				},
+			}
+			expectations := []string{
+				fmt.Sprintf("EPHEMERAL_STORAGE_LIMIT=%d", 64*1024*1024),
+				fmt.Sprintf("EPHEMERAL_STORAGE_REQUEST=%d", 32*1024*1024),
+			}
+
+			testDownwardAPIForEphemeralStorage(f, podName, env, expectations)
+		})
+
+		It("should provide default limits.ephemeral-storage from node allocatable", func() {
+			podName := "downward-api-" + string(uuid.NewUUID())
+			env := []v1.EnvVar{
+				{
+					Name: "EPHEMERAL_STORAGE_LIMIT",
+					ValueFrom: &v1.EnvVarSource{
+						ResourceFieldRef: &v1.ResourceFieldSelector{
+							Resource: "limits.ephemeral-storage",
+						},
+					},
+				},
+			}
+			expectations := []string{
+				"EPHEMERAL_STORAGE_LIMIT=[1-9]",
+			}
+			pod := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   podName,
+					Labels: map[string]string{"name": podName},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:    "dapi-container",
+							Image:   busyboxImage,
+							Command: []string{"sh", "-c", "env"},
+							Env:     env,
+						},
+					},
+					RestartPolicy: v1.RestartPolicyNever,
+				},
+			}
+
+			testDownwardAPIUsingPod(f, pod, env, expectations)
+		})
+	})
+
+})
+
 func testDownwardAPI(f *framework.Framework, podName string, env []v1.EnvVar, expectations []string) {
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -245,6 +351,36 @@ func testDownwardAPI(f *framework.Framework, podName string, env []v1.EnvVar, ex
 						Limits: v1.ResourceList{
 							v1.ResourceCPU:    resource.MustParse("1250m"),
 							v1.ResourceMemory: resource.MustParse("64Mi"),
+						},
+					},
+					Env: env,
+				},
+			},
+			RestartPolicy: v1.RestartPolicyNever,
+		},
+	}
+
+	testDownwardAPIUsingPod(f, pod, env, expectations)
+}
+
+func testDownwardAPIForEphemeralStorage(f *framework.Framework, podName string, env []v1.EnvVar, expectations []string) {
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   podName,
+			Labels: map[string]string{"name": podName},
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name:    "dapi-container",
+					Image:   busyboxImage,
+					Command: []string{"sh", "-c", "env"},
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{
+							v1.ResourceEphemeralStorage: resource.MustParse("32Mi"),
+						},
+						Limits: v1.ResourceList{
+							v1.ResourceEphemeralStorage: resource.MustParse("64Mi"),
 						},
 					},
 					Env: env,

@@ -19,13 +19,11 @@ package kubelet
 import (
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
-	"path/filepath"
 	goruntime "runtime"
 	"sort"
 	"strings"
@@ -34,8 +32,6 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-
-	clientgoclientset "k8s.io/client-go/kubernetes"
 
 	cadvisorapi "github.com/google/cadvisor/info/v1"
 	cadvisorapiv2 "github.com/google/cadvisor/info/v2"
@@ -57,7 +53,7 @@ import (
 	"k8s.io/client-go/util/certificate"
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/client-go/util/integer"
-	"k8s.io/kubernetes/pkg/api"
+	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/features"
 	internalapi "k8s.io/kubernetes/pkg/kubelet/apis/cri"
@@ -70,7 +66,6 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/configmap"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/dockershim"
-	"k8s.io/kubernetes/pkg/kubelet/dockershim/libdocker"
 	dockerremote "k8s.io/kubernetes/pkg/kubelet/dockershim/remote"
 	"k8s.io/kubernetes/pkg/kubelet/events"
 	"k8s.io/kubernetes/pkg/kubelet/eviction"
@@ -82,6 +77,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/lifecycle"
 	"k8s.io/kubernetes/pkg/kubelet/metrics"
 	"k8s.io/kubernetes/pkg/kubelet/network"
+	"k8s.io/kubernetes/pkg/kubelet/network/dns"
 	"k8s.io/kubernetes/pkg/kubelet/pleg"
 	kubepod "k8s.io/kubernetes/pkg/kubelet/pod"
 	"k8s.io/kubernetes/pkg/kubelet/preemption"
@@ -205,6 +201,8 @@ type Builder func(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	cloudProvider string,
 	certDirectory string,
 	rootDirectory string,
+	registerNode bool,
+	registerWithTaints []api.Taint,
 	allowedUnsafeSysctls []string,
 	containerized bool,
 	remoteRuntimeEndpoint string,
@@ -219,7 +217,8 @@ type Builder func(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	masterServiceNamespace string,
 	registerSchedulable bool,
 	nonMasqueradeCIDR string,
-	keepTerminatedPodVolumes bool) (Bootstrap, error)
+	keepTerminatedPodVolumes bool,
+	nodeLabels map[string]string) (Bootstrap, error)
 
 // Dependencies is a bin for things we might consider "injected dependencies" -- objects constructed
 // at runtime that are necessary for running the Kubelet. This is a temporary solution for grouping
@@ -252,11 +251,11 @@ type Dependencies struct {
 	CAdvisorInterface       cadvisor.Interface
 	Cloud                   cloudprovider.Interface
 	ContainerManager        cm.ContainerManager
-	DockerClient            libdocker.Interface
+	DockerClientConfig      *dockershim.ClientConfig
 	EventClient             v1core.EventsGetter
 	HeartbeatClient         v1core.CoreV1Interface
 	KubeClient              clientset.Interface
-	ExternalKubeClient      clientgoclientset.Interface
+	ExternalKubeClient      clientset.Interface
 	Mounter                 mount.Interface
 	NetworkPlugins          []network.NetworkPlugin
 	OOMAdjuster             *oom.OOMAdjuster
@@ -328,6 +327,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	cloudProvider string,
 	certDirectory string,
 	rootDirectory string,
+	registerNode bool,
+	registerWithTaints []api.Taint,
 	allowedUnsafeSysctls []string,
 	containerized bool,
 	remoteRuntimeEndpoint string,
@@ -342,7 +343,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	masterServiceNamespace string,
 	registerSchedulable bool,
 	nonMasqueradeCIDR string,
-	keepTerminatedPodVolumes bool) (*Kubelet, error) {
+	keepTerminatedPodVolumes bool,
+	nodeLabels map[string]string) (*Kubelet, error) {
 	if rootDirectory == "" {
 		return nil, fmt.Errorf("invalid root directory %q", rootDirectory)
 	}
@@ -482,6 +484,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		}
 	}
 	httpClient := &http.Client{}
+	parsedNodeIP := net.ParseIP(nodeIP)
 
 	klet := &Kubelet{
 		hostname:                       hostname,
@@ -491,10 +494,10 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		rootDirectory:                  rootDirectory,
 		resyncInterval:                 kubeCfg.SyncFrequency.Duration,
 		sourcesReady:                   config.NewSourcesReady(kubeDeps.PodConfig.SeenAllSources),
-		registerNode:                   kubeCfg.RegisterNode,
+		registerNode:                   registerNode,
+		registerWithTaints:             registerWithTaints,
 		registerSchedulable:            registerSchedulable,
-		clusterDomain:                  kubeCfg.ClusterDomain,
-		clusterDNS:                     clusterDNS,
+		dnsConfigurer:                  dns.NewConfigurer(kubeDeps.Recorder, nodeRef, parsedNodeIP, clusterDNS, kubeCfg.ClusterDomain, kubeCfg.ResolverConfig),
 		serviceLister:                  serviceLister,
 		nodeInfo:                       nodeInfo,
 		masterServiceNamespace:         masterServiceNamespace,
@@ -506,7 +509,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		externalCloudProvider:     cloudprovider.IsExternal(cloudProvider),
 		providerID:                providerID,
 		nodeRef:                   nodeRef,
-		nodeLabels:                kubeCfg.NodeLabels,
+		nodeLabels:                nodeLabels,
 		nodeStatusUpdateFrequency: kubeCfg.NodeStatusUpdateFrequency.Duration,
 		os:                   kubeDeps.OSInterface,
 		oomWatcher:           oomWatcher,
@@ -517,11 +520,10 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		maxPods:              int(kubeCfg.MaxPods),
 		podsPerCore:          int(kubeCfg.PodsPerCore),
 		syncLoopMonitor:      atomic.Value{},
-		resolverConfig:       kubeCfg.ResolverConfig,
 		daemonEndpoints:      daemonEndpoints,
 		containerManager:     kubeDeps.ContainerManager,
 		containerRuntimeName: containerRuntime,
-		nodeIP:               net.ParseIP(nodeIP),
+		nodeIP:               parsedNodeIP,
 		clock:                clock.RealClock{},
 		enableControllerAttachDetach:            kubeCfg.EnableControllerAttachDetach,
 		iptClient:                               utilipt.New(utilexec.New(), utildbus.New(), utilipt.ProtocolIpv4),
@@ -579,13 +581,12 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	}
 
 	// TODO: These need to become arguments to a standalone docker shim.
-	binDir := crOptions.CNIBinDir
 	pluginSettings := dockershim.NetworkPluginSettings{
 		HairpinMode:       hairpinMode,
 		NonMasqueradeCIDR: nonMasqueradeCIDR,
 		PluginName:        crOptions.NetworkPluginName,
 		PluginConfDir:     crOptions.CNIConfDir,
-		PluginBinDir:      binDir,
+		PluginBinDir:      crOptions.CNIBinDir,
 		MTU:               int(crOptions.NetworkPluginMTU),
 	}
 
@@ -611,7 +612,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		case kubetypes.DockerContainerRuntime:
 			// Create and start the CRI shim running as a grpc server.
 			streamingConfig := getStreamingConfig(kubeCfg, kubeDeps)
-			ds, err := dockershim.NewDockerService(kubeDeps.DockerClient, crOptions.PodSandboxImage, streamingConfig,
+			ds, err := dockershim.NewDockerService(kubeDeps.DockerClientConfig, crOptions.PodSandboxImage, streamingConfig,
 				&pluginSettings, runtimeCgroups, kubeCfg.CgroupDriver, crOptions.DockershimRootDirectory,
 				crOptions.DockerDisableSharedPID)
 			if err != nil {
@@ -635,12 +636,12 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 			}
 
 			// Create dockerLegacyService when the logging driver is not supported.
-			supported, err := dockershim.IsCRISupportedLogDriver(kubeDeps.DockerClient)
+			supported, err := ds.IsCRISupportedLogDriver()
 			if err != nil {
 				return nil, err
 			}
 			if !supported {
-				klet.dockerLegacyService = dockershim.NewDockerLegacyService(kubeDeps.DockerClient)
+				klet.dockerLegacyService = ds.NewDockerLegacyService()
 				legacyLogProvider = dockershim.NewLegacyLogProvider(klet.dockerLegacyService)
 			}
 		case kubetypes.RemoteContainerRuntime:
@@ -812,7 +813,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		experimentalCheckNodeCapabilitiesBeforeMount = false
 		// Replace the nameserver in containerized-mounter's rootfs/etc/resolve.conf with kubelet.ClusterDNS
 		// so that service name could be resolved
-		klet.setupDNSinContainerizedMounter(experimentalMounterPath)
+		klet.dnsConfigurer.SetupDNSinContainerizedMounter(experimentalMounterPath)
 	}
 
 	// setup volumeManager
@@ -889,7 +890,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	klet.softAdmitHandlers.AddPodAdmitHandler(lifecycle.NewNoNewPrivsAdmitHandler(klet.containerRuntime))
 	if utilfeature.DefaultFeatureGate.Enabled(features.Accelerators) {
 		if containerRuntime == kubetypes.DockerContainerRuntime {
-			if klet.gpuManager, err = nvidia.NewNvidiaGPUManager(klet, kubeDeps.DockerClient); err != nil {
+			if klet.gpuManager, err = nvidia.NewNvidiaGPUManager(klet, kubeDeps.DockerClientConfig); err != nil {
 				return nil, err
 			}
 		} else {
@@ -949,16 +950,15 @@ type Kubelet struct {
 
 	// Set to true to have the node register itself with the apiserver.
 	registerNode bool
+	// List of taints to add to a node object when the kubelet registers itself.
+	registerWithTaints []api.Taint
 	// Set to true to have the node register itself as schedulable.
 	registerSchedulable bool
 	// for internal book keeping; access only from within registerWithApiserver
 	registrationCompleted bool
 
-	// If non-empty, use this for container DNS search.
-	clusterDomain string
-
-	// If non-nil, use this for container DNS server.
-	clusterDNS []net.IP
+	// dnsConfigurer is used for setting up DNS resolver configuration when launching pods.
+	dnsConfigurer *dns.Configurer
 
 	// masterServiceNamespace is the namespace that the master service is exposed in.
 	masterServiceNamespace string
@@ -1102,11 +1102,6 @@ type Kubelet struct {
 
 	// Channel for sending pods to kill.
 	podKillingCh chan *kubecontainer.PodPair
-
-	// The configuration file used as the base to generate the container's
-	// DNS resolver configuration file. This can be used in conjunction with
-	// clusterDomain and clusterDNS.
-	resolverConfig string
 
 	// Information about the ports which are opened by daemons on Node running this Kubelet server.
 	daemonEndpoints *v1.NodeDaemonEndpoints
@@ -1381,8 +1376,8 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 	go wait.Until(kl.podKiller, 1*time.Second, wait.NeverStop)
 
 	// Start gorouting responsible for checking limits in resolv.conf
-	if kl.resolverConfig != "" {
-		go wait.Until(func() { kl.checkLimitsForResolvConf() }, 30*time.Second, wait.NeverStop)
+	if kl.dnsConfigurer.ResolverConfig != "" {
+		go wait.Until(func() { kl.dnsConfigurer.CheckLimitsForResolvConf() }, 30*time.Second, wait.NeverStop)
 	}
 
 	// Start component sync loops.
@@ -1399,64 +1394,6 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 // with more specific methods.
 func (kl *Kubelet) GetKubeClient() clientset.Interface {
 	return kl.kubeClient
-}
-
-// GetClusterDNS returns a list of the DNS servers and a list of the DNS search
-// domains of the cluster.
-func (kl *Kubelet) GetClusterDNS(pod *v1.Pod) ([]string, []string, bool, error) {
-	var hostDNS, hostSearch []string
-	// Get host DNS settings
-	if kl.resolverConfig != "" {
-		f, err := os.Open(kl.resolverConfig)
-		if err != nil {
-			return nil, nil, false, err
-		}
-		defer f.Close()
-
-		hostDNS, hostSearch, err = kl.parseResolvConf(f)
-		if err != nil {
-			return nil, nil, false, err
-		}
-	}
-	useClusterFirstPolicy := ((pod.Spec.DNSPolicy == v1.DNSClusterFirst && !kubecontainer.IsHostNetworkPod(pod)) || pod.Spec.DNSPolicy == v1.DNSClusterFirstWithHostNet)
-	if useClusterFirstPolicy && len(kl.clusterDNS) == 0 {
-		// clusterDNS is not known.
-		// pod with ClusterDNSFirst Policy cannot be created
-		kl.recorder.Eventf(pod, v1.EventTypeWarning, "MissingClusterDNS", "kubelet does not have ClusterDNS IP configured and cannot create Pod using %q policy. Falling back to DNSDefault policy.", pod.Spec.DNSPolicy)
-		log := fmt.Sprintf("kubelet does not have ClusterDNS IP configured and cannot create Pod using %q policy. pod: %q. Falling back to DNSDefault policy.", pod.Spec.DNSPolicy, format.Pod(pod))
-		kl.recorder.Eventf(kl.nodeRef, v1.EventTypeWarning, "MissingClusterDNS", log)
-
-		// fallback to DNSDefault
-		useClusterFirstPolicy = false
-	}
-
-	if !useClusterFirstPolicy {
-		// When the kubelet --resolv-conf flag is set to the empty string, use
-		// DNS settings that override the docker default (which is to use
-		// /etc/resolv.conf) and effectively disable DNS lookups. According to
-		// the bind documentation, the behavior of the DNS client library when
-		// "nameservers" are not specified is to "use the nameserver on the
-		// local machine". A nameserver setting of localhost is equivalent to
-		// this documented behavior.
-		if kl.resolverConfig == "" {
-			hostDNS = []string{"127.0.0.1"}
-			hostSearch = []string{"."}
-		} else {
-			hostSearch = kl.formDNSSearchForDNSDefault(hostSearch, pod)
-		}
-		return hostDNS, hostSearch, useClusterFirstPolicy, nil
-	}
-
-	// for a pod with DNSClusterFirst policy, the cluster DNS server is the only nameserver configured for
-	// the pod. The cluster DNS server itself will forward queries to other nameservers that is configured to use,
-	// in case the cluster DNS server cannot resolve the DNS query itself
-	dns := make([]string, len(kl.clusterDNS))
-	for i, ip := range kl.clusterDNS {
-		dns[i] = ip.String()
-	}
-	dnsSearch := kl.formDNSSearch(hostSearch, pod)
-
-	return dns, dnsSearch, useClusterFirstPolicy, nil
 }
 
 // syncPod is the transaction script for the sync of a single pod.
@@ -2221,36 +2158,6 @@ func (kl *Kubelet) cleanUpContainersInPod(podID types.UID, exitedContainerID str
 			removeAll = eviction.PodIsEvicted(syncedPod.Status) || (syncedPod.DeletionTimestamp != nil && notRunning(apiPodStatus.ContainerStatuses))
 		}
 		kl.containerDeletor.deleteContainersInPod(exitedContainerID, podStatus, removeAll)
-	}
-}
-
-// Replace the nameserver in containerized-mounter's rootfs/etc/resolve.conf with kubelet.ClusterDNS
-func (kl *Kubelet) setupDNSinContainerizedMounter(mounterPath string) {
-	resolvePath := filepath.Join(strings.TrimSuffix(mounterPath, "/mounter"), "rootfs", "etc", "resolv.conf")
-	dnsString := ""
-	for _, dns := range kl.clusterDNS {
-		dnsString = dnsString + fmt.Sprintf("nameserver %s\n", dns)
-	}
-	if kl.resolverConfig != "" {
-		f, err := os.Open(kl.resolverConfig)
-		defer f.Close()
-		if err != nil {
-			glog.Error("Could not open resolverConf file")
-		} else {
-			_, hostSearch, err := kl.parseResolvConf(f)
-			if err != nil {
-				glog.Errorf("Error for parsing the reslov.conf file: %v", err)
-			} else {
-				dnsString = dnsString + "search"
-				for _, search := range hostSearch {
-					dnsString = dnsString + fmt.Sprintf(" %s", search)
-				}
-				dnsString = dnsString + "\n"
-			}
-		}
-	}
-	if err := ioutil.WriteFile(resolvePath, []byte(dnsString), 0600); err != nil {
-		glog.Errorf("Could not write dns nameserver in file %s, with error %v", resolvePath, err)
 	}
 }
 

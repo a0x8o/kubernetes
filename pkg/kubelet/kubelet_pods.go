@@ -44,11 +44,11 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
-	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
-	v1qos "k8s.io/kubernetes/pkg/api/v1/helper/qos"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	"k8s.io/kubernetes/pkg/api/v1/resource"
-	"k8s.io/kubernetes/pkg/api/v1/validation"
+	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
+	"k8s.io/kubernetes/pkg/apis/core/v1/validation"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/fieldpath"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/v1alpha1/runtime"
@@ -346,7 +346,7 @@ func truncatePodHostnameIfNeeded(podName, hostname string) (string, error) {
 // given that pod's spec and annotations or returns an error.
 func (kl *Kubelet) GeneratePodHostNameAndDomain(pod *v1.Pod) (string, string, error) {
 	// TODO(vmarmol): Handle better.
-	clusterDomain := kl.clusterDomain
+	clusterDomain := kl.dnsConfigurer.ClusterDomain
 
 	hostname := pod.Name
 	if len(pod.Spec.Hostname) > 0 {

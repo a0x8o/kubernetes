@@ -46,10 +46,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/dynamic"
 	clientextensionsv1beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
-	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/events"
-	"k8s.io/kubernetes/pkg/api/helper"
-	"k8s.io/kubernetes/pkg/api/helper/qos"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/api/ref"
 	resourcehelper "k8s.io/kubernetes/pkg/api/resource"
@@ -57,6 +54,9 @@ import (
 	"k8s.io/kubernetes/pkg/apis/autoscaling"
 	"k8s.io/kubernetes/pkg/apis/batch"
 	"k8s.io/kubernetes/pkg/apis/certificates"
+	api "k8s.io/kubernetes/pkg/apis/core"
+	"k8s.io/kubernetes/pkg/apis/core/helper"
+	"k8s.io/kubernetes/pkg/apis/core/helper/qos"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/apis/networking"
 	"k8s.io/kubernetes/pkg/apis/policy"
@@ -3213,6 +3213,9 @@ func describeStorageClass(sc *storage.StorageClass, events *api.EventList) (stri
 		w.Write(LEVEL_0, "Parameters:\t%s\n", labels.FormatLabels(sc.Parameters))
 		if sc.ReclaimPolicy != nil {
 			w.Write(LEVEL_0, "ReclaimPolicy:\t%s\n", *sc.ReclaimPolicy)
+		}
+		if sc.VolumeBindingMode != nil {
+			w.Write(LEVEL_0, "VolumeBindingMode:\t%s\n", *sc.VolumeBindingMode)
 		}
 		if events != nil {
 			DescribeEvents(events, w)

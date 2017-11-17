@@ -31,8 +31,8 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/util/workqueue"
-	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
-	v1qos "k8s.io/kubernetes/pkg/api/v1/helper/qos"
+	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/aws"
 	"k8s.io/kubernetes/pkg/features"
 	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
@@ -890,7 +890,7 @@ func (s *ServiceAffinity) checkServiceAffinity(pod *v1.Pod, meta algorithm.Predi
 
 // PodFitsHostPorts checks if a node has free ports for the requested pod ports.
 func PodFitsHostPorts(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *schedulercache.NodeInfo) (bool, []algorithm.PredicateFailureReason, error) {
-	var wantPorts map[int]bool
+	var wantPorts map[string]bool
 	if predicateMeta, ok := meta.(*predicateMetadata); ok {
 		wantPorts = predicateMeta.podPorts
 	} else {
@@ -902,11 +902,12 @@ func PodFitsHostPorts(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *s
 	}
 
 	existingPorts := nodeInfo.UsedPorts()
-	for wport := range wantPorts {
-		if wport != 0 && existingPorts[wport] {
-			return false, []algorithm.PredicateFailureReason{ErrPodNotFitsHostPorts}, nil
-		}
+
+	// try to see whether existingPorts and  wantPorts will conflict or not
+	if portsConflict(existingPorts, wantPorts) {
+		return false, []algorithm.PredicateFailureReason{ErrPodNotFitsHostPorts}, nil
 	}
+
 	return true, nil, nil
 }
 

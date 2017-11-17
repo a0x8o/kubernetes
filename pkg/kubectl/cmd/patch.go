@@ -153,13 +153,7 @@ func RunPatch(f cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []strin
 		return fmt.Errorf("unable to parse %q: %v", patch, err)
 	}
 
-	mapper, typer, err := f.UnstructuredObject()
-	if err != nil {
-		return err
-	}
-
-	r := f.NewBuilder().
-		Unstructured(f.UnstructuredClientForMapping, mapper, typer).
+	r := f.NewUnstructuredBuilder().
 		ContinueOnError().
 		NamespaceParam(cmdNamespace).DefaultNamespace().
 		FilenameParam(enforceNamespace, &options.FilenameOptions).
@@ -226,7 +220,7 @@ func RunPatch(f cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []strin
 			}
 
 			if len(options.OutputFormat) > 0 && options.OutputFormat != "name" {
-				return cmdutil.PrintResourceInfoForCommand(cmd, info, f, out)
+				return f.PrintResourceInfoForCommand(cmd, info, out)
 			}
 			mapper, _, err := f.UnstructuredObject()
 			if err != nil {
@@ -266,7 +260,7 @@ func RunPatch(f cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []strin
 		if err := info.Refresh(targetObj, true); err != nil {
 			return err
 		}
-		return cmdutil.PrintResourceInfoForCommand(cmd, info, f, out)
+		return f.PrintResourceInfoForCommand(cmd, info, out)
 	})
 	if err != nil {
 		return err

@@ -41,7 +41,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/kubernetes/pkg/api"
+	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/kubectl"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
@@ -107,12 +107,12 @@ func (o *EditOptions) Complete(f cmdutil.Factory, out, errOut io.Writer, args []
 	if err != nil {
 		return err
 	}
-	mapper, typer, err := f.UnstructuredObject()
+	mapper, _, err := f.UnstructuredObject()
 	if err != nil {
 		return err
 	}
 
-	b := f.NewBuilder().Unstructured(f.UnstructuredClientForMapping, mapper, typer)
+	b := f.NewUnstructuredBuilder()
 	if o.EditMode == NormalEditMode || o.EditMode == ApplyEditMode {
 		// when do normal edit or apply edit we need to always retrieve the latest resource from server
 		b = b.ResourceTypeOrNameArgs(true, args...).Latest()
@@ -132,7 +132,7 @@ func (o *EditOptions) Complete(f cmdutil.Factory, out, errOut io.Writer, args []
 
 	o.updatedResultGetter = func(data []byte) *resource.Result {
 		// resource builder to read objects from edited data
-		return resource.NewBuilder(mapper, f.CategoryExpander(), typer, resource.ClientMapperFunc(f.UnstructuredClientForMapping), unstructured.UnstructuredJSONScheme).
+		return f.NewUnstructuredBuilder().
 			Stream(bytes.NewReader(data), "edited-file").
 			IncludeUninitialized(includeUninitialized).
 			ContinueOnError().
