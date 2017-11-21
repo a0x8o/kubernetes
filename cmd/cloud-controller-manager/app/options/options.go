@@ -31,14 +31,14 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// CloudControllerMangerServer is the main context object for the controller manager.
+// CloudControllerManagerServer is the main context object for the controller manager.
 type CloudControllerManagerServer struct {
 	componentconfig.KubeControllerManagerConfiguration
 
 	Master     string
 	Kubeconfig string
 
-	// NodeStatusUpdateFrequency is the freuency at which the controller updates nodes' status
+	// NodeStatusUpdateFrequency is the frequency at which the controller updates nodes' status
 	NodeStatusUpdateFrequency metav1.Duration
 }
 
@@ -97,7 +97,7 @@ func (s *CloudControllerManagerServer) AddFlags(fs *pflag.FlagSet) {
 	fs.Float32Var(&s.KubeAPIQPS, "kube-api-qps", s.KubeAPIQPS, "QPS to use while talking with kubernetes apiserver.")
 	fs.Int32Var(&s.KubeAPIBurst, "kube-api-burst", s.KubeAPIBurst, "Burst to use while talking with kubernetes apiserver.")
 	fs.DurationVar(&s.ControllerStartInterval.Duration, "controller-start-interval", s.ControllerStartInterval.Duration, "Interval between starting controller managers.")
-
+	fs.Int32Var(&s.ConcurrentServiceSyncs, "concurrent-service-syncs", s.ConcurrentServiceSyncs, "The number of services that are allowed to sync concurrently. Larger number = more responsive service management, but more CPU (and network) load")
 	leaderelectionconfig.BindFlags(&s.LeaderElection, fs)
 
 	utilfeature.DefaultFeatureGate.AddFlag(fs)

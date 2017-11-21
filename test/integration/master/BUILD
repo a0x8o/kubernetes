@@ -12,10 +12,11 @@ go_test(
         "main_test.go",
         "master_test.go",
     ],
+    importpath = "k8s.io/kubernetes/test/integration/master",
     tags = ["integration"],
     deps = [
-        "//pkg/api:go_default_library",
         "//pkg/api/testapi:go_default_library",
+        "//pkg/apis/core:go_default_library",
         "//pkg/client/clientset_generated/internalclientset:go_default_library",
         "//pkg/master:go_default_library",
         "//test/integration:go_default_library",

@@ -455,6 +455,11 @@ func Test_Run_OneVolumeAttachAndDetachMultipleNodesWithReadWriteOnce(t *testing.
 
 	nodesForVolume := asw.GetNodesForVolume(generatedVolumeName)
 
+	// check if multiattach is marked
+	// at least one volume+node should be marked with multiattach error
+	nodeAttachedTo := nodesForVolume[0]
+	waitForMultiAttachErrorOnNode(t, nodeAttachedTo, dsw)
+
 	// Act
 	podToDelete := ""
 	if nodesForVolume[0] == nodeName1 {
@@ -482,6 +487,28 @@ func Test_Run_OneVolumeAttachAndDetachMultipleNodesWithReadWriteOnce(t *testing.
 	waitForNewAttacherCallCount(t, 2 /* expectedCallCount */, fakePlugin)
 	verifyNewAttacherCallCount(t, false /* expectZeroNewAttacherCallCount */, fakePlugin)
 	waitForTotalAttachCallCount(t, 2 /* expectedAttachCallCount */, fakePlugin)
+}
+
+func waitForMultiAttachErrorOnNode(
+	t *testing.T,
+	attachedNode k8stypes.NodeName,
+	dsow cache.DesiredStateOfWorld) {
+	multAttachCheckFunc := func() (bool, error) {
+		for _, volumeToAttach := range dsow.GetVolumesToAttach() {
+			if volumeToAttach.NodeName != attachedNode {
+				if volumeToAttach.MultiAttachErrorReported {
+					return true, nil
+				}
+			}
+		}
+		t.Logf("Warning: MultiAttach error not yet set on Node. Will retry.")
+		return false, nil
+	}
+
+	err := retryWithExponentialBackOff(100*time.Millisecond, multAttachCheckFunc)
+	if err != nil {
+		t.Fatalf("Timed out waiting for MultiAttach Error to be set on non-attached node")
+	}
 }
 
 func waitForNewAttacherCallCount(

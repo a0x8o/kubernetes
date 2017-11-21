@@ -80,16 +80,16 @@ func TestPrintAvailableUpgrades(t *testing.T) {
 							"v1.7.1": 1,
 						},
 						KubeadmVersion: "v1.7.2",
-						DNSVersion:     "1.14.4",
+						DNSVersion:     "1.14.5",
 					},
 					After: upgrade.ClusterState{
 						KubeVersion:    "v1.7.3",
 						KubeadmVersion: "v1.7.3",
-						DNSVersion:     "1.14.4",
+						DNSVersion:     "1.14.5",
 					},
 				},
 			},
-			expectedBytes: []byte(`Components that must be upgraded manually after you've upgraded the control plane with 'kubeadm upgrade apply':
+			expectedBytes: []byte(`Components that must be upgraded manually after you have upgraded the control plane with 'kubeadm upgrade apply':
 COMPONENT   CURRENT      AVAILABLE
 Kubelet     1 x v1.7.1   v1.7.3
 
@@ -100,13 +100,13 @@ API Server           v1.7.1    v1.7.3
 Controller Manager   v1.7.1    v1.7.3
 Scheduler            v1.7.1    v1.7.3
 Kube Proxy           v1.7.1    v1.7.3
-Kube DNS             1.14.4    1.14.4
+Kube DNS             1.14.5    1.14.5
 
 You can now apply the upgrade by executing the following command:
 
 	kubeadm upgrade apply v1.7.3
 
-Note: Before you do can perform this upgrade, you have to update kubeadm to v1.7.3
+Note: Before you can perform this upgrade, you have to update kubeadm to v1.7.3.
 
 _____________________________________________________________________
 
@@ -122,16 +122,16 @@ _____________________________________________________________________
 							"v1.7.3": 1,
 						},
 						KubeadmVersion: "v1.8.0",
-						DNSVersion:     "1.14.4",
+						DNSVersion:     "1.14.5",
 					},
 					After: upgrade.ClusterState{
 						KubeVersion:    "v1.8.0",
 						KubeadmVersion: "v1.8.0",
-						DNSVersion:     "1.14.4",
+						DNSVersion:     "1.14.5",
 					},
 				},
 			},
-			expectedBytes: []byte(`Components that must be upgraded manually after you've upgraded the control plane with 'kubeadm upgrade apply':
+			expectedBytes: []byte(`Components that must be upgraded manually after you have upgraded the control plane with 'kubeadm upgrade apply':
 COMPONENT   CURRENT      AVAILABLE
 Kubelet     1 x v1.7.3   v1.8.0
 
@@ -142,7 +142,7 @@ API Server           v1.7.3    v1.8.0
 Controller Manager   v1.7.3    v1.8.0
 Scheduler            v1.7.3    v1.8.0
 Kube Proxy           v1.7.3    v1.8.0
-Kube DNS             1.14.4    1.14.4
+Kube DNS             1.14.5    1.14.5
 
 You can now apply the upgrade by executing the following command:
 
@@ -162,12 +162,12 @@ _____________________________________________________________________
 							"v1.7.3": 1,
 						},
 						KubeadmVersion: "v1.8.1",
-						DNSVersion:     "1.14.4",
+						DNSVersion:     "1.14.5",
 					},
 					After: upgrade.ClusterState{
 						KubeVersion:    "v1.7.5",
 						KubeadmVersion: "v1.8.1",
-						DNSVersion:     "1.14.4",
+						DNSVersion:     "1.14.5",
 					},
 				},
 				{
@@ -178,16 +178,16 @@ _____________________________________________________________________
 							"v1.7.3": 1,
 						},
 						KubeadmVersion: "v1.8.1",
-						DNSVersion:     "1.14.4",
+						DNSVersion:     "1.14.5",
 					},
 					After: upgrade.ClusterState{
 						KubeVersion:    "v1.8.2",
 						KubeadmVersion: "v1.8.2",
-						DNSVersion:     "1.14.4",
+						DNSVersion:     "1.14.5",
 					},
 				},
 			},
-			expectedBytes: []byte(`Components that must be upgraded manually after you've upgraded the control plane with 'kubeadm upgrade apply':
+			expectedBytes: []byte(`Components that must be upgraded manually after you have upgraded the control plane with 'kubeadm upgrade apply':
 COMPONENT   CURRENT      AVAILABLE
 Kubelet     1 x v1.7.3   v1.7.5
 
@@ -198,7 +198,7 @@ API Server           v1.7.3    v1.7.5
 Controller Manager   v1.7.3    v1.7.5
 Scheduler            v1.7.3    v1.7.5
 Kube Proxy           v1.7.3    v1.7.5
-Kube DNS             1.14.4    1.14.4
+Kube DNS             1.14.5    1.14.5
 
 You can now apply the upgrade by executing the following command:
 
@@ -206,7 +206,7 @@ You can now apply the upgrade by executing the following command:
 
 _____________________________________________________________________
 
-Components that must be upgraded manually after you've upgraded the control plane with 'kubeadm upgrade apply':
+Components that must be upgraded manually after you have upgraded the control plane with 'kubeadm upgrade apply':
 COMPONENT   CURRENT      AVAILABLE
 Kubelet     1 x v1.7.3   v1.8.2
 
@@ -217,13 +217,13 @@ API Server           v1.7.3    v1.8.2
 Controller Manager   v1.7.3    v1.8.2
 Scheduler            v1.7.3    v1.8.2
 Kube Proxy           v1.7.3    v1.8.2
-Kube DNS             1.14.4    1.14.4
+Kube DNS             1.14.5    1.14.5
 
 You can now apply the upgrade by executing the following command:
 
 	kubeadm upgrade apply v1.8.2
 
-Note: Before you do can perform this upgrade, you have to update kubeadm to v1.8.2
+Note: Before you can perform this upgrade, you have to update kubeadm to v1.8.2.
 
 _____________________________________________________________________
 
@@ -239,16 +239,16 @@ _____________________________________________________________________
 							"v1.7.5": 1,
 						},
 						KubeadmVersion: "v1.7.5",
-						DNSVersion:     "1.14.4",
+						DNSVersion:     "1.14.5",
 					},
 					After: upgrade.ClusterState{
 						KubeVersion:    "v1.8.0-beta.1",
 						KubeadmVersion: "v1.8.0-beta.1",
-						DNSVersion:     "1.14.4",
+						DNSVersion:     "1.14.5",
 					},
 				},
 			},
-			expectedBytes: []byte(`Components that must be upgraded manually after you've upgraded the control plane with 'kubeadm upgrade apply':
+			expectedBytes: []byte(`Components that must be upgraded manually after you have upgraded the control plane with 'kubeadm upgrade apply':
 COMPONENT   CURRENT      AVAILABLE
 Kubelet     1 x v1.7.5   v1.8.0-beta.1
 
@@ -259,13 +259,13 @@ API Server           v1.7.5    v1.8.0-beta.1
 Controller Manager   v1.7.5    v1.8.0-beta.1
 Scheduler            v1.7.5    v1.8.0-beta.1
 Kube Proxy           v1.7.5    v1.8.0-beta.1
-Kube DNS             1.14.4    1.14.4
+Kube DNS             1.14.5    1.14.5
 
 You can now apply the upgrade by executing the following command:
 
 	kubeadm upgrade apply v1.8.0-beta.1
 
-Note: Before you do can perform this upgrade, you have to update kubeadm to v1.8.0-beta.1
+Note: Before you can perform this upgrade, you have to update kubeadm to v1.8.0-beta.1.
 
 _____________________________________________________________________
 
@@ -281,16 +281,16 @@ _____________________________________________________________________
 							"v1.7.5": 1,
 						},
 						KubeadmVersion: "v1.7.5",
-						DNSVersion:     "1.14.4",
+						DNSVersion:     "1.14.5",
 					},
 					After: upgrade.ClusterState{
 						KubeVersion:    "v1.8.0-rc.1",
 						KubeadmVersion: "v1.8.0-rc.1",
-						DNSVersion:     "1.14.4",
+						DNSVersion:     "1.14.5",
 					},
 				},
 			},
-			expectedBytes: []byte(`Components that must be upgraded manually after you've upgraded the control plane with 'kubeadm upgrade apply':
+			expectedBytes: []byte(`Components that must be upgraded manually after you have upgraded the control plane with 'kubeadm upgrade apply':
 COMPONENT   CURRENT      AVAILABLE
 Kubelet     1 x v1.7.5   v1.8.0-rc.1
 
@@ -301,13 +301,13 @@ API Server           v1.7.5    v1.8.0-rc.1
 Controller Manager   v1.7.5    v1.8.0-rc.1
 Scheduler            v1.7.5    v1.8.0-rc.1
 Kube Proxy           v1.7.5    v1.8.0-rc.1
-Kube DNS             1.14.4    1.14.4
+Kube DNS             1.14.5    1.14.5
 
 You can now apply the upgrade by executing the following command:
 
 	kubeadm upgrade apply v1.8.0-rc.1
 
-Note: Before you do can perform this upgrade, you have to update kubeadm to v1.8.0-rc.1
+Note: Before you can perform this upgrade, you have to update kubeadm to v1.8.0-rc.1.
 
 _____________________________________________________________________
 

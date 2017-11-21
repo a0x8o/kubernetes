@@ -24,9 +24,9 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	apimachineryvalidation "k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"k8s.io/kubernetes/pkg/api"
-	apivalidation "k8s.io/kubernetes/pkg/api/validation"
 	"k8s.io/kubernetes/pkg/apis/batch"
+	api "k8s.io/kubernetes/pkg/apis/core"
+	apivalidation "k8s.io/kubernetes/pkg/apis/core/validation"
 )
 
 // TODO: generalize for other controller objects that will follow the same pattern, such as ReplicaSet and DaemonSet, and
@@ -173,6 +173,14 @@ func ValidateCronJob(scheduledJob *batch.CronJob) field.ErrorList {
 		// then job creation will fail later.
 		allErrs = append(allErrs, field.Invalid(field.NewPath("metadata").Child("name"), scheduledJob.ObjectMeta.Name, "must be no more than 52 characters"))
 	}
+	return allErrs
+}
+
+func ValidateCronJobUpdate(job, oldJob *batch.CronJob) field.ErrorList {
+	allErrs := apivalidation.ValidateObjectMetaUpdate(&job.ObjectMeta, &oldJob.ObjectMeta, field.NewPath("metadata"))
+	allErrs = append(allErrs, ValidateCronJobSpec(&job.Spec, field.NewPath("spec"))...)
+	// skip the 52-character name validation limit on update validation
+	// to allow old cronjobs with names > 52 chars to be updated/deleted
 	return allErrs
 }
 

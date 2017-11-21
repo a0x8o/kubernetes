@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	extensionsinternal "k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/test/e2e/framework"
 	imageutils "k8s.io/kubernetes/test/utils/image"
 
@@ -162,7 +163,7 @@ func testNvidiaGPUsOnCOS(f *framework.Framework) {
 	framework.Logf("Cluster is running on COS. Proceeding with test")
 
 	if f.BaseName == "device-plugin-gpus" {
-		dsYamlUrl = framework.GPUDevicePluginDSYAML
+		dsYamlUrl = "https://raw.githubusercontent.com/GoogleCloudPlatform/container-engine-accelerators/master/daemonset.yaml"
 		gpuResourceName = framework.NVIDIAGPUResourceName
 		podCreationFunc = makeCudaAdditionDevicePluginTestPod
 	} else {
@@ -171,20 +172,28 @@ func testNvidiaGPUsOnCOS(f *framework.Framework) {
 		podCreationFunc = makeCudaAdditionTestPod
 	}
 
-	// GPU drivers might have already been installed.
-	if !areGPUsAvailableOnAllSchedulableNodes(f) {
-		// Install Nvidia Drivers.
-		ds, err := framework.DsFromManifest(dsYamlUrl)
-		Expect(err).NotTo(HaveOccurred())
-		ds.Namespace = f.Namespace.Name
-		_, err = f.ClientSet.Extensions().DaemonSets(f.Namespace.Name).Create(ds)
-		framework.ExpectNoError(err, "failed to create daemonset")
-		framework.Logf("Successfully created daemonset to install Nvidia drivers. Waiting for drivers to be installed and GPUs to be available in Node Capacity...")
-		// Wait for Nvidia GPUs to be available on nodes
-		Eventually(func() bool {
-			return areGPUsAvailableOnAllSchedulableNodes(f)
-		}, driverInstallTimeout, time.Second).Should(BeTrue())
-	}
+	// Creates the DaemonSet that installs Nvidia Drivers.
+	// The DaemonSet also runs nvidia device plugin for device plugin test.
+	ds, err := framework.DsFromManifest(dsYamlUrl)
+	Expect(err).NotTo(HaveOccurred())
+	ds.Namespace = f.Namespace.Name
+	_, err = f.ClientSet.ExtensionsV1beta1().DaemonSets(f.Namespace.Name).Create(ds)
+	framework.ExpectNoError(err, "failed to create daemonset")
+	framework.Logf("Successfully created daemonset to install Nvidia drivers.")
+
+	pods, err := framework.WaitForControlledPods(f.ClientSet, ds.Namespace, ds.Name, extensionsinternal.Kind("DaemonSet"))
+	framework.ExpectNoError(err, "getting pods controlled by the daemonset")
+	framework.Logf("Starting ResourceUsageGather for the created DaemonSet pods.")
+	rsgather, err := framework.NewResourceUsageGatherer(f.ClientSet, framework.ResourceGathererOptions{false, false, 2 * time.Second, 2 * time.Second, true}, pods)
+	framework.ExpectNoError(err, "creating ResourceUsageGather for the daemonset pods")
+	go rsgather.StartGatheringData()
+
+	// Wait for Nvidia GPUs to be available on nodes
+	framework.Logf("Waiting for drivers to be installed and GPUs to be available in Node Capacity...")
+	Eventually(func() bool {
+		return areGPUsAvailableOnAllSchedulableNodes(f)
+	}, driverInstallTimeout, time.Second).Should(BeTrue())
+
 	framework.Logf("Creating as many pods as there are Nvidia GPUs and have the pods run a CUDA app")
 	podList := []*v1.Pod{}
 	for i := int64(0); i < getGPUsAvailable(f); i++ {
@@ -195,6 +204,13 @@ func testNvidiaGPUsOnCOS(f *framework.Framework) {
 	for _, po := range podList {
 		f.PodClient().WaitForSuccess(po.Name, 5*time.Minute)
 	}
+
+	framework.Logf("Stopping ResourceUsageGather")
+	constraints := make(map[string]framework.ResourceConstraint)
+	// For now, just gets summary. Can pass valid constraints in the future.
+	summary, err := rsgather.StopAndSummarize([]int{50, 90, 100}, constraints)
+	f.TestSummaries = append(f.TestSummaries, summary)
+	framework.ExpectNoError(err, "getting resource usage summary")
 }
 
 var _ = SIGDescribe("[Feature:GPU]", func() {
@@ -207,27 +223,6 @@ var _ = SIGDescribe("[Feature:GPU]", func() {
 var _ = SIGDescribe("[Feature:GPUDevicePlugin]", func() {
 	f := framework.NewDefaultFramework("device-plugin-gpus")
 	It("run Nvidia GPU Device Plugin tests on Container Optimized OS only", func() {
-		// 1. Verifies GPU resource is successfully advertised on the nodes
-		// and we can run pods using GPUs.
-		By("Starting device plugin daemonset and running GPU pods")
-		testNvidiaGPUsOnCOS(f)
-
-		// 2. Verifies that when the device plugin DaemonSet is removed, resource capacity drops to zero.
-		By("Deleting device plugin daemonset")
-		ds, err := framework.DsFromManifest(dsYamlUrl)
-		Expect(err).NotTo(HaveOccurred())
-		falseVar := false
-		err = f.ClientSet.Extensions().DaemonSets(f.Namespace.Name).Delete(ds.Name, &metav1.DeleteOptions{OrphanDependents: &falseVar})
-		framework.ExpectNoError(err, "failed to delete daemonset")
-		framework.Logf("Successfully deleted device plugin daemonset. Wait for resource to be removed.")
-		// Wait for Nvidia GPUs to be not available on nodes
-		Eventually(func() bool {
-			return !areGPUsAvailableOnAllSchedulableNodes(f)
-		}, 5*time.Minute, time.Second).Should(BeTrue())
-
-		// 3. Restarts the device plugin DaemonSet. Verifies GPU resource is successfully advertised
-		// on the nodes and we can run pods using GPUs.
-		By("Restarting device plugin daemonset and running GPU pods")
 		testNvidiaGPUsOnCOS(f)
 	})
 })

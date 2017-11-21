@@ -74,46 +74,64 @@ func cadvisorInfoToContainerStats(name string, info *cadvisorapiv2.ContainerInfo
 		}
 	}
 
-	// The container logs live on the node rootfs device
-	result.Logs = &statsapi.FsStats{
-		Time:           metav1.NewTime(cstat.Timestamp),
-		AvailableBytes: &rootFs.Available,
-		CapacityBytes:  &rootFs.Capacity,
-		InodesFree:     rootFs.InodesFree,
-		Inodes:         rootFs.Inodes,
+	if rootFs != nil {
+		// The container logs live on the node rootfs device
+		result.Logs = &statsapi.FsStats{
+			Time:           metav1.NewTime(cstat.Timestamp),
+			AvailableBytes: &rootFs.Available,
+			CapacityBytes:  &rootFs.Capacity,
+			InodesFree:     rootFs.InodesFree,
+			Inodes:         rootFs.Inodes,
+		}
+
+		if rootFs.Inodes != nil && rootFs.InodesFree != nil {
+			logsInodesUsed := *rootFs.Inodes - *rootFs.InodesFree
+			result.Logs.InodesUsed = &logsInodesUsed
+		}
 	}
 
-	if rootFs.Inodes != nil && rootFs.InodesFree != nil {
-		logsInodesUsed := *rootFs.Inodes - *rootFs.InodesFree
-		result.Logs.InodesUsed = &logsInodesUsed
-	}
-
-	// The container rootFs lives on the imageFs devices (which may not be the node root fs)
-	result.Rootfs = &statsapi.FsStats{
-		Time:           metav1.NewTime(cstat.Timestamp),
-		AvailableBytes: &imageFs.Available,
-		CapacityBytes:  &imageFs.Capacity,
-		InodesFree:     imageFs.InodesFree,
-		Inodes:         imageFs.Inodes,
+	if imageFs != nil {
+		// The container rootFs lives on the imageFs devices (which may not be the node root fs)
+		result.Rootfs = &statsapi.FsStats{
+			Time:           metav1.NewTime(cstat.Timestamp),
+			AvailableBytes: &imageFs.Available,
+			CapacityBytes:  &imageFs.Capacity,
+			InodesFree:     imageFs.InodesFree,
+			Inodes:         imageFs.Inodes,
+		}
 	}
 
 	cfs := cstat.Filesystem
 	if cfs != nil {
 		if cfs.BaseUsageBytes != nil {
-			rootfsUsage := *cfs.BaseUsageBytes
-			result.Rootfs.UsedBytes = &rootfsUsage
-			if cfs.TotalUsageBytes != nil {
+			if result.Rootfs != nil {
+				rootfsUsage := *cfs.BaseUsageBytes
+				result.Rootfs.UsedBytes = &rootfsUsage
+			}
+			if cfs.TotalUsageBytes != nil && result.Logs != nil {
 				logsUsage := *cfs.TotalUsageBytes - *cfs.BaseUsageBytes
 				result.Logs.UsedBytes = &logsUsage
 			}
 		}
-		if cfs.InodeUsage != nil {
+		if cfs.InodeUsage != nil && result.Rootfs != nil {
 			rootInodes := *cfs.InodeUsage
 			result.Rootfs.InodesUsed = &rootInodes
 		}
 	}
 
+	for _, acc := range cstat.Accelerators {
+		result.Accelerators = append(result.Accelerators, statsapi.AcceleratorStats{
+			Make:        acc.Make,
+			Model:       acc.Model,
+			ID:          acc.ID,
+			MemoryTotal: acc.MemoryTotal,
+			MemoryUsed:  acc.MemoryUsed,
+			DutyCycle:   acc.DutyCycle,
+		})
+	}
+
 	result.UserDefinedMetrics = cadvisorInfoToUserDefinedMetrics(info)
+
 	return result
 }
 

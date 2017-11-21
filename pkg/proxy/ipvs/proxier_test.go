@@ -1,5 +1,3 @@
-// +build linux
-
 /*
 Copyright 2017 The Kubernetes Authors.
 
@@ -27,13 +25,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/kubernetes/pkg/api"
+	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/proxy"
 	"k8s.io/utils/exec"
 	fakeexec "k8s.io/utils/exec/testing"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	netlinktest "k8s.io/kubernetes/pkg/proxy/ipvs/testing"
 	proxyutil "k8s.io/kubernetes/pkg/proxy/util"
+	utilipset "k8s.io/kubernetes/pkg/util/ipset"
+	ipsettest "k8s.io/kubernetes/pkg/util/ipset/testing"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
 	iptablestest "k8s.io/kubernetes/pkg/util/iptables/testing"
 	utilipvs "k8s.io/kubernetes/pkg/util/ipvs"
@@ -86,7 +87,7 @@ func (fake *fakeHealthChecker) SyncEndpoints(newEndpoints map[types.NamespacedNa
 	return nil
 }
 
-func NewFakeProxier(ipt utiliptables.Interface, ipvs utilipvs.Interface, nodeIPs []net.IP) *Proxier {
+func NewFakeProxier(ipt utiliptables.Interface, ipvs utilipvs.Interface, ipset utilipset.Interface, nodeIPs []net.IP) *Proxier {
 	fcmd := fakeexec.FakeCmd{
 		CombinedOutputScript: []fakeexec.FakeCombinedOutputAction{
 			func() ([]byte, error) { return []byte("dummy device have been created"), nil },
@@ -99,23 +100,34 @@ func NewFakeProxier(ipt utiliptables.Interface, ipvs utilipvs.Interface, nodeIPs
 		LookPathFunc: func(cmd string) (string, error) { return cmd, nil },
 	}
 	return &Proxier{
-		exec:             fexec,
-		serviceMap:       make(proxyServiceMap),
-		serviceChanges:   newServiceChangeMap(),
-		endpointsMap:     make(proxyEndpointsMap),
-		endpointsChanges: newEndpointsChangeMap(testHostname),
-		iptables:         ipt,
-		ipvs:             ipvs,
-		clusterCIDR:      "10.0.0.0/24",
-		hostname:         testHostname,
-		portsMap:         make(map[proxyutil.LocalPort]proxyutil.Closeable),
-		portMapper:       &fakePortOpener{[]*proxyutil.LocalPort{}},
-		healthChecker:    newFakeHealthChecker(),
-		ipvsScheduler:    DefaultScheduler,
-		ipGetter:         &fakeIPGetter{nodeIPs: nodeIPs},
-		iptablesData:     bytes.NewBuffer(nil),
-		natChains:        bytes.NewBuffer(nil),
-		natRules:         bytes.NewBuffer(nil),
+		exec:               fexec,
+		serviceMap:         make(proxyServiceMap),
+		serviceChanges:     newServiceChangeMap(),
+		endpointsMap:       make(proxyEndpointsMap),
+		endpointsChanges:   newEndpointsChangeMap(testHostname),
+		iptables:           ipt,
+		ipvs:               ipvs,
+		ipset:              ipset,
+		clusterCIDR:        "10.0.0.0/24",
+		hostname:           testHostname,
+		portsMap:           make(map[proxyutil.LocalPort]proxyutil.Closeable),
+		portMapper:         &fakePortOpener{[]*proxyutil.LocalPort{}},
+		healthChecker:      newFakeHealthChecker(),
+		ipvsScheduler:      DefaultScheduler,
+		ipGetter:           &fakeIPGetter{nodeIPs: nodeIPs},
+		iptablesData:       bytes.NewBuffer(nil),
+		natChains:          bytes.NewBuffer(nil),
+		natRules:           bytes.NewBuffer(nil),
+		netlinkHandle:      netlinktest.NewFakeNetlinkHandle(),
+		loopbackSet:        NewIPSet(ipset, KubeLoopBackIPSet, utilipset.HashIPPortIP, false),
+		clusterIPSet:       NewIPSet(ipset, KubeClusterIPSet, utilipset.HashIPPort, false),
+		externalIPSet:      NewIPSet(ipset, KubeExternalIPSet, utilipset.HashIPPort, false),
+		lbIngressSet:       NewIPSet(ipset, KubeLoadBalancerSet, utilipset.HashIPPort, false),
+		lbMasqSet:          NewIPSet(ipset, KubeLoadBalancerMasqSet, utilipset.HashIPPort, false),
+		lbWhiteListIPSet:   NewIPSet(ipset, KubeLoadBalancerSourceIPSet, utilipset.HashIPPortIP, false),
+		lbWhiteListCIDRSet: NewIPSet(ipset, KubeLoadBalancerSourceCIDRSet, utilipset.HashIPPortNet, false),
+		nodePortSetTCP:     NewIPSet(ipset, KubeNodePortSetTCP, utilipset.BitmapPort, false),
+		nodePortSetUDP:     NewIPSet(ipset, KubeNodePortSetUDP, utilipset.BitmapPort, false),
 	}
 }
 
@@ -171,8 +183,11 @@ func makeTestEndpoints(namespace, name string, eptFunc func(*api.Endpoints)) *ap
 func TestNodePort(t *testing.T) {
 	ipt := iptablestest.NewFake()
 	ipvs := ipvstest.NewFake()
-	nodeIP := net.ParseIP("100.101.102.103")
-	fp := NewFakeProxier(ipt, ipvs, []net.IP{nodeIP})
+	ipset := ipsettest.NewFake()
+	nodeIPv4 := net.ParseIP("100.101.102.103")
+	nodeIPv6 := net.ParseIP("2001:db8::1:1")
+	nodeIPs := sets.NewString(nodeIPv4.String(), nodeIPv6.String())
+	fp := NewFakeProxier(ipt, ipvs, ipset, []net.IP{nodeIPv4, nodeIPv6})
 	svcIP := "10.20.30.41"
 	svcPort := 80
 	svcNodePort := 3001
@@ -193,12 +208,16 @@ func TestNodePort(t *testing.T) {
 			}}
 		}),
 	)
-	epIP := "10.180.0.1"
+	epIPv4 := "10.180.0.1"
+	epIPv6 := "1002:ab8::2:10"
+	epIPs := sets.NewString(epIPv4, epIPv6)
 	makeEndpointsMap(fp,
 		makeTestEndpoints(svcPortName.Namespace, svcPortName.Name, func(ept *api.Endpoints) {
 			ept.Subsets = []api.EndpointSubset{{
 				Addresses: []api.EndpointAddress{{
-					IP: epIP,
+					IP: epIPv4,
+				}, {
+					IP: epIPv6,
 				}},
 				Ports: []api.EndpointPort{{
 					Name: svcPortName.Port,
@@ -215,19 +234,19 @@ func TestNodePort(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to get ipvs services, err: %v", err)
 	}
-	if len(services) != 2 {
-		t.Errorf("Expect 2 ipvs services, got %d", len(services))
+	if len(services) != 3 {
+		t.Errorf("Expect 3 ipvs services, got %d", len(services))
 	}
 	found := false
 	for _, svc := range services {
-		if svc.Address.Equal(nodeIP) && svc.Port == uint16(svcNodePort) && svc.Protocol == string(api.ProtocolTCP) {
+		if nodeIPs.Has(svc.Address.String()) && svc.Port == uint16(svcNodePort) && svc.Protocol == string(api.ProtocolTCP) {
 			found = true
 			destinations, err := ipvs.GetRealServers(svc)
 			if err != nil {
 				t.Errorf("Failed to get ipvs destinations, err: %v", err)
 			}
 			for _, dest := range destinations {
-				if dest.Address.To4().String() != epIP || dest.Port != uint16(svcPort) {
+				if !epIPs.Has(dest.Address.String()) || dest.Port != uint16(svcPort) {
 					t.Errorf("service Endpoint mismatch ipvs service destination")
 				}
 			}
@@ -242,8 +261,9 @@ func TestNodePort(t *testing.T) {
 func TestNodePortNoEndpoint(t *testing.T) {
 	ipt := iptablestest.NewFake()
 	ipvs := ipvstest.NewFake()
+	ipset := ipsettest.NewFake()
 	nodeIP := net.ParseIP("100.101.102.103")
-	fp := NewFakeProxier(ipt, ipvs, []net.IP{nodeIP})
+	fp := NewFakeProxier(ipt, ipvs, ipset, []net.IP{nodeIP})
 	svcIP := "10.20.30.41"
 	svcPort := 80
 	svcNodePort := 3001
@@ -295,7 +315,8 @@ func TestNodePortNoEndpoint(t *testing.T) {
 func TestClusterIPNoEndpoint(t *testing.T) {
 	ipt := iptablestest.NewFake()
 	ipvs := ipvstest.NewFake()
-	fp := NewFakeProxier(ipt, ipvs, nil)
+	ipset := ipsettest.NewFake()
+	fp := NewFakeProxier(ipt, ipvs, ipset, nil)
 	svcIP := "10.20.30.41"
 	svcPort := 80
 	svcPortName := proxy.ServicePortName{
@@ -324,7 +345,7 @@ func TestClusterIPNoEndpoint(t *testing.T) {
 	if len(services) != 1 {
 		t.Errorf("Expect 1 ipvs services, got %d", len(services))
 	} else {
-		if services[0].Address.To4().String() != svcIP || services[0].Port != uint16(svcPort) && services[0].Protocol == string(api.ProtocolTCP) {
+		if services[0].Address.String() != svcIP || services[0].Port != uint16(svcPort) || services[0].Protocol != string(api.ProtocolTCP) {
 			t.Errorf("Unexpected mismatch service")
 		} else {
 			destinations, _ := ipvs.GetRealServers(services[0])
@@ -338,35 +359,62 @@ func TestClusterIPNoEndpoint(t *testing.T) {
 func TestClusterIP(t *testing.T) {
 	ipt := iptablestest.NewFake()
 	ipvs := ipvstest.NewFake()
-	fp := NewFakeProxier(ipt, ipvs, nil)
-	svcIP := "10.20.30.41"
-	svcPort := 80
-	svcPortName := proxy.ServicePortName{
+	ipset := ipsettest.NewFake()
+	fp := NewFakeProxier(ipt, ipvs, ipset, nil)
+
+	svcIPv4 := "10.20.30.41"
+	svcPortV4 := 80
+	svcPortNameV4 := proxy.ServicePortName{
 		NamespacedName: makeNSN("ns1", "svc1"),
 		Port:           "p80",
 	}
-
+	svcIPv6 := "1002:ab8::2:1"
+	svcPortV6 := 8080
+	svcPortNameV6 := proxy.ServicePortName{
+		NamespacedName: makeNSN("ns2", "svc2"),
+		Port:           "p8080",
+	}
 	makeServiceMap(fp,
-		makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *api.Service) {
-			svc.Spec.ClusterIP = svcIP
+		makeTestService(svcPortNameV4.Namespace, svcPortNameV4.Name, func(svc *api.Service) {
+			svc.Spec.ClusterIP = svcIPv4
 			svc.Spec.Ports = []api.ServicePort{{
-				Name:     svcPortName.Port,
-				Port:     int32(svcPort),
+				Name:     svcPortNameV4.Port,
+				Port:     int32(svcPortV4),
+				Protocol: api.ProtocolTCP,
+			}}
+		}),
+		makeTestService(svcPortNameV6.Namespace, svcPortNameV6.Name, func(svc *api.Service) {
+			svc.Spec.ClusterIP = svcIPv6
+			svc.Spec.Ports = []api.ServicePort{{
+				Name:     svcPortNameV6.Port,
+				Port:     int32(svcPortV6),
 				Protocol: api.ProtocolTCP,
 			}}
 		}),
 	)
 
-	epIP := "10.180.0.1"
+	epIPv4 := "10.180.0.1"
+	epIPv6 := "1009:ab8::5:6"
 	makeEndpointsMap(fp,
-		makeTestEndpoints(svcPortName.Namespace, svcPortName.Name, func(ept *api.Endpoints) {
+		makeTestEndpoints(svcPortNameV4.Namespace, svcPortNameV4.Name, func(ept *api.Endpoints) {
 			ept.Subsets = []api.EndpointSubset{{
 				Addresses: []api.EndpointAddress{{
-					IP: epIP,
+					IP: epIPv4,
 				}},
 				Ports: []api.EndpointPort{{
-					Name: svcPortName.Port,
-					Port: int32(svcPort),
+					Name: svcPortNameV4.Port,
+					Port: int32(svcPortV4),
+				}},
+			}}
+		}),
+		makeTestEndpoints(svcPortNameV6.Namespace, svcPortNameV6.Name, func(ept *api.Endpoints) {
+			ept.Subsets = []api.EndpointSubset{{
+				Addresses: []api.EndpointAddress{{
+					IP: epIPv6,
+				}},
+				Ports: []api.EndpointPort{{
+					Name: svcPortNameV6.Port,
+					Port: int32(svcPortV6),
 				}},
 			}}
 		}),
@@ -379,16 +427,36 @@ func TestClusterIP(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to get ipvs services, err: %v", err)
 	}
-	if len(services) != 1 {
-		t.Errorf("Expect 1 ipvs services, got %d", len(services))
-	} else {
-		if services[0].Address.To4().String() != svcIP || services[0].Port != uint16(svcPort) && services[0].Protocol == string(api.ProtocolTCP) {
-			t.Errorf("Unexpected mismatch service")
-		} else {
-			destinations, _ := ipvs.GetRealServers(services[0])
+	if len(services) != 2 {
+		t.Errorf("Expect 2 ipvs services, got %d", len(services))
+	}
+	for i := range services {
+		// Check services
+		if services[i].Address.String() == svcIPv4 {
+			if services[i].Port != uint16(svcPortV4) || services[i].Protocol != string(api.ProtocolTCP) {
+				t.Errorf("Unexpected mismatch service")
+			}
+			// Check destinations
+			destinations, _ := ipvs.GetRealServers(services[i])
 			if len(destinations) != 1 {
-				t.Errorf("Unexpected %d destinations, expect 0 destinations", len(destinations))
-			} else if destinations[0].Address.To4().String() != epIP || destinations[0].Port != uint16(svcPort) {
+				t.Errorf("Expected 1 destinations, got %d destinations", len(destinations))
+				continue
+			}
+			if destinations[0].Address.String() != epIPv4 || destinations[0].Port != uint16(svcPortV4) {
+				t.Errorf("Unexpected mismatch destinations")
+			}
+		}
+		if services[i].Address.String() == svcIPv6 {
+			if services[i].Port != uint16(svcPortV6) || services[i].Protocol != string(api.ProtocolTCP) {
+				t.Errorf("Unexpected mismatch service")
+			}
+			// Check destinations
+			destinations, _ := ipvs.GetRealServers(services[i])
+			if len(destinations) != 1 {
+				t.Errorf("Expected 1 destinations, got %d destinations", len(destinations))
+				continue
+			}
+			if destinations[0].Address.String() != epIPv6 || destinations[0].Port != uint16(svcPortV6) {
 				t.Errorf("Unexpected mismatch destinations")
 			}
 		}
@@ -398,7 +466,8 @@ func TestClusterIP(t *testing.T) {
 func TestExternalIPsNoEndpoint(t *testing.T) {
 	ipt := iptablestest.NewFake()
 	ipvs := ipvstest.NewFake()
-	fp := NewFakeProxier(ipt, ipvs, nil)
+	ipset := ipsettest.NewFake()
+	fp := NewFakeProxier(ipt, ipvs, ipset, nil)
 	svcIP := "10.20.30.41"
 	svcPort := 80
 	svcExternalIPs := "50.60.70.81"
@@ -435,7 +504,7 @@ func TestExternalIPsNoEndpoint(t *testing.T) {
 	}
 	found := false
 	for _, svc := range services {
-		if svc.Address.To4().String() == svcExternalIPs && svc.Port == uint16(svcPort) && svc.Protocol == string(api.ProtocolTCP) {
+		if svc.Address.String() == svcExternalIPs && svc.Port == uint16(svcPort) && svc.Protocol == string(api.ProtocolTCP) {
 			found = true
 			destinations, _ := ipvs.GetRealServers(svc)
 			if len(destinations) != 0 {
@@ -452,10 +521,11 @@ func TestExternalIPsNoEndpoint(t *testing.T) {
 func TestExternalIPs(t *testing.T) {
 	ipt := iptablestest.NewFake()
 	ipvs := ipvstest.NewFake()
-	fp := NewFakeProxier(ipt, ipvs, nil)
+	ipset := ipsettest.NewFake()
+	fp := NewFakeProxier(ipt, ipvs, ipset, nil)
 	svcIP := "10.20.30.41"
 	svcPort := 80
-	svcExternalIPs := "50.60.70.81"
+	svcExternalIPs := sets.NewString("50.60.70.81", "2012::51")
 	svcPortName := proxy.ServicePortName{
 		NamespacedName: makeNSN("ns1", "svc1"),
 		Port:           "p80",
@@ -465,7 +535,7 @@ func TestExternalIPs(t *testing.T) {
 		makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *api.Service) {
 			svc.Spec.Type = "ClusterIP"
 			svc.Spec.ClusterIP = svcIP
-			svc.Spec.ExternalIPs = []string{svcExternalIPs}
+			svc.Spec.ExternalIPs = svcExternalIPs.UnsortedList()
 			svc.Spec.Ports = []api.ServicePort{{
 				Name:       svcPortName.Port,
 				Port:       int32(svcPort),
@@ -497,16 +567,16 @@ func TestExternalIPs(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to get ipvs services, err: %v", err)
 	}
-	if len(services) != 2 {
-		t.Errorf("Expect 2 ipvs services, got %d", len(services))
+	if len(services) != 3 {
+		t.Errorf("Expect 3 ipvs services, got %d", len(services))
 	}
 	found := false
 	for _, svc := range services {
-		if svc.Address.To4().String() == svcExternalIPs && svc.Port == uint16(svcPort) && svc.Protocol == string(api.ProtocolTCP) {
+		if svcExternalIPs.Has(svc.Address.String()) && svc.Port == uint16(svcPort) && svc.Protocol == string(api.ProtocolTCP) {
 			found = true
 			destinations, _ := ipvs.GetRealServers(svc)
 			for _, dest := range destinations {
-				if dest.Address.To4().String() != epIP || dest.Port != uint16(svcPort) {
+				if dest.Address.String() != epIP || dest.Port != uint16(svcPort) {
 					t.Errorf("service Endpoint mismatch ipvs service destination")
 				}
 			}
@@ -521,7 +591,8 @@ func TestExternalIPs(t *testing.T) {
 func TestLoadBalancer(t *testing.T) {
 	ipt := iptablestest.NewFake()
 	ipvs := ipvstest.NewFake()
-	fp := NewFakeProxier(ipt, ipvs, nil)
+	ipset := ipsettest.NewFake()
+	fp := NewFakeProxier(ipt, ipvs, ipset, nil)
 	svcIP := "10.20.30.41"
 	svcPort := 80
 	svcNodePort := 3001
@@ -572,8 +643,9 @@ func strPtr(s string) *string {
 func TestOnlyLocalNodePorts(t *testing.T) {
 	ipt := iptablestest.NewFake()
 	ipvs := ipvstest.NewFake()
+	ipset := ipsettest.NewFake()
 	nodeIP := net.ParseIP("100.101.102.103")
-	fp := NewFakeProxier(ipt, ipvs, []net.IP{nodeIP})
+	fp := NewFakeProxier(ipt, ipvs, ipset, []net.IP{nodeIP})
 	svcIP := "10.20.30.41"
 	svcPort := 80
 	svcNodePort := 3001
@@ -637,7 +709,7 @@ func TestOnlyLocalNodePorts(t *testing.T) {
 			if len(destinations) != 1 {
 				t.Errorf("Expect 1 ipvs destination, got %d", len(destinations))
 			} else {
-				if destinations[0].Address.To4().String() != epIP2 || destinations[0].Port != uint16(svcPort) {
+				if destinations[0].Address.String() != epIP2 || destinations[0].Port != uint16(svcPort) {
 					t.Errorf("service Endpoint mismatch ipvs service destination")
 				}
 			}
@@ -653,7 +725,8 @@ func TestOnlyLocalNodePorts(t *testing.T) {
 func TestOnlyLocalLoadBalancing(t *testing.T) {
 	ipt := iptablestest.NewFake()
 	ipvs := ipvstest.NewFake()
-	fp := NewFakeProxier(ipt, ipvs, nil)
+	ipset := ipsettest.NewFake()
+	fp := NewFakeProxier(ipt, ipvs, ipset, nil)
 	svcIP := "10.20.30.41"
 	svcPort := 80
 	svcNodePort := 3001
@@ -717,7 +790,8 @@ func addTestPort(array []api.ServicePort, name string, protocol api.Protocol, po
 func TestBuildServiceMapAddRemove(t *testing.T) {
 	ipt := iptablestest.NewFake()
 	ipvs := ipvstest.NewFake()
-	fp := NewFakeProxier(ipt, ipvs, nil)
+	ipset := ipsettest.NewFake()
+	fp := NewFakeProxier(ipt, ipvs, ipset, nil)
 
 	services := []*api.Service{
 		makeTestService("somewhere-else", "cluster-ip", func(svc *api.Service) {
@@ -822,7 +896,8 @@ func TestBuildServiceMapAddRemove(t *testing.T) {
 func TestBuildServiceMapServiceHeadless(t *testing.T) {
 	ipt := iptablestest.NewFake()
 	ipvs := ipvstest.NewFake()
-	fp := NewFakeProxier(ipt, ipvs, nil)
+	ipset := ipsettest.NewFake()
+	fp := NewFakeProxier(ipt, ipvs, ipset, nil)
 
 	makeServiceMap(fp,
 		makeTestService("somewhere-else", "headless", func(svc *api.Service) {
@@ -855,7 +930,8 @@ func TestBuildServiceMapServiceHeadless(t *testing.T) {
 func TestBuildServiceMapServiceTypeExternalName(t *testing.T) {
 	ipt := iptablestest.NewFake()
 	ipvs := ipvstest.NewFake()
-	fp := NewFakeProxier(ipt, ipvs, nil)
+	ipset := ipsettest.NewFake()
+	fp := NewFakeProxier(ipt, ipvs, ipset, nil)
 
 	makeServiceMap(fp,
 		makeTestService("somewhere-else", "external-name", func(svc *api.Service) {
@@ -882,7 +958,8 @@ func TestBuildServiceMapServiceTypeExternalName(t *testing.T) {
 func TestBuildServiceMapServiceUpdate(t *testing.T) {
 	ipt := iptablestest.NewFake()
 	ipvs := ipvstest.NewFake()
-	fp := NewFakeProxier(ipt, ipvs, nil)
+	ipset := ipsettest.NewFake()
+	fp := NewFakeProxier(ipt, ipvs, ipset, nil)
 
 	servicev1 := makeTestService("somewhere", "some-service", func(svc *api.Service) {
 		svc.Spec.Type = api.ServiceTypeClusterIP
@@ -964,8 +1041,9 @@ func TestBuildServiceMapServiceUpdate(t *testing.T) {
 func TestSessionAffinity(t *testing.T) {
 	ipt := iptablestest.NewFake()
 	ipvs := ipvstest.NewFake()
+	ipset := ipsettest.NewFake()
 	nodeIP := net.ParseIP("100.101.102.103")
-	fp := NewFakeProxier(ipt, ipvs, []net.IP{nodeIP})
+	fp := NewFakeProxier(ipt, ipvs, ipset, []net.IP{nodeIP})
 	svcIP := "10.20.30.41"
 	svcPort := 80
 	svcNodePort := 3001
@@ -1827,7 +1905,8 @@ func Test_updateEndpointsMap(t *testing.T) {
 	for tci, tc := range testCases {
 		ipt := iptablestest.NewFake()
 		ipvs := ipvstest.NewFake()
-		fp := NewFakeProxier(ipt, ipvs, nil)
+		ipset := ipsettest.NewFake()
+		fp := NewFakeProxier(ipt, ipvs, ipset, nil)
 		fp.hostname = nodeName
 
 		// First check that after adding all previous versions of endpoints,
@@ -1965,6 +2044,14 @@ func Test_getLocalIPs(t *testing.T) {
 			{Namespace: "ns2", Name: "ep2"}: sets.NewString("2.2.2.2", "2.2.2.22", "2.2.2.3"),
 			{Namespace: "ns4", Name: "ep4"}: sets.NewString("4.4.4.4", "4.4.4.6"),
 		},
+	}, {
+		// Case[5]: named port local and bad endpoints IP
+		endpointsMap: map[proxy.ServicePortName][]*endpointsInfo{
+			makeServicePortName("ns1", "ep1", "p11"): {
+				{endpoint: "bad ip:11", isLocal: true},
+			},
+		},
+		expected: map[types.NamespacedName]sets.String{},
 	}}
 
 	for tci, tc := range testCases {
@@ -2159,77 +2246,5 @@ func Test_endpointsToEndpointsMap(t *testing.T) {
 				}
 			}
 		}
-	}
-}
-
-func Test_ensureDummyDevice(t *testing.T) {
-	fcmd := fakeexec.FakeCmd{
-		CombinedOutputScript: []fakeexec.FakeCombinedOutputAction{
-			// Success.
-			func() ([]byte, error) { return []byte{}, nil },
-			// Exists.
-			func() ([]byte, error) { return nil, &fakeexec.FakeExitError{Status: 2} },
-		},
-	}
-	fexec := fakeexec.FakeExec{
-		CommandScript: []fakeexec.FakeCommandAction{
-			func(cmd string, args ...string) exec.Cmd { return fakeexec.InitFakeCmd(&fcmd, cmd, args...) },
-			func(cmd string, args ...string) exec.Cmd { return fakeexec.InitFakeCmd(&fcmd, cmd, args...) },
-		},
-	}
-	// Success.
-	exists, err := ensureDummyDevice(&fexec, DefaultDummyDevice)
-	if err != nil {
-		t.Errorf("expected success, got %v", err)
-	}
-	if exists {
-		t.Errorf("expected exists = false")
-	}
-	if fcmd.CombinedOutputCalls != 1 {
-		t.Errorf("expected 1 CombinedOutput() calls, got %d", fcmd.CombinedOutputCalls)
-	}
-	if !sets.NewString(fcmd.CombinedOutputLog[0]...).HasAll("ip", "link", "add", "kube-ipvs0", "type", "dummy") {
-		t.Errorf("wrong CombinedOutput() log, got %s", fcmd.CombinedOutputLog[0])
-	}
-	// Exists.
-	exists, err = ensureDummyDevice(&fexec, DefaultDummyDevice)
-	if err != nil {
-		t.Errorf("expected success, got %v", err)
-	}
-	if !exists {
-		t.Errorf("expected exists = true")
-	}
-}
-
-func Test_deleteDummyDevice(t *testing.T) {
-	fcmd := fakeexec.FakeCmd{
-		CombinedOutputScript: []fakeexec.FakeCombinedOutputAction{
-			// Success.
-			func() ([]byte, error) { return []byte{}, nil },
-			// Failure.
-			func() ([]byte, error) { return nil, &fakeexec.FakeExitError{Status: 1} },
-		},
-	}
-	fexec := fakeexec.FakeExec{
-		CommandScript: []fakeexec.FakeCommandAction{
-			func(cmd string, args ...string) exec.Cmd { return fakeexec.InitFakeCmd(&fcmd, cmd, args...) },
-			func(cmd string, args ...string) exec.Cmd { return fakeexec.InitFakeCmd(&fcmd, cmd, args...) },
-		},
-	}
-	// Success.
-	err := deleteDummyDevice(&fexec, DefaultDummyDevice)
-	if err != nil {
-		t.Errorf("expected success, got %v", err)
-	}
-	if fcmd.CombinedOutputCalls != 1 {
-		t.Errorf("expected 1 CombinedOutput() calls, got %d", fcmd.CombinedOutputCalls)
-	}
-	if !sets.NewString(fcmd.CombinedOutputLog[0]...).HasAll("ip", "link", "del", "kube-ipvs0") {
-		t.Errorf("wrong CombinedOutput() log, got %s", fcmd.CombinedOutputLog[0])
-	}
-	// Failure.
-	err = deleteDummyDevice(&fexec, DefaultDummyDevice)
-	if err == nil {
-		t.Errorf("expected failure")
 	}
 }

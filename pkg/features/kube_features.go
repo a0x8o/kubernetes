@@ -98,7 +98,7 @@ const (
 	// the API server as the certificate approaches expiration.
 	RotateKubeletClientCertificate utilfeature.Feature = "RotateKubeletClientCertificate"
 
-	// owner: @msau
+	// owner: @msau42
 	// alpha: v1.7
 	//
 	// A new volume type that supports local disks on a node.
@@ -163,6 +163,36 @@ const (
 	//
 	// Enable pods to consume pre-allocated huge pages of varying page sizes
 	HugePages utilfeature.Feature = "HugePages"
+
+	// owner @brendandburns
+	// alpha: v1.8
+	//
+	// Enable nodes to exclude themselves from service load balancers
+	ServiceNodeExclusion utilfeature.Feature = "ServiceNodeExclusion"
+
+	// owner: @jsafrane
+	// alpha: v1.9
+	//
+	// Enable running mount utilities in containers.
+	MountContainers utilfeature.Feature = "MountContainers"
+
+	// owner: @msau42
+	// alpha: v1.9
+	//
+	// Extend the default scheduler to be aware of PV topology and handle PV binding
+	VolumeScheduling utilfeature.Feature = "VolumeScheduling"
+
+	// owner: @vladimirvivien
+	// alpha: v1.9
+	//
+	// Enable mount/attachment of Container Storage Interface (CSI) backed PVs
+	CSIPersistentVolume utilfeature.Feature = "CSIPersistentVolume"
+
+	// owner: @screeley44
+	// alpha: v1.9
+	//
+	// Enable Block volume support in containers.
+	BlockVolume utilfeature.Feature = "BlockVolume"
 )
 
 func init() {
@@ -194,6 +224,11 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	MountPropagation:                            {Default: false, PreRelease: utilfeature.Alpha},
 	ExpandPersistentVolumes:                     {Default: false, PreRelease: utilfeature.Alpha},
 	CPUManager:                                  {Default: false, PreRelease: utilfeature.Alpha},
+	ServiceNodeExclusion:                        {Default: false, PreRelease: utilfeature.Alpha},
+	MountContainers:                             {Default: false, PreRelease: utilfeature.Alpha},
+	VolumeScheduling:                            {Default: false, PreRelease: utilfeature.Alpha},
+	CSIPersistentVolume:                         {Default: false, PreRelease: utilfeature.Alpha},
+	BlockVolume:                                 {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:
@@ -201,10 +236,10 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	genericfeatures.AdvancedAuditing:        {Default: true, PreRelease: utilfeature.Beta},
 	genericfeatures.APIResponseCompression:  {Default: false, PreRelease: utilfeature.Alpha},
 	genericfeatures.Initializers:            {Default: false, PreRelease: utilfeature.Alpha},
-	genericfeatures.APIListChunking:         {Default: false, PreRelease: utilfeature.Alpha},
+	genericfeatures.APIListChunking:         {Default: true, PreRelease: utilfeature.Beta},
 
 	// inherited features from apiextensions-apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:
-	apiextensionsfeatures.CustomResourceValidation: {Default: false, PreRelease: utilfeature.Alpha},
+	apiextensionsfeatures.CustomResourceValidation: {Default: true, PreRelease: utilfeature.Beta},
 	SupportIPVSProxyMode:                           {Default: false, PreRelease: utilfeature.Alpha},
 }

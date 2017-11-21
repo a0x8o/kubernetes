@@ -48,15 +48,15 @@ var (
 	completionLong = dedent.Dedent(`
 		Output shell completion code for the specified shell (bash or zsh).
 		The shell code must be evalutated to provide interactive
-		completion of kubeadm commands.  This can be done by sourcing it from
+		completion of kubeadm commands. This can be done by sourcing it from
 		the .bash_profile.
 
 		Note: this requires the bash-completion framework, which is not installed
-		by default on Mac.  This can be installed by using homebrew:
+		by default on Mac. This can be installed by using homebrew:
 
 		    $ brew install bash-completion
 
-		Once installed, bash_completion must be evaluated.  This can be done by adding the
+		Once installed, bash_completion must be evaluated. This can be done by adding the
 		following line to the .bash_profile
 
 		    $ source $(brew --prefix)/etc/bash_completion
@@ -97,7 +97,7 @@ func NewCmdCompletion(out io.Writer, boilerPlate string) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "completion SHELL",
-		Short:   i18n.T("Output shell completion code for the specified shell (bash or zsh)"),
+		Short:   i18n.T("Output shell completion code for the specified shell (bash or zsh)."),
 		Long:    completionLong,
 		Example: completionExample,
 		Run: func(cmd *cobra.Command, args []string) {

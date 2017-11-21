@@ -293,13 +293,96 @@ func TestReconcileLoadBalancerMultipleServices(t *testing.T) {
 	validateLoadBalancer(t, updatedLoadBalancer, svc1, svc2)
 }
 
+func findLBRuleForPort(lbRules []network.LoadBalancingRule, port int32) (network.LoadBalancingRule, error) {
+	for _, lbRule := range lbRules {
+		if *lbRule.FrontendPort == port {
+			return lbRule, nil
+		}
+	}
+	return network.LoadBalancingRule{}, fmt.Errorf("Expected LB rule with port %d but none found", port)
+}
+
+func TestServiceDefaultsToNoSessionPersistence(t *testing.T) {
+	az := getTestCloud()
+	svc := getTestService("service-sa-omitted", v1.ProtocolTCP, 7170)
+	configProperties := getTestPublicFipConfigurationProperties()
+	lb := getTestLoadBalancer()
+	nodes := []*v1.Node{}
+
+	lb, _, err := az.reconcileLoadBalancer(lb, &configProperties, testClusterName, &svc, nodes)
+	if err != nil {
+		t.Errorf("Unexpected error reconciling svc1: %q", err)
+	}
+
+	validateLoadBalancer(t, lb, svc)
+
+	lbRule, err := findLBRuleForPort(*lb.LoadBalancingRules, 7170)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if lbRule.LoadDistribution != network.Default {
+		t.Errorf("Expected LB rule to have default load distribution but was %s", lbRule.LoadDistribution)
+	}
+}
+
+func TestServiceRespectsNoSessionAffinity(t *testing.T) {
+	az := getTestCloud()
+	svc := getTestService("service-sa-none", v1.ProtocolTCP, 7170)
+	svc.Spec.SessionAffinity = v1.ServiceAffinityNone
+	configProperties := getTestPublicFipConfigurationProperties()
+	lb := getTestLoadBalancer()
+	nodes := []*v1.Node{}
+
+	lb, _, err := az.reconcileLoadBalancer(lb, &configProperties, testClusterName, &svc, nodes)
+	if err != nil {
+		t.Errorf("Unexpected error reconciling svc1: %q", err)
+	}
+
+	validateLoadBalancer(t, lb, svc)
+
+	lbRule, err := findLBRuleForPort(*lb.LoadBalancingRules, 7170)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if lbRule.LoadDistribution != network.Default {
+		t.Errorf("Expected LB rule to have default load distribution but was %s", lbRule.LoadDistribution)
+	}
+}
+
+func TestServiceRespectsClientIPSessionAffinity(t *testing.T) {
+	az := getTestCloud()
+	svc := getTestService("service-sa-clientip", v1.ProtocolTCP, 7170)
+	svc.Spec.SessionAffinity = v1.ServiceAffinityClientIP
+	configProperties := getTestPublicFipConfigurationProperties()
+	lb := getTestLoadBalancer()
+	nodes := []*v1.Node{}
+
+	lb, _, err := az.reconcileLoadBalancer(lb, &configProperties, testClusterName, &svc, nodes)
+	if err != nil {
+		t.Errorf("Unexpected error reconciling svc1: %q", err)
+	}
+
+	validateLoadBalancer(t, lb, svc)
+
+	lbRule, err := findLBRuleForPort(*lb.LoadBalancingRules, 7170)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if lbRule.LoadDistribution != network.SourceIP {
+		t.Errorf("Expected LB rule to have SourceIP load distribution but was %s", lbRule.LoadDistribution)
+	}
+}
+
 func TestReconcileSecurityGroupNewServiceAddsPort(t *testing.T) {
 	az := getTestCloud()
 	svc1 := getTestService("serviceea", v1.ProtocolTCP, 80)
 
 	sg := getTestSecurityGroup()
 
-	sg, _, err := az.reconcileSecurityGroup(sg, testClusterName, &svc1, true)
+	sg, _, err := az.reconcileSecurityGroup(sg, testClusterName, &svc1, to.StringPtr("192.168.0.0"), true)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
@@ -313,7 +396,7 @@ func TestReconcileSecurityGroupNewInternalServiceAddsPort(t *testing.T) {
 
 	sg := getTestSecurityGroup()
 
-	sg, _, err := az.reconcileSecurityGroup(sg, testClusterName, &svc1, true)
+	sg, _, err := az.reconcileSecurityGroup(sg, testClusterName, &svc1, to.StringPtr("192.168.0.0"), true)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
@@ -329,7 +412,7 @@ func TestReconcileSecurityGroupRemoveService(t *testing.T) {
 
 	validateSecurityGroup(t, sg, service1, service2)
 	az := getTestCloud()
-	sg, _, err := az.reconcileSecurityGroup(sg, testClusterName, &service1, false)
+	sg, _, err := az.reconcileSecurityGroup(sg, testClusterName, &service1, nil, false)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
@@ -344,7 +427,7 @@ func TestReconcileSecurityGroupRemoveServiceRemovesPort(t *testing.T) {
 	sg := getTestSecurityGroup(svc)
 
 	svcUpdated := getTestService("servicea", v1.ProtocolTCP, 80)
-	sg, _, err := az.reconcileSecurityGroup(sg, testClusterName, &svcUpdated, true)
+	sg, _, err := az.reconcileSecurityGroup(sg, testClusterName, &svcUpdated, to.StringPtr("192.168.0.0"), true)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
@@ -361,7 +444,7 @@ func TestReconcileSecurityWithSourceRanges(t *testing.T) {
 	}
 
 	sg := getTestSecurityGroup(svc)
-	sg, _, err := az.reconcileSecurityGroup(sg, testClusterName, &svc, true)
+	sg, _, err := az.reconcileSecurityGroup(sg, testClusterName, &svc, to.StringPtr("192.168.0.0"), true)
 	if err != nil {
 		t.Errorf("Unexpected error: %q", err)
 	}
