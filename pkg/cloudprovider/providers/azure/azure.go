@@ -181,6 +181,23 @@ type SecurityGroupsClient interface {
 	List(resourceGroupName string) (result network.SecurityGroupListResult, err error)
 }
 
+// VirtualMachineScaleSetsClient defines needed functions for azure compute.VirtualMachineScaleSetsClient
+type VirtualMachineScaleSetsClient interface {
+	CreateOrUpdate(resourceGroupName string, VMScaleSetName string, parameters compute.VirtualMachineScaleSet, cancel <-chan struct{}) (<-chan compute.VirtualMachineScaleSet, <-chan error)
+	Get(resourceGroupName string, VMScaleSetName string) (result compute.VirtualMachineScaleSet, err error)
+	List(resourceGroupName string) (result compute.VirtualMachineScaleSetListResult, err error)
+	ListNextResults(lastResults compute.VirtualMachineScaleSetListResult) (result compute.VirtualMachineScaleSetListResult, err error)
+	UpdateInstances(resourceGroupName string, VMScaleSetName string, VMInstanceIDs compute.VirtualMachineScaleSetVMInstanceRequiredIDs, cancel <-chan struct{}) (<-chan compute.OperationStatusResponse, <-chan error)
+}
+
+// VirtualMachineScaleSetVMsClient defines needed functions for azure compute.VirtualMachineScaleSetVMsClient
+type VirtualMachineScaleSetVMsClient interface {
+	Get(resourceGroupName string, VMScaleSetName string, instanceID string) (result compute.VirtualMachineScaleSetVM, err error)
+	GetInstanceView(resourceGroupName string, VMScaleSetName string, instanceID string) (result compute.VirtualMachineScaleSetVMInstanceView, err error)
+	List(resourceGroupName string, virtualMachineScaleSetName string, filter string, selectParameter string, expand string) (result compute.VirtualMachineScaleSetVMListResult, err error)
+	ListNextResults(lastResults compute.VirtualMachineScaleSetVMListResult) (result compute.VirtualMachineScaleSetVMListResult, err error)
+}
+
 // Cloud holds the config and clients
 type Cloud struct {
 	Config
@@ -198,10 +215,11 @@ type Cloud struct {
 	operationPollRateLimiter flowcontrol.RateLimiter
 	resourceRequestBackoff   wait.Backoff
 	metadata                 *InstanceMetadata
+	vmSet                    VMSet
 
 	// Clients for vmss.
-	VirtualMachineScaleSetsClient   compute.VirtualMachineScaleSetsClient
-	VirtualMachineScaleSetVMsClient compute.VirtualMachineScaleSetVMsClient
+	VirtualMachineScaleSetsClient   VirtualMachineScaleSetsClient
+	VirtualMachineScaleSetVMsClient VirtualMachineScaleSetVMsClient
 
 	*BlobDiskController
 	*ManagedDiskController
@@ -346,16 +364,16 @@ func NewCloud(configReader io.Reader) (cloudprovider.Interface, error) {
 	az.SecurityGroupsClient = securityGroupsClient
 
 	virtualMachineScaleSetVMsClient := compute.NewVirtualMachineScaleSetVMsClient(az.SubscriptionID)
-	az.VirtualMachineScaleSetVMsClient.BaseURI = az.Environment.ResourceManagerEndpoint
-	az.VirtualMachineScaleSetVMsClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipalToken)
-	az.VirtualMachineScaleSetVMsClient.PollingDelay = 5 * time.Second
+	virtualMachineScaleSetVMsClient.BaseURI = az.Environment.ResourceManagerEndpoint
+	virtualMachineScaleSetVMsClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipalToken)
+	virtualMachineScaleSetVMsClient.PollingDelay = 5 * time.Second
 	configureUserAgent(&virtualMachineScaleSetVMsClient.Client)
 	az.VirtualMachineScaleSetVMsClient = virtualMachineScaleSetVMsClient
 
 	virtualMachineScaleSetsClient := compute.NewVirtualMachineScaleSetsClient(az.SubscriptionID)
-	az.VirtualMachineScaleSetsClient.BaseURI = az.Environment.ResourceManagerEndpoint
-	az.VirtualMachineScaleSetsClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipalToken)
-	az.VirtualMachineScaleSetsClient.PollingDelay = 5 * time.Second
+	virtualMachineScaleSetsClient.BaseURI = az.Environment.ResourceManagerEndpoint
+	virtualMachineScaleSetsClient.Authorizer = autorest.NewBearerAuthorizer(servicePrincipalToken)
+	virtualMachineScaleSetsClient.PollingDelay = 5 * time.Second
 	configureUserAgent(&virtualMachineScaleSetsClient.Client)
 	az.VirtualMachineScaleSetsClient = virtualMachineScaleSetsClient
 
@@ -419,6 +437,12 @@ func NewCloud(configReader io.Reader) (cloudprovider.Interface, error) {
 
 	if az.MaximumLoadBalancerRuleCount == 0 {
 		az.MaximumLoadBalancerRuleCount = maximumLoadBalancerRuleCount
+	}
+
+	if az.Config.VMType == vmTypeVMSS {
+		az.vmSet = newScaleSet(&az)
+	} else {
+		az.vmSet = newAvailabilitySet(&az)
 	}
 
 	if err := initDiskControllers(&az); err != nil {
@@ -487,11 +511,6 @@ func (az *Cloud) Clusters() (cloudprovider.Clusters, bool) {
 // Routes returns a routes interface along with whether the interface is supported.
 func (az *Cloud) Routes() (cloudprovider.Routes, bool) {
 	return az, true
-}
-
-// ScrubDNS provides an opportunity for cloud-provider-specific code to process DNS settings for pods.
-func (az *Cloud) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []string) {
-	return nameservers, searches
 }
 
 // HasClusterID returns true if the cluster has a clusterID

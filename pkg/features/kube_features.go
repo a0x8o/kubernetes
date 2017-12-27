@@ -64,6 +64,8 @@ const (
 	// owner: @vishh
 	// alpha: v1.6
 	//
+	// This is deprecated and will be removed in v1.11. Use DevicePlugins instead.
+	//
 	// Enables support for GPUs as a schedulable resource.
 	// Only Nvidia GPUs are supported as of v1.6.
 	// Works only with Docker Container Runtime.
@@ -159,7 +161,7 @@ const (
 	HugePages utilfeature.Feature = "HugePages"
 
 	// owner @brendandburns
-	// alpha: v1.8
+	// alpha: v1.9
 	//
 	// Enable nodes to exclude themselves from service load balancers
 	ServiceNodeExclusion utilfeature.Feature = "ServiceNodeExclusion"
@@ -242,7 +244,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	TaintNodesByCondition:                       {Default: false, PreRelease: utilfeature.Alpha},
 	MountPropagation:                            {Default: false, PreRelease: utilfeature.Alpha},
 	ExpandPersistentVolumes:                     {Default: false, PreRelease: utilfeature.Alpha},
-	CPUManager:                                  {Default: false, PreRelease: utilfeature.Alpha},
+	CPUManager:                                  {Default: true, PreRelease: utilfeature.Beta},
 	ServiceNodeExclusion:                        {Default: false, PreRelease: utilfeature.Alpha},
 	MountContainers:                             {Default: false, PreRelease: utilfeature.Alpha},
 	VolumeScheduling:                            {Default: false, PreRelease: utilfeature.Alpha},

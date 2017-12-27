@@ -532,7 +532,8 @@ func setupTestScheduler(queuedPodStore *clientcache.FIFO, scache schedulercache.
 		[]algorithm.PriorityConfig{},
 		algorithm.EmptyMetadataProducer,
 		[]algorithm.SchedulerExtender{},
-		nil)
+		nil,
+		schedulertesting.FakePersistentVolumeClaimLister{})
 	bindingChan := make(chan *v1.Binding, 1)
 	errChan := make(chan error, 1)
 	configurator := &FakeConfigurator{
@@ -575,7 +576,8 @@ func setupTestSchedulerLongBindingWithRetry(queuedPodStore *clientcache.FIFO, sc
 		[]algorithm.PriorityConfig{},
 		algorithm.EmptyMetadataProducer,
 		[]algorithm.SchedulerExtender{},
-		nil)
+		nil,
+		schedulertesting.FakePersistentVolumeClaimLister{})
 	bindingChan := make(chan *v1.Binding, 2)
 	configurator := &FakeConfigurator{
 		Config: &Config{
@@ -617,7 +619,7 @@ func setupTestSchedulerWithVolumeBinding(fakeVolumeBinder *volumebinder.VolumeBi
 	scache.AddNode(&testNode)
 
 	predicateMap := map[string]algorithm.FitPredicate{
-		"VolumeBindingChecker": predicates.NewVolumeBindingPredicate(fakeVolumeBinder),
+		predicates.CheckVolumeBindingPred: predicates.NewVolumeBindingPredicate(fakeVolumeBinder),
 	}
 
 	recorder := broadcaster.NewRecorder(legacyscheme.Scheme, v1.EventSource{Component: "scheduler"})
@@ -635,6 +637,8 @@ func makePredicateError(failReason string) error {
 }
 
 func TestSchedulerWithVolumeBinding(t *testing.T) {
+	order := []string{predicates.CheckVolumeBindingPred, predicates.GeneralPred}
+	predicates.SetPredicatesOrdering(order)
 	findErr := fmt.Errorf("find err")
 	assumeErr := fmt.Errorf("assume err")
 	bindErr := fmt.Errorf("bind err")

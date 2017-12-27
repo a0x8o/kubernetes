@@ -471,7 +471,7 @@ func (c *BlobDiskController) getDiskCount(SAName string) (int, error) {
 }
 
 func (c *BlobDiskController) getAllStorageAccounts() (map[string]*storageAccountState, error) {
-	accountListResult, err := c.common.cloud.StorageAccountClient.List()
+	accountListResult, err := c.common.cloud.StorageAccountClient.ListByResourceGroup(c.common.resourceGroup)
 	if err != nil {
 		return nil, err
 	}
@@ -519,7 +519,7 @@ func (c *BlobDiskController) createStorageAccount(storageAccountName string, sto
 			return fmt.Errorf("azureDisk - can not create new storage account, current storage accounts count:%v Max is:%v", len(c.accounts), maxStorageAccounts)
 		}
 
-		glog.V(2).Infof("azureDisk - Creating storage account %s type %s \n", storageAccountName, string(storageAccountType))
+		glog.V(2).Infof("azureDisk - Creating storage account %s type %s", storageAccountName, string(storageAccountType))
 
 		cp := storage.AccountCreateParameters{
 			Sku:      &storage.Sku{Name: storageAccountType},

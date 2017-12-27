@@ -49,9 +49,25 @@ import (
 )
 
 const (
-	MatchInterPodAffinity = "MatchInterPodAffinity"
-	CheckVolumeBinding    = "CheckVolumeBinding"
-
+	MatchInterPodAffinityPred           = "MatchInterPodAffinity"
+	CheckVolumeBindingPred              = "CheckVolumeBinding"
+	CheckNodeConditionPred              = "CheckNodeCondition"
+	GeneralPred                         = "GeneralPredicates"
+	HostNamePred                        = "HostName"
+	PodFitsHostPortsPred                = "PodFitsHostPorts"
+	MatchNodeSelectorPred               = "MatchNodeSelector"
+	PodFitsResourcesPred                = "PodFitsResources"
+	NoDiskConflictPred                  = "NoDiskConflict"
+	PodToleratesNodeTaintsPred          = "PodToleratesNodeTaints"
+	PodToleratesNodeNoExecuteTaintsPred = "PodToleratesNodeNoExecuteTaints"
+	CheckNodeLabelPresencePred          = "CheckNodeLabelPresence"
+	checkServiceAffinityPred            = "checkServiceAffinity"
+	MaxEBSVolumeCountPred               = "MaxEBSVolumeCount"
+	MaxGCEPDVolumeCountPred             = "MaxGCEPDVolumeCount"
+	MaxAzureDiskVolumeCountPred         = "MaxAzureDiskVolumeCount"
+	NoVolumeZoneConflictPred            = "NoVolumeZoneConflict"
+	CheckNodeMemoryPressurePred         = "CheckNodeMemoryPressure"
+	CheckNodeDiskPressurePred           = "CheckNodeDiskPressure"
 	// DefaultMaxGCEPDVolumes defines the maximum number of PD Volumes for GCE
 	// GCE instances can have up to 16 PD volumes attached.
 	DefaultMaxGCEPDVolumes = 16
@@ -79,6 +95,21 @@ const (
 // For example:
 // https://github.com/kubernetes/kubernetes/blob/36a218e/plugin/pkg/scheduler/factory/factory.go#L422
 
+// IMPORTANT NOTE: this list contains the ordering of the predicates, if you develop a new predicate
+// it is mandatory to add its name to this list.
+// Otherwise it won't be processed, see generic_scheduler#podFitsOnNode().
+// The order is based on the restrictiveness & complexity of predicates.
+// Design doc: https://github.com/kubernetes/community/blob/master/contributors/design-proposals/scheduling/predicates-ordering.md
+var (
+	predicatesOrdering = []string{CheckNodeConditionPred,
+		GeneralPred, HostNamePred, PodFitsHostPortsPred,
+		MatchNodeSelectorPred, PodFitsResourcesPred, NoDiskConflictPred,
+		PodToleratesNodeTaintsPred, PodToleratesNodeNoExecuteTaintsPred, CheckNodeLabelPresencePred,
+		checkServiceAffinityPred, MaxEBSVolumeCountPred, MaxGCEPDVolumeCountPred,
+		MaxAzureDiskVolumeCountPred, CheckVolumeBindingPred, NoVolumeZoneConflictPred,
+		CheckNodeMemoryPressurePred, CheckNodeDiskPressurePred, MatchInterPodAffinityPred}
+)
+
 // NodeInfo: Other types for predicate functions...
 type NodeInfo interface {
 	GetNodeInfo(nodeID string) (*v1.Node, error)
@@ -91,6 +122,14 @@ type PersistentVolumeInfo interface {
 // CachedPersistentVolumeInfo implements PersistentVolumeInfo
 type CachedPersistentVolumeInfo struct {
 	corelisters.PersistentVolumeLister
+}
+
+func PredicatesOrdering() []string {
+	return predicatesOrdering
+}
+
+func SetPredicatesOrdering(names []string) {
+	predicatesOrdering = names
 }
 
 func (c *CachedPersistentVolumeInfo) GetPersistentVolumeInfo(pvID string) (*v1.PersistentVolume, error) {
@@ -308,7 +347,8 @@ func (c *MaxPDVolumeCountChecker) filterVolumes(volumes []v1.Volume, namespace s
 				continue
 			}
 
-			if pvc.Spec.VolumeName == "" {
+			pvName := pvc.Spec.VolumeName
+			if pvName == "" {
 				// PVC is not bound. It was either deleted and created again or
 				// it was forcefuly unbound by admin. The pod can still use the
 				// original PV where it was bound to -> log the error and count
@@ -318,7 +358,6 @@ func (c *MaxPDVolumeCountChecker) filterVolumes(volumes []v1.Volume, namespace s
 				continue
 			}
 
-			pvName := pvc.Spec.VolumeName
 			pv, err := c.pvInfo.GetPersistentVolumeInfo(pvName)
 			if err != nil || pv == nil {
 				// if the PV is not found, log the error
@@ -1077,7 +1116,7 @@ func (c *PodAffinityChecker) InterPodAffinityMatches(pod *v1.Pod, meta algorithm
 // First return value indicates whether a matching pod exists on a node that matches the topology key,
 // while the second return value indicates whether a matching pod exists anywhere.
 // TODO: Do we really need any pod matching, or all pods matching? I think the latter.
-func (c *PodAffinityChecker) anyPodMatchesPodAffinityTerm(pod *v1.Pod, allPods []*v1.Pod, node *v1.Node, term *v1.PodAffinityTerm) (bool, bool, error) {
+func (c *PodAffinityChecker) anyPodMatchesPodAffinityTerm(pod *v1.Pod, pods []*v1.Pod, nodeInfo *schedulercache.NodeInfo, term *v1.PodAffinityTerm) (bool, bool, error) {
 	if len(term.TopologyKey) == 0 {
 		return false, false, fmt.Errorf("empty topologyKey is not allowed except for PreferredDuringScheduling pod anti-affinity")
 	}
@@ -1087,7 +1126,12 @@ func (c *PodAffinityChecker) anyPodMatchesPodAffinityTerm(pod *v1.Pod, allPods [
 	if err != nil {
 		return false, false, err
 	}
-	for _, existingPod := range allPods {
+	// Special case: When the topological domain is node, we can limit our
+	// search to pods on that node without searching the entire cluster.
+	if term.TopologyKey == kubeletapis.LabelHostname {
+		pods = nodeInfo.Pods()
+	}
+	for _, existingPod := range pods {
 		match := priorityutil.PodMatchesTermsNamespaceAndSelector(existingPod, namespaces, selector)
 		if match {
 			matchingPodExists = true
@@ -1095,7 +1139,7 @@ func (c *PodAffinityChecker) anyPodMatchesPodAffinityTerm(pod *v1.Pod, allPods [
 			if err != nil {
 				return false, matchingPodExists, err
 			}
-			if priorityutil.NodesHaveSameTopologyKey(node, existingPodNode, term.TopologyKey) {
+			if priorityutil.NodesHaveSameTopologyKey(nodeInfo.Node(), existingPodNode, term.TopologyKey) {
 				return true, matchingPodExists, nil
 			}
 		}
@@ -1295,7 +1339,7 @@ func (c *PodAffinityChecker) satisfiesPodsAffinityAntiAffinity(pod *v1.Pod, node
 
 	// Check all affinity terms.
 	for _, term := range GetPodAffinityTerms(affinity.PodAffinity) {
-		termMatches, matchingPodExists, err := c.anyPodMatchesPodAffinityTerm(pod, filteredPods, node, &term)
+		termMatches, matchingPodExists, err := c.anyPodMatchesPodAffinityTerm(pod, filteredPods, nodeInfo, &term)
 		if err != nil {
 			errMessage := fmt.Sprintf("Cannot schedule pod %+v onto node %v, because of PodAffinityTerm %v, err: %v", podName(pod), node.Name, term, err)
 			glog.Error(errMessage)
@@ -1328,7 +1372,7 @@ func (c *PodAffinityChecker) satisfiesPodsAffinityAntiAffinity(pod *v1.Pod, node
 
 	// Check all anti-affinity terms.
 	for _, term := range GetPodAntiAffinityTerms(affinity.PodAntiAffinity) {
-		termMatches, _, err := c.anyPodMatchesPodAffinityTerm(pod, filteredPods, node, &term)
+		termMatches, _, err := c.anyPodMatchesPodAffinityTerm(pod, filteredPods, nodeInfo, &term)
 		if err != nil || termMatches {
 			glog.V(10).Infof("Cannot schedule pod %+v onto node %v, because of PodAntiAffinityTerm %v, err: %v",
 				podName(pod), node.Name, term, err)
