@@ -79,7 +79,7 @@ func (e *Error) Error() string {
 }
 
 // Checker validates the state of the system to ensure kubeadm will be
-// successful as often as possilble.
+// successful as often as possible.
 type Checker interface {
 	Check() (warnings, errors []error)
 	Name() string
@@ -525,9 +525,12 @@ func (eac ExtraArgsCheck) Check() (warnings, errors []error) {
 		warnings = append(warnings, argsCheck("kube-controller-manager", eac.ControllerManagerExtraArgs, flags)...)
 	}
 	if len(eac.SchedulerExtraArgs) > 0 {
-		command := schedulerapp.NewSchedulerCommand()
+		opts, err := schedulerapp.NewOptions()
+		if err != nil {
+			warnings = append(warnings, err)
+		}
 		flags := pflag.NewFlagSet("", pflag.ContinueOnError)
-		flags.AddFlagSet(command.Flags())
+		opts.AddFlags(flags)
 		warnings = append(warnings, argsCheck("kube-scheduler", eac.SchedulerExtraArgs, flags)...)
 	}
 	return warnings, nil
@@ -848,6 +851,8 @@ func RunInitMasterChecks(execer utilsexec.Interface, cfg *kubeadmapi.MasterConfi
 	warns, _ := criCtlChecker.Check()
 	useCRI := len(warns) == 0
 
+	manifestsDir := filepath.Join(kubeadmconstants.KubernetesDir, kubeadmconstants.ManifestsSubDirName)
+
 	checks := []Checker{
 		KubernetesVersionCheck{KubernetesVersion: cfg.KubernetesVersion, KubeadmVersion: kubeadmversion.Get().GitVersion},
 		SystemVerificationCheck{CRISocket: criSocket},
@@ -860,7 +865,10 @@ func RunInitMasterChecks(execer utilsexec.Interface, cfg *kubeadmapi.MasterConfi
 		PortOpenCheck{port: 10250},
 		PortOpenCheck{port: 10251},
 		PortOpenCheck{port: 10252},
-		DirAvailableCheck{Path: filepath.Join(kubeadmconstants.KubernetesDir, kubeadmconstants.ManifestsSubDirName)},
+		FileAvailableCheck{Path: kubeadmconstants.GetStaticPodFilepath(kubeadmconstants.KubeAPIServer, manifestsDir)},
+		FileAvailableCheck{Path: kubeadmconstants.GetStaticPodFilepath(kubeadmconstants.KubeControllerManager, manifestsDir)},
+		FileAvailableCheck{Path: kubeadmconstants.GetStaticPodFilepath(kubeadmconstants.KubeScheduler, manifestsDir)},
+		FileAvailableCheck{Path: kubeadmconstants.GetStaticPodFilepath(kubeadmconstants.Etcd, manifestsDir)},
 		FileContentCheck{Path: bridgenf, Content: []byte{'1'}},
 		SwapCheck{},
 		InPathCheck{executable: "ip", mandatory: true, exec: execer},

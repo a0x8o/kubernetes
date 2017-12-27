@@ -62,7 +62,7 @@ func PerformPostUpgradeTasks(client clientset.Interface, cfg *kubeadmapi.MasterC
 		errs = append(errs, err)
 	}
 
-	// Create/update RBAC rules that makes the 1.8.0+ nodes to rotate certificates and get their CSRs approved automatically
+	// Create/update RBAC rules that makes the nodes to rotate certificates and get their CSRs approved automatically
 	if err := nodebootstraptoken.AutoApproveNodeCertificateRotation(client); err != nil {
 		errs = append(errs, err)
 	}
@@ -117,7 +117,7 @@ func PerformPostUpgradeTasks(client clientset.Interface, cfg *kubeadmapi.MasterC
 func removeOldKubeDNSDeploymentIfCoreDNSIsUsed(cfg *kubeadmapi.MasterConfiguration, client clientset.Interface) error {
 	if features.Enabled(cfg.FeatureGates, features.CoreDNS) {
 		return apiclient.TryRunCommand(func() error {
-			coreDNSDeployment, err := client.AppsV1beta2().Deployments(metav1.NamespaceSystem).Get(kubeadmconstants.CoreDNS, metav1.GetOptions{})
+			coreDNSDeployment, err := client.AppsV1().Deployments(metav1.NamespaceSystem).Get(kubeadmconstants.CoreDNS, metav1.GetOptions{})
 			if err != nil {
 				return err
 			}

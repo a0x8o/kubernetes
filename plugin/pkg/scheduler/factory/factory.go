@@ -409,7 +409,7 @@ func (c *configFactory) invalidatePredicatesForPv(pv *v1.PersistentVolume) {
 
 	if utilfeature.DefaultFeatureGate.Enabled(features.VolumeScheduling) {
 		// Add/delete impacts the available PVs to choose from
-		invalidPredicates.Insert(predicates.CheckVolumeBinding)
+		invalidPredicates.Insert(predicates.CheckVolumeBindingPred)
 	}
 
 	c.equivalencePodCache.InvalidateCachedPredicateItemOfAllNodes(invalidPredicates)
@@ -480,7 +480,7 @@ func (c *configFactory) invalidatePredicatesForPvc(pvc *v1.PersistentVolumeClaim
 
 	if utilfeature.DefaultFeatureGate.Enabled(features.VolumeScheduling) {
 		// Add/delete impacts the available PVs to choose from
-		invalidPredicates.Insert(predicates.CheckVolumeBinding)
+		invalidPredicates.Insert(predicates.CheckVolumeBindingPred)
 	}
 	c.equivalencePodCache.InvalidateCachedPredicateItemOfAllNodes(invalidPredicates)
 }
@@ -491,7 +491,7 @@ func (c *configFactory) invalidatePredicatesForPvcUpdate(old, new *v1.Persistent
 	if old.Spec.VolumeName != new.Spec.VolumeName {
 		if utilfeature.DefaultFeatureGate.Enabled(features.VolumeScheduling) {
 			// PVC volume binding has changed
-			invalidPredicates.Insert(predicates.CheckVolumeBinding)
+			invalidPredicates.Insert(predicates.CheckVolumeBindingPred)
 		}
 		// The bound volume type may change
 		invalidPredicates.Insert(maxPDVolumeCountPredicateKeys...)
@@ -933,7 +933,7 @@ func (f *configFactory) CreateFromKeys(predicateKeys, priorityKeys sets.String, 
 		glog.Info("Created equivalence class cache")
 	}
 
-	algo := core.NewGenericScheduler(f.schedulerCache, f.equivalencePodCache, f.podQueue, predicateFuncs, predicateMetaProducer, priorityConfigs, priorityMetaProducer, extenders, f.volumeBinder)
+	algo := core.NewGenericScheduler(f.schedulerCache, f.equivalencePodCache, f.podQueue, predicateFuncs, predicateMetaProducer, priorityConfigs, priorityMetaProducer, extenders, f.volumeBinder, f.pVCLister)
 
 	podBackoff := util.CreateDefaultPodBackoff()
 	return &scheduler.Config{
@@ -1139,6 +1139,21 @@ func (factory *configFactory) MakeDefaultErrorFunc(backoff *util.PodBackoff, pod
 		} else {
 			if _, ok := err.(*core.FitError); ok {
 				glog.V(4).Infof("Unable to schedule %v %v: no fit: %v; waiting", pod.Namespace, pod.Name, err)
+			} else if errors.IsNotFound(err) {
+				if errStatus, ok := err.(errors.APIStatus); ok && errStatus.Status().Details.Kind == "node" {
+					nodeName := errStatus.Status().Details.Name
+					// when node is not found, We do not remove the node right away. Trying again to get
+					// the node and if the node is still not found, then remove it from the scheduler cache.
+					_, err := factory.client.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+					if err != nil && errors.IsNotFound(err) {
+						node := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: nodeName}}
+						factory.schedulerCache.RemoveNode(&node)
+						// invalidate cached predicate for the node
+						if factory.enableEquivalenceClassCache {
+							factory.equivalencePodCache.InvalidateAllCachedPredicateItemOfNode(nodeName)
+						}
+					}
+				}
 			} else {
 				glog.Errorf("Error scheduling %v %v: %v; retrying", pod.Namespace, pod.Name, err)
 			}

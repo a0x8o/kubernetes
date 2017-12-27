@@ -81,7 +81,7 @@ func (plugin *rbdPlugin) GetPluginName() string {
 }
 
 func (plugin *rbdPlugin) GetVolumeName(spec *volume.Spec) (string, error) {
-	mon, err := getVolumeSourceMonitors(spec)
+	pool, err := getVolumeSourcePool(spec)
 	if err != nil {
 		return "", err
 	}
@@ -92,7 +92,7 @@ func (plugin *rbdPlugin) GetVolumeName(spec *volume.Spec) (string, error) {
 
 	return fmt.Sprintf(
 		"%v:%v",
-		mon,
+		pool,
 		img), nil
 }
 
@@ -244,7 +244,7 @@ func (plugin *rbdPlugin) createMounterFromVolumeSpecAndPod(spec *volume.Spec, po
 		if kubeClient == nil {
 			return nil, fmt.Errorf("Cannot get kube client")
 		}
-		secrets, err := kubeClient.Core().Secrets(secretNs).Get(secretName, metav1.GetOptions{})
+		secrets, err := kubeClient.CoreV1().Secrets(secretNs).Get(secretName, metav1.GetOptions{})
 		if err != nil {
 			err = fmt.Errorf("Couldn't get secret %v/%v err: %v", secretNs, secretName, err)
 			return nil, err
@@ -346,11 +346,22 @@ func (plugin *rbdPlugin) newUnmounterInternal(volName string, podUID types.UID, 
 }
 
 func (plugin *rbdPlugin) ConstructVolumeSpec(volumeName, mountPath string) (*volume.Spec, error) {
+	mounter := plugin.host.GetMounter(plugin.GetPluginName())
+	pluginDir := plugin.host.GetPluginDir(plugin.GetPluginName())
+	sourceName, err := mounter.GetDeviceNameFromMount(mountPath, pluginDir)
+	if err != nil {
+		return nil, err
+	}
+	s := dstrings.Split(sourceName, "-image-")
+	if len(s) != 2 {
+		return nil, fmt.Errorf("sourceName %s wrong, should be pool+\"-image-\"+imageName", sourceName)
+	}
 	rbdVolume := &v1.Volume{
 		Name: volumeName,
 		VolumeSource: v1.VolumeSource{
 			RBD: &v1.RBDVolumeSource{
-				CephMonitors: []string{},
+				RBDPool:  s[0],
+				RBDImage: s[1],
 			},
 		},
 	}

@@ -19,6 +19,7 @@ go_library(
         "node_label.go",
         "node_prefer_avoid_pods.go",
         "reduce.go",
+        "resource_allocation.go",
         "resource_limits.go",
         "selector_spreading.go",
         "taint_toleration.go",
@@ -27,7 +28,6 @@ go_library(
     importpath = "k8s.io/kubernetes/plugin/pkg/scheduler/algorithm/priorities",
     deps = [
         "//pkg/apis/core/v1/helper:go_default_library",
-        "//pkg/kubelet/apis:go_default_library",
         "//pkg/util/node:go_default_library",
         "//plugin/pkg/scheduler/algorithm:go_default_library",
         "//plugin/pkg/scheduler/algorithm/predicates:go_default_library",
@@ -60,8 +60,8 @@ go_test(
         "selector_spreading_test.go",
         "taint_toleration_test.go",
     ],
+    embed = [":go_default_library"],
     importpath = "k8s.io/kubernetes/plugin/pkg/scheduler/algorithm/priorities",
-    library = ":go_default_library",
     deps = [
         "//pkg/kubelet/apis:go_default_library",
         "//plugin/pkg/scheduler/algorithm/priorities/util:go_default_library",

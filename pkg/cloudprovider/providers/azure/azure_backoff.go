@@ -58,23 +58,6 @@ func (az *Cloud) GetVirtualMachineWithRetry(name types.NodeName) (compute.Virtua
 	return machine, exists, err
 }
 
-// GetScaleSetsVMWithRetry invokes az.getScaleSetsVM with exponential backoff retry
-func (az *Cloud) GetScaleSetsVMWithRetry(name types.NodeName) (compute.VirtualMachineScaleSetVM, bool, error) {
-	var machine compute.VirtualMachineScaleSetVM
-	var exists bool
-	err := wait.ExponentialBackoff(az.resourceRequestBackoff, func() (bool, error) {
-		var retryErr error
-		machine, exists, retryErr = az.getVmssVirtualMachine(name)
-		if retryErr != nil {
-			glog.Errorf("GetScaleSetsVMWithRetry backoff: failure, will retry,err=%v", retryErr)
-			return false, nil
-		}
-		glog.V(10).Infof("GetScaleSetsVMWithRetry backoff: success")
-		return true, nil
-	})
-	return machine, exists, err
-}
-
 // VirtualMachineClientGetWithRetry invokes az.VirtualMachinesClient.Get with exponential backoff retry
 func (az *Cloud) VirtualMachineClientGetWithRetry(resourceGroup, vmName string, types compute.InstanceViewTypes) (compute.VirtualMachine, error) {
 	var machine compute.VirtualMachine
@@ -243,23 +226,23 @@ func (az *Cloud) ListLBWithRetry() ([]network.LoadBalancer, error) {
 	return allLBs, nil
 }
 
-// ListPIPWithRetry list the PIP resources in az.ResourceGroup
-func (az *Cloud) ListPIPWithRetry() ([]network.PublicIPAddress, error) {
+// ListPIPWithRetry list the PIP resources in the given resource group
+func (az *Cloud) ListPIPWithRetry(pipResourceGroup string) ([]network.PublicIPAddress, error) {
 	allPIPs := []network.PublicIPAddress{}
 	var result network.PublicIPAddressListResult
 	err := wait.ExponentialBackoff(az.requestBackoff(), func() (bool, error) {
 		var retryErr error
 		az.operationPollRateLimiter.Accept()
-		glog.V(10).Infof("PublicIPAddressesClient.List(%v): start", az.ResourceGroup)
-		result, retryErr = az.PublicIPAddressesClient.List(az.ResourceGroup)
-		glog.V(10).Infof("PublicIPAddressesClient.List(%v): end", az.ResourceGroup)
+		glog.V(10).Infof("PublicIPAddressesClient.List(%v): start", pipResourceGroup)
+		result, retryErr = az.PublicIPAddressesClient.List(pipResourceGroup)
+		glog.V(10).Infof("PublicIPAddressesClient.List(%v): end", pipResourceGroup)
 		if retryErr != nil {
 			glog.Errorf("PublicIPAddressesClient.List(%v) - backoff: failure, will retry,err=%v",
-				az.ResourceGroup,
+				pipResourceGroup,
 				retryErr)
 			return false, retryErr
 		}
-		glog.V(2).Infof("PublicIPAddressesClient.List(%v) - backoff: success", az.ResourceGroup)
+		glog.V(2).Infof("PublicIPAddressesClient.List(%v) - backoff: success", pipResourceGroup)
 		return true, nil
 	})
 	if err != nil {
@@ -271,21 +254,21 @@ func (az *Cloud) ListPIPWithRetry() ([]network.PublicIPAddress, error) {
 		allPIPs = append(allPIPs, *result.Value...)
 		appendResults = false
 
-		// follow the next link to get all the vms for resource group
+		// follow the next link to get all the pip resources for resource group
 		if result.NextLink != nil {
 			err := wait.ExponentialBackoff(az.requestBackoff(), func() (bool, error) {
 				var retryErr error
 				az.operationPollRateLimiter.Accept()
-				glog.V(10).Infof("PublicIPAddressesClient.ListNextResults(%v): start", az.ResourceGroup)
+				glog.V(10).Infof("PublicIPAddressesClient.ListNextResults(%v): start", pipResourceGroup)
 				result, retryErr = az.PublicIPAddressesClient.ListNextResults(result)
-				glog.V(10).Infof("PublicIPAddressesClient.ListNextResults(%v): end", az.ResourceGroup)
+				glog.V(10).Infof("PublicIPAddressesClient.ListNextResults(%v): end", pipResourceGroup)
 				if retryErr != nil {
 					glog.Errorf("PublicIPAddressesClient.ListNextResults(%v) - backoff: failure, will retry,err=%v",
-						az.ResourceGroup,
+						pipResourceGroup,
 						retryErr)
 					return false, retryErr
 				}
-				glog.V(2).Infof("PublicIPAddressesClient.ListNextResults(%v) - backoff: success", az.ResourceGroup)
+				glog.V(2).Infof("PublicIPAddressesClient.ListNextResults(%v) - backoff: success", pipResourceGroup)
 				return true, nil
 			})
 			if err != nil {
@@ -299,14 +282,14 @@ func (az *Cloud) ListPIPWithRetry() ([]network.PublicIPAddress, error) {
 }
 
 // CreateOrUpdatePIPWithRetry invokes az.PublicIPAddressesClient.CreateOrUpdate with exponential backoff retry
-func (az *Cloud) CreateOrUpdatePIPWithRetry(pip network.PublicIPAddress) error {
+func (az *Cloud) CreateOrUpdatePIPWithRetry(pipResourceGroup string, pip network.PublicIPAddress) error {
 	return wait.ExponentialBackoff(az.requestBackoff(), func() (bool, error) {
 		az.operationPollRateLimiter.Accept()
-		glog.V(10).Infof("PublicIPAddressesClient.CreateOrUpdate(%s): start", *pip.Name)
-		respChan, errChan := az.PublicIPAddressesClient.CreateOrUpdate(az.ResourceGroup, *pip.Name, pip, nil)
+		glog.V(10).Infof("PublicIPAddressesClient.CreateOrUpdate(%s, %s): start", pipResourceGroup, *pip.Name)
+		respChan, errChan := az.PublicIPAddressesClient.CreateOrUpdate(pipResourceGroup, *pip.Name, pip, nil)
 		resp := <-respChan
 		err := <-errChan
-		glog.V(10).Infof("PublicIPAddressesClient.CreateOrUpdate(%s): end", *pip.Name)
+		glog.V(10).Infof("PublicIPAddressesClient.CreateOrUpdate(%s, %s): end", pipResourceGroup, *pip.Name)
 		return processRetryResponse(resp.Response, err)
 	})
 }
@@ -325,14 +308,14 @@ func (az *Cloud) CreateOrUpdateInterfaceWithRetry(nic network.Interface) error {
 }
 
 // DeletePublicIPWithRetry invokes az.PublicIPAddressesClient.Delete with exponential backoff retry
-func (az *Cloud) DeletePublicIPWithRetry(pipName string) error {
+func (az *Cloud) DeletePublicIPWithRetry(pipResourceGroup string, pipName string) error {
 	return wait.ExponentialBackoff(az.requestBackoff(), func() (bool, error) {
 		az.operationPollRateLimiter.Accept()
-		glog.V(10).Infof("PublicIPAddressesClient.Delete(%s): start", pipName)
-		respChan, errChan := az.PublicIPAddressesClient.Delete(az.ResourceGroup, pipName, nil)
+		glog.V(10).Infof("PublicIPAddressesClient.Delete(%s, %s): start", pipResourceGroup, pipName)
+		respChan, errChan := az.PublicIPAddressesClient.Delete(pipResourceGroup, pipName, nil)
 		resp := <-respChan
 		err := <-errChan
-		glog.V(10).Infof("PublicIPAddressesClient.Delete(%s): end", pipName)
+		glog.V(10).Infof("PublicIPAddressesClient.Delete(%s, %s): end", pipResourceGroup, pipName)
 		return processRetryResponse(resp, err)
 	})
 }

@@ -17,19 +17,14 @@ limitations under the License.
 package azure
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/Azure/azure-sdk-for-go/arm/compute"
 	"github.com/Azure/azure-sdk-for-go/arm/network"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/golang/glog"
-	"k8s.io/apimachinery/pkg/types"
-)
 
-var (
-	// ErrorNotVmssInstance indicates an instance is not belongint to any vmss.
-	ErrorNotVmssInstance = errors.New("not a vmss instance")
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // checkExistsFromError inspects an error and returns a true if err is nil,
@@ -40,7 +35,10 @@ func checkResourceExistsFromError(err error) (bool, error) {
 		return true, nil
 	}
 	v, ok := err.(autorest.DetailedError)
-	if ok && v.StatusCode == http.StatusNotFound {
+	if !ok {
+		return false, err
+	}
+	if v.StatusCode == http.StatusNotFound {
 		return false, nil
 	}
 	return false, v
@@ -67,32 +65,6 @@ func (az *Cloud) getVirtualMachine(nodeName types.NodeName) (vm compute.VirtualM
 	glog.V(10).Infof("VirtualMachinesClient.Get(%s): start", vmName)
 	vm, err = az.VirtualMachinesClient.Get(az.ResourceGroup, vmName, "")
 	glog.V(10).Infof("VirtualMachinesClient.Get(%s): end", vmName)
-
-	exists, realErr = checkResourceExistsFromError(err)
-	if realErr != nil {
-		return vm, false, realErr
-	}
-
-	if !exists {
-		return vm, false, nil
-	}
-
-	return vm, exists, err
-}
-
-func (az *Cloud) getVmssVirtualMachine(nodeName types.NodeName) (vm compute.VirtualMachineScaleSetVM, exists bool, err error) {
-	var realErr error
-
-	vmName := string(nodeName)
-	instanceID, err := getVmssInstanceID(vmName)
-	if err != nil {
-		return vm, false, err
-	}
-
-	az.operationPollRateLimiter.Accept()
-	glog.V(10).Infof("VirtualMachineScaleSetVMsClient.Get(%s): start", vmName)
-	vm, err = az.VirtualMachineScaleSetVMsClient.Get(az.ResourceGroup, az.PrimaryScaleSetName, instanceID)
-	glog.V(10).Infof("VirtualMachineScaleSetVMsClient.Get(%s): end", vmName)
 
 	exists, realErr = checkResourceExistsFromError(err)
 	if realErr != nil {
@@ -184,13 +156,17 @@ func (az *Cloud) listLoadBalancers() (lbListResult network.LoadBalancerListResul
 	return lbListResult, exists, err
 }
 
-func (az *Cloud) getPublicIPAddress(name string) (pip network.PublicIPAddress, exists bool, err error) {
-	var realErr error
+func (az *Cloud) getPublicIPAddress(pipResourceGroup string, pipName string) (pip network.PublicIPAddress, exists bool, err error) {
+	resourceGroup := az.ResourceGroup
+	if pipResourceGroup != "" {
+		resourceGroup = pipResourceGroup
+	}
 
+	var realErr error
 	az.operationPollRateLimiter.Accept()
-	glog.V(10).Infof("PublicIPAddressesClient.Get(%s): start", name)
-	pip, err = az.PublicIPAddressesClient.Get(az.ResourceGroup, name, "")
-	glog.V(10).Infof("PublicIPAddressesClient.Get(%s): end", name)
+	glog.V(10).Infof("PublicIPAddressesClient.Get(%s, %s): start", resourceGroup, pipName)
+	pip, err = az.PublicIPAddressesClient.Get(resourceGroup, pipName, "")
+	glog.V(10).Infof("PublicIPAddressesClient.Get(%s, %s): end", resourceGroup, pipName)
 
 	exists, realErr = checkResourceExistsFromError(err)
 	if realErr != nil {
