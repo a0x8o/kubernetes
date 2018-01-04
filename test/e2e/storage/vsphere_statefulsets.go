@@ -24,6 +24,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
+<<<<<<< HEAD
+=======
+	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
+>>>>>>> axbaretto
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -103,7 +107,11 @@ var _ = SIGDescribe("vsphere statefulset", func() {
 		Expect(scaledownErr).NotTo(HaveOccurred())
 		statefulsetTester.WaitForStatusReadyReplicas(statefulset, replicas-1)
 
+<<<<<<< HEAD
 		vsp, err := getVSphere(client)
+=======
+		vsp, err := vsphere.GetVSphere()
+>>>>>>> axbaretto
 		Expect(err).NotTo(HaveOccurred())
 
 		// After scale down, verify vsphere volumes are detached from deleted pods
@@ -116,7 +124,11 @@ var _ = SIGDescribe("vsphere statefulset", func() {
 					if volumespec.PersistentVolumeClaim != nil {
 						vSpherediskPath := getvSphereVolumePathFromClaim(client, statefulset.Namespace, volumespec.PersistentVolumeClaim.ClaimName)
 						framework.Logf("Waiting for Volume: %q to detach from Node: %q", vSpherediskPath, sspod.Spec.NodeName)
+<<<<<<< HEAD
 						Expect(waitForVSphereDiskToDetach(client, vsp, vSpherediskPath, types.NodeName(sspod.Spec.NodeName))).NotTo(HaveOccurred())
+=======
+						Expect(waitForVSphereDiskToDetach(vsp, vSpherediskPath, types.NodeName(sspod.Spec.NodeName))).NotTo(HaveOccurred())
+>>>>>>> axbaretto
 					}
 				}
 			}
@@ -145,7 +157,11 @@ var _ = SIGDescribe("vsphere statefulset", func() {
 					framework.Logf("Verify Volume: %q is attached to the Node: %q", vSpherediskPath, sspod.Spec.NodeName)
 					// Verify scale up has re-attached the same volumes and not introduced new volume
 					Expect(volumesBeforeScaleDown[vSpherediskPath] == "").To(BeFalse())
+<<<<<<< HEAD
 					isVolumeAttached, verifyDiskAttachedError := verifyVSphereDiskAttached(client, vsp, vSpherediskPath, types.NodeName(sspod.Spec.NodeName))
+=======
+					isVolumeAttached, verifyDiskAttachedError := verifyVSphereDiskAttached(vsp, vSpherediskPath, types.NodeName(sspod.Spec.NodeName))
+>>>>>>> axbaretto
 					Expect(isVolumeAttached).To(BeTrue())
 					Expect(verifyDiskAttachedError).NotTo(HaveOccurred())
 				}

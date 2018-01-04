@@ -61,7 +61,11 @@ var _ = SIGDescribe("Node Poweroff [Feature:vsphere] [Slow] [Disruptive]", func(
 		nodeList := framework.GetReadySchedulableNodesOrDie(f.ClientSet)
 		Expect(nodeList.Items).NotTo(BeEmpty(), "Unable to find ready and schedulable Node")
 		Expect(len(nodeList.Items) > 1).To(BeTrue(), "At least 2 nodes are required for this test")
+<<<<<<< HEAD
 		vsp, err = getVSphere(client)
+=======
+		vsp, err = vsphere.GetVSphere()
+>>>>>>> axbaretto
 		Expect(err).NotTo(HaveOccurred())
 		workingDir = os.Getenv("VSPHERE_WORKING_DIR")
 		Expect(workingDir).NotTo(BeEmpty())
@@ -112,7 +116,11 @@ var _ = SIGDescribe("Node Poweroff [Feature:vsphere] [Slow] [Disruptive]", func(
 		node1 := types.NodeName(pod.Spec.NodeName)
 
 		By(fmt.Sprintf("Verify disk is attached to the node: %v", node1))
+<<<<<<< HEAD
 		isAttached, err := verifyVSphereDiskAttached(client, vsp, volumePath, node1)
+=======
+		isAttached, err := verifyVSphereDiskAttached(vsp, volumePath, node1)
+>>>>>>> axbaretto
 		Expect(err).NotTo(HaveOccurred())
 		Expect(isAttached).To(BeTrue(), "Disk is not attached to the node")
 
@@ -139,11 +147,19 @@ var _ = SIGDescribe("Node Poweroff [Feature:vsphere] [Slow] [Disruptive]", func(
 		Expect(err).NotTo(HaveOccurred(), "Pod did not fail over to a different node")
 
 		By(fmt.Sprintf("Waiting for disk to be attached to the new node: %v", node2))
+<<<<<<< HEAD
 		err = waitForVSphereDiskToAttach(client, vsp, volumePath, node2)
 		Expect(err).NotTo(HaveOccurred(), "Disk is not attached to the node")
 
 		By(fmt.Sprintf("Waiting for disk to be detached from the previous node: %v", node1))
 		err = waitForVSphereDiskToDetach(client, vsp, volumePath, node1)
+=======
+		err = waitForVSphereDiskToAttach(vsp, volumePath, node2)
+		Expect(err).NotTo(HaveOccurred(), "Disk is not attached to the node")
+
+		By(fmt.Sprintf("Waiting for disk to be detached from the previous node: %v", node1))
+		err = waitForVSphereDiskToDetach(vsp, volumePath, node1)
+>>>>>>> axbaretto
 		Expect(err).NotTo(HaveOccurred(), "Disk is not detached from the node")
 
 		By(fmt.Sprintf("Power on the previous node: %v", node1))

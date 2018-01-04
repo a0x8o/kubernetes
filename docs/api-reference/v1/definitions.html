@@ -2244,7 +2244,7 @@ The resulting set of endpoints can be viewed as:<br>
 <div class="sect2">
 <h3 id="_v1_flexvolumesource">v1.FlexVolumeSource</h3>
 <div class="paragraph">
-<p>FlexVolume represents a generic volume resource that is provisioned/attached using an exec based plugin. This is an alpha feature and may change in future.</p>
+<p>FlexVolume represents a generic volume resource that is provisioned/attached using an exec based plugin.</p>
 </div>
 <table class="tableblock frame-all grid-all" style="width:100%; ">
 <colgroup>
@@ -3533,6 +3533,40 @@ Examples:<br>
 
 </div>
 <div class="sect2">
+<h3 id="_v1_servicestatus">v1.ServiceStatus</h3>
+<div class="paragraph">
+<p>ServiceStatus represents the current status of a service.</p>
+</div>
+<table class="tableblock frame-all grid-all" style="width:100%; ">
+<colgroup>
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;"> 
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Required</th>
+<th class="tableblock halign-left valign-top">Schema</th>
+<th class="tableblock halign-left valign-top">Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">loadBalancer</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">LoadBalancer contains the current status of the load-balancer, if one is present.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_loadbalancerstatus">v1.LoadBalancerStatus</a></p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+<div class="sect2">
 <h3 id="_v1_nfsvolumesource">v1.NFSVolumeSource</h3>
 <div class="paragraph">
 <p>Represents an NFS mount that lasts the lifetime of a pod. NFS volumes do not support ownership management or SELinux relabeling.</p>
@@ -3575,40 +3609,6 @@ Examples:<br>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">boolean</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
-</tr>
-</tbody>
-</table>
-
-</div>
-<div class="sect2">
-<h3 id="_v1_servicestatus">v1.ServiceStatus</h3>
-<div class="paragraph">
-<p>ServiceStatus represents the current status of a service.</p>
-</div>
-<table class="tableblock frame-all grid-all" style="width:100%; ">
-<colgroup>
-<col style="width:20%;">
-<col style="width:20%;">
-<col style="width:20%;">
-<col style="width:20%;">
-<col style="width:20%;"> 
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Name</th>
-<th class="tableblock halign-left valign-top">Description</th>
-<th class="tableblock halign-left valign-top">Required</th>
-<th class="tableblock halign-left valign-top">Schema</th>
-<th class="tableblock halign-left valign-top">Default</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">loadBalancer</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">LoadBalancer contains the current status of the load-balancer, if one is present.</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_loadbalancerstatus">v1.LoadBalancerStatus</a></p></td>
-<td class="tableblock halign-left valign-top"></td>
 </tr>
 </tbody>
 </table>
@@ -3738,6 +3738,54 @@ Examples:<br>
 <td class="tableblock halign-left valign-top"><p class="tableblock">The scheduler will prefer to schedule pods to nodes that satisfy the anti-affinity expressions specified by this field, but it may choose a node that violates one or more of the expressions. The node that is most preferred is the one with the greatest sum of weights, i.e. for each node that meets all of the scheduling requirements (resource request, requiredDuringScheduling anti-affinity expressions, etc.), compute a sum by iterating through the elements of this field and adding "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the node(s) with the highest sum are the most preferred.</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_weightedpodaffinityterm">v1.WeightedPodAffinityTerm</a> array</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+<div class="sect2">
+<h3 id="_v1_eventseries">v1.EventSeries</h3>
+<div class="paragraph">
+<p>EventSeries contain information on series of events, i.e. thing that was/is happening continously for some time.</p>
+</div>
+<table class="tableblock frame-all grid-all" style="width:100%; ">
+<colgroup>
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;"> 
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Required</th>
+<th class="tableblock halign-left valign-top">Schema</th>
+<th class="tableblock halign-left valign-top">Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">count</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Number of occurrences in this series up to the last heartbeat time</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">integer (int32)</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">lastObservedTime</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Time of the last occurence observed</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">state</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">State of this Series: Ongoing or Finished</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 </tbody>
@@ -4039,9 +4087,9 @@ Examples:<br>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">flexVolume</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">FlexVolume represents a generic volume resource that is provisioned/attached using an exec based plugin. This is an alpha feature and may change in future.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">FlexVolume represents a generic volume resource that is provisioned/attached using an exec based plugin.</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_flexvolumesource">v1.FlexVolumeSource</a></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_flexpersistentvolumesource">v1.FlexPersistentVolumeSource</a></p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 <tr>
@@ -5297,6 +5345,48 @@ Examples:<br>
 <td class="tableblock halign-left valign-top"><p class="tableblock">type</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">Type of this event (Normal, Warning), new types could be added in the future</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">eventTime</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Time when this Event was first observed.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">series</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Data about the Event series this event represents or nil if it&#8217;s a singleton Event.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_eventseries">v1.EventSeries</a></p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">action</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">What action was taken/failed regarding to the Regarding object.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">related</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optional secondary object for more complex actions.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_objectreference">v1.ObjectReference</a></p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">reportingComponent</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Name of the controller that emitted this Event, e.g. <code>kubernetes.io/kubelet</code>.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">reportingInstance</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">ID of the controller instance, e.g. <code>kubelet-xyzf</code>.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
@@ -6786,6 +6876,68 @@ Examples:<br>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">boolean</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+<div class="sect2">
+<h3 id="_v1_flexpersistentvolumesource">v1.FlexPersistentVolumeSource</h3>
+<div class="paragraph">
+<p>FlexPersistentVolumeSource represents a generic persistent volume resource that is provisioned/attached using an exec based plugin.</p>
+</div>
+<table class="tableblock frame-all grid-all" style="width:100%; ">
+<colgroup>
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;"> 
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Required</th>
+<th class="tableblock halign-left valign-top">Schema</th>
+<th class="tableblock halign-left valign-top">Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">driver</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Driver is the name of the driver to use for this volume.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">fsType</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. "ext4", "xfs", "ntfs". The default filesystem depends on FlexVolume script.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">secretRef</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: SecretRef is reference to the secret object containing sensitive information to pass to the plugin scripts. This may be empty if no secret object is specified. If the secret object contains more than one secret, all secrets are passed to the plugin scripts.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_secretreference">v1.SecretReference</a></p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">readOnly</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: Defaults to false (read/write). ReadOnly here will force the ReadOnly setting in VolumeMounts.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">boolean</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">options</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: Extra command options if any.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">object</p></td>
+<td class="tableblock halign-left valign-top"></td>
 </tr>
 </tbody>
 </table>
@@ -8290,7 +8442,7 @@ Examples:<br>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">flexVolume</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">FlexVolume represents a generic volume resource that is provisioned/attached using an exec based plugin. This is an alpha feature and may change in future.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">FlexVolume represents a generic volume resource that is provisioned/attached using an exec based plugin.</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_flexvolumesource">v1.FlexVolumeSource</a></p></td>
 <td class="tableblock halign-left valign-top"></td>
@@ -8992,7 +9144,7 @@ Examples:<br>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">dnsPolicy</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Set DNS policy for the pod. Defaults to "ClusterFirst". Valid values are <em>ClusterFirstWithHostNet</em>, <em>ClusterFirst</em>, <em>Default</em> or <em>None</em>. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to <em>ClusterFirstWithHostNet</em>.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Set DNS policy for the pod. Defaults to "ClusterFirst". Valid values are <em>ClusterFirstWithHostNet</em>, <em>ClusterFirst</em>, <em>Default</em> or <em>None</em>. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to <em>ClusterFirstWithHostNet</em>. Note that <em>None</em> policy is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it.</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
 <td class="tableblock halign-left valign-top"></td>
@@ -9125,7 +9277,7 @@ Examples:<br>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">dnsConfig</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Specifies the DNS parameters of a pod. Parameters specified here will be merged to the generated DNS configuration based on DNSPolicy.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Specifies the DNS parameters of a pod. Parameters specified here will be merged to the generated DNS configuration based on DNSPolicy. This is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it.</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_poddnsconfig">v1.PodDNSConfig</a></p></td>
 <td class="tableblock halign-left valign-top"></td>

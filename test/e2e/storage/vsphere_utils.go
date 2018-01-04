@@ -70,7 +70,11 @@ func verifyVSphereDiskAttached(c clientset.Interface, vsp *vsphere.VSphere, volu
 }
 
 // Wait until vsphere volumes are detached from the list of nodes or time out after 5 minutes
+<<<<<<< HEAD
 func waitForVSphereDisksToDetach(c clientset.Interface, vsp *vsphere.VSphere, nodeVolumes map[k8stype.NodeName][]string) error {
+=======
+func waitForVSphereDisksToDetach(vsp *vsphere.VSphere, nodeVolumes map[k8stype.NodeName][]string) error {
+>>>>>>> axbaretto
 	var (
 		err            error
 		disksAttached  = true
@@ -110,7 +114,11 @@ func waitForVSphereDisksToDetach(c clientset.Interface, vsp *vsphere.VSphere, no
 }
 
 // Wait until vsphere vmdk moves to expected state on the given node, or time out after 6 minutes
+<<<<<<< HEAD
 func waitForVSphereDiskStatus(c clientset.Interface, vsp *vsphere.VSphere, volumePath string, nodeName types.NodeName, expectedState volumeState) error {
+=======
+func waitForVSphereDiskStatus(vsp *vsphere.VSphere, volumePath string, nodeName types.NodeName, expectedState volumeState) error {
+>>>>>>> axbaretto
 	var (
 		err          error
 		diskAttached bool
@@ -130,7 +138,11 @@ func waitForVSphereDiskStatus(c clientset.Interface, vsp *vsphere.VSphere, volum
 	}
 
 	err = wait.Poll(pollTime, timeout, func() (bool, error) {
+<<<<<<< HEAD
 		diskAttached, err = verifyVSphereDiskAttached(c, vsp, volumePath, nodeName)
+=======
+		diskAttached, err = verifyVSphereDiskAttached(vsp, volumePath, nodeName)
+>>>>>>> axbaretto
 		if err != nil {
 			return true, err
 		}
@@ -154,6 +166,7 @@ func waitForVSphereDiskStatus(c clientset.Interface, vsp *vsphere.VSphere, volum
 }
 
 // Wait until vsphere vmdk is attached from the given node or time out after 6 minutes
+<<<<<<< HEAD
 func waitForVSphereDiskToAttach(c clientset.Interface, vsp *vsphere.VSphere, volumePath string, nodeName types.NodeName) error {
 	return waitForVSphereDiskStatus(c, vsp, volumePath, nodeName, volumeStateAttached)
 }
@@ -161,6 +174,15 @@ func waitForVSphereDiskToAttach(c clientset.Interface, vsp *vsphere.VSphere, vol
 // Wait until vsphere vmdk is detached from the given node or time out after 6 minutes
 func waitForVSphereDiskToDetach(c clientset.Interface, vsp *vsphere.VSphere, volumePath string, nodeName types.NodeName) error {
 	return waitForVSphereDiskStatus(c, vsp, volumePath, nodeName, volumeStateDetached)
+=======
+func waitForVSphereDiskToAttach(vsp *vsphere.VSphere, volumePath string, nodeName types.NodeName) error {
+	return waitForVSphereDiskStatus(vsp, volumePath, nodeName, volumeStateAttached)
+}
+
+// Wait until vsphere vmdk is detached from the given node or time out after 6 minutes
+func waitForVSphereDiskToDetach(vsp *vsphere.VSphere, volumePath string, nodeName types.NodeName) error {
+	return waitForVSphereDiskStatus(vsp, volumePath, nodeName, volumeStateDetached)
+>>>>>>> axbaretto
 }
 
 // function to create vsphere volume spec with given VMDK volume path, Reclaim Policy and labels
@@ -437,6 +459,7 @@ func getvSphereVolumePathFromClaim(client clientset.Interface, namespace string,
 	Expect(err).NotTo(HaveOccurred())
 	return pv.Spec.VsphereVolume.VolumePath
 }
+<<<<<<< HEAD
 
 func addNodesToVCP(vsp *vsphere.VSphere, c clientset.Interface) error {
 	nodes, err := c.CoreV1().Nodes().List(metav1.ListOptions{})
@@ -457,3 +480,5 @@ func getVSphere(c clientset.Interface) (*vsphere.VSphere, error) {
 	addNodesToVCP(vsp, c)
 	return vsp, nil
 }
+=======
+>>>>>>> axbaretto

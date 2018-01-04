@@ -24,16 +24,17 @@ import (
 	"sync"
 
 	"k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/rand"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	corelisters "k8s.io/client-go/listers/core/v1"
+	storagelisters "k8s.io/client-go/listers/storage/v1"
 	"k8s.io/client-go/util/workqueue"
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
-	"k8s.io/kubernetes/pkg/cloudprovider/providers/aws"
 	"k8s.io/kubernetes/pkg/features"
 	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
@@ -41,14 +42,36 @@ import (
 	priorityutil "k8s.io/kubernetes/plugin/pkg/scheduler/algorithm/priorities/util"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/schedulercache"
 	schedutil "k8s.io/kubernetes/plugin/pkg/scheduler/util"
-	"k8s.io/metrics/pkg/client/clientset_generated/clientset"
 
 	"github.com/golang/glog"
+	"k8s.io/kubernetes/plugin/pkg/scheduler/volumebinder"
 )
 
 const (
-	MatchInterPodAffinity = "MatchInterPodAffinity"
+	MatchInterPodAffinityPred           = "MatchInterPodAffinity"
+	CheckVolumeBindingPred              = "CheckVolumeBinding"
+	CheckNodeConditionPred              = "CheckNodeCondition"
+	GeneralPred                         = "GeneralPredicates"
+	HostNamePred                        = "HostName"
+	PodFitsHostPortsPred                = "PodFitsHostPorts"
+	MatchNodeSelectorPred               = "MatchNodeSelector"
+	PodFitsResourcesPred                = "PodFitsResources"
+	NoDiskConflictPred                  = "NoDiskConflict"
+	PodToleratesNodeTaintsPred          = "PodToleratesNodeTaints"
+	PodToleratesNodeNoExecuteTaintsPred = "PodToleratesNodeNoExecuteTaints"
+	CheckNodeLabelPresencePred          = "CheckNodeLabelPresence"
+	checkServiceAffinityPred            = "checkServiceAffinity"
+	MaxEBSVolumeCountPred               = "MaxEBSVolumeCount"
+	MaxGCEPDVolumeCountPred             = "MaxGCEPDVolumeCount"
+	MaxAzureDiskVolumeCountPred         = "MaxAzureDiskVolumeCount"
+	NoVolumeZoneConflictPred            = "NoVolumeZoneConflict"
+	CheckNodeMemoryPressurePred         = "CheckNodeMemoryPressure"
+	CheckNodeDiskPressurePred           = "CheckNodeDiskPressure"
 
+	// DefaultMaxEBSVolumes is the limit for volumes attached to an instance.
+	// Amazon recommends no more than 40; the system root volume uses at least one.
+	// See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/volume_limits.html#linux-specific-volume-limits
+	DefaultMaxEBSVolumes = 39
 	// DefaultMaxGCEPDVolumes defines the maximum number of PD Volumes for GCE
 	// GCE instances can have up to 16 PD volumes attached.
 	DefaultMaxGCEPDVolumes = 16
@@ -76,6 +99,21 @@ const (
 // For example:
 // https://github.com/kubernetes/kubernetes/blob/36a218e/plugin/pkg/scheduler/factory/factory.go#L422
 
+// IMPORTANT NOTE: this list contains the ordering of the predicates, if you develop a new predicate
+// it is mandatory to add its name to this list.
+// Otherwise it won't be processed, see generic_scheduler#podFitsOnNode().
+// The order is based on the restrictiveness & complexity of predicates.
+// Design doc: https://github.com/kubernetes/community/blob/master/contributors/design-proposals/scheduling/predicates-ordering.md
+var (
+	predicatesOrdering = []string{CheckNodeConditionPred,
+		GeneralPred, HostNamePred, PodFitsHostPortsPred,
+		MatchNodeSelectorPred, PodFitsResourcesPred, NoDiskConflictPred,
+		PodToleratesNodeTaintsPred, PodToleratesNodeNoExecuteTaintsPred, CheckNodeLabelPresencePred,
+		checkServiceAffinityPred, MaxEBSVolumeCountPred, MaxGCEPDVolumeCountPred,
+		MaxAzureDiskVolumeCountPred, CheckVolumeBindingPred, NoVolumeZoneConflictPred,
+		CheckNodeMemoryPressurePred, CheckNodeDiskPressurePred, MatchInterPodAffinityPred}
+)
+
 // NodeInfo: Other types for predicate functions...
 type NodeInfo interface {
 	GetNodeInfo(nodeID string) (*v1.Node, error)
@@ -88,6 +126,14 @@ type PersistentVolumeInfo interface {
 // CachedPersistentVolumeInfo implements PersistentVolumeInfo
 type CachedPersistentVolumeInfo struct {
 	corelisters.PersistentVolumeLister
+}
+
+func PredicatesOrdering() []string {
+	return predicatesOrdering
+}
+
+func SetPredicatesOrdering(names []string) {
+	predicatesOrdering = names
 }
 
 func (c *CachedPersistentVolumeInfo) GetPersistentVolumeInfo(pvID string) (*v1.PersistentVolume, error) {
@@ -117,7 +163,7 @@ func (c *CachedNodeInfo) GetNodeInfo(id string) (*v1.Node, error) {
 	node, err := c.Get(id)
 
 	if apierrors.IsNotFound(err) {
-		return nil, fmt.Errorf("node '%v' not found", id)
+		return nil, err
 	}
 
 	if err != nil {
@@ -125,6 +171,19 @@ func (c *CachedNodeInfo) GetNodeInfo(id string) (*v1.Node, error) {
 	}
 
 	return node, nil
+}
+
+type StorageClassInfo interface {
+	GetStorageClassInfo(className string) (*storagev1.StorageClass, error)
+}
+
+// CachedStorageClassInfo implements StorageClassInfo
+type CachedStorageClassInfo struct {
+	storagelisters.StorageClassLister
+}
+
+func (c *CachedStorageClassInfo) GetStorageClassInfo(className string) (*storagev1.StorageClass, error) {
+	return c.Get(className)
 }
 
 func isVolumeConflict(volume v1.Volume, pod *v1.Pod) bool {
@@ -228,7 +287,7 @@ func NewMaxPDVolumeCountPredicate(filterName string, pvInfo PersistentVolumeInfo
 
 	case EBSVolumeFilterType:
 		filter = EBSVolumeFilter
-		maxVolumes = getMaxVols(aws.DefaultMaxEBSVolumes)
+		maxVolumes = getMaxVols(DefaultMaxEBSVolumes)
 	case GCEPDVolumeFilterType:
 		filter = GCEPDVolumeFilter
 		maxVolumes = getMaxVols(DefaultMaxGCEPDVolumes)
@@ -292,7 +351,8 @@ func (c *MaxPDVolumeCountChecker) filterVolumes(volumes []v1.Volume, namespace s
 				continue
 			}
 
-			if pvc.Spec.VolumeName == "" {
+			pvName := pvc.Spec.VolumeName
+			if pvName == "" {
 				// PVC is not bound. It was either deleted and created again or
 				// it was forcefuly unbound by admin. The pod can still use the
 				// original PV where it was bound to -> log the error and count
@@ -302,7 +362,6 @@ func (c *MaxPDVolumeCountChecker) filterVolumes(volumes []v1.Volume, namespace s
 				continue
 			}
 
-			pvName := pvc.Spec.VolumeName
 			pv, err := c.pvInfo.GetPersistentVolumeInfo(pvName)
 			if err != nil || pv == nil {
 				// if the PV is not found, log the error
@@ -416,8 +475,9 @@ var AzureDiskVolumeFilter VolumeFilter = VolumeFilter{
 }
 
 type VolumeZoneChecker struct {
-	pvInfo  PersistentVolumeInfo
-	pvcInfo PersistentVolumeClaimInfo
+	pvInfo    PersistentVolumeInfo
+	pvcInfo   PersistentVolumeClaimInfo
+	classInfo StorageClassInfo
 }
 
 // NewVolumeZonePredicate evaluates if a pod can fit due to the volumes it requests, given
@@ -434,10 +494,11 @@ type VolumeZoneChecker struct {
 // determining the zone of a volume during scheduling, and that is likely to
 // require calling out to the cloud provider.  It seems that we are moving away
 // from inline volume declarations anyway.
-func NewVolumeZonePredicate(pvInfo PersistentVolumeInfo, pvcInfo PersistentVolumeClaimInfo) algorithm.FitPredicate {
+func NewVolumeZonePredicate(pvInfo PersistentVolumeInfo, pvcInfo PersistentVolumeClaimInfo, classInfo StorageClassInfo) algorithm.FitPredicate {
 	c := &VolumeZoneChecker{
-		pvInfo:  pvInfo,
-		pvcInfo: pvcInfo,
+		pvInfo:    pvInfo,
+		pvcInfo:   pvcInfo,
+		classInfo: classInfo,
 	}
 	return c.predicate
 }
@@ -489,6 +550,21 @@ func (c *VolumeZoneChecker) predicate(pod *v1.Pod, meta algorithm.PredicateMetad
 
 			pvName := pvc.Spec.VolumeName
 			if pvName == "" {
+				if utilfeature.DefaultFeatureGate.Enabled(features.VolumeScheduling) {
+					scName := pvc.Spec.StorageClassName
+					if scName != nil && len(*scName) > 0 {
+						class, _ := c.classInfo.GetStorageClassInfo(*scName)
+						if class != nil {
+							if class.VolumeBindingMode == nil {
+								return false, nil, fmt.Errorf("VolumeBindingMode not set for StorageClass %q", scName)
+							}
+							if *class.VolumeBindingMode == storagev1.VolumeBindingWaitForFirstConsumer {
+								// Skip unbound volumes
+								continue
+							}
+						}
+					}
+				}
 				return false, nil, fmt.Errorf("PersistentVolumeClaim is not bound: %q", pvcName)
 			}
 
@@ -1044,7 +1120,7 @@ func (c *PodAffinityChecker) InterPodAffinityMatches(pod *v1.Pod, meta algorithm
 // First return value indicates whether a matching pod exists on a node that matches the topology key,
 // while the second return value indicates whether a matching pod exists anywhere.
 // TODO: Do we really need any pod matching, or all pods matching? I think the latter.
-func (c *PodAffinityChecker) anyPodMatchesPodAffinityTerm(pod *v1.Pod, allPods []*v1.Pod, node *v1.Node, term *v1.PodAffinityTerm) (bool, bool, error) {
+func (c *PodAffinityChecker) anyPodMatchesPodAffinityTerm(pod *v1.Pod, pods []*v1.Pod, nodeInfo *schedulercache.NodeInfo, term *v1.PodAffinityTerm) (bool, bool, error) {
 	if len(term.TopologyKey) == 0 {
 		return false, false, fmt.Errorf("empty topologyKey is not allowed except for PreferredDuringScheduling pod anti-affinity")
 	}
@@ -1054,7 +1130,12 @@ func (c *PodAffinityChecker) anyPodMatchesPodAffinityTerm(pod *v1.Pod, allPods [
 	if err != nil {
 		return false, false, err
 	}
-	for _, existingPod := range allPods {
+	// Special case: When the topological domain is node, we can limit our
+	// search to pods on that node without searching the entire cluster.
+	if term.TopologyKey == kubeletapis.LabelHostname {
+		pods = nodeInfo.Pods()
+	}
+	for _, existingPod := range pods {
 		match := priorityutil.PodMatchesTermsNamespaceAndSelector(existingPod, namespaces, selector)
 		if match {
 			matchingPodExists = true
@@ -1062,7 +1143,7 @@ func (c *PodAffinityChecker) anyPodMatchesPodAffinityTerm(pod *v1.Pod, allPods [
 			if err != nil {
 				return false, matchingPodExists, err
 			}
-			if priorityutil.NodesHaveSameTopologyKey(node, existingPodNode, term.TopologyKey) {
+			if priorityutil.NodesHaveSameTopologyKey(nodeInfo.Node(), existingPodNode, term.TopologyKey) {
 				return true, matchingPodExists, nil
 			}
 		}
@@ -1181,6 +1262,10 @@ func (c *PodAffinityChecker) getMatchingAntiAffinityTerms(pod *v1.Pod, allPods [
 		if affinity != nil && affinity.PodAntiAffinity != nil {
 			existingPodNode, err := c.info.GetNodeInfo(existingPod.Spec.NodeName)
 			if err != nil {
+				if apierrors.IsNotFound(err) {
+					glog.Errorf("Node not found, %v", existingPod.Spec.NodeName)
+					continue
+				}
 				return nil, err
 			}
 			existingPodMatchingTerms, err := getMatchingAntiAffinityTermsOfExistingPod(pod, existingPod, existingPodNode)
@@ -1258,7 +1343,7 @@ func (c *PodAffinityChecker) satisfiesPodsAffinityAntiAffinity(pod *v1.Pod, node
 
 	// Check all affinity terms.
 	for _, term := range GetPodAffinityTerms(affinity.PodAffinity) {
-		termMatches, matchingPodExists, err := c.anyPodMatchesPodAffinityTerm(pod, filteredPods, node, &term)
+		termMatches, matchingPodExists, err := c.anyPodMatchesPodAffinityTerm(pod, filteredPods, nodeInfo, &term)
 		if err != nil {
 			errMessage := fmt.Sprintf("Cannot schedule pod %+v onto node %v, because of PodAffinityTerm %v, err: %v", podName(pod), node.Name, term, err)
 			glog.Error(errMessage)
@@ -1291,7 +1376,7 @@ func (c *PodAffinityChecker) satisfiesPodsAffinityAntiAffinity(pod *v1.Pod, node
 
 	// Check all anti-affinity terms.
 	for _, term := range GetPodAntiAffinityTerms(affinity.PodAntiAffinity) {
-		termMatches, _, err := c.anyPodMatchesPodAffinityTerm(pod, filteredPods, node, &term)
+		termMatches, _, err := c.anyPodMatchesPodAffinityTerm(pod, filteredPods, nodeInfo, &term)
 		if err != nil || termMatches {
 			glog.V(10).Infof("Cannot schedule pod %+v onto node %v, because of PodAntiAffinityTerm %v, err: %v",
 				podName(pod), node.Name, term, err)
@@ -1403,33 +1488,30 @@ func CheckNodeConditionPredicate(pod *v1.Pod, meta algorithm.PredicateMetadata, 
 	return len(reasons) == 0, reasons, nil
 }
 
-type VolumeNodeChecker struct {
-	pvInfo  PersistentVolumeInfo
-	pvcInfo PersistentVolumeClaimInfo
-	client  clientset.Interface
+type VolumeBindingChecker struct {
+	binder *volumebinder.VolumeBinder
 }
 
-// NewVolumeNodePredicate evaluates if a pod can fit due to the volumes it requests, given
-// that some volumes have node topology constraints, particularly when using Local PVs.
-// The requirement is that any pod that uses a PVC that is bound to a PV with topology constraints
-// must be scheduled to a node that satisfies the PV's topology labels.
-func NewVolumeNodePredicate(pvInfo PersistentVolumeInfo, pvcInfo PersistentVolumeClaimInfo, client clientset.Interface) algorithm.FitPredicate {
-	c := &VolumeNodeChecker{
-		pvInfo:  pvInfo,
-		pvcInfo: pvcInfo,
-		client:  client,
+// NewVolumeBindingPredicate evaluates if a pod can fit due to the volumes it requests,
+// for both bound and unbound PVCs.
+//
+// For PVCs that are bound, then it checks that the corresponding PV's node affinity is
+// satisfied by the given node.
+//
+// For PVCs that are unbound, it tries to find available PVs that can satisfy the PVC requirements
+// and that the PV node affinity is satisfied by the given node.
+//
+// The predicate returns true if all bound PVCs have compatible PVs with the node, and if all unbound
+// PVCs can be matched with an available and node-compatible PV.
+func NewVolumeBindingPredicate(binder *volumebinder.VolumeBinder) algorithm.FitPredicate {
+	c := &VolumeBindingChecker{
+		binder: binder,
 	}
 	return c.predicate
 }
 
-func (c *VolumeNodeChecker) predicate(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *schedulercache.NodeInfo) (bool, []algorithm.PredicateFailureReason, error) {
-	if !utilfeature.DefaultFeatureGate.Enabled(features.PersistentLocalVolumes) {
-		return true, nil, nil
-	}
-
-	// If a pod doesn't have any volume attached to it, the predicate will always be true.
-	// Thus we make a fast path for it, to avoid unnecessary computations in this case.
-	if len(pod.Spec.Volumes) == 0 {
+func (c *VolumeBindingChecker) predicate(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *schedulercache.NodeInfo) (bool, []algorithm.PredicateFailureReason, error) {
+	if !utilfeature.DefaultFeatureGate.Enabled(features.VolumeScheduling) {
 		return true, nil, nil
 	}
 
@@ -1438,45 +1520,27 @@ func (c *VolumeNodeChecker) predicate(pod *v1.Pod, meta algorithm.PredicateMetad
 		return false, nil, fmt.Errorf("node not found")
 	}
 
-	glog.V(2).Infof("Checking for prebound volumes with node affinity")
-	namespace := pod.Namespace
-	manifest := &(pod.Spec)
-	for i := range manifest.Volumes {
-		volume := &manifest.Volumes[i]
-		if volume.PersistentVolumeClaim == nil {
-			continue
-		}
-		pvcName := volume.PersistentVolumeClaim.ClaimName
-		if pvcName == "" {
-			return false, nil, fmt.Errorf("PersistentVolumeClaim had no name")
-		}
-		pvc, err := c.pvcInfo.GetPersistentVolumeClaimInfo(namespace, pvcName)
-		if err != nil {
-			return false, nil, err
-		}
-
-		if pvc == nil {
-			return false, nil, fmt.Errorf("PersistentVolumeClaim was not found: %q", pvcName)
-		}
-		pvName := pvc.Spec.VolumeName
-		if pvName == "" {
-			return false, nil, fmt.Errorf("PersistentVolumeClaim is not bound: %q", pvcName)
-		}
-
-		pv, err := c.pvInfo.GetPersistentVolumeInfo(pvName)
-		if err != nil {
-			return false, nil, err
-		}
-		if pv == nil {
-			return false, nil, fmt.Errorf("PersistentVolume not found: %q", pvName)
-		}
-
-		err = volumeutil.CheckNodeAffinity(pv, node.Labels)
-		if err != nil {
-			glog.V(2).Infof("Won't schedule pod %q onto node %q due to volume %q node mismatch: %v", pod.Name, node.Name, pvName, err.Error())
-			return false, []algorithm.PredicateFailureReason{ErrVolumeNodeConflict}, nil
-		}
-		glog.V(4).Infof("VolumeNode predicate allows node %q for pod %q due to volume %q", node.Name, pod.Name, pvName)
+	unboundSatisfied, boundSatisfied, err := c.binder.Binder.FindPodVolumes(pod, node.Name)
+	if err != nil {
+		return false, nil, err
 	}
+
+	failReasons := []algorithm.PredicateFailureReason{}
+	if !boundSatisfied {
+		glog.V(5).Infof("Bound PVs not satisfied for pod %v/%v, node %q", pod.Namespace, pod.Name, node.Name)
+		failReasons = append(failReasons, ErrVolumeNodeConflict)
+	}
+
+	if !unboundSatisfied {
+		glog.V(5).Infof("Couldn't find matching PVs for pod %v/%v, node %q", pod.Namespace, pod.Name, node.Name)
+		failReasons = append(failReasons, ErrVolumeBindConflict)
+	}
+
+	if len(failReasons) > 0 {
+		return false, failReasons, nil
+	}
+
+	// All volumes bound or matching PVs found for all unbound PVCs
+	glog.V(5).Infof("All PVCs found matches for pod %v/%v, node %q", pod.Namespace, pod.Name, node.Name)
 	return true, nil, nil
 }

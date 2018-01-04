@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	info "github.com/google/cadvisor/info/v1"
@@ -30,6 +31,8 @@ import (
 )
 
 type NvidiaManager struct {
+	sync.RWMutex
+
 	// true if the NVML library (libnvidia-ml.so.1) was loaded successfully
 	nvmlInitialized bool
 
@@ -44,16 +47,16 @@ const nvidiaVendorId = "0x10de"
 // Setup initializes NVML if nvidia devices are present on the node.
 func (nm *NvidiaManager) Setup() {
 	if !detectDevices(nvidiaVendorId) {
-		glog.Info("No NVIDIA devices found.")
+		glog.V(4).Info("No NVIDIA devices found.")
 		return
 	}
 
+	nm.initializeNVML()
+	if nm.nvmlInitialized {
+		return
+	}
 	go func() {
-		glog.Info("Starting goroutine to initialize NVML")
-		nm.initializeNVML()
-		if nm.nvmlInitialized {
-			return
-		}
+		glog.V(2).Info("Starting goroutine to initialize NVML")
 		// TODO: use globalHousekeepingInterval
 		for range time.Tick(time.Minute) {
 			nm.initializeNVML()
@@ -68,7 +71,7 @@ func (nm *NvidiaManager) Setup() {
 func detectDevices(vendorId string) bool {
 	devices, err := ioutil.ReadDir(sysFsPCIDevicesPath)
 	if err != nil {
-		glog.Warningf("error reading %q: %v", sysFsPCIDevicesPath, err)
+		glog.Warningf("Error reading %q: %v", sysFsPCIDevicesPath, err)
 		return false
 	}
 
@@ -76,11 +79,11 @@ func detectDevices(vendorId string) bool {
 		vendorPath := filepath.Join(sysFsPCIDevicesPath, device.Name(), "vendor")
 		content, err := ioutil.ReadFile(vendorPath)
 		if err != nil {
-			glog.Infof("Error while reading %q: %v", vendorPath, err)
+			glog.V(4).Infof("Error while reading %q: %v", vendorPath, err)
 			continue
 		}
 		if strings.EqualFold(strings.TrimSpace(string(content)), vendorId) {
-			glog.Infof("Found device with vendorId %q", vendorId)
+			glog.V(3).Infof("Found device with vendorId %q", vendorId)
 			return true
 		}
 	}
@@ -92,16 +95,19 @@ func (nm *NvidiaManager) initializeNVML() {
 	if err := gonvml.Initialize(); err != nil {
 		// This is under a logging level because otherwise we may cause
 		// log spam if the drivers/nvml is not installed on the system.
-		glog.V(3).Infof("Could not initialize NVML: %v", err)
+		glog.V(4).Infof("Could not initialize NVML: %v", err)
 		return
 	}
-	nm.nvmlInitialized = true
 	numDevices, err := gonvml.DeviceCount()
 	if err != nil {
 		glog.Warningf("GPU metrics would not be available. Failed to get the number of nvidia devices: %v", err)
+		nm.Lock()
+		// Even though we won't have GPU metrics, the library was initialized and should be shutdown when exiting.
+		nm.nvmlInitialized = true
+		nm.Unlock()
 		return
 	}
-	glog.Infof("NVML initialized. Number of nvidia devices: %v", numDevices)
+	glog.V(1).Infof("NVML initialized. Number of nvidia devices: %v", numDevices)
 	nm.nvidiaDevices = make(map[int]gonvml.Device, numDevices)
 	for i := 0; i < int(numDevices); i++ {
 		device, err := gonvml.DeviceHandleByIndex(uint(i))
@@ -116,6 +122,10 @@ func (nm *NvidiaManager) initializeNVML() {
 		}
 		nm.nvidiaDevices[int(minorNumber)] = device
 	}
+	nm.Lock()
+	// Doing this at the end to avoid race in accessing nvidiaDevices in GetCollector.
+	nm.nvmlInitialized = true
+	nm.Unlock()
 }
 
 // Destroy shuts down NVML.
@@ -129,9 +139,12 @@ func (nm *NvidiaManager) Destroy() {
 // present in the devices.list file in the given devicesCgroupPath.
 func (nm *NvidiaManager) GetCollector(devicesCgroupPath string) (AcceleratorCollector, error) {
 	nc := &NvidiaCollector{}
+	nm.RLock()
 	if !nm.nvmlInitialized || len(nm.nvidiaDevices) == 0 {
+		nm.RUnlock()
 		return nc, nil
 	}
+	nm.RUnlock()
 	nvidiaMinorNumbers, err := parseDevicesCgroup(devicesCgroupPath)
 	if err != nil {
 		return nc, err

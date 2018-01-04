@@ -189,7 +189,7 @@ type KubeletConfiguration struct {
 	//   "promiscuous-bridge": make the container bridge promiscuous.
 	//   "hairpin-veth":       set the hairpin flag on container veth interfaces.
 	//   "none":               do nothing.
-	// Generally, one must set --hairpin-mode=veth-flag to achieve hairpin NAT,
+	// Generally, one must set --hairpin-mode=hairpin-veth to achieve hairpin NAT,
 	// because promiscous-bridge assumes the existence of a container bridge named cbr0.
 	HairpinMode string `json:"hairpinMode"`
 	// maxPods is the number of pods that can run on this Kubelet.
@@ -258,7 +258,7 @@ type KubeletConfiguration struct {
 	// featureGates is a map of feature names to bools that enable or disable alpha/experimental features.
 	FeatureGates map[string]bool `json:"featureGates,omitempty"`
 	// Tells the Kubelet to fail to start if swap is enabled on the node.
-	FailSwapOn bool `json:"failSwapOn,omitempty"`
+	FailSwapOn *bool `json:"failSwapOn,omitempty"`
 
 	/* following flags are meant for Node Allocatable */
 

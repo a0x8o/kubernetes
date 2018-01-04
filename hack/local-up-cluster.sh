@@ -71,6 +71,8 @@ FEATURE_GATES=${FEATURE_GATES:-"AllAlpha=false"}
 STORAGE_BACKEND=${STORAGE_BACKEND:-"etcd3"}
 # enable swagger ui
 ENABLE_SWAGGER_UI=${ENABLE_SWAGGER_UI:-false}
+# enable Pod priority and preemption
+ENABLE_POD_PRIORITY_PREEMPTION=${ENABLE_POD_PRIORITY_PREEMPTION:-""}
 
 # enable kubernetes dashboard
 ENABLE_CLUSTER_DASHBOARD=${KUBE_ENABLE_CLUSTER_DASHBOARD:-false}
@@ -115,9 +117,14 @@ if [ "${CLOUD_PROVIDER}" == "openstack" ]; then
     fi
 fi
 
-#set feature gates if using ipvs mode
+# set feature gates if using ipvs mode
 if [ "${KUBEPROXY_MODE}" == "ipvs" ]; then
     FEATURE_GATES="$FEATURE_GATES,SupportIPVSProxyMode=true"
+fi
+
+# set feature gates if enable Pod priority and preemption
+if [ "${ENABLE_POD_PRIORITY_PREEMPTION}" == true ]; then
+    FEATURE_GATES="$FEATURE_GATES,PodPriority=true"
 fi
 
 # warn if users are running with swap allowed
@@ -417,9 +424,19 @@ function start_apiserver {
     if [[ -n "${NODE_ADMISSION}" ]]; then
       security_admission=",NodeRestriction"
     fi
+    if [ "${ENABLE_POD_PRIORITY_PREEMPTION}" == true ]; then
+      security_admission=",Priority"
+      if [[ -n "${RUNTIME_CONFIG}" ]]; then
+          RUNTIME_CONFIG+=","
+      fi
+      RUNTIME_CONFIG+="scheduling.k8s.io/v1alpha1=true"
+    fi
+    
 
     # Admission Controllers to invoke prior to persisting objects in cluster
-    ADMISSION_CONTROL=MutatingAdmissionWebhook,Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount${security_admission},DefaultStorageClass,DefaultTolerationSeconds,ValidatingAdmissionWebhook,ResourceQuota
+    #
+    # ResourceQuota must come last, or a creation is recorded, but the pod may be forbidden.
+    ADMISSION_CONTROL=Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount${security_admission},DefaultStorageClass,DefaultTolerationSeconds,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota,PodPreset
     # This is the default dir and filename where the apiserver will generate a self-signed cert
     # which should be able to be used as the CA to verify itself
 
@@ -462,11 +479,11 @@ function start_apiserver {
         RUNTIME_CONFIG+="admissionregistration.k8s.io/v1alpha1"
     fi
 
-    if [[ ${ADMISSION_CONTROL} == *"AdmissionWebhook"* ]]; then
+    if [[ ${ADMISSION_CONTROL} == *"PodPreset"* ]]; then
         if [[ -n "${RUNTIME_CONFIG}" ]]; then
-          RUNTIME_CONFIG+=","
+            RUNTIME_CONFIG+=","
         fi
-        RUNTIME_CONFIG+="admissionregistration.k8s.io/v1beta1"
+        RUNTIME_CONFIG+="settings.k8s.io/v1alpha1"
     fi
 
     runtime_config=""
@@ -790,8 +807,11 @@ function start_kubedashboard {
     if [[ "${ENABLE_CLUSTER_DASHBOARD}" = true ]]; then
         echo "Creating kubernetes-dashboard"
         # use kubectl to create the dashboard
-        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" create -f ${KUBE_ROOT}/cluster/addons/dashboard/dashboard-controller.yaml
-        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" create -f ${KUBE_ROOT}/cluster/addons/dashboard/dashboard-service.yaml
+        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" apply -f ${KUBE_ROOT}/cluster/addons/dashboard/dashboard-secret.yaml
+        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" apply -f ${KUBE_ROOT}/cluster/addons/dashboard/dashboard-configmap.yaml
+        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" apply -f ${KUBE_ROOT}/cluster/addons/dashboard/dashboard-rbac.yaml
+        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" apply -f ${KUBE_ROOT}/cluster/addons/dashboard/dashboard-controller.yaml
+        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" apply -f ${KUBE_ROOT}/cluster/addons/dashboard/dashboard-service.yaml
         echo "kubernetes-dashboard deployment and service successfully deployed."
     fi
 }
@@ -820,8 +840,12 @@ function create_storage_class {
 
 function print_success {
 if [[ "${START_MODE}" != "kubeletonly" ]]; then
+  if [[ "${ENABLE_DAEMON}" = false ]]; then
+    echo "Local Kubernetes cluster is running. Press Ctrl-C to shut it down."
+  else
+    echo "Local Kubernetes cluster is running."
+  fi
   cat <<EOF
-Local Kubernetes cluster is running. Press Ctrl-C to shut it down.
 
 Logs:
   ${APISERVER_LOG:-}
@@ -845,8 +869,12 @@ fi
 
 if [[ "${START_MODE}" != "kubeletonly" ]]; then
   echo
+  if [[ "${ENABLE_DAEMON}" = false ]]; then
+    echo "To start using your cluster, you can open up another terminal/tab and run:"
+  else
+    echo "To start using your cluster, run:"
+  fi
   cat <<EOF
-To start using your cluster, you can open up another terminal/tab and run:
 
   export KUBECONFIG=${CERT_DIR}/admin.kubeconfig
   cluster/kubectl.sh

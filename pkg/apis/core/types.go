@@ -269,7 +269,7 @@ type VolumeSource struct {
 	Quobyte *QuobyteVolumeSource
 
 	// FlexVolume represents a generic volume resource that is
-	// provisioned/attached using an exec based plugin. This is an alpha feature and may change in future.
+	// provisioned/attached using an exec based plugin.
 	// +optional
 	FlexVolume *FlexVolumeSource
 
@@ -352,9 +352,9 @@ type PersistentVolumeSource struct {
 	// +optional
 	ISCSI *ISCSIPersistentVolumeSource
 	// FlexVolume represents a generic volume resource that is
-	// provisioned/attached using an exec based plugin. This is an alpha feature and may change in future.
+	// provisioned/attached using an exec based plugin.
 	// +optional
-	FlexVolume *FlexVolumeSource
+	FlexVolume *FlexPersistentVolumeSource
 	// Cinder represents a cinder volume attached and mounted on kubelets host machine
 	// +optional
 	Cinder *CinderVolumeSource
@@ -867,8 +867,34 @@ type FCVolumeSource struct {
 	WWIDs []string
 }
 
+// FlexPersistentVolumeSource represents a generic persistent volume resource that is
+// provisioned/attached using an exec based plugin.
+type FlexPersistentVolumeSource struct {
+	// Driver is the name of the driver to use for this volume.
+	Driver string
+	// Filesystem type to mount.
+	// Must be a filesystem type supported by the host operating system.
+	// Ex. "ext4", "xfs", "ntfs". The default filesystem depends on FlexVolume script.
+	// +optional
+	FSType string
+	// Optional: SecretRef is reference to the secret object containing
+	// sensitive information to pass to the plugin scripts. This may be
+	// empty if no secret object is specified. If the secret object
+	// contains more than one secret, all secrets are passed to the plugin
+	// scripts.
+	// +optional
+	SecretRef *SecretReference
+	// Optional: Defaults to false (read/write). ReadOnly here will force
+	// the ReadOnly setting in VolumeMounts.
+	// +optional
+	ReadOnly bool
+	// Optional: Extra driver options if any.
+	// +optional
+	Options map[string]string
+}
+
 // FlexVolume represents a generic volume resource that is
-// provisioned/attached using an exec based plugin. This is an alpha feature and may change in future.
+// provisioned/attached using an exec based plugin.
 type FlexVolumeSource struct {
 	// Driver is the name of the driver to use for this volume.
 	Driver string
@@ -2338,13 +2364,13 @@ type PodAffinityTerm struct {
 	LabelSelector *metav1.LabelSelector
 	// namespaces specifies which namespaces the labelSelector applies to (matches against);
 	// null or empty list means "this pod's namespace"
+	// +optional
 	Namespaces []string
 	// This pod should be co-located (affinity) or not co-located (anti-affinity) with the pods matching
 	// the labelSelector in the specified namespaces, where co-located is defined as running on a node
 	// whose value of the label with key topologyKey matches that of any node on which any of the
 	// selected pods is running.
 	// Empty topologyKey is not allowed.
-	// +optional
 	TopologyKey string
 }
 
@@ -3553,8 +3579,6 @@ const (
 )
 
 const (
-	// Namespace prefix for opaque counted resources (alpha).
-	ResourceOpaqueIntPrefix = "pod.alpha.kubernetes.io/opaque-int-resource-"
 	// Default namespace prefix.
 	ResourceDefaultNamespacePrefix = "kubernetes.io/"
 	// Name prefix for huge page resources (alpha).
@@ -3960,7 +3984,7 @@ type Event struct {
 	// +optional
 	metav1.ObjectMeta
 
-	// Required. The object that this event is about.
+	// Required. The object that this event is about. Mapped to events.Event.regarding
 	// +optional
 	InvolvedObject ObjectReference
 
@@ -3972,7 +3996,7 @@ type Event struct {
 	Reason string
 
 	// Optional. A human-readable description of the status of this operation.
-	// TODO: decide on maximum length.
+	// TODO: decide on maximum length. Mapped to events.Event.note
 	// +optional
 	Message string
 
@@ -3995,7 +4019,48 @@ type Event struct {
 	// Type of this event (Normal, Warning), new types could be added in the future.
 	// +optional
 	Type string
+
+	// Time when this Event was first observed.
+	// +optional
+	EventTime metav1.MicroTime
+
+	// Data about the Event series this event represents or nil if it's a singleton Event.
+	// +optional
+	Series *EventSeries
+
+	// What action was taken/failed regarding to the Regarding object.
+	// +optional
+	Action string
+
+	// Optional secondary object for more complex actions.
+	// +optional
+	Related *ObjectReference
+
+	// Name of the controller that emitted this Event, e.g. `kubernetes.io/kubelet`.
+	// +optional
+	ReportingController string
+
+	// ID of the controller instance, e.g. `kubelet-xyzf`.
+	// +optional
+	ReportingInstance string
 }
+
+type EventSeries struct {
+	// Number of occurrences in this series up to the last heartbeat time
+	Count int32
+	// Time of the last occurence observed
+	LastObservedTime metav1.MicroTime
+	// State of this Series: Ongoing or Finished
+	State EventSeriesState
+}
+
+type EventSeriesState string
+
+const (
+	EventSeriesStateOngoing  EventSeriesState = "Ongoing"
+	EventSeriesStateFinished EventSeriesState = "Finished"
+	EventSeriesStateUnknown  EventSeriesState = "Unknown"
+)
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 

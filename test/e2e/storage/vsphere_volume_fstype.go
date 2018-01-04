@@ -97,7 +97,11 @@ func invokeTestForFstype(f *framework.Framework, client clientset.Interface, nam
 	framework.Logf("Invoking Test for fstype: %s", fstype)
 	scParameters := make(map[string]string)
 	scParameters["fstype"] = fstype
+<<<<<<< HEAD
 	vsp, err := getVSphere(client)
+=======
+	vsp, err := vsphere.GetVSphere()
+>>>>>>> axbaretto
 	Expect(err).NotTo(HaveOccurred())
 
 	// Create Persistent Volume
@@ -117,7 +121,11 @@ func invokeTestForFstype(f *framework.Framework, client clientset.Interface, nam
 func invokeTestForInvalidFstype(f *framework.Framework, client clientset.Interface, namespace string, fstype string) {
 	scParameters := make(map[string]string)
 	scParameters["fstype"] = fstype
+<<<<<<< HEAD
 	vsp, err := getVSphere(client)
+=======
+	vsp, err := vsphere.GetVSphere()
+>>>>>>> axbaretto
 	Expect(err).NotTo(HaveOccurred())
 
 	// Create Persistent Volume
@@ -170,12 +178,20 @@ func createPodAndVerifyVolumeAccessible(client clientset.Interface, namespace st
 	pvclaims = append(pvclaims, pvclaim)
 	By("Creating pod to attach PV to the node")
 	// Create pod to attach Volume to Node
+<<<<<<< HEAD
 	pod, err := framework.CreatePod(client, namespace, nil, pvclaims, false, ExecCommand)
+=======
+	pod, err := framework.CreatePod(client, namespace, nil, pvclaims, false, "")
+>>>>>>> axbaretto
 	Expect(err).NotTo(HaveOccurred())
 
 	// Asserts: Right disk is attached to the pod
 	By("Verify the volume is accessible and available in the pod")
+<<<<<<< HEAD
 	verifyVSphereVolumesAccessible(client, pod, persistentvolumes, vsp)
+=======
+	verifyVSphereVolumesAccessible(pod, persistentvolumes, vsp)
+>>>>>>> axbaretto
 	return pod
 }
 
@@ -184,7 +200,11 @@ func detachVolume(f *framework.Framework, client clientset.Interface, vsp *vsphe
 	framework.DeletePodWithWait(f, client, pod)
 
 	By("Waiting for volumes to be detached from the node")
+<<<<<<< HEAD
 	waitForVSphereDiskToDetach(client, vsp, volPath, k8stype.NodeName(pod.Spec.NodeName))
+=======
+	waitForVSphereDiskToDetach(vsp, volPath, k8stype.NodeName(pod.Spec.NodeName))
+>>>>>>> axbaretto
 }
 
 func deleteVolume(client clientset.Interface, pvclaimName string, namespace string) {

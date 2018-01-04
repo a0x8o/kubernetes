@@ -68,7 +68,11 @@ var _ = SIGDescribe("Volume Provisioning on Datastore [Feature:vsphere]", func()
 		scParameters[DiskFormat] = ThinDisk
 		err := invokeInvalidDatastoreTestNeg(client, namespace, scParameters)
 		Expect(err).To(HaveOccurred())
+<<<<<<< HEAD
 		errorMsg := `Failed to provision volume with StorageClass \"` + DatastoreSCName + `\": The specified datastore ` + InvalidDatastore + ` is not a shared datastore across node VMs`
+=======
+		errorMsg := `Failed to provision volume with StorageClass \"` + DatastoreSCName + `\": datastore '` + InvalidDatastore + `' not found`
+>>>>>>> axbaretto
 		if !strings.Contains(err.Error(), errorMsg) {
 			Expect(err).NotTo(HaveOccurred(), errorMsg)
 		}

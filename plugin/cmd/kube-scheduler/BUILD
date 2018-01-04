@@ -9,14 +9,9 @@ load("//pkg/version:def.bzl", "version_x_defs")
 
 go_binary(
     name = "kube-scheduler",
-    gc_linkopts = [
-        "-linkmode",
-        "external",
-        "-extldflags",
-        "-static",
-    ],
+    embed = [":go_default_library"],
     importpath = "k8s.io/kubernetes/plugin/cmd/kube-scheduler",
-    library = ":go_default_library",
+    pure = "on",
     x_defs = version_x_defs(),
 )
 
@@ -28,7 +23,6 @@ go_library(
         "//pkg/client/metrics/prometheus:go_default_library",
         "//pkg/version/prometheus:go_default_library",
         "//plugin/cmd/kube-scheduler/app:go_default_library",
-        "//vendor/github.com/spf13/pflag:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/util/flag:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/util/logs:go_default_library",
     ],

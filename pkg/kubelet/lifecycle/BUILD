@@ -35,10 +35,11 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = ["handlers_test.go"],
+    embed = [":go_default_library"],
     importpath = "k8s.io/kubernetes/pkg/kubelet/lifecycle",
-    library = ":go_default_library",
     deps = [
         "//pkg/kubelet/container:go_default_library",
+        "//pkg/kubelet/util/format:go_default_library",
         "//vendor/k8s.io/api/core/v1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/intstr:go_default_library",
     ],

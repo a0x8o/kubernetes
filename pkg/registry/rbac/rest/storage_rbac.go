@@ -264,7 +264,7 @@ func (p *PolicyData) EnsureRBACPolicy() genericapiserver.PostStartHookFunc {
 						case result.Operation == reconciliation.ReconcileUpdate:
 							glog.Infof("updated role.%s/%s in %v with additional permissions: %v", rbac.GroupName, role.Name, namespace, result.MissingRules)
 						case result.Operation == reconciliation.ReconcileCreate:
-							glog.Infof("created role.%s/%s in %v ", rbac.GroupName, role.Name, namespace)
+							glog.Infof("created role.%s/%s in %v", rbac.GroupName, role.Name, namespace)
 						}
 						return nil
 					})
@@ -343,6 +343,7 @@ func primeAggregatedClusterRoles(clusterRolesToAggregate map[string]string, clus
 		}
 		glog.V(1).Infof("migrating %v to %v", existingRole.Name, newName)
 		existingRole.Name = newName
+		existingRole.ResourceVersion = "" // clear this so the object can be created.
 		if _, err := clusterRoleClient.ClusterRoles().Create(existingRole); err != nil && !apierrors.IsAlreadyExists(err) {
 			return err
 		}

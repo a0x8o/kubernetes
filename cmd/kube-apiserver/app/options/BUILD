@@ -40,6 +40,7 @@ go_library(
         "//plugin/pkg/admission/noderestriction:go_default_library",
         "//plugin/pkg/admission/persistentvolume/label:go_default_library",
         "//plugin/pkg/admission/persistentvolume/resize:go_default_library",
+        "//plugin/pkg/admission/persistentvolumeclaim/pvcprotection:go_default_library",
         "//plugin/pkg/admission/podnodeselector:go_default_library",
         "//plugin/pkg/admission/podpreset:go_default_library",
         "//plugin/pkg/admission/podtolerationrestriction:go_default_library",
@@ -60,8 +61,8 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = ["options_test.go"],
+    embed = [":go_default_library"],
     importpath = "k8s.io/kubernetes/cmd/kube-apiserver/app/options",
-    library = ":go_default_library",
     deps = [
         "//pkg/api/legacyscheme:go_default_library",
         "//pkg/apis/core:go_default_library",
@@ -73,6 +74,7 @@ go_test(
         "//vendor/k8s.io/apiserver/pkg/server/options:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/storage/storagebackend:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/util/flag:go_default_library",
+        "//vendor/k8s.io/apiserver/plugin/pkg/audit/webhook:go_default_library",
         "//vendor/k8s.io/client-go/rest:go_default_library",
     ],
 )

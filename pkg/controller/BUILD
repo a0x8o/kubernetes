@@ -12,8 +12,8 @@ go_test(
         "controller_ref_manager_test.go",
         "controller_utils_test.go",
     ],
+    embed = [":go_default_library"],
     importpath = "k8s.io/kubernetes/pkg/controller",
-    library = ":go_default_library",
     deps = [
         "//pkg/api/legacyscheme:go_default_library",
         "//pkg/api/testapi:go_default_library",
@@ -133,6 +133,7 @@ filegroup(
         "//pkg/controller/volume/events:all-srcs",
         "//pkg/controller/volume/expand:all-srcs",
         "//pkg/controller/volume/persistentvolume:all-srcs",
+        "//pkg/controller/volume/pvcprotection:all-srcs",
     ],
     tags = ["automanaged"],
 )

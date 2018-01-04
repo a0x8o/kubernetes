@@ -135,7 +135,7 @@ func density30AddonResourceVerifier(numNodes int) map[string]framework.ResourceC
 	controllerMem = math.MaxUint64
 	schedulerCPU := math.MaxFloat32
 	schedulerMem = math.MaxUint64
-	framework.Logf("Setting resource constraings for provider: %s", framework.TestContext.Provider)
+	framework.Logf("Setting resource constraints for provider: %s", framework.TestContext.Provider)
 	if framework.ProviderIs("kubemark") {
 		if numNodes <= 5 {
 			apiserverCPU = 0.35
@@ -200,7 +200,7 @@ func density30AddonResourceVerifier(numNodes int) map[string]framework.ResourceC
 		MemoryConstraint: 100 * (1024 * 1024),
 	}
 	constraints["l7-lb-controller"] = framework.ResourceConstraint{
-		CPUConstraint:    0.2 + 0.0001*float64(numNodes),
+		CPUConstraint:    0.2 + 0.00015*float64(numNodes),
 		MemoryConstraint: (75 + uint64(math.Ceil(0.8*float64(numNodes)))) * (1024 * 1024),
 	}
 	constraints["influxdb"] = framework.ResourceConstraint{

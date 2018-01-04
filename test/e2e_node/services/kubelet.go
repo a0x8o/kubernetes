@@ -27,15 +27,9 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	"github.com/spf13/pflag"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	"k8s.io/kubernetes/cmd/kubelet/app/options"
 	"k8s.io/kubernetes/pkg/features"
-	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
-	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/scheme"
-	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/v1alpha1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e_node/builder"
 )
@@ -66,9 +60,13 @@ func (a *args) Set(value string) error {
 
 // kubeletArgs is the override kubelet args specified by the test runner.
 var kubeletArgs args
+var kubeletContainerized bool
+var hyperkubeImage string
 
 func init() {
 	flag.Var(&kubeletArgs, "kubelet-flags", "Kubelet flags passed to kubelet, this will override default kubelet flags in the test. Flags specified in multiple kubelet-flags will be concatenate.")
+	flag.BoolVar(&kubeletContainerized, "kubelet-containerized", false, "Run kubelet in a docker container")
+	flag.StringVar(&hyperkubeImage, "hyperkube-image", "", "Docker image with containerized kubelet")
 }
 
 // RunKubelet starts kubelet and waits for termination signal. Once receives the
@@ -99,6 +97,10 @@ const (
 // startKubelet starts the Kubelet in a separate process or returns an error
 // if the Kubelet fails to start.
 func (e *E2EServices) startKubelet() (*server, error) {
+	if kubeletContainerized && hyperkubeImage == "" {
+		return nil, fmt.Errorf("the --hyperkube-image option must be set")
+	}
+
 	glog.Info("Starting kubelet")
 
 	// set feature gates so we can check which features are enabled and pass the appropriate flags
@@ -124,7 +126,6 @@ func (e *E2EServices) startKubelet() (*server, error) {
 	var isSystemd bool
 	// Apply default kubelet flags.
 	cmdArgs := []string{}
-	kubeArgs := []string{}
 	if systemdRun, err := exec.LookPath("systemd-run"); err == nil {
 		// On systemd services, detection of a service / unit works reliably while
 		// detection of a process started from an ssh session does not work.
@@ -132,20 +133,45 @@ func (e *E2EServices) startKubelet() (*server, error) {
 		// sense to test it that way
 		isSystemd = true
 		unitName := fmt.Sprintf("kubelet-%d.service", rand.Int31())
-		cmdArgs = append(cmdArgs, systemdRun, "--unit="+unitName, "--slice=runtime.slice", "--remain-after-exit", builder.GetKubeletServerBin())
+		if kubeletContainerized {
+			cmdArgs = append(cmdArgs, systemdRun, "--unit="+unitName, "--slice=runtime.slice", "--remain-after-exit",
+				"/usr/bin/docker", "run", "--name=kubelet",
+				"--rm", "--privileged", "--net=host", "--pid=host",
+				"-e HOST=/rootfs", "-e HOST_ETC=/host-etc",
+				"-v", "/etc/localtime:/etc/localtime:ro",
+				"-v", "/etc/machine-id:/etc/machine-id:ro",
+				"-v", filepath.Dir(kubeconfigPath)+":/etc/kubernetes",
+				"-v", "/:/rootfs:ro,rslave",
+				"-v", "/run:/run",
+				"-v", "/sys/fs/cgroup:/sys/fs/cgroup:rw",
+				"-v", "/sys:/sys:rw",
+				"-v", "/usr/bin/docker:/usr/bin/docker:ro",
+				"-v", "/var/lib/cni:/var/lib/cni",
+				"-v", "/var/lib/docker:/var/lib/docker",
+				"-v", "/var/lib/kubelet:/var/lib/kubelet:rw,rslave",
+				"-v", "/var/log:/var/log",
+				"-v", manifestPath+":"+manifestPath+":rw",
+				hyperkubeImage, "/hyperkube", "kubelet",
+				"--containerized",
+			)
+			kubeconfigPath = "/etc/kubernetes/kubeconfig"
+		} else {
+			cmdArgs = append(cmdArgs, systemdRun, "--unit="+unitName, "--slice=runtime.slice", "--remain-after-exit", builder.GetKubeletServerBin())
+		}
+
 		killCommand = exec.Command("systemctl", "kill", unitName)
 		restartCommand = exec.Command("systemctl", "restart", unitName)
 		e.logs["kubelet.log"] = LogFileData{
 			Name:              "kubelet.log",
 			JournalctlCommand: []string{"-u", unitName},
 		}
-		kubeArgs = append(kubeArgs,
+		cmdArgs = append(cmdArgs,
 			"--kubelet-cgroups=/kubelet.slice",
 			"--cgroup-root=/",
 		)
 	} else {
 		cmdArgs = append(cmdArgs, builder.GetKubeletServerBin())
-		kubeArgs = append(kubeArgs,
+		cmdArgs = append(cmdArgs,
 			// TODO(random-liu): Get rid of this docker specific thing.
 			"--runtime-cgroups=/docker-daemon",
 			"--kubelet-cgroups=/kubelet",
@@ -153,7 +179,7 @@ func (e *E2EServices) startKubelet() (*server, error) {
 			"--system-cgroups=/system",
 		)
 	}
-	kubeArgs = append(kubeArgs,
+	cmdArgs = append(cmdArgs,
 		"--kubeconfig", kubeconfigPath,
 		"--address", "0.0.0.0",
 		"--port", kubeletPort,
@@ -172,21 +198,24 @@ func (e *E2EServices) startKubelet() (*server, error) {
 		// - test/e2e_node/conformance/run_test.sh.
 		"--pod-cidr", "10.100.0.0/24",
 		"--eviction-pressure-transition-period", "30s",
-		// Apply test framework feature gates by default. This could also be overridden
-		// by kubelet-flags.
-		"--feature-gates", framework.TestContext.FeatureGates,
 		"--eviction-hard", "memory.available<250Mi,nodefs.available<10%,nodefs.inodesFree<5%", // The hard eviction thresholds.
 		"--eviction-minimum-reclaim", "nodefs.available=5%,nodefs.inodesFree=5%", // The minimum reclaimed resources after eviction.
 		"--v", LOG_VERBOSITY_LEVEL, "--logtostderr",
 	)
 
+	// Apply test framework feature gates by default. This could also be overridden
+	// by kubelet-flags.
+	if framework.TestContext.FeatureGates != "" {
+		cmdArgs = append(cmdArgs, "--feature-gates", framework.TestContext.FeatureGates)
+	}
+
 	if utilfeature.DefaultFeatureGate.Enabled(features.DynamicKubeletConfig) {
 		// Enable dynamic config if the feature gate is enabled
-		dir, err := getDynamicConfigDirectory()
+		dynamicConfigDir, err := getDynamicConfigDir()
 		if err != nil {
 			return nil, err
 		}
-		kubeArgs = append(kubeArgs, "--dynamic-config-dir", dir)
+		cmdArgs = append(cmdArgs, "--dynamic-config-dir", dynamicConfigDir)
 	}
 
 	// Enable kubenet by default.
@@ -200,40 +229,18 @@ func (e *E2EServices) startKubelet() (*server, error) {
 		return nil, err
 	}
 
-	kubeArgs = append(kubeArgs,
+	cmdArgs = append(cmdArgs,
 		"--network-plugin=kubenet",
 		"--cni-bin-dir", cniBinDir,
 		"--cni-conf-dir", cniConfDir)
 
 	// Keep hostname override for convenience.
 	if framework.TestContext.NodeName != "" { // If node name is specified, set hostname override.
-		kubeArgs = append(kubeArgs, "--hostname-override", framework.TestContext.NodeName)
+		cmdArgs = append(cmdArgs, "--hostname-override", framework.TestContext.NodeName)
 	}
 
 	// Override the default kubelet flags.
-	kubeArgs = append(kubeArgs, kubeletArgs...)
-
-	// If the config file feature gate is enabled, generate the file and remove the flags it applies to
-	if utilfeature.DefaultFeatureGate.Enabled(features.KubeletConfigFile) {
-		kc, other, err := splitKubeletConfigArgs(kubeArgs)
-		if err != nil {
-			return nil, err
-		}
-		// replace kubeArgs with the new command line, which has had the KubeletConfiguration flags removed
-		kubeArgs = other
-		path, err := writeKubeletConfigFile(kc)
-		if err != nil {
-			return nil, err
-		}
-		// ensure the test context feature gates (typically DynamicKubeletConfig and KubeletConfigFile)
-		// are set on the command line
-		kubeArgs = append(kubeArgs, "--feature-gates", framework.TestContext.FeatureGates)
-		// add the flag to load config from a file
-		kubeArgs = append(kubeArgs, "--init-config-dir", filepath.Dir(path))
-	}
-
-	// combine the kubelet parameters with the command
-	cmdArgs = append(cmdArgs, kubeArgs...)
+	cmdArgs = append(cmdArgs, kubeletArgs...)
 
 	// Adjust the args if we are running kubelet with systemd.
 	if isSystemd {
@@ -251,94 +258,6 @@ func (e *E2EServices) startKubelet() (*server, error) {
 		e.monitorParent,
 		true /* restartOnExit */)
 	return server, server.start()
-}
-
-// splitKubeletConfigArgs parses args onto a KubeletConfiguration object and also returns the unknown args
-func splitKubeletConfigArgs(args []string) (*kubeletconfig.KubeletConfiguration, []string, error) {
-	kc, err := options.NewKubeletConfiguration()
-	if err != nil {
-		return nil, nil, err
-	}
-	fs := pflag.NewFlagSet("kubeletconfig", pflag.ContinueOnError)
-	options.AddKubeletConfigFlags(fs, kc)
-	known, other := splitKnownArgs(fs, args)
-	if err := fs.Parse(known); err != nil {
-		return nil, nil, err
-	}
-	return kc, other, nil
-}
-
-// splitKnownArgs splits argument list into those known by the flagset, and those not known
-// only tests for longhand args, e.g. prefixed with `--`
-// TODO(mtaufen): I don't think the kubelet has any shorthand args, but if it does we will need to modify this.
-func splitKnownArgs(fs *pflag.FlagSet, args []string) ([]string, []string) {
-	known := []string{}
-	other := []string{}
-	lastFlag := len(args)
-	for i := len(args) - 1; i >= 0; i-- {
-		if strings.HasPrefix(args[i], "--") {
-			if fs.Lookup(strings.TrimPrefix(args[i], "--")) == nil {
-				// flag is unknown, add flag and params to other
-				// prepend to maintain order
-				other = append(append([]string(nil), args[i:lastFlag]...), other...)
-				// cut from known
-			} else {
-				// flag is known, add flag and params to known
-				// prepend to maintain order
-				known = append(append([]string(nil), args[i:lastFlag]...), known...)
-			}
-			// mark the last location where we saw a flag
-			lastFlag = i
-		}
-	}
-	return known, other
-}
-
-// writeKubeletConfigFile writes the kubelet config file based on the args and returns the filename
-func writeKubeletConfigFile(internal *kubeletconfig.KubeletConfiguration) (string, error) {
-	// extract the KubeletConfiguration and convert to versioned
-	versioned := &v1alpha1.KubeletConfiguration{}
-	scheme, _, err := scheme.NewSchemeAndCodecs()
-	if err != nil {
-		return "", err
-	}
-	if err := scheme.Convert(internal, versioned, nil); err != nil {
-		return "", err
-	}
-	// encode
-	encoder, err := newKubeletConfigJSONEncoder()
-	if err != nil {
-		return "", err
-	}
-	data, err := runtime.Encode(encoder, versioned)
-	if err != nil {
-		return "", err
-	}
-	// create the init conifg directory
-	dir, err := createKubeletInitConfigDirectory()
-	if err != nil {
-		return "", err
-	}
-	// write init config file
-	path := filepath.Join(dir, "kubelet")
-	if err := ioutil.WriteFile(path, data, 0755); err != nil {
-		return "", err
-	}
-	return path, nil
-}
-
-func newKubeletConfigJSONEncoder() (runtime.Encoder, error) {
-	_, kubeletCodecs, err := scheme.NewSchemeAndCodecs()
-	if err != nil {
-		return nil, err
-	}
-
-	mediaType := "application/json"
-	info, ok := runtime.SerializerInfoForMediaType(kubeletCodecs.SupportedMediaTypes(), mediaType)
-	if !ok {
-		return nil, fmt.Errorf("unsupported media type %q", mediaType)
-	}
-	return kubeletCodecs.EncoderForVersion(info.Serializer, v1alpha1.SchemeGroupVersion), nil
 }
 
 // createPodManifestDirectory creates pod manifest directory.
@@ -430,25 +349,12 @@ func getCNIConfDirectory() (string, error) {
 }
 
 // getDynamicConfigDir returns the directory for dynamic Kubelet configuration
-func getDynamicConfigDirectory() (string, error) {
+func getDynamicConfigDir() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(cwd, "dynamic-kubelet-config"), nil
-}
-
-// createKubeletInitConfigDirectory creates and returns the name of the directory for dynamic Kubelet configuration
-func createKubeletInitConfigDirectory() (string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	path := filepath.Join(cwd, "init-kubelet-config")
-	if err := os.MkdirAll(path, 0755); err != nil {
-		return "", err
-	}
-	return path, nil
 }
 
 // adjustArgsForSystemd escape special characters in kubelet arguments for systemd. Systemd

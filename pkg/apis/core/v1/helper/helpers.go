@@ -30,10 +30,9 @@ import (
 )
 
 // IsExtendedResourceName returns true if the resource name is not in the
-// default namespace, or it has the opaque integer resource prefix.
+// default namespace.
 func IsExtendedResourceName(name v1.ResourceName) bool {
-	// TODO: Remove OIR part following deprecation.
-	return !IsDefaultNamespaceResource(name) || IsOpaqueIntResourceName(name)
+	return !IsDefaultNamespaceResource(name)
 }
 
 // IsDefaultNamespaceResource returns true if the resource name is in the
@@ -69,22 +68,6 @@ func HugePageSizeFromResourceName(name v1.ResourceName) (resource.Quantity, erro
 	return resource.ParseQuantity(pageSize)
 }
 
-// IsOpaqueIntResourceName returns true if the resource name has the opaque
-// integer resource prefix.
-func IsOpaqueIntResourceName(name v1.ResourceName) bool {
-	return strings.HasPrefix(string(name), v1.ResourceOpaqueIntPrefix)
-}
-
-// OpaqueIntResourceName returns a ResourceName with the canonical opaque
-// integer prefix prepended. If the argument already has the prefix, it is
-// returned unmodified.
-func OpaqueIntResourceName(name string) v1.ResourceName {
-	if IsOpaqueIntResourceName(v1.ResourceName(name)) {
-		return v1.ResourceName(name)
-	}
-	return v1.ResourceName(fmt.Sprintf("%s%s", v1.ResourceOpaqueIntPrefix, name))
-}
-
 var overcommitBlacklist = sets.NewString(string(v1.ResourceNvidiaGPU))
 
 // IsOvercommitAllowed returns true if the resource is in the default
@@ -104,15 +87,6 @@ func IsScalarResourceName(name v1.ResourceName) bool {
 // the objective is not to perform validation here
 func IsServiceIPSet(service *v1.Service) bool {
 	return service.Spec.ClusterIP != v1.ClusterIPNone && service.Spec.ClusterIP != ""
-}
-
-// this function aims to check if the service's cluster IP is requested or not
-func IsServiceIPRequested(service *v1.Service) bool {
-	// ExternalName services are CNAME aliases to external ones. Ignore the IP.
-	if service.Spec.Type == v1.ServiceTypeExternalName {
-		return false
-	}
-	return service.Spec.ClusterIP == ""
 }
 
 // AddToNodeAddresses appends the NodeAddresses to the passed-by-pointer slice,
@@ -431,20 +405,6 @@ func GetPersistentVolumeClaimClass(claim *v1.PersistentVolumeClaim) string {
 	}
 
 	return ""
-}
-
-// PersistentVolumeClaimHasClass returns true if given claim has set StorageClassName field.
-func PersistentVolumeClaimHasClass(claim *v1.PersistentVolumeClaim) bool {
-	// Use beta annotation first
-	if _, found := claim.Annotations[v1.BetaStorageClassAnnotation]; found {
-		return true
-	}
-
-	if claim.Spec.StorageClassName != nil {
-		return true
-	}
-
-	return false
 }
 
 // GetStorageNodeAffinityFromAnnotation gets the json serialized data from PersistentVolume.Annotations

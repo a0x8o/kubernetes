@@ -40,6 +40,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	"k8s.io/kubernetes/pkg/controller/replicaset"
+	"k8s.io/kubernetes/pkg/util/slice"
 	"k8s.io/kubernetes/test/integration/framework"
 	testutil "k8s.io/kubernetes/test/utils"
 )
@@ -115,7 +116,7 @@ func newMatchingPod(podName, namespace string) *v1.Pod {
 // sets and pods are rsNum and podNum. It returns error if the
 // communication with the API server fails.
 func verifyRemainingObjects(t *testing.T, clientSet clientset.Interface, namespace string, rsNum, podNum int) (bool, error) {
-	rsClient := clientSet.Extensions().ReplicaSets(namespace)
+	rsClient := clientSet.ExtensionsV1beta1().ReplicaSets(namespace)
 	podClient := clientSet.CoreV1().Pods(namespace)
 	pods, err := podClient.List(metav1.ListOptions{})
 	if err != nil {
@@ -199,7 +200,7 @@ func createRSsPods(t *testing.T, clientSet clientset.Interface, rss []*v1beta1.R
 	var createdRSs []*v1beta1.ReplicaSet
 	var createdPods []*v1.Pod
 	for _, rs := range rss {
-		createdRS, err := clientSet.Extensions().ReplicaSets(rs.Namespace).Create(rs)
+		createdRS, err := clientSet.ExtensionsV1beta1().ReplicaSets(rs.Namespace).Create(rs)
 		if err != nil {
 			t.Fatalf("Failed to create replica set %s: %v", rs.Name, err)
 		}
@@ -225,7 +226,7 @@ func waitRSStable(t *testing.T, clientSet clientset.Interface, rs *v1beta1.Repli
 
 // Update .Spec.Replicas to replicas and verify .Status.Replicas is changed accordingly
 func scaleRS(t *testing.T, c clientset.Interface, rs *v1beta1.ReplicaSet, replicas int32) {
-	rsClient := c.Extensions().ReplicaSets(rs.Namespace)
+	rsClient := c.ExtensionsV1beta1().ReplicaSets(rs.Namespace)
 	rs = updateRS(t, rsClient, rs.Name, func(rs *v1beta1.ReplicaSet) {
 		*rs.Spec.Replicas = replicas
 	})
@@ -360,7 +361,7 @@ func setPodsReadyCondition(t *testing.T, clientSet clientset.Interface, pods *v1
 
 func testScalingUsingScaleSubresource(t *testing.T, c clientset.Interface, rs *v1beta1.ReplicaSet, replicas int32) {
 	ns := rs.Namespace
-	rsClient := c.Extensions().ReplicaSets(ns)
+	rsClient := c.ExtensionsV1beta1().ReplicaSets(ns)
 	newRS, err := rsClient.Get(rs.Name, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Failed to obtain rs %s: %v", rs.Name, err)
@@ -453,7 +454,7 @@ func TestAdoption(t *testing.T) {
 			ns := framework.CreateTestingNamespace(fmt.Sprintf("rs-adoption-%d", i), s, t)
 			defer framework.DeleteTestingNamespace(ns, s, t)
 
-			rsClient := clientSet.Extensions().ReplicaSets(ns.Name)
+			rsClient := clientSet.ExtensionsV1beta1().ReplicaSets(ns.Name)
 			podClient := clientSet.CoreV1().Pods(ns.Name)
 			const rsName = "rs"
 			rs, err := rsClient.Create(newRS(rsName, ns.Name, 1))
@@ -548,7 +549,7 @@ func TestSpecReplicasChange(t *testing.T) {
 
 	// Add a template annotation change to test RS's status does update
 	// without .Spec.Replicas change
-	rsClient := c.Extensions().ReplicaSets(ns.Name)
+	rsClient := c.ExtensionsV1beta1().ReplicaSets(ns.Name)
 	var oldGeneration int64
 	newRS := updateRS(t, rsClient, rs.Name, func(rs *v1beta1.ReplicaSet) {
 		oldGeneration = rs.Generation
@@ -818,7 +819,7 @@ func TestReadyAndAvailableReplicas(t *testing.T) {
 	// by setting LastTransitionTime to more than 3600 seconds ago
 	setPodsReadyCondition(t, c, thirdPodList, v1.ConditionTrue, time.Now().Add(-120*time.Minute))
 
-	rsClient := c.Extensions().ReplicaSets(ns.Name)
+	rsClient := c.ExtensionsV1beta1().ReplicaSets(ns.Name)
 	if err := wait.PollImmediate(interval, timeout, func() (bool, error) {
 		newRS, err := rsClient.Get(rs.Name, metav1.GetOptions{})
 		if err != nil {
@@ -897,7 +898,7 @@ func TestFullyLabeledReplicas(t *testing.T) {
 	waitRSStable(t, c, rs)
 
 	// Change RS's template labels to have extra labels, but not its selector
-	rsClient := c.Extensions().ReplicaSets(ns.Name)
+	rsClient := c.ExtensionsV1beta1().ReplicaSets(ns.Name)
 	updateRS(t, rsClient, rs.Name, func(rs *v1beta1.ReplicaSet) {
 		rs.Spec.Template.Labels = extraLabelMap
 	})
@@ -923,4 +924,116 @@ func TestFullyLabeledReplicas(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Failed to verify only one pod is fully labeled: %v", err)
 	}
+}
+
+func TestReplicaSetsExtensionsV1beta1DefaultGCPolicy(t *testing.T) {
+	s, closeFn, rm, informers, c := rmSetup(t)
+	defer closeFn()
+	ns := framework.CreateTestingNamespace("test-default-gc-extensions", s, t)
+	defer framework.DeleteTestingNamespace(ns, s, t)
+	stopCh := runControllerAndInformers(t, rm, informers, 0)
+	defer close(stopCh)
+
+	rs := newRS("rs", ns.Name, 2)
+	fakeFinalizer := "kube.io/dummy-finalizer"
+	rs.Finalizers = []string{fakeFinalizer}
+	rss, _ := createRSsPods(t, c, []*v1beta1.ReplicaSet{rs}, []*v1.Pod{})
+	rs = rss[0]
+	waitRSStable(t, c, rs)
+
+	// Verify RS creates 2 pods
+	podClient := c.CoreV1().Pods(ns.Name)
+	pods := getPods(t, podClient, labelMap())
+	if len(pods.Items) != 2 {
+		t.Fatalf("len(pods) = %d, want 2", len(pods.Items))
+	}
+
+	rsClient := c.ExtensionsV1beta1().ReplicaSets(ns.Name)
+	err := rsClient.Delete(rs.Name, nil)
+	if err != nil {
+		t.Fatalf("Failed to delete rs: %v", err)
+	}
+
+	// Verify orphan finalizer has been added
+	if err := wait.PollImmediate(interval, timeout, func() (bool, error) {
+		newRS, err := rsClient.Get(rs.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return slice.ContainsString(newRS.Finalizers, metav1.FinalizerOrphanDependents, nil), nil
+	}); err != nil {
+		t.Fatalf("Failed to verify orphan finalizer is added: %v", err)
+	}
+
+	updateRS(t, rsClient, rs.Name, func(rs *v1beta1.ReplicaSet) {
+		var finalizers []string
+		// remove fakeFinalizer
+		for _, finalizer := range rs.Finalizers {
+			if finalizer != fakeFinalizer {
+				finalizers = append(finalizers, finalizer)
+			}
+		}
+		rs.Finalizers = finalizers
+	})
+
+	rsClient.Delete(rs.Name, nil)
+}
+
+func TestReplicaSetsAppsV1DefaultGCPolicy(t *testing.T) {
+	s, closeFn, rm, informers, c := rmSetup(t)
+	defer closeFn()
+	ns := framework.CreateTestingNamespace("test-default-gc-extensions", s, t)
+	defer framework.DeleteTestingNamespace(ns, s, t)
+	stopCh := runControllerAndInformers(t, rm, informers, 0)
+	defer close(stopCh)
+
+	rs := newRS("rs", ns.Name, 2)
+	fakeFinalizer := "kube.io/dummy-finalizer"
+	rs.Finalizers = []string{fakeFinalizer}
+	rss, _ := createRSsPods(t, c, []*v1beta1.ReplicaSet{rs}, []*v1.Pod{})
+	rs = rss[0]
+	waitRSStable(t, c, rs)
+
+	// Verify RS creates 2 pods
+	podClient := c.CoreV1().Pods(ns.Name)
+	pods := getPods(t, podClient, labelMap())
+	if len(pods.Items) != 2 {
+		t.Fatalf("len(pods) = %d, want 2", len(pods.Items))
+	}
+
+	rsClient := c.AppsV1().ReplicaSets(ns.Name)
+	err := rsClient.Delete(rs.Name, nil)
+	if err != nil {
+		t.Fatalf("Failed to delete rs: %v", err)
+	}
+
+	// Verify no new finalizer has been added
+	if err := wait.PollImmediate(interval, timeout, func() (bool, error) {
+		newRS, err := rsClient.Get(rs.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		if newRS.DeletionTimestamp == nil {
+			return false, nil
+		}
+		if got, want := newRS.Finalizers, []string{fakeFinalizer}; !reflect.DeepEqual(got, want) {
+			return false, fmt.Errorf("got finalizers: %+v; want: %+v", got, want)
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatalf("Failed to verify the finalizer: %v", err)
+	}
+
+	updateRS(t, c.ExtensionsV1beta1().ReplicaSets(ns.Name), rs.Name, func(rs *v1beta1.ReplicaSet) {
+		var finalizers []string
+		// remove fakeFinalizer
+		for _, finalizer := range rs.Finalizers {
+			if finalizer != fakeFinalizer {
+				finalizers = append(finalizers, finalizer)
+			}
+		}
+		rs.Finalizers = finalizers
+	})
+
+	rsClient.Delete(rs.Name, nil)
 }

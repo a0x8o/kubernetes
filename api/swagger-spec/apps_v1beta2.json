@@ -6131,7 +6131,7 @@
    },
    "v1beta2.ControllerRevision": {
     "id": "v1beta2.ControllerRevision",
-    "description": "ControllerRevision implements an immutable snapshot of state data. Clients are responsible for serializing and deserializing the objects that contain their internal state. Once a ControllerRevision has been successfully created, it can not be updated. The API Server will fail validation of all requests that attempt to mutate the Data field. ControllerRevisions may, however, be deleted. Note that, due to its use by both the DaemonSet and StatefulSet controllers for update and rollback, this object is beta. However, it may be subject to name and representation changes in future releases, and clients should not depend on its stability. It is primarily for internal use by controllers.",
+    "description": "DEPRECATED - This group version of ControllerRevision is deprecated by apps/v1/ControllerRevision. See the release notes for more information. ControllerRevision implements an immutable snapshot of state data. Clients are responsible for serializing and deserializing the objects that contain their internal state. Once a ControllerRevision has been successfully created, it can not be updated. The API Server will fail validation of all requests that attempt to mutate the Data field. ControllerRevisions may, however, be deleted. Note that, due to its use by both the DaemonSet and StatefulSet controllers for update and rollback, this object is beta. However, it may be subject to name and representation changes in future releases, and clients should not depend on its stability. It is primarily for internal use by controllers.",
     "required": [
      "revision"
     ],
@@ -6496,7 +6496,7 @@
    },
    "v1beta2.DaemonSet": {
     "id": "v1beta2.DaemonSet",
-    "description": "DaemonSet represents the configuration of a daemon set.",
+    "description": "DEPRECATED - This group version of DaemonSet is deprecated by apps/v1/DaemonSet. See the release notes for more information. DaemonSet represents the configuration of a daemon set.",
     "properties": {
      "kind": {
       "type": "string",
@@ -6524,12 +6524,13 @@
     "id": "v1beta2.DaemonSetSpec",
     "description": "DaemonSetSpec is the specification of a daemon set.",
     "required": [
+     "selector",
      "template"
     ],
     "properties": {
      "selector": {
       "$ref": "v1.LabelSelector",
-      "description": "A label query over pods that are managed by the daemon set. Must match in order to be controlled. If empty, defaulted to labels on Pod template. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors"
+      "description": "A label query over pods that are managed by the daemon set. Must match in order to be controlled. It must match the pod template's labels. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors"
      },
      "template": {
       "$ref": "v1.PodTemplateSpec",
@@ -6651,7 +6652,7 @@
      },
      "dnsPolicy": {
       "type": "string",
-      "description": "Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'."
+      "description": "Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'. Note that 'None' policy is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it."
      },
      "nodeSelector": {
       "type": "object",
@@ -6737,7 +6738,7 @@
      },
      "dnsConfig": {
       "$ref": "v1.PodDNSConfig",
-      "description": "Specifies the DNS parameters of a pod. Parameters specified here will be merged to the generated DNS configuration based on DNSPolicy."
+      "description": "Specifies the DNS parameters of a pod. Parameters specified here will be merged to the generated DNS configuration based on DNSPolicy. This is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it."
      }
     }
    },
@@ -6798,7 +6799,7 @@
      },
      "flexVolume": {
       "$ref": "v1.FlexVolumeSource",
-      "description": "FlexVolume represents a generic volume resource that is provisioned/attached using an exec based plugin. This is an alpha feature and may change in future."
+      "description": "FlexVolume represents a generic volume resource that is provisioned/attached using an exec based plugin."
      },
      "cinder": {
       "$ref": "v1.CinderVolumeSource",
@@ -7196,7 +7197,7 @@
    },
    "v1.FlexVolumeSource": {
     "id": "v1.FlexVolumeSource",
-    "description": "FlexVolume represents a generic volume resource that is provisioned/attached using an exec based plugin. This is an alpha feature and may change in future.",
+    "description": "FlexVolume represents a generic volume resource that is provisioned/attached using an exec based plugin.",
     "required": [
      "driver"
     ],
@@ -8798,7 +8799,7 @@
    },
    "v1beta2.Deployment": {
     "id": "v1beta2.Deployment",
-    "description": "Deployment enables declarative updates for Pods and ReplicaSets.",
+    "description": "DEPRECATED - This group version of Deployment is deprecated by apps/v1/Deployment. See the release notes for more information. Deployment enables declarative updates for Pods and ReplicaSets.",
     "properties": {
      "kind": {
       "type": "string",
@@ -8826,6 +8827,7 @@
     "id": "v1beta2.DeploymentSpec",
     "description": "DeploymentSpec is the specification of the desired behavior of the Deployment.",
     "required": [
+     "selector",
      "template"
     ],
     "properties": {
@@ -8836,7 +8838,7 @@
      },
      "selector": {
       "$ref": "v1.LabelSelector",
-      "description": "Label selector for pods. Existing ReplicaSets whose pods are selected by this will be the ones affected by this deployment."
+      "description": "Label selector for pods. Existing ReplicaSets whose pods are selected by this will be the ones affected by this deployment. It must match the pod template's labels."
      },
      "template": {
       "$ref": "v1.PodTemplateSpec",
@@ -9066,7 +9068,7 @@
    },
    "v1beta2.ReplicaSet": {
     "id": "v1beta2.ReplicaSet",
-    "description": "ReplicaSet ensures that a specified number of pod replicas are running at any given time.",
+    "description": "DEPRECATED - This group version of ReplicaSet is deprecated by apps/v1/ReplicaSet. See the release notes for more information. ReplicaSet ensures that a specified number of pod replicas are running at any given time.",
     "properties": {
      "kind": {
       "type": "string",
@@ -9093,6 +9095,9 @@
    "v1beta2.ReplicaSetSpec": {
     "id": "v1beta2.ReplicaSetSpec",
     "description": "ReplicaSetSpec is the specification of a ReplicaSet.",
+    "required": [
+     "selector"
+    ],
     "properties": {
      "replicas": {
       "type": "integer",
@@ -9106,7 +9111,7 @@
      },
      "selector": {
       "$ref": "v1.LabelSelector",
-      "description": "Selector is a label query over pods that should match the replica count. If the selector is empty, it is defaulted to the labels present on the pod template. Label keys and values that must match in order to be controlled by this replica set. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors"
+      "description": "Selector is a label query over pods that should match the replica count. Label keys and values that must match in order to be controlled by this replica set. It must match the pod template's labels. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors"
      },
      "template": {
       "$ref": "v1.PodTemplateSpec",
@@ -9213,7 +9218,7 @@
    },
    "v1beta2.StatefulSet": {
     "id": "v1beta2.StatefulSet",
-    "description": "StatefulSet represents a set of pods with consistent identities. Identities are defined as:\n - Network: A single stable DNS and hostname.\n - Storage: As many VolumeClaims as requested.\nThe StatefulSet guarantees that a given network identity will always map to the same storage identity.",
+    "description": "DEPRECATED - This group version of StatefulSet is deprecated by apps/v1/StatefulSet. See the release notes for more information. StatefulSet represents a set of pods with consistent identities. Identities are defined as:\n - Network: A single stable DNS and hostname.\n - Storage: As many VolumeClaims as requested.\nThe StatefulSet guarantees that a given network identity will always map to the same storage identity.",
     "properties": {
      "kind": {
       "type": "string",
@@ -9240,6 +9245,7 @@
     "id": "v1beta2.StatefulSetSpec",
     "description": "A StatefulSetSpec is the specification of a StatefulSet.",
     "required": [
+     "selector",
      "template",
      "serviceName"
     ],
@@ -9251,7 +9257,7 @@
      },
      "selector": {
       "$ref": "v1.LabelSelector",
-      "description": "selector is a label query over pods that should match the replica count. If empty, defaulted to labels on the pod template. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors"
+      "description": "selector is a label query over pods that should match the replica count. It must match the pod template's labels. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors"
      },
      "template": {
       "$ref": "v1.PodTemplateSpec",

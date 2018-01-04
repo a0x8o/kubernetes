@@ -29,11 +29,12 @@ go_test(
         "compatibility_test.go",
         "defaults_test.go",
     ],
+    embed = [":go_default_library"],
     importpath = "k8s.io/kubernetes/plugin/pkg/scheduler/algorithmprovider/defaults",
-    library = ":go_default_library",
     deps = [
         "//pkg/api/legacyscheme:go_default_library",
         "//pkg/apis/core/install:go_default_library",
+        "//plugin/pkg/scheduler/algorithm/predicates:go_default_library",
         "//plugin/pkg/scheduler/api:go_default_library",
         "//plugin/pkg/scheduler/api/latest:go_default_library",
         "//plugin/pkg/scheduler/factory:go_default_library",

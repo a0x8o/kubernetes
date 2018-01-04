@@ -48,6 +48,7 @@ import (
 	"path"
 
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -172,6 +173,25 @@ const ServiceAnnotationLoadBalancerBEProtocol = "service.beta.kubernetes.io/aws-
 // For example: "Key1=Val1,Key2=Val2,KeyNoVal1=,KeyNoVal2"
 const ServiceAnnotationLoadBalancerAdditionalTags = "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags"
 
+// ServiceAnnotationLoadBalancerHCHealthyThreshold is the annotation used on
+// the service to specify the number of successive successful health checks
+// required for a backend to be considered healthy for traffic.
+const ServiceAnnotationLoadBalancerHCHealthyThreshold = "service.beta.kubernetes.io/aws-load-balancer-healthcheck-healthy-threshold"
+
+// ServiceAnnotationLoadBalancerHCUnhealthyThreshold is the annotation used
+// on the service to specify the number of unsuccessful health checks
+// required for a backend to be considered unhealthy for traffic
+const ServiceAnnotationLoadBalancerHCUnhealthyThreshold = "service.beta.kubernetes.io/aws-load-balancer-healthcheck-unhealthy-threshold"
+
+// ServiceAnnotationLoadBalancerHCTimeout is the annotation used on the
+// service to specify, in seconds, how long to wait before marking a health
+// check as failed.
+const ServiceAnnotationLoadBalancerHCTimeout = "service.beta.kubernetes.io/aws-load-balancer-healthcheck-timeout"
+
+// ServiceAnnotationLoadBalancerHCInterval is the annotation used on the
+// service to specify, in seconds, the interval between health checks.
+const ServiceAnnotationLoadBalancerHCInterval = "service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval"
+
 // Event key when a volume is stuck on attaching state when being attached to a volume
 const volumeAttachmentStuck = "VolumeAttachmentStuck"
 
@@ -227,11 +247,6 @@ const MaxReadThenCreateRetries = 30
 // need hardcoded defaults.
 const DefaultVolumeType = "gp2"
 
-// DefaultMaxEBSVolumes is the limit for volumes attached to an instance.
-// Amazon recommends no more than 40; the system root volume uses at least one.
-// See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/volume_limits.html#linux-specific-volume-limits
-const DefaultMaxEBSVolumes = 39
-
 // Used to call RecognizeWellKnownRegions just once
 var once sync.Once
 
@@ -265,6 +280,10 @@ type EC2 interface {
 	CreateVolume(request *ec2.CreateVolumeInput) (resp *ec2.Volume, err error)
 	// Delete an EBS volume
 	DeleteVolume(*ec2.DeleteVolumeInput) (*ec2.DeleteVolumeOutput, error)
+
+	ModifyVolume(*ec2.ModifyVolumeInput) (*ec2.ModifyVolumeOutput, error)
+
+	DescribeVolumeModifications(*ec2.DescribeVolumesModificationsInput) ([]*ec2.VolumeModification, error)
 
 	DescribeSecurityGroups(request *ec2.DescribeSecurityGroupsInput) ([]*ec2.SecurityGroup, error)
 
@@ -434,6 +453,9 @@ type Volumes interface {
 
 	// Check if disks specified in argument map are still attached to their respective nodes.
 	DisksAreAttached(map[types.NodeName][]KubernetesVolumeID) (map[types.NodeName]map[KubernetesVolumeID]bool, error)
+
+	// Expand the disk to new size
+	ResizeDisk(diskName KubernetesVolumeID, oldSize resource.Quantity, newSize resource.Quantity) (resource.Quantity, error)
 }
 
 // InstanceGroups is an interface for managing cloud-managed instance groups / autoscaling instance groups
@@ -814,6 +836,36 @@ func (s *awsSdkEC2) DeleteVolume(request *ec2.DeleteVolumeInput) (*ec2.DeleteVol
 	return resp, err
 }
 
+func (s *awsSdkEC2) ModifyVolume(request *ec2.ModifyVolumeInput) (*ec2.ModifyVolumeOutput, error) {
+	requestTime := time.Now()
+	resp, err := s.ec2.ModifyVolume(request)
+	timeTaken := time.Since(requestTime).Seconds()
+	recordAwsMetric("modify_volume", timeTaken, err)
+	return resp, err
+}
+
+func (s *awsSdkEC2) DescribeVolumeModifications(request *ec2.DescribeVolumesModificationsInput) ([]*ec2.VolumeModification, error) {
+	requestTime := time.Now()
+	results := []*ec2.VolumeModification{}
+	var nextToken *string
+	for {
+		resp, err := s.ec2.DescribeVolumesModifications(request)
+		if err != nil {
+			recordAwsMetric("describe_volume_modification", 0, err)
+			return nil, fmt.Errorf("error listing volume modifictions : %v", err)
+		}
+		results = append(results, resp.VolumesModifications...)
+		nextToken = resp.NextToken
+		if aws.StringValue(nextToken) == "" {
+			break
+		}
+		request.NextToken = nextToken
+	}
+	timeTaken := time.Since(requestTime).Seconds()
+	recordAwsMetric("describe_volume_modification", timeTaken, nil)
+	return results, nil
+}
+
 func (s *awsSdkEC2) DescribeSubnets(request *ec2.DescribeSubnetsInput) ([]*ec2.Subnet, error) {
 	// Subnets are not paged
 	response, err := s.ec2.DescribeSubnets(request)
@@ -1061,11 +1113,11 @@ func newAWSCloud(config io.Reader, awsServices Services) (*Cloud, error) {
 // Initialize passes a Kubernetes clientBuilder interface to the cloud provider
 func (c *Cloud) Initialize(clientBuilder controller.ControllerClientBuilder) {
 	c.clientBuilder = clientBuilder
-	c.kubeClient = clientBuilder.ClientOrDie("cloud-provider")
+	c.kubeClient = clientBuilder.ClientOrDie("aws-cloud-provider")
 	c.eventBroadcaster = record.NewBroadcaster()
 	c.eventBroadcaster.StartLogging(glog.Infof)
 	c.eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(c.kubeClient.CoreV1().RESTClient()).Events("")})
-	c.eventRecorder = c.eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "aws-cloudprovider"})
+	c.eventRecorder = c.eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "aws-cloud-provider"})
 }
 
 // Clusters returns the list of clusters.
@@ -1076,11 +1128,6 @@ func (c *Cloud) Clusters() (cloudprovider.Clusters, bool) {
 // ProviderName returns the cloud provider ID.
 func (c *Cloud) ProviderName() string {
 	return ProviderName
-}
-
-// ScrubDNS filters DNS settings for pods.
-func (c *Cloud) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []string) {
-	return nameservers, searches
 }
 
 // LoadBalancer returns an implementation of LoadBalancer for Amazon Web Services.
@@ -1605,7 +1652,7 @@ type awsDisk struct {
 }
 
 func newAWSDisk(aws *Cloud, name KubernetesVolumeID) (*awsDisk, error) {
-	awsID, err := name.mapToAWSVolumeID()
+	awsID, err := name.MapToAWSVolumeID()
 	if err != nil {
 		return nil, err
 	}
@@ -1632,6 +1679,65 @@ func (d *awsDisk) describeVolume() (*ec2.Volume, error) {
 		return nil, fmt.Errorf("multiple volumes found for volume %q", volumeID)
 	}
 	return volumes[0], nil
+}
+
+func (d *awsDisk) describeVolumeModification() (*ec2.VolumeModification, error) {
+	volumeID := d.awsID
+	request := &ec2.DescribeVolumesModificationsInput{
+		VolumeIds: []*string{volumeID.awsString()},
+	}
+	volumeMods, err := d.ec2.DescribeVolumeModifications(request)
+
+	if err != nil {
+		return nil, fmt.Errorf("error describing volume modification %s with %v", volumeID, err)
+	}
+
+	if len(volumeMods) == 0 {
+		return nil, fmt.Errorf("no volume modifications found for %s", volumeID)
+	}
+	lastIndex := len(volumeMods) - 1
+	return volumeMods[lastIndex], nil
+}
+
+func (d *awsDisk) modifyVolume(requestGiB int64) (int64, error) {
+	volumeID := d.awsID
+
+	request := &ec2.ModifyVolumeInput{
+		VolumeId: volumeID.awsString(),
+		Size:     aws.Int64(requestGiB),
+	}
+	output, err := d.ec2.ModifyVolume(request)
+	if err != nil {
+		modifyError := fmt.Errorf("AWS modifyVolume failed for %s with %v", volumeID, err)
+		return requestGiB, modifyError
+	}
+
+	volumeModification := output.VolumeModification
+
+	if aws.StringValue(volumeModification.ModificationState) == ec2.VolumeModificationStateCompleted {
+		return aws.Int64Value(volumeModification.TargetSize), nil
+	}
+
+	backoff := wait.Backoff{
+		Duration: 1 * time.Second,
+		Factor:   2,
+		Steps:    10,
+	}
+
+	checkForResize := func() (bool, error) {
+		volumeModification, err := d.describeVolumeModification()
+
+		if err != nil {
+			return false, err
+		}
+
+		if aws.StringValue(volumeModification.ModificationState) == ec2.VolumeModificationStateCompleted {
+			return true, nil
+		}
+		return false, nil
+	}
+	waitWithErr := wait.ExponentialBackoff(backoff, checkForResize)
+	return requestGiB, waitWithErr
 }
 
 // applyUnSchedulableTaint applies a unschedulable taint to a node after verifying
@@ -1905,26 +2011,23 @@ func (c *Cloud) AttachDisk(diskName KubernetesVolumeID, nodeName types.NodeName,
 
 // DetachDisk implements Volumes.DetachDisk
 func (c *Cloud) DetachDisk(diskName KubernetesVolumeID, nodeName types.NodeName) (string, error) {
-	disk, err := newAWSDisk(c, diskName)
-	if err != nil {
+	diskInfo, attached, err := c.checkIfAttachedToNode(diskName, nodeName)
+	if diskInfo == nil {
 		return "", err
 	}
 
-	awsInstance, info, err := c.getFullInstance(nodeName)
-	if err != nil {
-		if err == cloudprovider.InstanceNotFound {
-			// If instance no longer exists, safe to assume volume is not attached.
-			glog.Warningf(
-				"Instance %q does not exist. DetachDisk will assume disk %q is not attached to it.",
-				nodeName,
-				diskName)
-			return "", nil
-		}
-
-		return "", err
+	if !attached && diskInfo.ec2Instance != nil {
+		glog.Warningf("DetachDisk %s called for node %s but volume is attached to node %s", diskName, nodeName, diskInfo.nodeName)
+		return "", nil
 	}
 
-	mountDevice, alreadyAttached, err := c.getMountDevice(awsInstance, info, disk.awsID, false)
+	if !attached {
+		return "", nil
+	}
+
+	awsInstance := newAWSInstance(c.ec2, diskInfo.ec2Instance)
+
+	mountDevice, alreadyAttached, err := c.getMountDevice(awsInstance, diskInfo.ec2Instance, diskInfo.disk.awsID, false)
 	if err != nil {
 		return "", err
 	}
@@ -1936,18 +2039,19 @@ func (c *Cloud) DetachDisk(diskName KubernetesVolumeID, nodeName types.NodeName)
 
 	request := ec2.DetachVolumeInput{
 		InstanceId: &awsInstance.awsID,
-		VolumeId:   disk.awsID.awsString(),
+		VolumeId:   diskInfo.disk.awsID.awsString(),
 	}
 
 	response, err := c.ec2.DetachVolume(&request)
 	if err != nil {
-		return "", fmt.Errorf("error detaching EBS volume %q from %q: %q", disk.awsID, awsInstance.awsID, err)
+		return "", fmt.Errorf("error detaching EBS volume %q from %q: %q", diskInfo.disk.awsID, awsInstance.awsID, err)
 	}
+
 	if response == nil {
 		return "", errors.New("no response from DetachVolume")
 	}
 
-	attachment, err := disk.waitForAttachmentStatus("detached")
+	attachment, err := diskInfo.disk.waitForAttachmentStatus("detached")
 	if err != nil {
 		return "", err
 	}
@@ -1960,7 +2064,7 @@ func (c *Cloud) DetachDisk(diskName KubernetesVolumeID, nodeName types.NodeName)
 	}
 
 	if mountDevice != "" {
-		c.endAttaching(awsInstance, disk.awsID, mountDevice)
+		c.endAttaching(awsInstance, diskInfo.disk.awsID, mountDevice)
 		// We don't check the return value - we don't really expect the attachment to have been
 		// in progress, though it might have been
 	}
@@ -2204,32 +2308,12 @@ func (c *Cloud) GetDiskPath(volumeName KubernetesVolumeID) (string, error) {
 
 // DiskIsAttached implements Volumes.DiskIsAttached
 func (c *Cloud) DiskIsAttached(diskName KubernetesVolumeID, nodeName types.NodeName) (bool, error) {
-	_, instance, err := c.getFullInstance(nodeName)
-	if err != nil {
-		if err == cloudprovider.InstanceNotFound {
-			// If instance no longer exists, safe to assume volume is not attached.
-			glog.Warningf(
-				"Instance %q does not exist. DiskIsAttached will assume disk %q is not attached to it.",
-				nodeName,
-				diskName)
-			return false, nil
-		}
-
-		return false, err
+	diskInfo, attached, err := c.checkIfAttachedToNode(diskName, nodeName)
+	if diskInfo == nil {
+		return true, err
 	}
 
-	diskID, err := diskName.mapToAWSVolumeID()
-	if err != nil {
-		return false, fmt.Errorf("error mapping volume spec %q to aws id: %v", diskName, err)
-	}
-
-	for _, blockDevice := range instance.BlockDeviceMappings {
-		id := awsVolumeID(aws.StringValue(blockDevice.Ebs.VolumeId))
-		if id == diskID {
-			return true, nil
-		}
-	}
-	return false, nil
+	return attached, nil
 }
 
 func (c *Cloud) DisksAreAttached(nodeDisks map[types.NodeName][]KubernetesVolumeID) (map[types.NodeName]map[KubernetesVolumeID]bool, error) {
@@ -2282,7 +2366,7 @@ func (c *Cloud) DisksAreAttached(nodeDisks map[types.NodeName][]KubernetesVolume
 
 		idToDiskName := make(map[awsVolumeID]KubernetesVolumeID)
 		for _, diskName := range diskNames {
-			volumeID, err := diskName.mapToAWSVolumeID()
+			volumeID, err := diskName.MapToAWSVolumeID()
 			if err != nil {
 				return nil, fmt.Errorf("error mapping volume spec %q to aws id: %v", diskName, err)
 			}
@@ -2300,6 +2384,37 @@ func (c *Cloud) DisksAreAttached(nodeDisks map[types.NodeName][]KubernetesVolume
 	}
 
 	return attached, nil
+}
+
+func (c *Cloud) ResizeDisk(
+	diskName KubernetesVolumeID,
+	oldSize resource.Quantity,
+	newSize resource.Quantity) (resource.Quantity, error) {
+	awsDisk, err := newAWSDisk(c, diskName)
+	if err != nil {
+		return oldSize, err
+	}
+
+	volumeInfo, err := awsDisk.describeVolume()
+	if err != nil {
+		descErr := fmt.Errorf("AWS.ResizeDisk Error describing volume %s with %v", diskName, err)
+		return oldSize, descErr
+	}
+	requestBytes := newSize.Value()
+	// AWS resizes in chunks of GiB (not GB)
+	requestGiB := volume.RoundUpSize(requestBytes, 1024*1024*1024)
+	newSizeQuant := resource.MustParse(fmt.Sprintf("%dGi", requestGiB))
+
+	// If disk already if of greater or equal size than requested we return
+	if aws.Int64Value(volumeInfo.Size) >= requestGiB {
+		return newSizeQuant, nil
+	}
+	_, err = awsDisk.modifyVolume(requestGiB)
+
+	if err != nil {
+		return oldSize, err
+	}
+	return newSizeQuant, nil
 }
 
 // Gets the current load balancer state
@@ -3375,7 +3490,7 @@ func (c *Cloud) EnsureLoadBalancer(clusterName string, apiService *v1.Service, n
 
 	if path, healthCheckNodePort := service.GetServiceHealthCheckPathPort(apiService); path != "" {
 		glog.V(4).Infof("service %v (%v) needs health checks on :%d%s)", apiService.Name, loadBalancerName, healthCheckNodePort, path)
-		err = c.ensureLoadBalancerHealthCheck(loadBalancer, "HTTP", healthCheckNodePort, path)
+		err = c.ensureLoadBalancerHealthCheck(loadBalancer, "HTTP", healthCheckNodePort, path, annotations)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to ensure health check for localized service %v on node port %v: %q", loadBalancerName, healthCheckNodePort, err)
 		}
@@ -3391,7 +3506,7 @@ func (c *Cloud) EnsureLoadBalancer(clusterName string, apiService *v1.Service, n
 			break
 		}
 		// there must be no path on TCP health check
-		err = c.ensureLoadBalancerHealthCheck(loadBalancer, "TCP", tcpHealthCheckPort, "")
+		err = c.ensureLoadBalancerHealthCheck(loadBalancer, "TCP", tcpHealthCheckPort, "", annotations)
 		if err != nil {
 			return nil, err
 		}

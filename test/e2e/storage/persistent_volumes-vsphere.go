@@ -133,11 +133,15 @@ var _ = SIGDescribe("PersistentVolumes:vsphere", func() {
 	framework.AddCleanupAction(func() {
 		// Cleanup actions will be called even when the tests are skipped and leaves namespace unset.
 		if len(ns) > 0 && len(volumePath) > 0 {
+<<<<<<< HEAD
 			client, err := framework.LoadClientset()
 			if err != nil {
 				return
 			}
 			framework.ExpectNoError(waitForVSphereDiskToDetach(client, vsp, volumePath, node))
+=======
+			framework.ExpectNoError(waitForVSphereDiskToDetach(vsp, volumePath, node))
+>>>>>>> axbaretto
 			vsp.DeleteVolume(volumePath)
 		}
 	})

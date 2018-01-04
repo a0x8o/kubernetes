@@ -419,7 +419,8 @@ func (dswp *desiredStateOfWorldPopulator) createVolumeSpec(
 }
 
 // getPVCExtractPV fetches the PVC object with the given namespace and name from
-// the API server extracts the name of the PV it is pointing to and returns it.
+// the API server, checks whether PVC is being deleted, extracts the name of the PV
+// it is pointing to and returns it.
 // An error is returned if the PVC object's phase is not "Bound".
 func (dswp *desiredStateOfWorldPopulator) getPVCExtractPV(
 	namespace string, claimName string) (string, types.UID, error) {
@@ -431,6 +432,23 @@ func (dswp *desiredStateOfWorldPopulator) getPVCExtractPV(
 			namespace,
 			claimName,
 			err)
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(features.PVCProtection) {
+		// Pods that uses a PVC that is being deleted must not be started.
+		//
+		// In case an old kubelet is running without this check or some kubelets
+		// have this feature disabled, the worst that can happen is that such
+		// pod is scheduled. This was the default behavior in 1.8 and earlier
+		// and users should not be that surprised.
+		// It should happen only in very rare case when scheduler schedules
+		// a pod and user deletes a PVC that's used by it at the same time.
+		if pvc.ObjectMeta.DeletionTimestamp != nil {
+			return "", "", fmt.Errorf(
+				"can't start pod because PVC %s/%s is being deleted",
+				namespace,
+				claimName)
+		}
 	}
 
 	if pvc.Status.Phase != v1.ClaimBound || pvc.Spec.VolumeName == "" {

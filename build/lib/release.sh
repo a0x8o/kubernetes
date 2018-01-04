@@ -28,11 +28,7 @@ readonly RELEASE_STAGE="${LOCAL_OUTPUT_ROOT}/release-stage"
 readonly RELEASE_TARS="${LOCAL_OUTPUT_ROOT}/release-tars"
 readonly RELEASE_IMAGES="${LOCAL_OUTPUT_ROOT}/release-images"
 
-KUBE_BUILD_HYPERKUBE=${KUBE_BUILD_HYPERKUBE:-n}
-if [[ -n "${KUBE_DOCKER_IMAGE_TAG-}" && -n "${KUBE_DOCKER_REGISTRY-}" ]]; then
-  # retain legacy behavior of automatically building hyperkube during releases
-  KUBE_BUILD_HYPERKUBE=y
-fi
+KUBE_BUILD_HYPERKUBE=${KUBE_BUILD_HYPERKUBE:-y}
 
 # Validate a ci version
 #
@@ -98,18 +94,23 @@ function kube::release::package_tarballs() {
 
 # Package the source code we built, for compliance/licensing/audit/yadda.
 function kube::release::package_src_tarball() {
+  local -r src_tarball="${RELEASE_TARS}/kubernetes-src.tar.gz"
   kube::log::status "Building tarball: src"
-  local source_files=(
-    $(cd "${KUBE_ROOT}" && find . -mindepth 1 -maxdepth 1 \
-      -not \( \
-        \( -path ./_\*        -o \
-           -path ./.git\*     -o \
-           -path ./.config\* -o \
-           -path ./.gsutil\*    \
-        \) -prune \
-      \))
-  )
-  "${TAR}" czf "${RELEASE_TARS}/kubernetes-src.tar.gz" -C "${KUBE_ROOT}" "${source_files[@]}"
+  if [[ "${KUBE_GIT_TREE_STATE-}" == "clean" ]]; then
+    git archive -o "${src_tarball}" HEAD
+  else
+    local source_files=(
+      $(cd "${KUBE_ROOT}" && find . -mindepth 1 -maxdepth 1 \
+        -not \( \
+          \( -path ./_\*        -o \
+             -path ./.git\*     -o \
+             -path ./.config\* -o \
+             -path ./.gsutil\*    \
+          \) -prune \
+        \))
+    )
+    "${TAR}" czf "${src_tarball}" -C "${KUBE_ROOT}" "${source_files[@]}"
+  fi
 }
 
 # Package up all of the cross compiled clients. Over time this should grow into

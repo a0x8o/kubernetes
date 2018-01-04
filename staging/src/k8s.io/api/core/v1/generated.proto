@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -1029,7 +1029,6 @@ message EnvVarSource {
 }
 
 // Event is a report of an event somewhere in the cluster.
-// TODO: Decide whether to store these separately or with the object they apply to.
 message Event {
   // Standard object's metadata.
   // More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata
@@ -1068,6 +1067,30 @@ message Event {
   // Type of this event (Normal, Warning), new types could be added in the future
   // +optional
   optional string type = 9;
+
+  // Time when this Event was first observed.
+  // +optional
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.MicroTime eventTime = 10;
+
+  // Data about the Event series this event represents or nil if it's a singleton Event.
+  // +optional
+  optional EventSeries series = 11;
+
+  // What action was taken/failed regarding to the Regarding object.
+  // +optional
+  optional string action = 12;
+
+  // Optional secondary object for more complex actions.
+  // +optional
+  optional ObjectReference related = 13;
+
+  // Name of the controller that emitted this Event, e.g. `kubernetes.io/kubelet`.
+  // +optional
+  optional string reportingComponent = 14;
+
+  // ID of the controller instance, e.g. `kubelet-xyzf`.
+  // +optional
+  optional string reportingInstance = 15;
 }
 
 // EventList is a list of events.
@@ -1079,6 +1102,19 @@ message EventList {
 
   // List of events
   repeated Event items = 2;
+}
+
+// EventSeries contain information on series of events, i.e. thing that was/is happening
+// continously for some time.
+message EventSeries {
+  // Number of occurrences in this series up to the last heartbeat time
+  optional int32 count = 1;
+
+  // Time of the last occurence observed
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.MicroTime lastObservedTime = 2;
+
+  // State of this Series: Ongoing or Finished
+  optional string state = 3;
 }
 
 // EventSource contains information for an event.
@@ -1133,8 +1169,38 @@ message FCVolumeSource {
   repeated string wwids = 5;
 }
 
+// FlexPersistentVolumeSource represents a generic persistent volume resource that is
+// provisioned/attached using an exec based plugin.
+message FlexPersistentVolumeSource {
+  // Driver is the name of the driver to use for this volume.
+  optional string driver = 1;
+
+  // Filesystem type to mount.
+  // Must be a filesystem type supported by the host operating system.
+  // Ex. "ext4", "xfs", "ntfs". The default filesystem depends on FlexVolume script.
+  // +optional
+  optional string fsType = 2;
+
+  // Optional: SecretRef is reference to the secret object containing
+  // sensitive information to pass to the plugin scripts. This may be
+  // empty if no secret object is specified. If the secret object
+  // contains more than one secret, all secrets are passed to the plugin
+  // scripts.
+  // +optional
+  optional SecretReference secretRef = 3;
+
+  // Optional: Defaults to false (read/write). ReadOnly here will force
+  // the ReadOnly setting in VolumeMounts.
+  // +optional
+  optional bool readOnly = 4;
+
+  // Optional: Extra command options if any.
+  // +optional
+  map<string, string> options = 5;
+}
+
 // FlexVolume represents a generic volume resource that is
-// provisioned/attached using an exec based plugin. This is an alpha feature and may change in future.
+// provisioned/attached using an exec based plugin.
 message FlexVolumeSource {
   // Driver is the name of the driver to use for this volume.
   optional string driver = 1;
@@ -2403,10 +2469,9 @@ message PersistentVolumeSource {
   optional FlockerVolumeSource flocker = 11;
 
   // FlexVolume represents a generic volume resource that is
-  // provisioned/attached using an exec based plugin. This is an
-  // alpha feature and may change in future.
+  // provisioned/attached using an exec based plugin.
   // +optional
-  optional FlexVolumeSource flexVolume = 12;
+  optional FlexPersistentVolumeSource flexVolume = 12;
 
   // AzureFile represents an Azure File Service mount on the host and bind mount to the pod.
   // +optional
@@ -2584,6 +2649,7 @@ message PodAffinityTerm {
 
   // namespaces specifies which namespaces the labelSelector applies to (matches against);
   // null or empty list means "this pod's namespace"
+  // +optional
   repeated string namespaces = 2;
 
   // This pod should be co-located (affinity) or not co-located (anti-affinity) with the pods matching
@@ -2943,6 +3009,7 @@ message PodSpec {
   // DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy.
   // To have DNS options set along with hostNetwork, you have to specify DNS policy
   // explicitly to 'ClusterFirstWithHostNet'.
+  // Note that 'None' policy is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it.
   // +optional
   optional string dnsPolicy = 6;
 
@@ -3055,6 +3122,7 @@ message PodSpec {
   // Specifies the DNS parameters of a pod.
   // Parameters specified here will be merged to the generated DNS
   // configuration based on DNSPolicy.
+  // This is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it.
   // +optional
   optional PodDNSConfig dnsConfig = 26;
 }
@@ -4439,8 +4507,7 @@ message VolumeSource {
   optional RBDVolumeSource rbd = 11;
 
   // FlexVolume represents a generic volume resource that is
-  // provisioned/attached using an exec based plugin. This is an
-  // alpha feature and may change in future.
+  // provisioned/attached using an exec based plugin.
   // +optional
   optional FlexVolumeSource flexVolume = 12;
 

@@ -17,13 +17,12 @@ limitations under the License.
 package priorities
 
 import (
-	"strings"
 	"sync"
 
 	"k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/workqueue"
-	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm/predicates"
 	priorityutil "k8s.io/kubernetes/plugin/pkg/scheduler/algorithm/priorities/util"
@@ -62,17 +61,14 @@ type podAffinityPriorityMap struct {
 	// counts store the mapping from node name to so-far computed score of
 	// the node.
 	counts map[string]float64
-	// failureDomains contain default failure domains keys
-	failureDomains priorityutil.Topologies
 	// The first error that we faced.
 	firstError error
 }
 
 func newPodAffinityPriorityMap(nodes []*v1.Node) *podAffinityPriorityMap {
 	return &podAffinityPriorityMap{
-		nodes:          nodes,
-		counts:         make(map[string]float64, len(nodes)),
-		failureDomains: priorityutil.Topologies{DefaultKeys: strings.Split(kubeletapis.DefaultFailureDomains, ",")},
+		nodes:  nodes,
+		counts: make(map[string]float64, len(nodes)),
 	}
 }
 
@@ -97,7 +93,7 @@ func (p *podAffinityPriorityMap) processTerm(term *v1.PodAffinityTerm, podDefini
 			p.Lock()
 			defer p.Unlock()
 			for _, node := range p.nodes {
-				if p.failureDomains.NodesHaveSameTopologyKey(node, fixedNode, term.TopologyKey) {
+				if priorityutil.NodesHaveSameTopologyKey(node, fixedNode, term.TopologyKey) {
 					p.counts[node.Name] += weight
 				}
 			}
@@ -137,6 +133,10 @@ func (ipa *InterPodAffinity) CalculateInterPodAffinityPriority(pod *v1.Pod, node
 	processPod := func(existingPod *v1.Pod) error {
 		existingPodNode, err := ipa.info.GetNodeInfo(existingPod.Spec.NodeName)
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				glog.Errorf("Node not found, %v", existingPod.Spec.NodeName)
+				return nil
+			}
 			return err
 		}
 		existingPodAffinity := existingPod.Spec.Affinity
@@ -189,19 +189,21 @@ func (ipa *InterPodAffinity) CalculateInterPodAffinityPriority(pod *v1.Pod, node
 	}
 	processNode := func(i int) {
 		nodeInfo := nodeNameToInfo[allNodeNames[i]]
-		if hasAffinityConstraints || hasAntiAffinityConstraints {
-			// We need to process all the nodes.
-			for _, existingPod := range nodeInfo.Pods() {
-				if err := processPod(existingPod); err != nil {
-					pm.setError(err)
+		if nodeInfo.Node() != nil {
+			if hasAffinityConstraints || hasAntiAffinityConstraints {
+				// We need to process all the nodes.
+				for _, existingPod := range nodeInfo.Pods() {
+					if err := processPod(existingPod); err != nil {
+						pm.setError(err)
+					}
 				}
-			}
-		} else {
-			// The pod doesn't have any constraints - we need to check only existing
-			// ones that have some.
-			for _, existingPod := range nodeInfo.PodsWithAffinity() {
-				if err := processPod(existingPod); err != nil {
-					pm.setError(err)
+			} else {
+				// The pod doesn't have any constraints - we need to check only existing
+				// ones that have some.
+				for _, existingPod := range nodeInfo.PodsWithAffinity() {
+					if err := processPod(existingPod); err != nil {
+						pm.setError(err)
+					}
 				}
 			}
 		}
@@ -229,9 +231,7 @@ func (ipa *InterPodAffinity) CalculateInterPodAffinityPriority(pod *v1.Pod, node
 		}
 		result = append(result, schedulerapi.HostPriority{Host: node.Name, Score: int(fScore)})
 		if glog.V(10) {
-			// We explicitly don't do glog.V(10).Infof() to avoid computing all the parameters if this is
-			// not logged. There is visible performance gain from it.
-			glog.V(10).Infof("%v -> %v: InterPodAffinityPriority, Score: (%d)", pod.Name, node.Name, int(fScore))
+			glog.Infof("%v -> %v: InterPodAffinityPriority, Score: (%d)", pod.Name, node.Name, int(fScore))
 		}
 	}
 	return result, nil

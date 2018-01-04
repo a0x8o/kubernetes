@@ -54,6 +54,7 @@ var _ volume.PersistentVolumePlugin = &rbdPlugin{}
 var _ volume.DeletableVolumePlugin = &rbdPlugin{}
 var _ volume.ProvisionableVolumePlugin = &rbdPlugin{}
 var _ volume.AttachableVolumePlugin = &rbdPlugin{}
+var _ volume.ExpandableVolumePlugin = &rbdPlugin{}
 
 const (
 	rbdPluginName                  = "kubernetes.io/rbd"
@@ -80,7 +81,7 @@ func (plugin *rbdPlugin) GetPluginName() string {
 }
 
 func (plugin *rbdPlugin) GetVolumeName(spec *volume.Spec) (string, error) {
-	mon, err := getVolumeSourceMonitors(spec)
+	pool, err := getVolumeSourcePool(spec)
 	if err != nil {
 		return "", err
 	}
@@ -91,7 +92,7 @@ func (plugin *rbdPlugin) GetVolumeName(spec *volume.Spec) (string, error) {
 
 	return fmt.Sprintf(
 		"%v:%v",
-		mon,
+		pool,
 		img), nil
 }
 
@@ -120,6 +121,85 @@ func (plugin *rbdPlugin) GetAccessModes() []v1.PersistentVolumeAccessMode {
 		v1.ReadWriteOnce,
 		v1.ReadOnlyMany,
 	}
+}
+
+type rbdVolumeExpander struct {
+	*rbdMounter
+}
+
+func (plugin *rbdPlugin) getAdminAndSecret(spec *volume.Spec) (string, string, error) {
+	class, err := volutil.GetClassForVolume(plugin.host.GetKubeClient(), spec.PersistentVolume)
+	if err != nil {
+		return "", "", err
+	}
+	adminSecretName := ""
+	adminSecretNamespace := rbdDefaultAdminSecretNamespace
+	admin := ""
+
+	for k, v := range class.Parameters {
+		switch dstrings.ToLower(k) {
+		case "adminid":
+			admin = v
+		case "adminsecretname":
+			adminSecretName = v
+		case "adminsecretnamespace":
+			adminSecretNamespace = v
+		}
+	}
+
+	if admin == "" {
+		admin = rbdDefaultAdminId
+	}
+	secret, err := parsePVSecret(adminSecretNamespace, adminSecretName, plugin.host.GetKubeClient())
+	if err != nil {
+		return admin, "", fmt.Errorf("failed to get admin secret from [%q/%q]: %v", adminSecretNamespace, adminSecretName, err)
+	}
+
+	return admin, secret, nil
+}
+
+func (plugin *rbdPlugin) ExpandVolumeDevice(spec *volume.Spec, newSize resource.Quantity, oldSize resource.Quantity) (resource.Quantity, error) {
+	if spec.PersistentVolume != nil && spec.PersistentVolume.Spec.RBD == nil {
+		return oldSize, fmt.Errorf("spec.PersistentVolumeSource.Spec.RBD is nil")
+	}
+
+	// get admin and secret
+	admin, secret, err := plugin.getAdminAndSecret(spec)
+	if err != nil {
+		return oldSize, err
+	}
+
+	expander := &rbdVolumeExpander{
+		rbdMounter: &rbdMounter{
+			rbd: &rbd{
+				volName: spec.Name(),
+				Image:   spec.PersistentVolume.Spec.RBD.RBDImage,
+				Pool:    spec.PersistentVolume.Spec.RBD.RBDPool,
+				plugin:  plugin,
+				manager: &RBDUtil{},
+				mounter: &mount.SafeFormatAndMount{Interface: plugin.host.GetMounter(plugin.GetPluginName())},
+				exec:    plugin.host.GetExec(plugin.GetPluginName()),
+			},
+			Mon:         spec.PersistentVolume.Spec.RBD.CephMonitors,
+			adminId:     admin,
+			adminSecret: secret,
+		},
+	}
+
+	expandedSize, err := expander.ResizeImage(oldSize, newSize)
+	if err != nil {
+		return oldSize, err
+	} else {
+		return expandedSize, nil
+	}
+}
+
+func (expander *rbdVolumeExpander) ResizeImage(oldSize resource.Quantity, newSize resource.Quantity) (resource.Quantity, error) {
+	return expander.manager.ExpandImage(expander, oldSize, newSize)
+}
+
+func (plugin *rbdPlugin) RequiresFSResize() bool {
+	return true
 }
 
 func (plugin *rbdPlugin) createMounterFromVolumeSpecAndPod(spec *volume.Spec, pod *v1.Pod) (*rbdMounter, error) {
@@ -164,7 +244,7 @@ func (plugin *rbdPlugin) createMounterFromVolumeSpecAndPod(spec *volume.Spec, po
 		if kubeClient == nil {
 			return nil, fmt.Errorf("Cannot get kube client")
 		}
-		secrets, err := kubeClient.Core().Secrets(secretNs).Get(secretName, metav1.GetOptions{})
+		secrets, err := kubeClient.CoreV1().Secrets(secretNs).Get(secretName, metav1.GetOptions{})
 		if err != nil {
 			err = fmt.Errorf("Couldn't get secret %v/%v err: %v", secretNs, secretName, err)
 			return nil, err
@@ -266,11 +346,22 @@ func (plugin *rbdPlugin) newUnmounterInternal(volName string, podUID types.UID, 
 }
 
 func (plugin *rbdPlugin) ConstructVolumeSpec(volumeName, mountPath string) (*volume.Spec, error) {
+	mounter := plugin.host.GetMounter(plugin.GetPluginName())
+	pluginDir := plugin.host.GetPluginDir(plugin.GetPluginName())
+	sourceName, err := mounter.GetDeviceNameFromMount(mountPath, pluginDir)
+	if err != nil {
+		return nil, err
+	}
+	s := dstrings.Split(sourceName, "-image-")
+	if len(s) != 2 {
+		return nil, fmt.Errorf("sourceName %s wrong, should be pool+\"-image-\"+imageName", sourceName)
+	}
 	rbdVolume := &v1.Volume{
 		Name: volumeName,
 		VolumeSource: v1.VolumeSource{
 			RBD: &v1.RBDVolumeSource{
-				CephMonitors: []string{},
+				RBDPool:  s[0],
+				RBDImage: s[1],
 			},
 		},
 	}
@@ -281,32 +372,12 @@ func (plugin *rbdPlugin) NewDeleter(spec *volume.Spec) (volume.Deleter, error) {
 	if spec.PersistentVolume != nil && spec.PersistentVolume.Spec.RBD == nil {
 		return nil, fmt.Errorf("spec.PersistentVolumeSource.Spec.RBD is nil")
 	}
-	class, err := volutil.GetClassForVolume(plugin.host.GetKubeClient(), spec.PersistentVolume)
+
+	admin, secret, err := plugin.getAdminAndSecret(spec)
 	if err != nil {
 		return nil, err
 	}
-	adminSecretName := ""
-	adminSecretNamespace := rbdDefaultAdminSecretNamespace
-	admin := ""
 
-	for k, v := range class.Parameters {
-		switch dstrings.ToLower(k) {
-		case "adminid":
-			admin = v
-		case "adminsecretname":
-			adminSecretName = v
-		case "adminsecretnamespace":
-			adminSecretNamespace = v
-		}
-	}
-
-	if admin == "" {
-		admin = rbdDefaultAdminId
-	}
-	secret, err := parsePVSecret(adminSecretNamespace, adminSecretName, plugin.host.GetKubeClient())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get admin secret from [%q/%q]: %v", adminSecretNamespace, adminSecretName, err)
-	}
 	return plugin.newDeleterInternal(spec, admin, secret, &RBDUtil{})
 }
 

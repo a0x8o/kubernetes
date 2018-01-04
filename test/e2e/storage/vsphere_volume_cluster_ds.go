@@ -25,6 +25,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
+<<<<<<< HEAD
+=======
+	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
+>>>>>>> axbaretto
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
@@ -68,7 +72,11 @@ var _ = SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:vsphere
 
 	It("verify static provisioning on clustered datastore", func() {
 		var volumePath string
+<<<<<<< HEAD
 		vsp, err := getVSphere(client)
+=======
+		vsp, err := vsphere.GetVSphere()
+>>>>>>> axbaretto
 		Expect(err).NotTo(HaveOccurred())
 
 		By("creating a test vsphere volume")
@@ -99,7 +107,11 @@ var _ = SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:vsphere
 		nodeName := types.NodeName(pod.Spec.NodeName)
 
 		By("Verifying volume is attached")
+<<<<<<< HEAD
 		isAttached, err := verifyVSphereDiskAttached(client, vsp, volumePath, nodeName)
+=======
+		isAttached, err := verifyVSphereDiskAttached(vsp, volumePath, nodeName)
+>>>>>>> axbaretto
 		Expect(err).NotTo(HaveOccurred())
 		Expect(isAttached).To(BeTrue(), fmt.Sprintf("disk: %s is not attached with the node: %v", volumePath, nodeName))
 
@@ -108,7 +120,11 @@ var _ = SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:vsphere
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for volumes to be detached from the node")
+<<<<<<< HEAD
 		err = waitForVSphereDiskToDetach(client, vsp, volumePath, nodeName)
+=======
+		err = waitForVSphereDiskToDetach(vsp, volumePath, nodeName)
+>>>>>>> axbaretto
 		Expect(err).NotTo(HaveOccurred())
 	})
 

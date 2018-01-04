@@ -64,6 +64,8 @@ const (
 	// owner: @vishh
 	// alpha: v1.6
 	//
+	// This is deprecated and will be removed in v1.11. Use DevicePlugins instead.
+	//
 	// Enables support for GPUs as a schedulable resource.
 	// Only Nvidia GPUs are supported as of v1.6.
 	// Works only with Docker Container Runtime.
@@ -140,12 +142,6 @@ const (
 	// 'MemoryPressure', 'OutOfDisk' and 'DiskPressure'.
 	TaintNodesByCondition utilfeature.Feature = "TaintNodesByCondition"
 
-	// owner: @haibinxie
-	// alpha: v1.8
-	//
-	// Implement IPVS-based in-cluster service load balancing
-	SupportIPVSProxyMode utilfeature.Feature = "SupportIPVSProxyMode"
-
 	// owner: @jsafrane
 	// alpha: v1.8
 	//
@@ -165,7 +161,7 @@ const (
 	HugePages utilfeature.Feature = "HugePages"
 
 	// owner @brendandburns
-	// alpha: v1.8
+	// alpha: v1.9
 	//
 	// Enable nodes to exclude themselves from service load balancers
 	ServiceNodeExclusion utilfeature.Feature = "ServiceNodeExclusion"
@@ -180,6 +176,7 @@ const (
 	// alpha: v1.9
 	//
 	// Extend the default scheduler to be aware of PV topology and handle PV binding
+	// Before moving to beta, resolve Kubernetes issue #56180
 	VolumeScheduling utilfeature.Feature = "VolumeScheduling"
 
 	// owner: @vladimirvivien
@@ -199,6 +196,24 @@ const (
 	//
 	// Enable Block volume support in containers.
 	BlockVolume utilfeature.Feature = "BlockVolume"
+
+	// owner: @pospispa
+	//
+	// alpha: v1.9
+	// Postpone deletion of a persistent volume claim in case it is used by a pod
+	PVCProtection utilfeature.Feature = "PVCProtection"
+
+	// owner: @aveshagarwal
+	// alpha: v1.9
+	//
+	// Enable resource limits priority function
+	ResourceLimitsPriorityFunction utilfeature.Feature = "ResourceLimitsPriorityFunction"
+
+	// owner: @m1093782566
+	// beta: v1.9
+	//
+	// Implement IPVS-based in-cluster service load balancing
+	SupportIPVSProxyMode utilfeature.Feature = "SupportIPVSProxyMode"
 )
 
 func init() {
@@ -229,13 +244,16 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	TaintNodesByCondition:                       {Default: false, PreRelease: utilfeature.Alpha},
 	MountPropagation:                            {Default: false, PreRelease: utilfeature.Alpha},
 	ExpandPersistentVolumes:                     {Default: false, PreRelease: utilfeature.Alpha},
-	CPUManager:                                  {Default: false, PreRelease: utilfeature.Alpha},
+	CPUManager:                                  {Default: true, PreRelease: utilfeature.Beta},
 	ServiceNodeExclusion:                        {Default: false, PreRelease: utilfeature.Alpha},
 	MountContainers:                             {Default: false, PreRelease: utilfeature.Alpha},
 	VolumeScheduling:                            {Default: false, PreRelease: utilfeature.Alpha},
 	CSIPersistentVolume:                         {Default: false, PreRelease: utilfeature.Alpha},
 	CustomPodDNS:                                {Default: false, PreRelease: utilfeature.Alpha},
 	BlockVolume:                                 {Default: false, PreRelease: utilfeature.Alpha},
+	PVCProtection:                               {Default: false, PreRelease: utilfeature.Alpha},
+	ResourceLimitsPriorityFunction:              {Default: false, PreRelease: utilfeature.Alpha},
+	SupportIPVSProxyMode:                        {Default: false, PreRelease: utilfeature.Beta},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:
@@ -248,5 +266,4 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	// inherited features from apiextensions-apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:
 	apiextensionsfeatures.CustomResourceValidation: {Default: true, PreRelease: utilfeature.Beta},
-	SupportIPVSProxyMode:                           {Default: false, PreRelease: utilfeature.Alpha},
 }

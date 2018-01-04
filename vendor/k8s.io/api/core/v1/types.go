@@ -302,8 +302,7 @@ type VolumeSource struct {
 	// +optional
 	RBD *RBDVolumeSource `json:"rbd,omitempty" protobuf:"bytes,11,opt,name=rbd"`
 	// FlexVolume represents a generic volume resource that is
-	// provisioned/attached using an exec based plugin. This is an
-	// alpha feature and may change in future.
+	// provisioned/attached using an exec based plugin.
 	// +optional
 	FlexVolume *FlexVolumeSource `json:"flexVolume,omitempty" protobuf:"bytes,12,opt,name=flexVolume"`
 	// Cinder represents a cinder volume attached and mounted on kubelets host machine
@@ -417,10 +416,9 @@ type PersistentVolumeSource struct {
 	// +optional
 	Flocker *FlockerVolumeSource `json:"flocker,omitempty" protobuf:"bytes,11,opt,name=flocker"`
 	// FlexVolume represents a generic volume resource that is
-	// provisioned/attached using an exec based plugin. This is an
-	// alpha feature and may change in future.
+	// provisioned/attached using an exec based plugin.
 	// +optional
-	FlexVolume *FlexVolumeSource `json:"flexVolume,omitempty" protobuf:"bytes,12,opt,name=flexVolume"`
+	FlexVolume *FlexPersistentVolumeSource `json:"flexVolume,omitempty" protobuf:"bytes,12,opt,name=flexVolume"`
 	// AzureFile represents an Azure File Service mount on the host and bind mount to the pod.
 	// +optional
 	AzureFile *AzureFilePersistentVolumeSource `json:"azureFile,omitempty" protobuf:"bytes,13,opt,name=azureFile"`
@@ -1083,8 +1081,34 @@ type QuobyteVolumeSource struct {
 	Group string `json:"group,omitempty" protobuf:"bytes,5,opt,name=group"`
 }
 
+// FlexPersistentVolumeSource represents a generic persistent volume resource that is
+// provisioned/attached using an exec based plugin.
+type FlexPersistentVolumeSource struct {
+	// Driver is the name of the driver to use for this volume.
+	Driver string `json:"driver" protobuf:"bytes,1,opt,name=driver"`
+	// Filesystem type to mount.
+	// Must be a filesystem type supported by the host operating system.
+	// Ex. "ext4", "xfs", "ntfs". The default filesystem depends on FlexVolume script.
+	// +optional
+	FSType string `json:"fsType,omitempty" protobuf:"bytes,2,opt,name=fsType"`
+	// Optional: SecretRef is reference to the secret object containing
+	// sensitive information to pass to the plugin scripts. This may be
+	// empty if no secret object is specified. If the secret object
+	// contains more than one secret, all secrets are passed to the plugin
+	// scripts.
+	// +optional
+	SecretRef *SecretReference `json:"secretRef,omitempty" protobuf:"bytes,3,opt,name=secretRef"`
+	// Optional: Defaults to false (read/write). ReadOnly here will force
+	// the ReadOnly setting in VolumeMounts.
+	// +optional
+	ReadOnly bool `json:"readOnly,omitempty" protobuf:"varint,4,opt,name=readOnly"`
+	// Optional: Extra command options if any.
+	// +optional
+	Options map[string]string `json:"options,omitempty" protobuf:"bytes,5,rep,name=options"`
+}
+
 // FlexVolume represents a generic volume resource that is
-// provisioned/attached using an exec based plugin. This is an alpha feature and may change in future.
+// provisioned/attached using an exec based plugin.
 type FlexVolumeSource struct {
 	// Driver is the name of the driver to use for this volume.
 	Driver string `json:"driver" protobuf:"bytes,1,opt,name=driver"`
@@ -2435,7 +2459,11 @@ const (
 	// parameters such as nameservers and search paths should be defined via
 	// DNSConfig.
 	DNSNone DNSPolicy = "None"
+)
 
+const (
+	// DefaultTerminationGracePeriodSeconds indicates the default duration in
+	// seconds a pod needs to terminate gracefully.
 	DefaultTerminationGracePeriodSeconds = 30
 )
 
@@ -2587,6 +2615,7 @@ type PodAffinityTerm struct {
 	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty" protobuf:"bytes,1,opt,name=labelSelector"`
 	// namespaces specifies which namespaces the labelSelector applies to (matches against);
 	// null or empty list means "this pod's namespace"
+	// +optional
 	Namespaces []string `json:"namespaces,omitempty" protobuf:"bytes,2,rep,name=namespaces"`
 	// This pod should be co-located (affinity) or not co-located (anti-affinity) with the pods matching
 	// the labelSelector in the specified namespaces, where co-located is defined as running on a node
@@ -2771,6 +2800,7 @@ type PodSpec struct {
 	// DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy.
 	// To have DNS options set along with hostNetwork, you have to specify DNS policy
 	// explicitly to 'ClusterFirstWithHostNet'.
+	// Note that 'None' policy is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it.
 	// +optional
 	DNSPolicy DNSPolicy `json:"dnsPolicy,omitempty" protobuf:"bytes,6,opt,name=dnsPolicy,casttype=DNSPolicy"`
 	// NodeSelector is a selector which must be true for the pod to fit on a node.
@@ -2866,6 +2896,7 @@ type PodSpec struct {
 	// Specifies the DNS parameters of a pod.
 	// Parameters specified here will be merged to the generated DNS
 	// configuration based on DNSPolicy.
+	// This is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it.
 	// +optional
 	DNSConfig *PodDNSConfig `json:"dnsConfig,omitempty" protobuf:"bytes,26,opt,name=dnsConfig"`
 }
@@ -3981,8 +4012,6 @@ const (
 )
 
 const (
-	// Namespace prefix for opaque counted resources (alpha).
-	ResourceOpaqueIntPrefix = "pod.alpha.kubernetes.io/opaque-int-resource-"
 	// Default namespace prefix.
 	ResourceDefaultNamespacePrefix = "kubernetes.io/"
 	// Name prefix for huge page resources (alpha).
@@ -4470,7 +4499,6 @@ const (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Event is a report of an event somewhere in the cluster.
-// TODO: Decide whether to store these separately or with the object they apply to.
 type Event struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard object's metadata.
@@ -4510,7 +4538,50 @@ type Event struct {
 	// Type of this event (Normal, Warning), new types could be added in the future
 	// +optional
 	Type string `json:"type,omitempty" protobuf:"bytes,9,opt,name=type"`
+
+	// Time when this Event was first observed.
+	// +optional
+	EventTime metav1.MicroTime `json:"eventTime,omitempty" protobuf:"bytes,10,opt,name=eventTime"`
+
+	// Data about the Event series this event represents or nil if it's a singleton Event.
+	// +optional
+	Series *EventSeries `json:"series,omitempty" protobuf:"bytes,11,opt,name=series"`
+
+	// What action was taken/failed regarding to the Regarding object.
+	// +optional
+	Action string `json:"action,omitempty" protobuf:"bytes,12,opt,name=action"`
+
+	// Optional secondary object for more complex actions.
+	// +optional
+	Related *ObjectReference `json:"related,omitempty" protobuf:"bytes,13,opt,name=related"`
+
+	// Name of the controller that emitted this Event, e.g. `kubernetes.io/kubelet`.
+	// +optional
+	ReportingController string `json:"reportingComponent" protobuf:"bytes,14,opt,name=reportingComponent"`
+
+	// ID of the controller instance, e.g. `kubelet-xyzf`.
+	// +optional
+	ReportingInstance string `json:"reportingInstance" protobuf:"bytes,15,opt,name=reportingInstance"`
 }
+
+// EventSeries contain information on series of events, i.e. thing that was/is happening
+// continously for some time.
+type EventSeries struct {
+	// Number of occurrences in this series up to the last heartbeat time
+	Count int32 `json:"count,omitempty" protobuf:"varint,1,name=count"`
+	// Time of the last occurence observed
+	LastObservedTime metav1.MicroTime `json:"lastObservedTime,omitempty" protobuf:"bytes,2,name=lastObservedTime"`
+	// State of this Series: Ongoing or Finished
+	State EventSeriesState `json:"state,omitempty" protobuf:"bytes,3,name=state"`
+}
+
+type EventSeriesState string
+
+const (
+	EventSeriesStateOngoing  EventSeriesState = "Ongoing"
+	EventSeriesStateFinished EventSeriesState = "Finished"
+	EventSeriesStateUnknown  EventSeriesState = "Unknown"
+)
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 

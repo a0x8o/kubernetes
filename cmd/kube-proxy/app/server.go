@@ -95,7 +95,8 @@ type Options struct {
 	WriteConfigTo string
 	// CleanupAndExit, when true, makes the proxy server clean up iptables rules, then exit.
 	CleanupAndExit bool
-
+	// CleanupIPVS, when true, makes the proxy server clean up ipvs rules before running.
+	CleanupIPVS bool
 	// config is the proxy server's configuration object.
 	config *kubeproxyconfig.KubeProxyConfiguration
 
@@ -120,14 +121,15 @@ func AddFlags(options *Options, fs *pflag.FlagSet) {
 	fs.BoolVar(&options.CleanupAndExit, "cleanup-iptables", options.CleanupAndExit, "If true cleanup iptables and ipvs rules and exit.")
 	fs.MarkDeprecated("cleanup-iptables", "This flag is replaced by --cleanup.")
 	fs.BoolVar(&options.CleanupAndExit, "cleanup", options.CleanupAndExit, "If true cleanup iptables and ipvs rules and exit.")
+	fs.BoolVar(&options.CleanupIPVS, "cleanup-ipvs", options.CleanupIPVS, "If true make kube-proxy cleanup ipvs rules before running.  Default is true")
 
 	// All flags below here are deprecated and will eventually be removed.
 
-	fs.Var(componentconfig.IPVar{Val: &options.config.BindAddress}, "bind-address", "The IP address for the proxy server to serve on (set to 0.0.0.0 for all interfaces)")
+	fs.Var(componentconfig.IPVar{Val: &options.config.BindAddress}, "bind-address", "The IP address for the proxy server to serve on (set to `0.0.0.0` for all IPv4 interfaces and `::` for all IPv6 interfaces)")
 	fs.StringVar(&options.master, "master", options.master, "The address of the Kubernetes API server (overrides any value in kubeconfig)")
 	fs.Int32Var(&options.healthzPort, "healthz-port", options.healthzPort, "The port to bind the health check server. Use 0 to disable.")
-	fs.Var(componentconfig.IPVar{Val: &options.config.HealthzBindAddress}, "healthz-bind-address", "The IP address and port for the health check server to serve on (set to 0.0.0.0 for all interfaces)")
-	fs.Var(componentconfig.IPVar{Val: &options.config.MetricsBindAddress}, "metrics-bind-address", "The IP address and port for the metrics server to serve on (set to 0.0.0.0 for all interfaces)")
+	fs.Var(componentconfig.IPVar{Val: &options.config.HealthzBindAddress}, "healthz-bind-address", "The IP address and port for the health check server to serve on (set to `0.0.0.0` for all IPv4 interfaces and `::` for all IPv6 interfaces)")
+	fs.Var(componentconfig.IPVar{Val: &options.config.MetricsBindAddress}, "metrics-bind-address", "The IP address and port for the metrics server to serve on (set to `0.0.0.0` for all IPv4 interfaces and `::` for all IPv6 interfaces)")
 	fs.Int32Var(options.config.OOMScoreAdj, "oom-score-adj", utilpointer.Int32PtrDerefOr(options.config.OOMScoreAdj, int32(qos.KubeProxyOOMScoreAdj)), "The oom-score-adj value for kube-proxy process. Values must be within the range [-1000, 1000]")
 	fs.StringVar(&options.config.ResourceContainer, "resource-container", options.config.ResourceContainer, "Absolute name of the resource-only container to create and run the Kube-proxy in (Default: /kube-proxy).")
 	fs.MarkDeprecated("resource-container", "This feature will be removed in a later release.")
@@ -173,6 +175,7 @@ func NewOptions() *Options {
 		healthzPort: ports.ProxyHealthzPort,
 		scheme:      scheme.Scheme,
 		codecs:      scheme.Codecs,
+		CleanupIPVS: true,
 	}
 }
 
@@ -215,7 +218,7 @@ func (o *Options) Run() error {
 		return o.writeConfigFile()
 	}
 
-	proxyServer, err := NewProxyServer(o.config, o.CleanupAndExit, o.scheme, o.master)
+	proxyServer, err := NewProxyServer(o)
 	if err != nil {
 		return err
 	}
@@ -367,6 +370,7 @@ type ProxyServer struct {
 	ProxyMode              string
 	NodeRef                *v1.ObjectReference
 	CleanupAndExit         bool
+	CleanupIPVS            bool
 	MetricsBindAddress     string
 	EnableProfiling        bool
 	OOMScoreAdj            *int32
@@ -424,7 +428,7 @@ func (s *ProxyServer) Run() error {
 	if s.CleanupAndExit {
 		encounteredError := userspace.CleanupLeftovers(s.IptInterface)
 		encounteredError = iptables.CleanupLeftovers(s.IptInterface) || encounteredError
-		encounteredError = ipvs.CleanupLeftovers(s.IpvsInterface, s.IptInterface, s.IpsetInterface) || encounteredError
+		encounteredError = ipvs.CleanupLeftovers(s.IpvsInterface, s.IptInterface, s.IpsetInterface, s.CleanupIPVS) || encounteredError
 		if encounteredError {
 			return errors.New("encountered an error while tearing down rules.")
 		}

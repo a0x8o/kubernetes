@@ -29,14 +29,13 @@ go_library(
     ],
     importpath = "k8s.io/kubernetes/pkg/kubelet",
     deps = [
-        "//pkg/api/legacyscheme:go_default_library",
         "//pkg/api/v1/pod:go_default_library",
         "//pkg/api/v1/resource:go_default_library",
         "//pkg/apis/core:go_default_library",
+        "//pkg/apis/core/pods:go_default_library",
         "//pkg/apis/core/v1:go_default_library",
         "//pkg/apis/core/v1/helper:go_default_library",
         "//pkg/apis/core/v1/helper/qos:go_default_library",
-        "//pkg/apis/core/v1/validation:go_default_library",
         "//pkg/capabilities:go_default_library",
         "//pkg/cloudprovider:go_default_library",
         "//pkg/features:go_default_library",
@@ -45,7 +44,6 @@ go_library(
         "//pkg/kubelet/apis/cri:go_default_library",
         "//pkg/kubelet/apis/cri/v1alpha1/runtime:go_default_library",
         "//pkg/kubelet/apis/kubeletconfig:go_default_library",
-        "//pkg/kubelet/apis/kubeletconfig/v1alpha1:go_default_library",
         "//pkg/kubelet/cadvisor:go_default_library",
         "//pkg/kubelet/certificate:go_default_library",
         "//pkg/kubelet/cm:go_default_library",
@@ -126,7 +124,6 @@ go_library(
         "//vendor/k8s.io/apimachinery/pkg/util/runtime:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/sets:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/validation:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/util/validation/field:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/wait:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/util/feature:go_default_library",
         "//vendor/k8s.io/client-go/kubernetes:go_default_library",
@@ -159,13 +156,13 @@ go_test(
         "reason_cache_test.go",
         "runonce_test.go",
     ] + select({
-        "@io_bazel_rules_go//go/platform:windows_amd64": [
+        "@io_bazel_rules_go//go/platform:windows": [
             "kubelet_pods_windows_test.go",
         ],
         "//conditions:default": [],
     }),
+    embed = [":go_default_library"],
     importpath = "k8s.io/kubernetes/pkg/kubelet",
-    library = ":go_default_library",
     deps = [
         "//pkg/api/legacyscheme:go_default_library",
         "//pkg/apis/core/install:go_default_library",

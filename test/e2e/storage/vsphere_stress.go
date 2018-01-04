@@ -30,6 +30,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8stype "k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
+<<<<<<< HEAD
+=======
+	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
+>>>>>>> axbaretto
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -134,8 +138,14 @@ var _ = SIGDescribe("vsphere cloud provider stress [Feature:vsphere]", func() {
 func PerformVolumeLifeCycleInParallel(f *framework.Framework, client clientset.Interface, namespace string, instanceId string, sc *storageV1.StorageClass, iterations int, wg *sync.WaitGroup) {
 	defer wg.Done()
 	defer GinkgoRecover()
+<<<<<<< HEAD
 	vsp, err := getVSphere(f.ClientSet)
 	Expect(err).NotTo(HaveOccurred())
+=======
+	vsp, err := vsphere.GetVSphere()
+	Expect(err).NotTo(HaveOccurred())
+
+>>>>>>> axbaretto
 	for iterationCount := 0; iterationCount < iterations; iterationCount++ {
 		logPrefix := fmt.Sprintf("Instance: [%v], Iteration: [%v] :", instanceId, iterationCount+1)
 		By(fmt.Sprintf("%v Creating PVC using the Storage Class: %v", logPrefix, sc.Name))
@@ -162,19 +172,31 @@ func PerformVolumeLifeCycleInParallel(f *framework.Framework, client clientset.I
 		Expect(err).NotTo(HaveOccurred())
 
 		By(fmt.Sprintf("%v Verifing the volume: %v is attached to the node VM: %v", logPrefix, persistentvolumes[0].Spec.VsphereVolume.VolumePath, pod.Spec.NodeName))
+<<<<<<< HEAD
 		isVolumeAttached, verifyDiskAttachedError := verifyVSphereDiskAttached(client, vsp, persistentvolumes[0].Spec.VsphereVolume.VolumePath, types.NodeName(pod.Spec.NodeName))
+=======
+		isVolumeAttached, verifyDiskAttachedError := verifyVSphereDiskAttached(vsp, persistentvolumes[0].Spec.VsphereVolume.VolumePath, types.NodeName(pod.Spec.NodeName))
+>>>>>>> axbaretto
 		Expect(isVolumeAttached).To(BeTrue())
 		Expect(verifyDiskAttachedError).NotTo(HaveOccurred())
 
 		By(fmt.Sprintf("%v Verifing the volume: %v is accessible in the pod: %v", logPrefix, persistentvolumes[0].Spec.VsphereVolume.VolumePath, pod.Name))
+<<<<<<< HEAD
 		verifyVSphereVolumesAccessible(client, pod, persistentvolumes, vsp)
+=======
+		verifyVSphereVolumesAccessible(pod, persistentvolumes, vsp)
+>>>>>>> axbaretto
 
 		By(fmt.Sprintf("%v Deleting pod: %v", logPrefix, pod.Name))
 		err = framework.DeletePodWithWait(f, client, pod)
 		Expect(err).NotTo(HaveOccurred())
 
 		By(fmt.Sprintf("%v Waiting for volume: %v to be detached from the node: %v", logPrefix, persistentvolumes[0].Spec.VsphereVolume.VolumePath, pod.Spec.NodeName))
+<<<<<<< HEAD
 		err = waitForVSphereDiskToDetach(client, vsp, persistentvolumes[0].Spec.VsphereVolume.VolumePath, k8stype.NodeName(pod.Spec.NodeName))
+=======
+		err = waitForVSphereDiskToDetach(vsp, persistentvolumes[0].Spec.VsphereVolume.VolumePath, k8stype.NodeName(pod.Spec.NodeName))
+>>>>>>> axbaretto
 		Expect(err).NotTo(HaveOccurred())
 
 		By(fmt.Sprintf("%v Deleting the Claim: %v", logPrefix, pvclaim.Name))

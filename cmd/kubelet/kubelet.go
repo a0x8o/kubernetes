@@ -53,7 +53,7 @@ func main() {
 	}
 	options.AddKubeletConfigFlags(pflag.CommandLine, defaultConfig)
 
-	// initialize pflag and parse the initial command line flags into the respective objects
+	// parse the command line flags into the respective objects
 	flag.InitFlags()
 
 	// initialize logging and defer flush
@@ -75,16 +75,10 @@ func main() {
 	// bootstrap the kubelet config controller, app.BootstrapKubeletConfigController will check
 	// feature gates and only turn on relevant parts of the controller
 	kubeletConfig, kubeletConfigController, err := app.BootstrapKubeletConfigController(
-		defaultConfig, kubeletFlags.InitConfigDir, kubeletFlags.DynamicConfigDir)
+		defaultConfig, kubeletFlags.KubeletConfigFile, kubeletFlags.DynamicConfigDir)
 	if err != nil {
 		die(err)
 	}
-
-	// re-parse the command-line flags on top of the returned configuration
-	// we layer flags over file-based and remote configuration to
-	// preserve backwards compatibility across binary upgrades
-	// see issue #56171 for more details
-	pflag.Parse()
 
 	// construct a KubeletServer from kubeletFlags and kubeletConfig
 	kubeletServer := &options.KubeletServer{

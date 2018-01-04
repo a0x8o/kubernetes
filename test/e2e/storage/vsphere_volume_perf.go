@@ -28,6 +28,10 @@ import (
 	storageV1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
+<<<<<<< HEAD
+=======
+	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
+>>>>>>> axbaretto
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -213,11 +217,19 @@ func invokeVolumeLifeCyclePerformance(f *framework.Framework, client clientset.I
 	latency[AttachOp] = elapsed.Seconds()
 
 	// Verify access to the volumes
+<<<<<<< HEAD
 	vsp, err := getVSphere(client)
 	Expect(err).NotTo(HaveOccurred())
 
 	for i, pod := range totalpods {
 		verifyVSphereVolumesAccessible(client, pod, totalpvs[i], vsp)
+=======
+	vsp, err := vsphere.GetVSphere()
+	Expect(err).NotTo(HaveOccurred())
+
+	for i, pod := range totalpods {
+		verifyVSphereVolumesAccessible(pod, totalpvs[i], vsp)
+>>>>>>> axbaretto
 	}
 
 	By("Deleting pods")
@@ -236,7 +248,11 @@ func invokeVolumeLifeCyclePerformance(f *framework.Framework, client clientset.I
 		}
 	}
 
+<<<<<<< HEAD
 	err = waitForVSphereDisksToDetach(client, vsp, nodeVolumeMap)
+=======
+	err = waitForVSphereDisksToDetach(vsp, nodeVolumeMap)
+>>>>>>> axbaretto
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Deleting the PVCs")
