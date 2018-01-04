@@ -135,7 +135,7 @@ func RemovePredicateKeyFromAlgoProvider(providerName, key string) error {
 	return nil
 }
 
-// RemovePredicateKeyFromAlgoProvider removes a fit predicate key from all algorithmProviders which in algorithmProviderMap.
+// RemovePredicateKeyFromAlgorithmProviderMap removes a fit predicate key from all algorithmProviders which in algorithmProviderMap.
 func RemovePredicateKeyFromAlgorithmProviderMap(key string) {
 	schedulerFactoryMutex.Lock()
 	defer schedulerFactoryMutex.Unlock()
@@ -305,7 +305,7 @@ func RegisterCustomPriorityFunction(policy schedulerapi.PriorityPolicy) string {
 	if policy.Argument != nil {
 		if policy.Argument.ServiceAntiAffinity != nil {
 			pcf = &PriorityConfigFactory{
-				Function: func(args PluginFactoryArgs) algorithm.PriorityFunction {
+				MapReduceFunction: func(args PluginFactoryArgs) (algorithm.PriorityMapFunction, algorithm.PriorityReduceFunction) {
 					return priorities.NewServiceAntiAffinityPriority(
 						args.PodLister,
 						args.ServiceLister,
