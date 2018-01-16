@@ -139,7 +139,7 @@ func UnsecuredDependencies(s *options.KubeletServer) (*kubelet.Dependencies, err
 	mounter := mount.New(s.ExperimentalMounterPath)
 	var writer kubeio.Writer = &kubeio.StdWriter{}
 	if s.Containerized {
-		glog.V(2).Info("Running kubelet in containerized mode (experimental)")
+		glog.V(2).Info("Running kubelet in containerized mode")
 		mounter = mount.NewNsenterMounter()
 		writer = &kubeio.NsenterWriter{}
 	}
@@ -662,17 +662,17 @@ func RunKubelet(kubeFlags *options.KubeletFlags, kubeCfg *kubeletconfiginternal.
 	//                prefer this to be done as part of an independent validation step on the
 	//                KubeletConfiguration. But as far as I can tell, we don't have an explicit
 	//                place for validation of the KubeletConfiguration yet.
-	hostNetworkSources, err := kubetypes.GetValidatedSources(kubeCfg.HostNetworkSources)
+	hostNetworkSources, err := kubetypes.GetValidatedSources(kubeFlags.HostNetworkSources)
 	if err != nil {
 		return err
 	}
 
-	hostPIDSources, err := kubetypes.GetValidatedSources(kubeCfg.HostPIDSources)
+	hostPIDSources, err := kubetypes.GetValidatedSources(kubeFlags.HostPIDSources)
 	if err != nil {
 		return err
 	}
 
-	hostIPCSources, err := kubetypes.GetValidatedSources(kubeCfg.HostIPCSources)
+	hostIPCSources, err := kubetypes.GetValidatedSources(kubeFlags.HostIPCSources)
 	if err != nil {
 		return err
 	}
@@ -682,7 +682,7 @@ func RunKubelet(kubeFlags *options.KubeletFlags, kubeCfg *kubeletconfiginternal.
 		HostPIDSources:     hostPIDSources,
 		HostIPCSources:     hostIPCSources,
 	}
-	capabilities.Setup(kubeCfg.AllowPrivileged, privilegedSources, 0)
+	capabilities.Setup(kubeFlags.AllowPrivileged, privilegedSources, 0)
 
 	credentialprovider.SetPreferredDockercfgPath(kubeFlags.RootDirectory)
 	glog.V(2).Infof("Using root directory: %v", kubeFlags.RootDirectory)
