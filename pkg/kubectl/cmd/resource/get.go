@@ -25,6 +25,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 
+	"net/url"
+
 	kapierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -141,7 +143,8 @@ func NewCmdGet(f cmdutil.Factory, out io.Writer, errOut io.Writer) *cobra.Comman
 	}
 
 	cmd := &cobra.Command{
-		Use:     "get [(-o|--output=)json|yaml|wide|custom-columns=...|custom-columns-file=...|go-template=...|go-template-file=...|jsonpath=...|jsonpath-file=...] (TYPE [NAME | -l label] | TYPE/NAME ...) [flags]",
+		Use: "get [(-o|--output=)json|yaml|wide|custom-columns=...|custom-columns-file=...|go-template=...|go-template-file=...|jsonpath=...|jsonpath-file=...] (TYPE [NAME | -l label] | TYPE/NAME ...) [flags]",
+		DisableFlagsInUseLine: true,
 		Short:   i18n.T("Display one or many resources"),
 		Long:    getLong + "\n\n" + cmdutil.ValidResourceTypeList(f),
 		Example: getExample,
@@ -216,8 +219,16 @@ func (options *GetOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args 
 
 // Validate checks the set of flags provided by the user.
 func (options *GetOptions) Validate(cmd *cobra.Command) error {
-	if len(options.Raw) > 0 && (options.Watch || options.WatchOnly || len(options.LabelSelector) > 0 || options.Export) {
-		return fmt.Errorf("--raw may not be specified with other flags that filter the server request or alter the output")
+	if len(options.Raw) > 0 {
+		if options.Watch || options.WatchOnly || len(options.LabelSelector) > 0 || options.Export {
+			return fmt.Errorf("--raw may not be specified with other flags that filter the server request or alter the output")
+		}
+		if len(cmdutil.GetFlagString(cmd, "output")) > 0 {
+			return cmdutil.UsageErrorf(cmd, "--raw and --output are mutually exclusive")
+		}
+		if _, err := url.ParseRequestURI(options.Raw); err != nil {
+			return cmdutil.UsageErrorf(cmd, "--raw must be a valid URL path: %v", err)
+		}
 	}
 	if cmdutil.GetFlagBool(cmd, "show-labels") {
 		outputOption := cmd.Flags().Lookup("output").Value.String()
