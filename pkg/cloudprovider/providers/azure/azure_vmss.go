@@ -768,11 +768,11 @@ func (ss *scaleSet) EnsureHostsInPool(serviceName string, nodes []*v1.Node, back
 		err := <-errChan
 		glog.V(10).Infof("VirtualMachineScaleSetsClient.CreateOrUpdate(%q): end", vmSetName)
 		if ss.CloudProviderBackoff && shouldRetryAPIRequest(resp.Response, err) {
-			glog.V(2).Infof("VirtualMachineScaleSetsClient.CreateOrUpdate for service (%): scale set (%s) - updating, err=%v", serviceName, vmSetName, err)
+			glog.V(2).Infof("VirtualMachineScaleSetsClient.CreateOrUpdate for service (%s): scale set (%s) - updating, err=%v", serviceName, vmSetName, err)
 			retryErr := ss.createOrUpdateVMSSWithRetry(virtualMachineScaleSet)
 			if retryErr != nil {
 				err = retryErr
-				glog.V(2).Infof("VirtualMachineScaleSetsClient.CreateOrUpdate for service (%) abort backoff: scale set (%s) - updating", serviceName, vmSetName)
+				glog.V(2).Infof("VirtualMachineScaleSetsClient.CreateOrUpdate for service (%s) abort backoff: scale set (%s) - updating", serviceName, vmSetName)
 			}
 		}
 		if err != nil {
@@ -785,11 +785,11 @@ func (ss *scaleSet) EnsureHostsInPool(serviceName string, nodes []*v1.Node, back
 	for _, curNode := range nodes {
 		curScaleSetName, err := extractScaleSetNameByVMID(curNode.Spec.ExternalID)
 		if err != nil {
-			glog.V(2).Infof("Node %q is not belonging to any scale sets, omitting it", curNode.Name)
+			glog.V(4).Infof("Node %q is not belonging to any scale sets, omitting it", curNode.Name)
 			continue
 		}
 		if curScaleSetName != vmSetName {
-			glog.V(2).Infof("Node %q is not belonging to scale set %q, omitting it", curNode.Name, vmSetName)
+			glog.V(4).Infof("Node %q is not belonging to scale set %q, omitting it", curNode.Name, vmSetName)
 			continue
 		}
 
@@ -811,11 +811,11 @@ func (ss *scaleSet) EnsureHostsInPool(serviceName string, nodes []*v1.Node, back
 	err = <-errChan
 	glog.V(10).Infof("VirtualMachineScaleSetsClient.UpdateInstances(%q): end", vmSetName)
 	if ss.CloudProviderBackoff && shouldRetryAPIRequest(resp.Response, err) {
-		glog.V(2).Infof("VirtualMachineScaleSetsClient.UpdateInstances for service (%): scale set (%s) - updating, err=%v", serviceName, vmSetName, err)
+		glog.V(2).Infof("VirtualMachineScaleSetsClient.UpdateInstances for service (%s): scale set (%s) - updating, err=%v", serviceName, vmSetName, err)
 		retryErr := ss.updateVMSSInstancesWithRetry(vmSetName, vmInstanceIDs)
 		if retryErr != nil {
 			err = retryErr
-			glog.V(2).Infof("VirtualMachineScaleSetsClient.UpdateInstances for service (%) abort backoff: scale set (%s) - updating", serviceName, vmSetName)
+			glog.V(2).Infof("VirtualMachineScaleSetsClient.UpdateInstances for service (%s) abort backoff: scale set (%s) - updating", serviceName, vmSetName)
 		}
 	}
 	if err != nil {
