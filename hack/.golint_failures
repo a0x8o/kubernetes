@@ -88,7 +88,6 @@ pkg/cloudprovider/providers/aws
 pkg/cloudprovider/providers/fake
 pkg/cloudprovider/providers/gce
 pkg/cloudprovider/providers/gce/cloud
-pkg/cloudprovider/providers/openstack
 pkg/cloudprovider/providers/ovirt
 pkg/cloudprovider/providers/photon
 pkg/cloudprovider/providers/vsphere
@@ -204,7 +203,6 @@ pkg/kubelet/prober/testing
 pkg/kubelet/qos
 pkg/kubelet/remote
 pkg/kubelet/rkt
-pkg/kubelet/rktshim
 pkg/kubelet/secret
 pkg/kubelet/server
 pkg/kubelet/server/portforward
@@ -392,7 +390,6 @@ pkg/volume/aws_ebs
 pkg/volume/azure_dd
 pkg/volume/azure_file
 pkg/volume/cephfs
-pkg/volume/cinder
 pkg/volume/configmap
 pkg/volume/empty_dir
 pkg/volume/fc
@@ -505,7 +502,7 @@ staging/src/k8s.io/apimachinery/pkg/apis/meta/fuzzer
 staging/src/k8s.io/apimachinery/pkg/apis/meta/internalversion
 staging/src/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured
 staging/src/k8s.io/apimachinery/pkg/apis/meta/v1/validation
-staging/src/k8s.io/apimachinery/pkg/apis/meta/v1alpha1
+staging/src/k8s.io/apimachinery/pkg/apis/meta/v1beta1
 staging/src/k8s.io/apimachinery/pkg/apis/testapigroup
 staging/src/k8s.io/apimachinery/pkg/apis/testapigroup/v1
 staging/src/k8s.io/apimachinery/pkg/conversion

@@ -44,18 +44,21 @@ import (
 	"k8s.io/apiserver/pkg/storage/storagebackend"
 	clientset "k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app/options"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	kapi "k8s.io/kubernetes/pkg/apis/core"
+	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
+	"k8s.io/kubernetes/test/integration"
 	"k8s.io/kubernetes/test/integration/framework"
 
 	// install all APIs
 	_ "k8s.io/kubernetes/pkg/master" // TODO what else is needed
 
 	"github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/pkg/transport"
 )
 
 // Etcd data for all persisted objects.
@@ -298,6 +301,14 @@ var etcdStorageData = map[schema.GroupVersionResource]struct {
 	gvr("storage.k8s.io", "v1alpha1", "volumeattachments"): {
 		stub:             `{"metadata": {"name": "va1"}, "spec": {"attacher": "gce", "nodeName": "localhost", "source": {"persistentVolumeName": "pv1"}}}`,
 		expectedEtcdPath: "/registry/volumeattachments/va1",
+		expectedGVK:      gvkP("storage.k8s.io", "v1beta1", "VolumeAttachment"),
+	},
+	// --
+
+	// k8s.io/kubernetes/pkg/apis/storage/v1beta1
+	gvr("storage.k8s.io", "v1beta1", "volumeattachments"): {
+		stub:             `{"metadata": {"name": "va2"}, "spec": {"attacher": "gce", "nodeName": "localhost", "source": {"persistentVolumeName": "pv2"}}}`,
+		expectedEtcdPath: "/registry/volumeattachments/va2",
 	},
 	// --
 
@@ -426,11 +437,13 @@ var ephemeralWhiteList = createEphemeralWhiteList(
 	// --
 
 	// k8s.io/kubernetes/pkg/apis/authentication/v1beta1
-	gvr("authentication.k8s.io", "v1beta1", "tokenreviews"), // not stored in etcd
+	gvr("authentication.k8s.io", "v1beta1", "tokenreviews"),  // not stored in etcd
+	gvr("authentication.k8s.io", "v1beta1", "tokenrequests"), // not stored in etcd
 	// --
 
 	// k8s.io/kubernetes/pkg/apis/authentication/v1
-	gvr("authentication.k8s.io", "v1", "tokenreviews"), // not stored in etcd
+	gvr("authentication.k8s.io", "v1", "tokenreviews"),  // not stored in etcd
+	gvr("authentication.k8s.io", "v1", "tokenrequests"), // not stored in etcd
 	// --
 
 	// k8s.io/kubernetes/pkg/apis/authorization/v1beta1
@@ -790,12 +803,14 @@ func startRealMasterOrDie(t *testing.T, certDir string) (*allClient, clientv3.KV
 		t.Fatal(err)
 	}
 
-	kvClient, err := getEtcdKVClient(storageConfig)
+	kvClient, err := integration.GetEtcdKVClient(storageConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	return client, kvClient, legacyscheme.Registry.RESTMapper()
+	mapper, _ := util.NewFactory(clientcmd.NewDefaultClientConfig(*clientcmdapi.NewConfig(), &clientcmd.ConfigOverrides{})).Object()
+
+	return client, kvClient, mapper
 }
 
 func dumpEtcdKVOnFailure(t *testing.T, kvClient clientv3.KV) {
@@ -1107,35 +1122,7 @@ func diffMapKeys(a, b interface{}, stringer func(interface{}) string) []string {
 	return ret
 }
 
-func getEtcdKVClient(config storagebackend.Config) (clientv3.KV, error) {
-	tlsInfo := transport.TLSInfo{
-		CertFile: config.CertFile,
-		KeyFile:  config.KeyFile,
-		CAFile:   config.CAFile,
-	}
-
-	tlsConfig, err := tlsInfo.ClientConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	cfg := clientv3.Config{
-		Endpoints: config.ServerList,
-		TLS:       tlsConfig,
-	}
-
-	c, err := clientv3.New(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return clientv3.NewKV(c), nil
-}
-
 type allResourceSource struct{}
 
-func (*allResourceSource) AnyVersionOfResourceEnabled(resource schema.GroupResource) bool { return true }
-func (*allResourceSource) AllResourcesForVersionEnabled(version schema.GroupVersion) bool { return true }
-func (*allResourceSource) AnyResourcesForGroupEnabled(group string) bool                  { return true }
-func (*allResourceSource) ResourceEnabled(resource schema.GroupVersionResource) bool      { return true }
-func (*allResourceSource) AnyResourcesForVersionEnabled(version schema.GroupVersion) bool { return true }
+func (*allResourceSource) AnyVersionForGroupEnabled(group string) bool     { return true }
+func (*allResourceSource) VersionEnabled(version schema.GroupVersion) bool { return true }

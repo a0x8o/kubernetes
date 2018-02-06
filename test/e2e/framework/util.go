@@ -229,12 +229,6 @@ func GetPauseImageName(c clientset.Interface) string {
 	return imageutils.GetE2EImageWithArch(imageutils.Pause, GetServerArchitecture(c))
 }
 
-// GetPauseImageNameForHostArch fetches the pause image name for the same architecture the test is running on.
-// TODO: move this function to the test/utils
-func GetPauseImageNameForHostArch() string {
-	return imageutils.GetE2EImage(imageutils.Pause)
-}
-
 func GetServicesProxyRequest(c clientset.Interface, request *restclient.Request) (*restclient.Request, error) {
 	return request.Resource("services").SubResource("proxy"), nil
 }
@@ -1551,6 +1545,28 @@ func WaitForPodToDisappear(c clientset.Interface, ns, podName string, label labe
 	})
 }
 
+// WaitForPodNameUnschedulableInNamespace returns an error if it takes too long for the pod to become Pending
+// and have condition Status equal to Unschedulable,
+// if the pod Get api returns an error (IsNotFound or other), or if the pod failed with an unexpected reason.
+// Typically called to test that the passed-in pod is Pending and Unschedulable.
+func WaitForPodNameUnschedulableInNamespace(c clientset.Interface, podName, namespace string) error {
+	return WaitForPodCondition(c, namespace, podName, "Unschedulable", PodStartTimeout, func(pod *v1.Pod) (bool, error) {
+		// Only consider Failed pods. Successful pods will be deleted and detected in
+		// waitForPodCondition's Get call returning `IsNotFound`
+		if pod.Status.Phase == v1.PodPending {
+			for _, cond := range pod.Status.Conditions {
+				if cond.Type == v1.PodScheduled && cond.Status == v1.ConditionFalse && cond.Reason == "Unschedulable" {
+					return true, nil
+				}
+			}
+		}
+		if pod.Status.Phase == v1.PodRunning || pod.Status.Phase == v1.PodSucceeded || pod.Status.Phase == v1.PodFailed {
+			return true, fmt.Errorf("Expected pod %q in namespace %q to be in phase Pending, but got phase: %v", podName, namespace, pod.Status.Phase)
+		}
+		return false, nil
+	})
+}
+
 // WaitForService waits until the service appears (exist == true), or disappears (exist == false)
 func WaitForService(c clientset.Interface, namespace, name string, exist bool, interval, timeout time.Duration) error {
 	err := wait.PollImmediate(interval, timeout, func() (bool, error) {
@@ -2687,13 +2703,6 @@ func RemoveAvoidPodsOffNode(c clientset.Interface, nodeName string) {
 	ExpectNoError(err)
 }
 
-//TODO(p0lyn0mial): remove internalClientset and kind
-func getScalerForKind(internalClientset internalclientset.Interface, kind schema.GroupKind, scalesGetter scaleclient.ScalesGetter, gr schema.GroupResource) (kubectl.Scaler, error) {
-	return kubectl.ScalerFor(kind, internalClientset, scalesGetter, gr)
-}
-
-//TODO(p0lyn0mial): remove internalClientset and kind.
-//TODO(p0lyn0mial): update the callers.
 func ScaleResource(
 	clientset clientset.Interface,
 	internalClientset internalclientset.Interface,
@@ -2705,13 +2714,10 @@ func ScaleResource(
 	gr schema.GroupResource,
 ) error {
 	By(fmt.Sprintf("Scaling %v %s in namespace %s to %d", kind, name, ns, size))
-	scaler, err := getScalerForKind(internalClientset, kind, scalesGetter, gr)
-	if err != nil {
-		return err
-	}
+	scaler := kubectl.ScalerFor(kind, internalClientset.Batch(), scalesGetter, gr)
 	waitForScale := kubectl.NewRetryParams(5*time.Second, 1*time.Minute)
 	waitForReplicas := kubectl.NewRetryParams(5*time.Second, 5*time.Minute)
-	if err = scaler.Scale(ns, name, size, nil, waitForScale, waitForReplicas); err != nil {
+	if err := scaler.Scale(ns, name, size, nil, waitForScale, waitForReplicas); err != nil {
 		return fmt.Errorf("error while scaling RC %s to %d replicas: %v", name, size, err)
 	}
 	if !wait {
@@ -4150,42 +4156,6 @@ func OpenWebSocketForURL(url *url.URL, config *restclient.Config, protocols []st
 	return websocket.DialConfig(cfg)
 }
 
-// getIngressAddress returns the ips/hostnames associated with the Ingress.
-func getIngressAddress(client clientset.Interface, ns, name string) ([]string, error) {
-	ing, err := client.ExtensionsV1beta1().Ingresses(ns).Get(name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-	addresses := []string{}
-	for _, a := range ing.Status.LoadBalancer.Ingress {
-		if a.IP != "" {
-			addresses = append(addresses, a.IP)
-		}
-		if a.Hostname != "" {
-			addresses = append(addresses, a.Hostname)
-		}
-	}
-	return addresses, nil
-}
-
-// WaitForIngressAddress waits for the Ingress to acquire an address.
-func WaitForIngressAddress(c clientset.Interface, ns, ingName string, timeout time.Duration) (string, error) {
-	var address string
-	err := wait.PollImmediate(10*time.Second, timeout, func() (bool, error) {
-		ipOrNameList, err := getIngressAddress(c, ns, ingName)
-		if err != nil || len(ipOrNameList) == 0 {
-			Logf("Waiting for Ingress %v to acquire IP, error %v", ingName, err)
-			if IsRetryableAPIError(err) {
-				return false, nil
-			}
-			return false, err
-		}
-		address = ipOrNameList[0]
-		return true, nil
-	})
-	return address, err
-}
-
 // Looks for the given string in the log of a specific pod container
 func LookForStringInLog(ns, podName, container, expectedString string, timeout time.Duration) (result string, err error) {
 	return LookForString(expectedString, timeout, func() string {
@@ -4807,6 +4777,22 @@ func (p *E2ETestNodePreparer) CleanupNodes() error {
 	return encounteredError
 }
 
+func GetClusterID(c clientset.Interface) (string, error) {
+	cm, err := c.CoreV1().ConfigMaps(metav1.NamespaceSystem).Get(gcecloud.UIDConfigMapName, metav1.GetOptions{})
+	if err != nil || cm == nil {
+		return "", fmt.Errorf("error getting cluster ID: %v", err)
+	}
+	clusterID, clusterIDExists := cm.Data[gcecloud.UIDCluster]
+	providerID, providerIDExists := cm.Data[gcecloud.UIDProvider]
+	if !clusterIDExists {
+		return "", fmt.Errorf("cluster ID not set")
+	}
+	if providerIDExists {
+		return providerID, nil
+	}
+	return clusterID, nil
+}
+
 // CleanupGCEResources cleans up GCE Service Type=LoadBalancer resources with
 // the given name. The name is usually the UUID of the Service prefixed with an
 // alpha-numeric character ('a') to work around cloudprovider rules.
@@ -4957,6 +4943,7 @@ func PollURL(route, host string, timeout time.Duration, interval time.Duration, 
 			Logf("host %v path %v: %v unreachable", host, route, err)
 			return expectUnreachable, nil
 		}
+		Logf("host %v path %v: reached", host, route)
 		return !expectUnreachable, nil
 	})
 	if pollErr != nil {
@@ -5121,4 +5108,20 @@ func waitForServerPreferredNamespacedResources(d discovery.DiscoveryInterface, t
 		return nil, err
 	}
 	return resources, nil
+}
+
+// WaitForPersistentVolumeClaimDeleted waits for a PersistentVolumeClaim to be removed from the system until timeout occurs, whichever comes first.
+func WaitForPersistentVolumeClaimDeleted(c clientset.Interface, ns string, pvcName string, Poll, timeout time.Duration) error {
+	Logf("Waiting up to %v for PersistentVolumeClaim %s to be removed", timeout, pvcName)
+	for start := time.Now(); time.Since(start) < timeout; time.Sleep(Poll) {
+		_, err := c.CoreV1().PersistentVolumeClaims(ns).Get(pvcName, metav1.GetOptions{})
+		if err != nil {
+			if apierrs.IsNotFound(err) {
+				Logf("Claim %q in namespace %q doesn't exist in the system", pvcName, ns)
+				return nil
+			}
+			Logf("Failed to get claim %q in namespace %q, retrying in %v. Error: %v", pvcName, ns, Poll, err)
+		}
+	}
+	return fmt.Errorf("PersistentVolumeClaim %s is not removed from the system within %v", pvcName, timeout)
 }

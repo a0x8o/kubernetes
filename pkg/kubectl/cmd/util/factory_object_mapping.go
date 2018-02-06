@@ -78,13 +78,11 @@ func NewObjectMappingFactory(clientAccessFactory ClientAccessFactory) ObjectMapp
 // the built in mapper if necessary. It supports unstructured objects either way, since
 // the underlying Scheme supports Unstructured. The mapper will return converters that can
 // convert versioned types to unstructured and back.
-// It can return an error and the best effort unstructured mapper and typer.
 func (f *ring1Factory) objectLoader() (meta.RESTMapper, runtime.ObjectTyper, error) {
 	discoveryClient, err := f.clientAccessFactory.DiscoveryClient()
 	if err != nil {
-		unstructuredMapper := discovery.NewRESTMapper(nil, meta.InterfacesForUnstructured)
-		unstructuredTyper := discovery.NewUnstructuredObjectTyper(nil)
-		return unstructuredMapper, unstructuredTyper, err
+		glog.V(3).Infof("Unable to get a discovery client to find server resources, falling back to hardcoded types: %v", err)
+		return legacyscheme.Registry.RESTMapper(), legacyscheme.Scheme, nil
 	}
 
 	groupResources, err := discovery.GetAPIGroupResources(discoveryClient)
@@ -92,11 +90,9 @@ func (f *ring1Factory) objectLoader() (meta.RESTMapper, runtime.ObjectTyper, err
 		discoveryClient.Invalidate()
 		groupResources, err = discovery.GetAPIGroupResources(discoveryClient)
 	}
-	// even if we can't get all the results, we're better off continuing with what we can than not presenting
-	// anything.  This mirrors old behavior that used to fallback to a hardcoded list of API types compiled
-	// into kubernetes.
 	if err != nil {
-		glog.V(1).Infof("Unable to retrieve all API resources, continuing with partial results: %v", err)
+		glog.V(3).Infof("Unable to retrieve API resources, falling back to hardcoded types: %v", err)
+		return legacyscheme.Registry.RESTMapper(), legacyscheme.Scheme, nil
 	}
 
 	// allow conversion between typed and unstructured objects
@@ -307,7 +303,7 @@ func (f *ring1Factory) Scaler(mapping *meta.RESTMapping) (kubectl.Scaler, error)
 	scalesGetter := scaleclient.New(restClient, mapper, dynamic.LegacyAPIPathResolverFunc, resolver)
 	gvk := mapping.GroupVersionKind.GroupVersion().WithResource(mapping.Resource)
 
-	return kubectl.ScalerFor(mapping.GroupVersionKind.GroupKind(), clientset, scalesGetter, gvk.GroupResource())
+	return kubectl.ScalerFor(mapping.GroupVersionKind.GroupKind(), clientset.Batch(), scalesGetter, gvk.GroupResource()), nil
 }
 
 func (f *ring1Factory) Reaper(mapping *meta.RESTMapping) (kubectl.Reaper, error) {

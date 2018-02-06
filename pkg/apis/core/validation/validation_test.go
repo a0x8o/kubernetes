@@ -737,6 +737,29 @@ func testVolumeClaimAnnotation(name string, namespace string, ann string, annval
 	}
 }
 
+func testVolumeClaimStorageClassInSpec(name, namespace, scName string, spec core.PersistentVolumeClaimSpec) *core.PersistentVolumeClaim {
+	spec.StorageClassName = &scName
+	return &core.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: spec,
+	}
+}
+
+func testVolumeClaimStorageClassInAnnotationAndSpec(name, namespace, scNameInAnn, scName string, spec core.PersistentVolumeClaimSpec) *core.PersistentVolumeClaim {
+	spec.StorageClassName = &scName
+	return &core.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   namespace,
+			Annotations: map[string]string{v1.BetaStorageClassAnnotation: scNameInAnn},
+		},
+		Spec: spec,
+	}
+}
+
 func TestValidatePersistentVolumeClaim(t *testing.T) {
 	invalidClassName := "-invalid-"
 	validClassName := "valid"
@@ -1252,6 +1275,52 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 		Phase: core.ClaimPending,
 	})
 
+	validClaimStorageClassInSpec := testVolumeClaimStorageClassInSpec("foo", "ns", "fast", core.PersistentVolumeClaimSpec{
+		AccessModes: []core.PersistentVolumeAccessMode{
+			core.ReadOnlyMany,
+		},
+		Resources: core.ResourceRequirements{
+			Requests: core.ResourceList{
+				core.ResourceName(core.ResourceStorage): resource.MustParse("10G"),
+			},
+		},
+	})
+
+	invalidClaimStorageClassInSpec := testVolumeClaimStorageClassInSpec("foo", "ns", "fast2", core.PersistentVolumeClaimSpec{
+		AccessModes: []core.PersistentVolumeAccessMode{
+			core.ReadOnlyMany,
+		},
+		Resources: core.ResourceRequirements{
+			Requests: core.ResourceList{
+				core.ResourceName(core.ResourceStorage): resource.MustParse("10G"),
+			},
+		},
+	})
+
+	validClaimStorageClassInAnnotationAndSpec := testVolumeClaimStorageClassInAnnotationAndSpec(
+		"foo", "ns", "fast", "fast", core.PersistentVolumeClaimSpec{
+			AccessModes: []core.PersistentVolumeAccessMode{
+				core.ReadOnlyMany,
+			},
+			Resources: core.ResourceRequirements{
+				Requests: core.ResourceList{
+					core.ResourceName(core.ResourceStorage): resource.MustParse("10G"),
+				},
+			},
+		})
+
+	invalidClaimStorageClassInAnnotationAndSpec := testVolumeClaimStorageClassInAnnotationAndSpec(
+		"foo", "ns", "fast2", "fast", core.PersistentVolumeClaimSpec{
+			AccessModes: []core.PersistentVolumeAccessMode{
+				core.ReadOnlyMany,
+			},
+			Resources: core.ResourceRequirements{
+				Requests: core.ResourceList{
+					core.ResourceName(core.ResourceStorage): resource.MustParse("10G"),
+				},
+			},
+		})
+
 	scenarios := map[string]struct {
 		isExpectedFailure bool
 		oldClaim          *core.PersistentVolumeClaim
@@ -1411,6 +1480,48 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 			oldClaim:          validClaim,
 			newClaim:          unboundSizeUpdate,
 			enableResize:      true,
+			enableBlock:       false,
+		},
+		"valid-upgrade-storage-class-annotation-to-spec": {
+			isExpectedFailure: false,
+			oldClaim:          validClaimStorageClass,
+			newClaim:          validClaimStorageClassInSpec,
+			enableResize:      false,
+			enableBlock:       false,
+		},
+		"invalid-upgrade-storage-class-annotation-to-spec": {
+			isExpectedFailure: true,
+			oldClaim:          validClaimStorageClass,
+			newClaim:          invalidClaimStorageClassInSpec,
+			enableResize:      false,
+			enableBlock:       false,
+		},
+		"valid-upgrade-storage-class-annotation-to-annotation-and-spec": {
+			isExpectedFailure: false,
+			oldClaim:          validClaimStorageClass,
+			newClaim:          validClaimStorageClassInAnnotationAndSpec,
+			enableResize:      false,
+			enableBlock:       false,
+		},
+		"invalid-upgrade-storage-class-annotation-to-annotation-and-spec": {
+			isExpectedFailure: true,
+			oldClaim:          validClaimStorageClass,
+			newClaim:          invalidClaimStorageClassInAnnotationAndSpec,
+			enableResize:      false,
+			enableBlock:       false,
+		},
+		"invalid-upgrade-storage-class-in-spec": {
+			isExpectedFailure: true,
+			oldClaim:          validClaimStorageClassInSpec,
+			newClaim:          invalidClaimStorageClassInSpec,
+			enableResize:      false,
+			enableBlock:       false,
+		},
+		"invalid-downgrade-storage-class-spec-to-annotation": {
+			isExpectedFailure: true,
+			oldClaim:          validClaimStorageClassInSpec,
+			newClaim:          validClaimStorageClass,
+			enableResize:      false,
 			enableBlock:       false,
 		},
 	}
@@ -7742,6 +7853,129 @@ func TestValidatePodUpdate(t *testing.T) {
 		test.new.ObjectMeta.ResourceVersion = "1"
 		test.old.ObjectMeta.ResourceVersion = "1"
 		errs := ValidatePodUpdate(&test.new, &test.old)
+		if test.err == "" {
+			if len(errs) != 0 {
+				t.Errorf("unexpected invalid: %s (%+v)\nA: %+v\nB: %+v", test.test, errs, test.new, test.old)
+			}
+		} else {
+			if len(errs) == 0 {
+				t.Errorf("unexpected valid: %s\nA: %+v\nB: %+v", test.test, test.new, test.old)
+			} else if actualErr := errs.ToAggregate().Error(); !strings.Contains(actualErr, test.err) {
+				t.Errorf("unexpected error message: %s\nExpected error: %s\nActual error: %s", test.test, test.err, actualErr)
+			}
+		}
+	}
+}
+
+func TestValidatePodStatusUpdate(t *testing.T) {
+	tests := []struct {
+		new  core.Pod
+		old  core.Pod
+		err  string
+		test string
+	}{
+		{
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName: "node1",
+				},
+				Status: core.PodStatus{
+					NominatedNodeName: "node1",
+				},
+			},
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName: "node1",
+				},
+				Status: core.PodStatus{},
+			},
+			"",
+			"removed nominatedNodeName",
+		},
+		{
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName: "node1",
+				},
+			},
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName: "node1",
+				},
+				Status: core.PodStatus{
+					NominatedNodeName: "node1",
+				},
+			},
+			"",
+			"add valid nominatedNodeName",
+		},
+		{
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName: "node1",
+				},
+				Status: core.PodStatus{
+					NominatedNodeName: "Node1",
+				},
+			},
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName: "node1",
+				},
+			},
+			"nominatedNodeName",
+			"Add invalid nominatedNodeName",
+		},
+		{
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName: "node1",
+				},
+				Status: core.PodStatus{
+					NominatedNodeName: "node1",
+				},
+			},
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName: "node1",
+				},
+				Status: core.PodStatus{
+					NominatedNodeName: "node2",
+				},
+			},
+			"",
+			"Update nominatedNodeName",
+		},
+	}
+
+	for _, test := range tests {
+		test.new.ObjectMeta.ResourceVersion = "1"
+		test.old.ObjectMeta.ResourceVersion = "1"
+		errs := ValidatePodStatusUpdate(&test.new, &test.old)
 		if test.err == "" {
 			if len(errs) != 0 {
 				t.Errorf("unexpected invalid: %s (%+v)\nA: %+v\nB: %+v", test.test, errs, test.new, test.old)

@@ -76,7 +76,7 @@ type Config struct {
 	// the cloudprovider will try to add all nodes to a single backend pool which is forbidden.
 	// In other words, if you use multiple agent pools (availability sets), you MUST set this field.
 	PrimaryAvailabilitySetName string `json:"primaryAvailabilitySetName" yaml:"primaryAvailabilitySetName"`
-	// The type of azure nodes. Candidate valudes are: vmss and standard.
+	// The type of azure nodes. Candidate values are: vmss and standard.
 	// If not set, it will be default to standard.
 	VMType string `json:"vmType" yaml:"vmType"`
 	// The name of the scale set that should be used as the load balancer backend.
@@ -120,6 +120,7 @@ type Cloud struct {
 	VirtualMachinesClient   VirtualMachinesClient
 	StorageAccountClient    StorageAccountClient
 	DisksClient             DisksClient
+	FileClient              FileClient
 	resourceRequestBackoff  wait.Backoff
 	vmSet                   VMSet
 
@@ -193,6 +194,7 @@ func NewCloud(configReader io.Reader) (cloudprovider.Interface, error) {
 		PublicIPAddressesClient:         newAzPublicIPAddressesClient(azClientConfig),
 		VirtualMachineScaleSetsClient:   newAzVirtualMachineScaleSetsClient(azClientConfig),
 		VirtualMachineScaleSetVMsClient: newAzVirtualMachineScaleSetVMsClient(azClientConfig),
+		FileClient:                      &azureFileClient{env: *env},
 	}
 
 	// Conditionally configure resource request backoff
@@ -311,14 +313,9 @@ func initDiskControllers(az *Cloud) error {
 	// needed by both blob disk and managed disk controllers
 
 	common := &controllerCommon{
-		aadResourceEndPoint:   az.Environment.ServiceManagementEndpoint,
-		clientID:              az.AADClientID,
-		clientSecret:          az.AADClientSecret,
 		location:              az.Location,
 		storageEndpointSuffix: az.Environment.StorageEndpointSuffix,
-		managementEndpoint:    az.Environment.ResourceManagerEndpoint,
 		resourceGroup:         az.ResourceGroup,
-		tokenEndPoint:         az.Environment.ActiveDirectoryEndpoint,
 		subscriptionID:        az.SubscriptionID,
 		cloud:                 az,
 	}

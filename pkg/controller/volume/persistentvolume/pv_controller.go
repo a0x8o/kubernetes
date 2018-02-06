@@ -233,6 +233,14 @@ func (ctrl *PersistentVolumeController) syncClaim(claim *v1.PersistentVolumeClai
 func checkVolumeSatisfyClaim(volume *v1.PersistentVolume, claim *v1.PersistentVolumeClaim) error {
 	requestedQty := claim.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)]
 	requestedSize := requestedQty.Value()
+
+	// check if PV's DeletionTimeStamp is set, if so, return error.
+	if utilfeature.DefaultFeatureGate.Enabled(features.StorageProtection) {
+		if volume.ObjectMeta.DeletionTimestamp != nil {
+			return fmt.Errorf("the volume is marked for deletion")
+		}
+	}
+
 	volumeQty := volume.Spec.Capacity[v1.ResourceStorage]
 	volumeSize := volumeQty.Value()
 	if volumeSize < requestedSize {
@@ -365,7 +373,7 @@ func (ctrl *PersistentVolumeController) syncUnboundClaim(claim *v1.PersistentVol
 				glog.V(4).Infof("synchronizing unbound PersistentVolumeClaim[%s]: volume is unbound, binding", claimToClaimKey(claim))
 				if err = checkVolumeSatisfyClaim(volume, claim); err != nil {
 					glog.V(4).Infof("Can't bind the claim to volume %q: %v", volume.Name, err)
-					//send a event
+					//send an event
 					msg := fmt.Sprintf("Cannot bind to requested volume %q: %s", volume.Name, err)
 					ctrl.eventRecorder.Event(claim, v1.EventTypeWarning, events.VolumeMismatch, msg)
 					//volume does not satisfy the requirements of the claim

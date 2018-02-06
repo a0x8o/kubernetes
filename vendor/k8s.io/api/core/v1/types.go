@@ -657,6 +657,8 @@ type PersistentVolumeClaimConditionType string
 const (
 	// PersistentVolumeClaimResizing - a user trigger resize of pvc has been started
 	PersistentVolumeClaimResizing PersistentVolumeClaimConditionType = "Resizing"
+	// PersistentVolumeClaimFileSystemResizePending - controller resize is finished and a file system resize is pending on node
+	PersistentVolumeClaimFileSystemResizePending PersistentVolumeClaimConditionType = "FileSystemResizePending"
 )
 
 // PersistentVolumeClaimCondition contails details about state of pvc
@@ -3021,6 +3023,15 @@ type PodStatus struct {
 	// e.g. 'Evicted'
 	// +optional
 	Reason string `json:"reason,omitempty" protobuf:"bytes,4,opt,name=reason"`
+	// nominatedNodeName is set only when this pod preempts other pods on the node, but it cannot be
+	// scheduled right away as preemption victims receive their graceful termination periods.
+	// This field does not guarantee that the pod will be scheduled on this node. Scheduler may decide
+	// to place the pod elsewhere if other nodes become available sooner. Scheduler may also decide to
+	// give the resources on this node to a higher priority pod that is created after preemption.
+	// As a result, this field may be different than PodSpec.nodeName when the pod is
+	// scheduled.
+	// +optional
+	NominatedNodeName string `json:"nominatedNodeName,omitempty" protobuf:"bytes,11,opt,name=nominatedNodeName"`
 
 	// IP address of the host to which the pod is assigned. Empty if not yet scheduled.
 	// +optional

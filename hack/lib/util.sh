@@ -277,11 +277,11 @@ kube::util::group-version-to-pkg-path() {
     meta/v1)
       echo "../vendor/k8s.io/apimachinery/pkg/apis/meta/v1"
       ;;
-    meta/v1alpha1)
-      echo "vendor/k8s.io/apimachinery/pkg/apis/meta/v1alpha1"
+    meta/v1beta1)
+      echo "vendor/k8s.io/apimachinery/pkg/apis/meta/v1beta1"
       ;;
-    meta/v1alpha1)
-      echo "../vendor/k8s.io/apimachinery/pkg/apis/meta/v1alpha1"
+    meta/v1beta1)
+      echo "../vendor/k8s.io/apimachinery/pkg/apis/meta/v1beta1"
       ;;
     unversioned)
       echo "pkg/api/unversioned"
@@ -446,6 +446,9 @@ kube::util::ensure_godep_version() {
 
   kube::log::status "Installing godep version ${GODEP_VERSION}"
   go install ./vendor/github.com/tools/godep/
+  GP="$(echo $GOPATH | cut -f1 -d:)"
+  hash -r # force bash to clear PATH cache
+  PATH="${GP}/bin:${PATH}"
 
   if [[ "$(godep version 2>/dev/null)" != *"godep ${GODEP_VERSION}"* ]]; then
     kube::log::error "Expected godep ${GODEP_VERSION}, got $(godep version)"

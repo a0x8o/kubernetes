@@ -10,6 +10,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "client_ca_hook.go",
+        "client_util.go",
         "controller.go",
         "doc.go",
         "import_known_versions.go",
@@ -132,6 +133,7 @@ go_test(
         "//pkg/apis/core:go_default_library",
         "//pkg/apis/extensions:go_default_library",
         "//pkg/apis/rbac:go_default_library",
+        "//pkg/apis/storage:go_default_library",
         "//pkg/client/clientset_generated/internalclientset/fake:go_default_library",
         "//pkg/generated/openapi:go_default_library",
         "//pkg/kubelet/client:go_default_library",

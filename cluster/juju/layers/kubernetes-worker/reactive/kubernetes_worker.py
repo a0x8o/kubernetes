@@ -74,6 +74,7 @@ def upgrade_charm():
     remove_state('kubernetes-worker.cni-plugins.installed')
     remove_state('kubernetes-worker.config.created')
     remove_state('kubernetes-worker.ingress.available')
+    remove_state('worker.auth.bootstrapped')
     set_state('kubernetes-worker.restart-needed')
 
 
@@ -738,7 +739,7 @@ def kubectl(*args):
 
 
 def kubectl_success(*args):
-    ''' Runs kubectl with the given args. Returns True if succesful, False if
+    ''' Runs kubectl with the given args. Returns True if successful, False if
     not. '''
     try:
         kubectl(*args)
@@ -810,7 +811,7 @@ def set_privileged():
     """Update the allow-privileged flag for kubelet.
 
     """
-    privileged = hookenv.config('allow-privileged')
+    privileged = hookenv.config('allow-privileged').lower()
     if privileged == 'auto':
         gpu_enabled = is_state('kubernetes-worker.gpu.enabled')
         privileged = 'true' if gpu_enabled else 'false'
@@ -975,35 +976,34 @@ def get_node_name():
     # Get all the nodes in the cluster
     cmd = 'kubectl --kubeconfig={} get no -o=json'.format(kubeconfig_path)
     cmd = cmd.split()
-    deadline = time.time() + 60
+    deadline = time.time() + 180
     while time.time() < deadline:
         try:
             raw = check_output(cmd)
-            break
         except CalledProcessError:
             hookenv.log('Failed to get node name for node %s.'
                         ' Will retry.' % (gethostname()))
             time.sleep(1)
-    else:
-        msg = 'Failed to get node name for node %s' % gethostname()
-        raise GetNodeNameFailed(msg)
+            continue
 
-    result = json.loads(raw.decode('utf-8'))
-    if 'items' in result:
-        for node in result['items']:
-            if 'status' not in node:
-                continue
-            if 'addresses' not in node['status']:
-                continue
+        result = json.loads(raw.decode('utf-8'))
+        if 'items' in result:
+            for node in result['items']:
+                if 'status' not in node:
+                    continue
+                if 'addresses' not in node['status']:
+                    continue
 
-            # find the hostname
-            for address in node['status']['addresses']:
-                if address['type'] == 'Hostname':
-                    if address['address'] == gethostname():
-                        return node['metadata']['name']
+                # find the hostname
+                for address in node['status']['addresses']:
+                    if address['type'] == 'Hostname':
+                        if address['address'] == gethostname():
+                            return node['metadata']['name']
 
-                    # if we didn't match, just bail to the next node
-                    break
+                        # if we didn't match, just bail to the next node
+                        break
+        time.sleep(1)
+
     msg = 'Failed to get node name for node %s' % gethostname()
     raise GetNodeNameFailed(msg)
 
@@ -1029,7 +1029,7 @@ def _apply_node_label(label, delete=False, overwrite=False):
             cmd = '{} --overwrite'.format(cmd)
     cmd = cmd.split()
 
-    deadline = time.time() + 60
+    deadline = time.time() + 180
     while time.time() < deadline:
         code = subprocess.call(cmd)
         if code == 0:

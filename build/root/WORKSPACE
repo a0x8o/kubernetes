@@ -1,8 +1,8 @@
 http_archive(
     name = "io_bazel_rules_go",
-    sha256 = "0efdc3cca8ac1c29e1c837bee260dab537dfd373eb4c43c7d50246a142a7c098",
-    strip_prefix = "rules_go-74d8ad8f9f59a1d9a7cf066d0980f9e394acccd7",
-    urls = ["https://github.com/bazelbuild/rules_go/archive/74d8ad8f9f59a1d9a7cf066d0980f9e394acccd7.tar.gz"],
+    sha256 = "af4281751a0e3b5d87fb6a52c83d358871b4f83d7acbe6e65a901fba6612a03e",
+    strip_prefix = "rules_go-bdf2df58c0d352ffa262ae4b36c7a1a2d6e3f0c9",
+    urls = ["https://github.com/bazelbuild/rules_go/archive/bdf2df58c0d352ffa262ae4b36c7a1a2d6e3f0c9.tar.gz"],
 )
 
 http_archive(
@@ -19,12 +19,12 @@ http_archive(
     urls = ["https://github.com/bazelbuild/bazel-skylib/archive/2169ae1c374aab4a09aa90e65efe1a3aad4e279b.tar.gz"],
 )
 
-ETCD_VERSION = "3.1.10"
+ETCD_VERSION = "3.2.14"
 
 new_http_archive(
     name = "com_coreos_etcd",
     build_file = "third_party/etcd.BUILD",
-    sha256 = "2d335f298619c6fb02b1124773a56966e448ad9952b26fea52909da4fe80d2be",
+    sha256 = "f77398f558ff19b65a0bf978b47868e03683f27090c56c054415666b1d78bf42",
     strip_prefix = "etcd-v%s-linux-amd64" % ETCD_VERSION,
     urls = ["https://github.com/coreos/etcd/releases/download/v%s/etcd-v%s-linux-amd64.tar.gz" % (ETCD_VERSION, ETCD_VERSION)],
 )
@@ -46,7 +46,7 @@ load("@io_bazel_rules_docker//docker:docker.bzl", "docker_repositories", "docker
 go_rules_dependencies()
 
 go_register_toolchains(
-    go_version = "1.9.2",
+    go_version = "1.9.3",
 )
 
 docker_repositories()

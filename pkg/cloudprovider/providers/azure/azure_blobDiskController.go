@@ -292,7 +292,7 @@ func (c *BlobDiskController) DeleteBlobDisk(diskURI string) error {
 			c.accounts[storageAccountName].diskCount = int32(diskCount)
 		} else {
 			glog.Warningf("azureDisk - failed to get disk count for %s however the delete disk operation was ok", storageAccountName)
-			return nil // we have failed to aquire a new count. not an error condition
+			return nil // we have failed to acquire a new count. not an error condition
 		}
 	}
 	atomic.AddInt32(&c.accounts[storageAccountName].diskCount, -1)
@@ -485,7 +485,7 @@ func (c *BlobDiskController) getAllStorageAccounts() (map[string]*storageAccount
 			continue
 		}
 		if v.Name == nil || v.Sku == nil {
-			glog.Infof("azureDisk - accountListResult Name or Sku is nil")
+			glog.Info("azureDisk - accountListResult Name or Sku is nil")
 			continue
 		}
 		glog.Infof("azureDisk - identified account %s as part of shared PVC accounts", *v.Name)
@@ -602,7 +602,7 @@ func (c *BlobDiskController) findSANameForDisk(storageAccountType storage.SkuNam
 
 	// avg are not create and we should create more accounts if we can
 	if aboveAvg && countAccounts < maxStorageAccounts {
-		glog.V(2).Infof("azureDisk - shared storageAccounts utilzation(%v) >  grow-at-avg-utilization (%v). New storage account will be created", avgUtilization, storageAccountUtilizationBeforeGrowing)
+		glog.V(2).Infof("azureDisk - shared storageAccounts utilization(%v) >  grow-at-avg-utilization (%v). New storage account will be created", avgUtilization, storageAccountUtilizationBeforeGrowing)
 		SAName = getAccountNameForNum(c.getNextAccountNum())
 		err := c.createStorageAccount(SAName, storageAccountType, c.common.location, true)
 		if err != nil {
@@ -613,7 +613,7 @@ func (c *BlobDiskController) findSANameForDisk(storageAccountType storage.SkuNam
 
 	// averages are not ok and we are at capacity (max storage accounts allowed)
 	if aboveAvg && countAccounts == maxStorageAccounts {
-		glog.Infof("azureDisk - shared storageAccounts utilzation(%v) > grow-at-avg-utilization (%v). But k8s maxed on SAs for PVC(%v). k8s will now exceed grow-at-avg-utilization without adding accounts",
+		glog.Infof("azureDisk - shared storageAccounts utilization(%v) > grow-at-avg-utilization (%v). But k8s maxed on SAs for PVC(%v). k8s will now exceed grow-at-avg-utilization without adding accounts",
 			avgUtilization, storageAccountUtilizationBeforeGrowing, maxStorageAccounts)
 	}
 
@@ -637,18 +637,6 @@ func (c *BlobDiskController) getNextAccountNum() int {
 	return max + 1
 }
 
-func (c *BlobDiskController) deleteStorageAccount(storageAccountName string) error {
-	resp, err := c.common.cloud.StorageAccountClient.Delete(c.common.resourceGroup, storageAccountName)
-	if err != nil {
-		return fmt.Errorf("azureDisk - Delete of storage account '%s' failed with status %s...%v", storageAccountName, resp.Status, err)
-	}
-
-	c.removeAccountState(storageAccountName)
-
-	glog.Infof("azureDisk - Storage Account %s was deleted", storageAccountName)
-	return nil
-}
-
 //Gets storage account exist, provisionStatus, Error if any
 func (c *BlobDiskController) getStorageAccountState(storageAccountName string) (bool, storage.ProvisioningState, error) {
 	account, err := c.common.cloud.StorageAccountClient.GetProperties(c.common.resourceGroup, storageAccountName)
@@ -665,12 +653,6 @@ func (c *BlobDiskController) addAccountState(key string, state *storageAccountSt
 	if _, ok := c.accounts[key]; !ok {
 		c.accounts[key] = state
 	}
-}
-
-func (c *BlobDiskController) removeAccountState(key string) {
-	accountsLock.Lock()
-	defer accountsLock.Unlock()
-	delete(c.accounts, key)
 }
 
 // pads account num with zeros as needed

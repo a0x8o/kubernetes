@@ -539,7 +539,7 @@ func (ss *scaleSet) getAgentPoolScaleSets(nodes []*v1.Node) (*[]string, error) {
 
 // GetVMSetNames selects all possible availability sets or scale sets
 // (depending vmType configured) for service load balancer. If the service has
-// no loadbalancer mode annotaion returns the primary VMSet. If service annotation
+// no loadbalancer mode annotation returns the primary VMSet. If service annotation
 // for loadbalancer exists then return the eligible VMSet.
 func (ss *scaleSet) GetVMSetNames(service *v1.Service, nodes []*v1.Node) (vmSetNames *[]string, err error) {
 	hasMode, isAuto, serviceVMSetNames := getServiceLoadBalancerMode(service)
@@ -654,7 +654,7 @@ func (ss *scaleSet) getScaleSetWithRetry(name string) (compute.VirtualMachineSca
 			glog.Errorf("backoff: failure, will retry,err=%v", retryErr)
 			return false, nil
 		}
-		glog.V(2).Infof("backoff: success")
+		glog.V(2).Info("backoff: success")
 		return true, nil
 	})
 

@@ -1287,8 +1287,6 @@ function prepare-log-file {
 function prepare-kube-proxy-manifest-variables {
   local -r src_file=$1;
 
-  remove-salt-config-comments "${src_file}"
-
   local -r kubeconfig="--kubeconfig=/var/lib/kube-proxy/kubeconfig"
   local kube_docker_registry="gcr.io/google_containers"
   if [[ -n "${KUBE_DOCKER_REGISTRY:-}" ]]; then
@@ -1374,7 +1372,6 @@ function prepare-etcd-manifest {
 
   local -r temp_file="/tmp/$5"
   cp "${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/etcd.manifest" "${temp_file}"
-  remove-salt-config-comments "${temp_file}"
   sed -i -e "s@{{ *suffix *}}@$1@g" "${temp_file}"
   sed -i -e "s@{{ *port *}}@$2@g" "${temp_file}"
   sed -i -e "s@{{ *server_port *}}@$3@g" "${temp_file}"
@@ -1393,7 +1390,7 @@ function prepare-etcd-manifest {
     sed -i -e "s@{{ *pillar\.get('storage_backend', '\(.*\)') *}}@\1@g" "${temp_file}"
   fi
   if [[ "${STORAGE_BACKEND:-${default_storage_backend}}" == "etcd3" ]]; then
-    sed -i -e "s@{{ *quota_bytes *}}@--quota-backend-bytes=4294967296@g" "${temp_file}"
+    sed -i -e "s@{{ *quota_bytes *}}@--quota-backend-bytes=${ETCD_QUOTA_BACKEND_BYTES:-4294967296}@g" "${temp_file}"
   else
     sed -i -e "s@{{ *quota_bytes *}}@@g" "${temp_file}"
   fi
@@ -1491,17 +1488,6 @@ function prepare-mounter-rootfs {
   cp /etc/resolv.conf "${CONTAINERIZED_MOUNTER_ROOTFS}/etc/"
 }
 
-# A helper function for removing salt configuration and comments from a file.
-# This is mainly for preparing a manifest file.
-#
-# $1: Full path of the file to manipulate
-function remove-salt-config-comments {
-  # Remove salt configuration.
-  sed -i "/^[ |\t]*{[#|%]/d" $1
-  # Remove comments.
-  sed -i "/^[ |\t]*#/d" $1
-}
-
 # Starts kubernetes apiserver.
 # It prepares the log file, loads the docker image, calculates variables, sets them
 # in the manifest file, and then copies the manifest file to /etc/kubernetes/manifests.
@@ -1527,6 +1513,7 @@ function start-kube-apiserver {
   params+=" --secure-port=443"
   params+=" --tls-cert-file=${APISERVER_SERVER_CERT_PATH}"
   params+=" --tls-private-key-file=${APISERVER_SERVER_KEY_PATH}"
+  params+=" --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname"
   if [[ -s "${REQUESTHEADER_CA_CERT_PATH:-}" ]]; then
     params+=" --requestheader-client-ca-file=${REQUESTHEADER_CA_CERT_PATH}"
     params+=" --requestheader-allowed-names=aggregator"
@@ -1553,6 +1540,9 @@ function start-kube-apiserver {
   fi
   if [[ -n "${STORAGE_MEDIA_TYPE:-}" ]]; then
     params+=" --storage-media-type=${STORAGE_MEDIA_TYPE}"
+  fi
+  if [[ -n "${ETCD_COMPACTION_INTERVAL_SEC:-}" ]]; then
+    params+=" --etcd-compaction-interval=${ETCD_COMPACTION_INTERVAL_SEC}s"
   fi
   if [[ -n "${KUBE_APISERVER_REQUEST_TIMEOUT_SEC:-}" ]]; then
     params+=" --request-timeout=${KUBE_APISERVER_REQUEST_TIMEOUT_SEC}s"
@@ -1683,11 +1673,9 @@ function start-kube-apiserver {
   if [[ -n "${PROJECT_ID:-}" && -n "${TOKEN_URL:-}" && -n "${TOKEN_BODY:-}" && -n "${NODE_NETWORK:-}" ]]; then
     local -r vm_external_ip=$(curl --retry 5 --retry-delay 3 ${CURL_RETRY_CONNREFUSED} --fail --silent -H 'Metadata-Flavor: Google' "http://metadata/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip")
     if [[ -n "${PROXY_SSH_USER:-}" ]]; then
-      params+=" --advertise-address=${vm_external_ip}"      
+      params+=" --advertise-address=${vm_external_ip}"
       params+=" --ssh-user=${PROXY_SSH_USER}"
       params+=" --ssh-keyfile=/etc/srv/sshproxy/.sshkeyfile"
-    else
-      params+=" --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname",
     fi
   elif [ -n "${MASTER_ADVERTISE_ADDRESS:-}" ]; then
     params="${params} --advertise-address=${MASTER_ADVERTISE_ADDRESS}"
@@ -1702,7 +1690,7 @@ function start-kube-apiserver {
   fi
 
 
-  local authorization_mode="Node,RBAC"
+  local authorization_mode="RBAC"
   local -r src_dir="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty"
 
   # Enable ABAC mode unless the user explicitly opts out with ENABLE_LEGACY_ABAC=false
@@ -1711,7 +1699,6 @@ function start-kube-apiserver {
     # Create the ABAC file if it doesn't exist yet, or if we have a KUBE_USER set (to ensure the right user is given permissions)
     if [[ -n "${KUBE_USER:-}" || ! -e /etc/srv/kubernetes/abac-authz-policy.jsonl ]]; then
       local -r abac_policy_json="${src_dir}/abac-authz-policy.jsonl"
-      remove-salt-config-comments "${abac_policy_json}"
       if [[ -n "${KUBE_USER:-}" ]]; then
         sed -i -e "s/{{kube_user}}/${KUBE_USER}/g" "${abac_policy_json}"
       else
@@ -1727,11 +1714,12 @@ function start-kube-apiserver {
   local webhook_config_mount=""
   local webhook_config_volume=""
   if [[ -n "${GCP_AUTHZ_URL:-}" ]]; then
-    authorization_mode+=",Webhook"
+    authorization_mode="Webhook,${authorization_mode}"
     params+=" --authorization-webhook-config-file=/etc/gcp_authz.config"
     webhook_config_mount="{\"name\": \"webhookconfigmount\",\"mountPath\": \"/etc/gcp_authz.config\", \"readOnly\": false},"
     webhook_config_volume="{\"name\": \"webhookconfigmount\",\"hostPath\": {\"path\": \"/etc/gcp_authz.config\", \"type\": \"FileOrCreate\"}},"
   fi
+  authorization_mode="Node,${authorization_mode}"
   params+=" --authorization-mode=${authorization_mode}"
 
   local container_env=""
@@ -1755,7 +1743,6 @@ function start-kube-apiserver {
   fi
 
   src_file="${src_dir}/kube-apiserver.manifest"
-  remove-salt-config-comments "${src_file}"
   # Evaluate variables.
   local -r kube_apiserver_docker_tag=$(cat /home/kubernetes/kube-docker-files/kube-apiserver.docker_tag)
   sed -i -e "s@{{params}}@${params}@g" "${src_file}"
@@ -1865,7 +1852,6 @@ function start-kube-controller-manager {
   fi
 
   local -r src_file="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/kube-controller-manager.manifest"
-  remove-salt-config-comments "${src_file}"
   # Evaluate variables.
   sed -i -e "s@{{srv_kube_path}}@/etc/srv/kubernetes@g" "${src_file}"
   sed -i -e "s@{{pillar\['kube_docker_registry'\]}}@${DOCKER_REGISTRY}@g" "${src_file}"
@@ -1913,7 +1899,6 @@ function start-kube-scheduler {
 
   # Remove salt comments and replace variables with values.
   local -r src_file="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/kube-scheduler.manifest"
-  remove-salt-config-comments "${src_file}"
 
   sed -i -e "s@{{srv_kube_path}}@/etc/srv/kubernetes@g" "${src_file}"
   sed -i -e "s@{{params}}@${params}@g" "${src_file}"
@@ -1934,7 +1919,6 @@ function start-cluster-autoscaler {
 
     # Remove salt comments and replace variables with values
     local -r src_file="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/cluster-autoscaler.manifest"
-    remove-salt-config-comments "${src_file}"
 
     local params="${AUTOSCALER_MIG_CONFIG} ${CLOUD_CONFIG_OPT} ${AUTOSCALER_EXPANDER_CONFIG:---expander=price}"
     sed -i -e "s@{{params}}@${params}@g" "${src_file}"
@@ -2143,7 +2127,6 @@ EOF
     else
       controller_yaml="${controller_yaml}/heapster-controller.yaml"
     fi
-    remove-salt-config-comments "${controller_yaml}"
 
     sed -i -e "s@{{ cluster_name }}@${CLUSTER_NAME}@g" "${controller_yaml}"
     sed -i -e "s@{{ *base_metrics_memory *}}@${base_metrics_memory}@g" "${controller_yaml}"
@@ -2189,18 +2172,6 @@ EOF
     else
       setup-kube-dns-manifest
     fi
-  fi
-  if [[ "${ENABLE_CLUSTER_REGISTRY:-}" == "true" ]]; then
-    setup-addon-manifests "addons" "registry"
-    local -r registry_pv_file="${dst_dir}/registry/registry-pv.yaml"
-    local -r registry_pvc_file="${dst_dir}/registry/registry-pvc.yaml"
-    mv "${dst_dir}/registry/registry-pv.yaml.in" "${registry_pv_file}"
-    mv "${dst_dir}/registry/registry-pvc.yaml.in" "${registry_pvc_file}"
-    # Replace the salt configurations with variable values.
-    remove-salt-config-comments "${controller_yaml}"
-    sed -i -e "s@{{ *pillar\['cluster_registry_disk_size'\] *}}@${CLUSTER_REGISTRY_DISK_SIZE}@g" "${registry_pv_file}"
-    sed -i -e "s@{{ *pillar\['cluster_registry_disk_size'\] *}}@${CLUSTER_REGISTRY_DISK_SIZE}@g" "${registry_pvc_file}"
-    sed -i -e "s@{{ *pillar\['cluster_registry_disk_name'\] *}}@${CLUSTER_REGISTRY_DISK}@g" "${registry_pvc_file}"
   fi
   if [[ "${ENABLE_NODE_LOGGING:-}" == "true" ]] && \
      [[ "${LOGGING_DESTINATION:-}" == "elasticsearch" ]] && \
@@ -2257,12 +2228,6 @@ function start-image-puller {
   echo "Start image-puller"
   cp "${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/e2e-image-puller.manifest" \
     /etc/kubernetes/manifests/
-}
-
-# Starts kube-registry proxy
-function start-kube-registry-proxy {
-  echo "Start kube-registry-proxy"
-  cp "${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/kube-registry-proxy.yaml" /etc/kubernetes/manifests
 }
 
 # Starts a l7 loadbalancing controller for ingress.
@@ -2447,10 +2412,6 @@ if [[ "${KUBERNETES_MASTER:-}" == "true" ]]; then
 else
   if [[ "${KUBE_PROXY_DAEMONSET:-}" != "true" ]]; then
     start-kube-proxy
-  fi
-  # Kube-registry-proxy.
-  if [[ "${ENABLE_CLUSTER_REGISTRY:-}" == "true" ]]; then
-    start-kube-registry-proxy
   fi
   if [[ "${PREPULL_E2E_IMAGES:-}" == "true" ]]; then
     start-image-puller

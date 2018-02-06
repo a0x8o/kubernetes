@@ -172,7 +172,7 @@ func (az *Cloud) EnsureLoadBalancerDeleted(clusterName string, service *v1.Servi
 
 // getServiceLoadBalancer gets the loadbalancer for the service if it already exists.
 // If wantLb is TRUE then -it selects a new load balancer.
-// In case the selected load balancer does not exists it returns network.LoadBalancer struct
+// In case the selected load balancer does not exist it returns network.LoadBalancer struct
 // with added metadata (such as name, location) and existsLB set to FALSE.
 // By default - cluster default LB is returned.
 func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string, nodes []*v1.Node, wantLb bool) (lb *network.LoadBalancer, status *v1.LoadBalancerStatus, exists bool, err error) {
@@ -231,10 +231,10 @@ func (az *Cloud) getServiceLoadBalancer(service *v1.Service, clusterName string,
 	return defaultLB, nil, false, nil
 }
 
-// select load balancer for the service in the cluster
-// the selection algorithm selectes the the load balancer with currently has
-// the minimum lb rules, there there are multiple LB's with same number of rules
-// it selects the first one (sorted based on name)
+// selectLoadBalancer selects load balancer for the service in the cluster.
+// The selection algorithm selects the the load balancer with currently has
+// the minimum lb rules. If there are multiple LBs with same number of rules,
+// then selects the first one (sorted based on name).
 func (az *Cloud) selectLoadBalancer(clusterName string, service *v1.Service, existingLBs *[]network.LoadBalancer, nodes []*v1.Node) (selectedLB *network.LoadBalancer, existsLb bool, err error) {
 	isInternal := requiresInternalLoadBalancer(service)
 	serviceName := getServiceName(service)
@@ -294,7 +294,7 @@ func (az *Cloud) selectLoadBalancer(clusterName string, service *v1.Service, exi
 
 func (az *Cloud) getServiceLoadBalancerStatus(service *v1.Service, lb *network.LoadBalancer) (status *v1.LoadBalancerStatus, err error) {
 	if lb == nil {
-		glog.V(10).Infof("getServiceLoadBalancerStatus lb is nil")
+		glog.V(10).Info("getServiceLoadBalancerStatus lb is nil")
 		return nil, nil
 	}
 	if lb.FrontendIPConfigurations == nil || *lb.FrontendIPConfigurations == nil {
@@ -771,6 +771,19 @@ func (az *Cloud) reconcileLoadBalancer(clusterName string, service *v1.Service, 
 			if err != nil {
 				glog.V(2).Infof("ensure(%s) abort backoff: lb(%s) - updating", serviceName, lbName)
 				return nil, err
+			}
+
+			if isInternal {
+				// Refresh updated lb which will be used later in other places.
+				newLB, exist, err := az.getAzureLoadBalancer(lbName)
+				if err != nil {
+					glog.V(2).Infof("getAzureLoadBalancer(%s) failed: %v", lbName, err)
+					return nil, err
+				}
+				if !exist {
+					return nil, fmt.Errorf("load balancer %q not found", lbName)
+				}
+				lb = &newLB
 			}
 		}
 	}

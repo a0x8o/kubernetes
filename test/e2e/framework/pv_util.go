@@ -263,6 +263,11 @@ func createPV(c clientset.Interface, pv *v1.PersistentVolume) (*v1.PersistentVol
 	return pv, nil
 }
 
+// create the PV resource. Fails test on error.
+func CreatePV(c clientset.Interface, pv *v1.PersistentVolume) (*v1.PersistentVolume, error) {
+	return createPV(c, pv)
+}
+
 // create the PVC resource. Fails test on error.
 func CreatePVC(c clientset.Interface, ns string, pvc *v1.PersistentVolumeClaim) (*v1.PersistentVolumeClaim, error) {
 	pvc, err := c.CoreV1().PersistentVolumeClaims(ns).Create(pvc)
@@ -924,6 +929,26 @@ func CreateSecPod(client clientset.Interface, namespace string, pvclaims []*v1.P
 // Define and create a pod with a mounted PV.  Pod runs infinite loop until killed.
 func CreateClientPod(c clientset.Interface, ns string, pvc *v1.PersistentVolumeClaim) (*v1.Pod, error) {
 	return CreatePod(c, ns, nil, []*v1.PersistentVolumeClaim{pvc}, true, "")
+}
+
+// CreateUnschedulablePod with given claims based on node selector
+func CreateUnschedulablePod(client clientset.Interface, namespace string, nodeSelector map[string]string, pvclaims []*v1.PersistentVolumeClaim, isPrivileged bool, command string) (*v1.Pod, error) {
+	pod := MakePod(namespace, nodeSelector, pvclaims, isPrivileged, command)
+	pod, err := client.CoreV1().Pods(namespace).Create(pod)
+	if err != nil {
+		return nil, fmt.Errorf("pod Create API error: %v", err)
+	}
+	// Waiting for pod to become Unschedulable
+	err = WaitForPodNameUnschedulableInNamespace(client, pod.Name, namespace)
+	if err != nil {
+		return pod, fmt.Errorf("pod %q is not Unschedulable: %v", pod.Name, err)
+	}
+	// get fresh pod info
+	pod, err = client.CoreV1().Pods(namespace).Get(pod.Name, metav1.GetOptions{})
+	if err != nil {
+		return pod, fmt.Errorf("pod Get API error: %v", err)
+	}
+	return pod, nil
 }
 
 // wait until all pvcs phase set to bound

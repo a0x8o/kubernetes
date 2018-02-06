@@ -39,7 +39,7 @@ NODE_DISK_SIZE=${NODE_DISK_SIZE:-100GB}
 NODE_LOCAL_SSDS=${NODE_LOCAL_SSDS:-0}
 # An extension to local SSDs allowing users to specify block/fs and SCSI/NVMe devices
 # Format of this variable will be "#,scsi/nvme,block/fs" you can specify multiple
-# configurations by seperating them by a semi-colon ex. "2,scsi,fs;1,nvme,block"
+# configurations by separating them by a semi-colon ex. "2,scsi,fs;1,nvme,block"
 # is a request for 2 SCSI formatted and mounted SSDs and 1 NVMe block device SSD.
 NODE_LOCAL_SSDS_EXT=${NODE_LOCAL_SSDS_EXT:-}
 NODE_ACCELERATORS=${NODE_ACCELERATORS:-""}
@@ -149,7 +149,7 @@ ENABLE_METRICS_SERVER="${KUBE_ENABLE_METRICS_SERVER:-true}"
 # Useful for scheduling heapster in large clusters with nodes of small size.
 HEAPSTER_MACHINE_TYPE="${HEAPSTER_MACHINE_TYPE:-}"
 
-# Set etcd image (e.g. gcr.io/google_containers/etcd) and version (e.g. 3.1.10) if you need
+# Set etcd image (e.g. gcr.io/google_containers/etcd) and version (e.g. 3.2.14) if you need
 # non-default version.
 ETCD_IMAGE="${TEST_ETCD_IMAGE:-}"
 ETCD_DOCKER_REPOSITORY="${TEST_ETCD_DOCKER_REPOSITORY:-}"
@@ -249,12 +249,6 @@ DNS_DOMAIN="cluster.local"
 # Optional: Enable DNS horizontal autoscaler
 ENABLE_DNS_HORIZONTAL_AUTOSCALER="${KUBE_ENABLE_DNS_HORIZONTAL_AUTOSCALER:-true}"
 
-# Optional: Install cluster docker registry.
-ENABLE_CLUSTER_REGISTRY="${KUBE_ENABLE_CLUSTER_REGISTRY:-false}"
-CLUSTER_REGISTRY_DISK="${CLUSTER_REGISTRY_DISK:-${INSTANCE_PREFIX}-kube-system-kube-registry}"
-CLUSTER_REGISTRY_DISK_SIZE="${CLUSTER_REGISTRY_DISK_SIZE:-200GB}"
-CLUSTER_REGISTRY_DISK_TYPE_GCE="${CLUSTER_REGISTRY_DISK_TYPE_GCE:-pd-standard}"
-
 # Optional: Install Kubernetes UI
 ENABLE_CLUSTER_UI="${KUBE_ENABLE_CLUSTER_UI:-true}"
 
@@ -346,11 +340,7 @@ STORAGE_BACKEND=${STORAGE_BACKEND:-}
 # Storage media type: application/json and application/vnd.kubernetes.protobuf are supported.
 STORAGE_MEDIA_TYPE=${STORAGE_MEDIA_TYPE:-}
 
-# OpenContrail networking plugin specific settings
-NETWORK_PROVIDER="${NETWORK_PROVIDER:-kubenet}" # none, opencontrail, kubenet
-OPENCONTRAIL_TAG="${OPENCONTRAIL_TAG:-R2.20}"
-OPENCONTRAIL_KUBERNETES_TAG="${OPENCONTRAIL_KUBERNETES_TAG:-master}"
-OPENCONTRAIL_PUBLIC_SUBNET="${OPENCONTRAIL_PUBLIC_SUBNET:-10.1.0.0/16}"
+NETWORK_PROVIDER="${NETWORK_PROVIDER:-kubenet}" # none, kubenet
 
 # Network Policy plugin specific settings.
 NETWORK_POLICY_PROVIDER="${NETWORK_POLICY_PROVIDER:-none}" # calico
@@ -380,10 +370,6 @@ ENABLE_DEFAULT_STORAGE_CLASS="${ENABLE_DEFAULT_STORAGE_CLASS:-true}"
 # Disabling this by default in tests ensures default RBAC policies are sufficient from 1.6+
 # Upgrade test jobs that go from a version < 1.6 to a version >= 1.6 should override this to be true.
 ENABLE_LEGACY_ABAC="${ENABLE_LEGACY_ABAC:-false}" # true, false
-
-# TODO(dawn1107): Remove this once the flag is built into CVM image.
-# Kernel panic upon soft lockup issue
-SOFTLOCKUP_PANIC="${SOFTLOCKUP_PANIC:-true}" # true, false
 
 # Enable a simple "AdvancedAuditing" setup for testing.
 ENABLE_APISERVER_ADVANCED_AUDIT="${ENABLE_APISERVER_ADVANCED_AUDIT:-true}" # true, false

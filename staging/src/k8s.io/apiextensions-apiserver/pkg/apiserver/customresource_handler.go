@@ -309,8 +309,8 @@ func (r *crdHandler) removeDeadStorage() {
 	r.customStorage.Store(storageMap2)
 }
 
-// GetCustomResourceListerCollectionDeleter returns the ListerCollectionDeleter for
-// the given uid, or nil if an error occurs.
+// GetCustomResourceListerCollectionDeleter returns the ListerCollectionDeleter of
+// the given crd.
 func (r *crdHandler) GetCustomResourceListerCollectionDeleter(crd *apiextensions.CustomResourceDefinition) (finalizer.ListerCollectionDeleter, error) {
 	info, err := r.getOrCreateServingInfoFor(crd)
 	if err != nil {
@@ -371,7 +371,7 @@ func (r *crdHandler) getOrCreateServingInfoFor(crd *apiextensions.CustomResource
 	selfLinkPrefix := ""
 	switch crd.Spec.Scope {
 	case apiextensions.ClusterScoped:
-		selfLinkPrefix = "/" + path.Join("apis", crd.Spec.Group, crd.Spec.Version) + "/"
+		selfLinkPrefix = "/" + path.Join("apis", crd.Spec.Group, crd.Spec.Version) + "/" + crd.Status.AcceptedNames.Plural + "/"
 	case apiextensions.NamespaceScoped:
 		selfLinkPrefix = "/" + path.Join("apis", crd.Spec.Group, crd.Spec.Version, "namespaces") + "/"
 	}
