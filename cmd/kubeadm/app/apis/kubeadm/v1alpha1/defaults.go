@@ -28,7 +28,6 @@ import (
 	kubeletconfigv1alpha1 "k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/v1alpha1"
 	kubeproxyscheme "k8s.io/kubernetes/pkg/proxy/apis/kubeproxyconfig/scheme"
 	kubeproxyconfigv1alpha1 "k8s.io/kubernetes/pkg/proxy/apis/kubeproxyconfig/v1alpha1"
-	utilpointer "k8s.io/kubernetes/pkg/util/pointer"
 )
 
 const (
@@ -47,7 +46,7 @@ const (
 	// DefaultCertificatesDir defines default certificate directory
 	DefaultCertificatesDir = "/etc/kubernetes/pki"
 	// DefaultImageRepository defines default image registry
-	DefaultImageRepository = "gcr.io/google_containers"
+	DefaultImageRepository = "k8s.gcr.io"
 	// DefaultManifestsDir defines default manifests directory
 	DefaultManifestsDir = "/etc/kubernetes/manifests"
 
@@ -201,9 +200,6 @@ func SetDefaults_KubeletConfiguration(obj *MasterConfiguration) {
 	}
 	if obj.KubeletConfiguration.BaseConfig.Authentication.X509.ClientCAFile == "" {
 		obj.KubeletConfiguration.BaseConfig.Authentication.X509.ClientCAFile = DefaultCACertPath
-	}
-	if obj.KubeletConfiguration.BaseConfig.CAdvisorPort == nil {
-		obj.KubeletConfiguration.BaseConfig.CAdvisorPort = utilpointer.Int32Ptr(0)
 	}
 
 	scheme, _, _ := kubeletscheme.NewSchemeAndCodecs()

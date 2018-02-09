@@ -453,7 +453,27 @@ def extra_args_changed():
 
 @when('config.changed.docker-logins')
 def docker_logins_changed():
+    """Set a flag to handle new docker login options.
+
+    If docker daemon options have also changed, set a flag to ensure the
+    daemon is restarted prior to running docker login.
+    """
     config = hookenv.config()
+
+    if data_changed('docker-opts', config['docker-opts']):
+        hookenv.log('Found new docker daemon options. Requesting a restart.')
+        # State will be removed by layer-docker after restart
+        set_state('docker.restart')
+
+    set_state('kubernetes-worker.docker-login')
+
+
+@when('kubernetes-worker.docker-login')
+@when_not('docker.restart')
+def run_docker_login():
+    """Login to a docker registry with configured credentials."""
+    config = hookenv.config()
+
     previous_logins = config.previous('docker-logins')
     logins = config['docker-logins']
     logins = json.loads(logins)
@@ -474,6 +494,7 @@ def docker_logins_changed():
         cmd = ['docker', 'login', server, '-u', username, '-p', password]
         subprocess.check_call(cmd)
 
+    remove_state('kubernetes-worker.docker-login')
     set_state('kubernetes-worker.restart-needed')
 
 
@@ -665,10 +686,10 @@ def launch_default_ingress_controller():
        context['defaultbackend_image'] == "auto"):
         if context['arch'] == 's390x':
             context['defaultbackend_image'] = \
-                "gcr.io/google_containers/defaultbackend-s390x:1.4"
+                "k8s.gcr.io/defaultbackend-s390x:1.4"
         else:
             context['defaultbackend_image'] = \
-                "gcr.io/google_containers/defaultbackend:1.4"
+                "k8s.gcr.io/defaultbackend:1.4"
 
     # Render the default http backend (404) replicationcontroller manifest
     manifest = addon_path.format('default-http-backend.yaml')
@@ -691,7 +712,7 @@ def launch_default_ingress_controller():
                 "docker.io/cdkbot/nginx-ingress-controller-s390x:0.9.0-beta.13"
         else:
             context['ingress_image'] = \
-                "gcr.io/google_containers/nginx-ingress-controller:0.9.0-beta.15" # noqa
+                "k8s.gcr.io/nginx-ingress-controller:0.9.0-beta.15" # noqa
     context['juju_application'] = hookenv.service_name()
     manifest = addon_path.format('ingress-daemon-set.yaml')
     render('ingress-daemon-set.yaml', manifest, context)

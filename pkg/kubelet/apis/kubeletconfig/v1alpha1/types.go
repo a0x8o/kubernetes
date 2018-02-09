@@ -114,8 +114,6 @@ type KubeletConfiguration struct {
 	EnableDebuggingHandlers *bool `json:"enableDebuggingHandlers"`
 	// enableContentionProfiling enables lock contention profiling, if enableDebuggingHandlers is true.
 	EnableContentionProfiling bool `json:"enableContentionProfiling"`
-	// cAdvisorPort is the port of the localhost cAdvisor endpoint (set to 0 to disable)
-	CAdvisorPort *int32 `json:"cAdvisorPort"`
 	// healthzPort is the port of the localhost healthz endpoint (set to 0 to disable)
 	HealthzPort *int32 `json:"healthzPort"`
 	// healthzBindAddress is the IP address for the healthz server to serve
@@ -275,9 +273,10 @@ type KubeletConfiguration struct {
 	// Refer to [Node Allocatable](https://git.k8s.io/community/contributors/design-proposals/node/node-allocatable.md) doc for more information.
 	KubeReservedCgroup string `json:"kubeReservedCgroup,omitempty"`
 	// This flag specifies the various Node Allocatable enforcements that Kubelet needs to perform.
-	// This flag accepts a list of options. Acceptible options are `pods`, `system-reserved` & `kube-reserved`.
+	// This flag accepts a list of options. Acceptable options are `none`, `pods`, `system-reserved` & `kube-reserved`.
+	// If `none` is specified, no other options may be specified.
 	// Refer to [Node Allocatable](https://git.k8s.io/community/contributors/design-proposals/node/node-allocatable.md) doc for more information.
-	EnforceNodeAllocatable []string `json:"enforceNodeAllocatable"`
+	EnforceNodeAllocatable []string `json:"enforceNodeAllocatable,omitempty"`
 }
 
 type KubeletAuthorizationMode string

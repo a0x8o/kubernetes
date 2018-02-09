@@ -1775,6 +1775,74 @@ func TestValidateCSIVolumeSource(t *testing.T) {
 			errtype:  field.ErrorTypeRequired,
 			errfield: "volumeHandle",
 		},
+		{
+			name: "driver name: ok no punctuations",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "comgooglestoragecsigcepd", VolumeHandle: "test-123"},
+		},
+		{
+			name: "driver name: ok dot only",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "io.kubernetes.storage.csi.flex", VolumeHandle: "test-123"},
+		},
+		{
+			name: "driver name: ok dash only",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "io-kubernetes-storage-csi-flex", VolumeHandle: "test-123"},
+		},
+		{
+			name: "driver name: ok underscore only",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "io_kubernetes_storage_csi_flex", VolumeHandle: "test-123"},
+		},
+		{
+			name: "driver name: ok dot underscores",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "io.kubernetes.storage_csi.flex", VolumeHandle: "test-123"},
+		},
+		{
+			name: "driver name: ok beginnin with number",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "2io.kubernetes.storage_csi.flex", VolumeHandle: "test-123"},
+		},
+		{
+			name: "driver name: ok ending with number",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "io.kubernetes.storage_csi.flex2", VolumeHandle: "test-123"},
+		},
+		{
+			name: "driver name: ok dot dash underscores",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "io.kubernetes-storage.csi_flex", VolumeHandle: "test-123"},
+		},
+		{
+			name:     "driver name: invalid length 0",
+			csi:      &core.CSIPersistentVolumeSource{Driver: "", VolumeHandle: "test-123"},
+			errtype:  field.ErrorTypeRequired,
+			errfield: "driver",
+		},
+		{
+			name:     "driver name: invalid length 1",
+			csi:      &core.CSIPersistentVolumeSource{Driver: "a", VolumeHandle: "test-123"},
+			errtype:  field.ErrorTypeInvalid,
+			errfield: "driver",
+		},
+		{
+			name:     "driver name: invalid length > 63",
+			csi:      &core.CSIPersistentVolumeSource{Driver: "comgooglestoragecsigcepdcomgooglestoragecsigcepdcomgooglestoragecsigcepdcomgooglestoragecsigcepd", VolumeHandle: "test-123"},
+			errtype:  field.ErrorTypeTooLong,
+			errfield: "driver",
+		},
+		{
+			name:     "driver name: invalid start char",
+			csi:      &core.CSIPersistentVolumeSource{Driver: "_comgooglestoragecsigcepd", VolumeHandle: "test-123"},
+			errtype:  field.ErrorTypeInvalid,
+			errfield: "driver",
+		},
+		{
+			name:     "driver name: invalid end char",
+			csi:      &core.CSIPersistentVolumeSource{Driver: "comgooglestoragecsigcepd/", VolumeHandle: "test-123"},
+			errtype:  field.ErrorTypeInvalid,
+			errfield: "driver",
+		},
+		{
+			name:     "driver name: invalid separators",
+			csi:      &core.CSIPersistentVolumeSource{Driver: "com/google/storage/csi~gcepd", VolumeHandle: "test-123"},
+			errtype:  field.ErrorTypeInvalid,
+			errfield: "driver",
+		},
 	}
 
 	err := utilfeature.DefaultFeatureGate.Set("CSIPersistentVolume=true")
@@ -5895,38 +5963,6 @@ func TestValidatePodSpec(t *testing.T) {
 			RestartPolicy:     core.RestartPolicyAlways,
 			DNSPolicy:         core.DNSClusterFirst,
 			PriorityClassName: "InvalidName",
-		},
-		"with privileged and allowPrivilegeEscalation false": {
-			Containers: []core.Container{
-				{
-					Name:            "ctr",
-					Image:           "image",
-					ImagePullPolicy: "IfNotPresent",
-					Ports: []core.ContainerPort{
-						{HostPort: 8080, ContainerPort: 2600, Protocol: "TCP"}},
-					SecurityContext: &core.SecurityContext{
-						Privileged:               boolPtr(true),
-						AllowPrivilegeEscalation: boolPtr(false),
-					},
-				},
-			},
-		},
-		"with CAP_SYS_ADMIN and allowPrivilegeEscalation false": {
-			Containers: []core.Container{
-				{
-					Name:            "ctr",
-					Image:           "image",
-					ImagePullPolicy: "IfNotPresent",
-					Ports: []core.ContainerPort{
-						{HostPort: 8080, ContainerPort: 2600, Protocol: "TCP"}},
-					SecurityContext: &core.SecurityContext{
-						Capabilities: &core.Capabilities{
-							Add: []core.Capability{"CAP_SYS_ADMIN"},
-						},
-						AllowPrivilegeEscalation: boolPtr(false),
-					},
-				},
-			},
 		},
 	}
 	for k, v := range failureCases {
@@ -11918,11 +11954,10 @@ func TestValidateTLSSecret(t *testing.T) {
 }
 
 func TestValidateSecurityContext(t *testing.T) {
-	priv := false
 	runAsUser := int64(1)
 	fullValidSC := func() *core.SecurityContext {
 		return &core.SecurityContext{
-			Privileged: &priv,
+			Privileged: boolPtr(false),
 			Capabilities: &core.Capabilities{
 				Add:  []core.Capability{"foo"},
 				Drop: []core.Capability{"bar"},
@@ -11967,17 +12002,25 @@ func TestValidateSecurityContext(t *testing.T) {
 	}
 
 	privRequestWithGlobalDeny := fullValidSC()
-	requestPrivileged := true
-	privRequestWithGlobalDeny.Privileged = &requestPrivileged
+	privRequestWithGlobalDeny.Privileged = boolPtr(true)
 
 	negativeRunAsUser := fullValidSC()
 	negativeUser := int64(-1)
 	negativeRunAsUser.RunAsUser = &negativeUser
 
+	privWithoutEscalation := fullValidSC()
+	privWithoutEscalation.Privileged = boolPtr(true)
+	privWithoutEscalation.AllowPrivilegeEscalation = boolPtr(false)
+
+	capSysAdminWithoutEscalation := fullValidSC()
+	capSysAdminWithoutEscalation.Capabilities.Add = []core.Capability{"CAP_SYS_ADMIN"}
+	capSysAdminWithoutEscalation.AllowPrivilegeEscalation = boolPtr(false)
+
 	errorCases := map[string]struct {
-		sc          *core.SecurityContext
-		errorType   field.ErrorType
-		errorDetail string
+		sc           *core.SecurityContext
+		errorType    field.ErrorType
+		errorDetail  string
+		capAllowPriv bool
 	}{
 		"request privileged when capabilities forbids": {
 			sc:          privRequestWithGlobalDeny,
@@ -11989,8 +12032,22 @@ func TestValidateSecurityContext(t *testing.T) {
 			errorType:   "FieldValueInvalid",
 			errorDetail: "must be between",
 		},
+		"with CAP_SYS_ADMIN and allowPrivilegeEscalation false": {
+			sc:          capSysAdminWithoutEscalation,
+			errorType:   "FieldValueInvalid",
+			errorDetail: "cannot set `allowPrivilegeEscalation` to false and `capabilities.Add` CAP_SYS_ADMIN",
+		},
+		"with privileged and allowPrivilegeEscalation false": {
+			sc:           privWithoutEscalation,
+			errorType:    "FieldValueInvalid",
+			errorDetail:  "cannot set `allowPrivilegeEscalation` to false and `privileged` to true",
+			capAllowPriv: true,
+		},
 	}
 	for k, v := range errorCases {
+		capabilities.SetForTests(capabilities.Capabilities{
+			AllowPrivileged: v.capAllowPriv,
+		})
 		if errs := ValidateSecurityContext(v.sc, field.NewPath("field")); len(errs) == 0 || errs[0].Type != v.errorType || !strings.Contains(errs[0].Detail, v.errorDetail) {
 			t.Errorf("[%s] Expected error type %q with detail %q, got %v", k, v.errorType, v.errorDetail, errs)
 		}

@@ -61,11 +61,6 @@ var ErrNoNodesAvailable = fmt.Errorf("no nodes available to schedule pods")
 
 const (
 	NoNodeAvailableMsg = "0/%v nodes are available"
-	// NominatedNodeAnnotationKey is used to annotate a pod that has preempted other pods.
-	// The scheduler uses the annotation to find that the pod shouldn't preempt more pods
-	// when it gets to the head of scheduling queue again.
-	// See podEligibleToPreemptOthers() for more information.
-	NominatedNodeAnnotationKey = "scheduler.kubernetes.io/nominated-node-name"
 )
 
 // Error returns detailed information of why the pod failed to fit on each node
@@ -312,9 +307,25 @@ func findNodesThatFit(
 
 		// We can use the same metadata producer for all nodes.
 		meta := metadataProducer(pod, nodeNameToInfo)
+
+		var equivCacheInfo *equivalenceClassInfo
+		if ecache != nil {
+			// getEquivalenceClassInfo will return immediately if no equivalence pod found
+			equivCacheInfo = ecache.getEquivalenceClassInfo(pod)
+		}
+
 		checkNode := func(i int) {
 			nodeName := nodes[i].Name
-			fits, failedPredicates, err := podFitsOnNode(pod, meta, nodeNameToInfo[nodeName], predicateFuncs, ecache, schedulingQueue, alwaysCheckAllPredicates)
+			fits, failedPredicates, err := podFitsOnNode(
+				pod,
+				meta,
+				nodeNameToInfo[nodeName],
+				predicateFuncs,
+				ecache,
+				schedulingQueue,
+				alwaysCheckAllPredicates,
+				equivCacheInfo,
+			)
 			if err != nil {
 				predicateResultLock.Lock()
 				errs[err.Error()]++
@@ -389,6 +400,8 @@ func addNominatedPods(podPriority int32, meta algorithm.PredicateMetadata,
 }
 
 // podFitsOnNode checks whether a node given by NodeInfo satisfies the given predicate functions.
+// For given pod, podFitsOnNode will check if any equivalent pod exists and try to reuse its cached
+// predicate results as possible.
 // This function is called from two different places: Schedule and Preempt.
 // When it is called from Schedule, we want to test whether the pod is schedulable
 // on the node with all the existing pods on the node plus higher and equal priority
@@ -404,11 +417,11 @@ func podFitsOnNode(
 	ecache *EquivalenceCache,
 	queue SchedulingQueue,
 	alwaysCheckAllPredicates bool,
+	equivCacheInfo *equivalenceClassInfo,
 ) (bool, []algorithm.PredicateFailureReason, error) {
 	var (
-		equivalenceHash  uint64
-		failedPredicates []algorithm.PredicateFailureReason
 		eCacheAvailable  bool
+		failedPredicates []algorithm.PredicateFailureReason
 		invalid          bool
 		fit              bool
 		reasons          []algorithm.PredicateFailureReason
@@ -416,10 +429,6 @@ func podFitsOnNode(
 	)
 	predicateResults := make(map[string]HostPredicate)
 
-	if ecache != nil {
-		// getHashEquivalencePod will return immediately if no equivalence pod found
-		equivalenceHash, eCacheAvailable = ecache.getHashEquivalencePod(pod)
-	}
 	podsAdded := false
 	// We run predicates twice in some cases. If the node has greater or equal priority
 	// nominated pods, we run them when those pods are added to meta and nodeInfo.
@@ -450,13 +459,13 @@ func podFitsOnNode(
 		// Bypass eCache if node has any nominated pods.
 		// TODO(bsalamat): consider using eCache and adding proper eCache invalidations
 		// when pods are nominated or their nominations change.
-		eCacheAvailable = eCacheAvailable && !podsAdded
+		eCacheAvailable = equivCacheInfo != nil && !podsAdded
 		for _, predicateKey := range predicates.PredicatesOrdering() {
-			//TODO (yastij) : compute average predicate restrictiveness to export it as promethus metric
+			//TODO (yastij) : compute average predicate restrictiveness to export it as Prometheus metric
 			if predicate, exist := predicateFuncs[predicateKey]; exist {
 				if eCacheAvailable {
 					// PredicateWithECache will return its cached predicate results.
-					fit, reasons, invalid = ecache.PredicateWithECache(pod.GetName(), info.Node().GetName(), predicateKey, equivalenceHash)
+					fit, reasons, invalid = ecache.PredicateWithECache(pod.GetName(), info.Node().GetName(), predicateKey, equivCacheInfo.hash)
 				}
 
 				if !eCacheAvailable || invalid {
@@ -498,7 +507,7 @@ func podFitsOnNode(
 		for predKey, result := range predicateResults {
 			// update equivalence cache with newly computed fit & reasons
 			// TODO(resouer) should we do this in another thread? any race?
-			ecache.UpdateCachedPredicateItem(pod.GetName(), nodeName, predKey, result.Fit, result.FailReasons, equivalenceHash)
+			ecache.UpdateCachedPredicateItem(pod.GetName(), nodeName, predKey, result.Fit, result.FailReasons, equivCacheInfo.hash)
 		}
 	}
 	return len(failedPredicates) == 0, failedPredicates, nil
@@ -922,7 +931,7 @@ func selectVictimsOnNode(
 	// that we should check is if the "pod" is failing to schedule due to pod affinity
 	// failure.
 	// TODO(bsalamat): Consider checking affinity to lower priority pods if feasible with reasonable performance.
-	if fits, _, err := podFitsOnNode(pod, meta, nodeInfoCopy, fitPredicates, nil, queue, false); !fits {
+	if fits, _, err := podFitsOnNode(pod, meta, nodeInfoCopy, fitPredicates, nil, queue, false, nil); !fits {
 		if err != nil {
 			glog.Warningf("Encountered error while selecting victims on node %v: %v", nodeInfo.Node().Name, err)
 		}
@@ -936,7 +945,7 @@ func selectVictimsOnNode(
 	violatingVictims, nonViolatingVictims := filterPodsWithPDBViolation(potentialVictims.Items, pdbs)
 	reprievePod := func(p *v1.Pod) bool {
 		addPod(p)
-		fits, _, _ := podFitsOnNode(pod, meta, nodeInfoCopy, fitPredicates, nil, queue, false)
+		fits, _, _ := podFitsOnNode(pod, meta, nodeInfoCopy, fitPredicates, nil, queue, false, nil)
 		if !fits {
 			removePod(p)
 			victims = append(victims, p)
@@ -1001,8 +1010,9 @@ func nodesWherePreemptionMightHelp(pod *v1.Pod, nodes []*v1.Node, failedPredicat
 // We look at the node that is nominated for this pod and as long as there are
 // terminating pods on the node, we don't consider this for preempting more pods.
 func podEligibleToPreemptOthers(pod *v1.Pod, nodeNameToInfo map[string]*schedulercache.NodeInfo) bool {
-	if nodeName, found := pod.Annotations[NominatedNodeAnnotationKey]; found {
-		if nodeInfo, found := nodeNameToInfo[nodeName]; found {
+	nomNodeName := pod.Status.NominatedNodeName
+	if len(nomNodeName) > 0 {
+		if nodeInfo, found := nodeNameToInfo[nomNodeName]; found {
 			for _, p := range nodeInfo.Pods() {
 				if p.DeletionTimestamp != nil && util.GetPodPriority(p) < util.GetPodPriority(pod) {
 					// There is a terminating pod on the nominated node.
