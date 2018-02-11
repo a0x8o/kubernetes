@@ -47,9 +47,6 @@ const (
 type KubeletConfiguration struct {
 	metav1.TypeMeta
 
-	// Only used for dynamic configuration.
-	// The length of the trial period for this configuration. This configuration will become the last-known-good after this duration.
-	ConfigTrialDuration metav1.Duration
 	// podManifestPath is the path to the directory containing pod manifests to
 	// run, or the path to a single manifest file
 	PodManifestPath string
@@ -82,7 +79,7 @@ type KubeletConfiguration struct {
 	// and key are generated for the public address and saved to the directory
 	// passed to certDir.
 	TLSCertFile string
-	// tlsPrivateKeyFile is the ile containing x509 private key matching
+	// tlsPrivateKeyFile is the file containing x509 private key matching
 	// tlsCertFile.
 	TLSPrivateKeyFile string
 	// TLSCipherSuites is the list of allowed cipher suites for the server.
@@ -184,7 +181,7 @@ type KubeletConfiguration struct {
 	//   "hairpin-veth":       set the hairpin flag on container veth interfaces.
 	//   "none":               do nothing.
 	// Generally, one must set --hairpin-mode=hairpin-veth to achieve hairpin NAT,
-	// because promiscous-bridge assumes the existence of a container bridge named cbr0.
+	// because promiscuous-bridge assumes the existence of a container bridge named cbr0.
 	HairpinMode string
 	// maxPods is the number of pods that can run on this Kubelet.
 	MaxPods int32

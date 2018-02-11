@@ -878,6 +878,10 @@ func getTestCloud() (az *Cloud) {
 	az.VirtualMachineScaleSetVMsClient = newFakeVirtualMachineScaleSetVMsClient()
 	az.VirtualMachinesClient = newFakeAzureVirtualMachinesClient()
 	az.vmSet = newAvailabilitySet(az)
+	az.vmCache, _ = az.newVMCache()
+	az.lbCache, _ = az.newLBCache()
+	az.nsgCache, _ = az.newNSGCache()
+	az.rtCache, _ = az.newRouteTableCache()
 
 	return az
 }
@@ -1243,7 +1247,7 @@ func validatePublicIP(t *testing.T, publicIP *network.PublicIPAddress, service *
 	}
 	// We cannot use service.Spec.LoadBalancerIP to compare with
 	// Public IP's IPAddress
-	// Becuase service properties are updated outside of cloudprovider code
+	// Because service properties are updated outside of cloudprovider code
 }
 
 func contains(ruleValues []string, targetValue string) bool {
