@@ -72,6 +72,7 @@ spec:
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ''
     spec:
+      priorityClassName: system-node-critical
       serviceAccountName: fluentd-es
       containers:
       - name: fluentd-es
@@ -112,4 +113,4 @@ spec:
           path: /usr/lib64
       - name: config-volume
         configMap:
-          name: fluentd-es-config-v0.1.3
+          name: fluentd-es-config-v0.1.4

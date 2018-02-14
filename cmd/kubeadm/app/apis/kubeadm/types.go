@@ -51,6 +51,10 @@ type MasterConfiguration struct {
 	// If not specified, defaults to Node and RBAC, meaning both the node
 	// authorizer and RBAC are enabled.
 	AuthorizationModes []string
+	// NoTaintMaster will, if set, suppress the tainting of the
+	// master node allowing workloads to be run on it (e.g. in
+	// single node configurations).
+	NoTaintMaster bool
 
 	// Mark the controller and api server pods as privileged as some cloud
 	// controllers like openstack need escalated privileges under some conditions
@@ -107,6 +111,9 @@ type MasterConfiguration struct {
 	// UnifiedControlPlaneImage specifies if a specific container image should be
 	// used for all control plane components.
 	UnifiedControlPlaneImage string
+
+	// AuditPolicyConfiguration defines the options for the api server audit system.
+	AuditPolicyConfiguration AuditPolicyConfiguration
 
 	// FeatureGates enabled by the user.
 	FeatureGates map[string]bool
@@ -262,4 +269,15 @@ type HostPathMount struct {
 // KubeProxy contains elements describing the proxy configuration.
 type KubeProxy struct {
 	Config *kubeproxyconfigv1alpha1.KubeProxyConfiguration
+}
+
+// AuditPolicyConfiguration holds the options for configuring the api server audit policy.
+type AuditPolicyConfiguration struct {
+	// Path is the local path to an audit policy.
+	Path string
+	// LogDir is the local path to the directory where logs should be stored.
+	LogDir string
+	// LogMaxAge is the number of days logs will be stored for. 0 indicates forever.
+	LogMaxAge *int32
+	//TODO(chuckha) add other options for audit policy.
 }

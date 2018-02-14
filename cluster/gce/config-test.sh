@@ -80,7 +80,8 @@ NODE_IMAGE_PROJECT=${KUBE_GCE_NODE_PROJECT:-cos-cloud}
 NODE_SERVICE_ACCOUNT=${KUBE_GCE_NODE_SERVICE_ACCOUNT:-default}
 CONTAINER_RUNTIME=${KUBE_CONTAINER_RUNTIME:-docker}
 CONTAINER_RUNTIME_ENDPOINT=${KUBE_CONTAINER_RUNTIME_ENDPOINT:-}
-LOAD_IMAGE_COMMAND=${KUBE_LOAD_IMAGE_COMMAND:-docker load -i}
+CONTAINER_RUNTIME_NAME=${KUBE_CONTAINER_RUNTIME_NAME:-}
+LOAD_IMAGE_COMMAND=${KUBE_LOAD_IMAGE_COMMAND:-}
 GCI_DOCKER_VERSION=${KUBE_GCI_DOCKER_VERSION:-}
 RKT_VERSION=${KUBE_RKT_VERSION:-1.23.0}
 RKT_STAGE1_IMAGE=${KUBE_RKT_STAGE1_IMAGE:-coreos.com/rkt/stage1-coreos}
@@ -409,6 +410,9 @@ ENABLE_PROMETHEUS_TO_SD="${ENABLE_PROMETHEUS_TO_SD:-true}"
 # TODO(#51292): Make kube-proxy Daemonset default and remove the configuration here.
 # Optional: [Experiment Only] Run kube-proxy as a DaemonSet if set to true, run as static pods otherwise.
 KUBE_PROXY_DAEMONSET="${KUBE_PROXY_DAEMONSET:-false}" # true, false
+
+# Optional: Change the kube-proxy implementation. Choices are [iptables, ipvs].
+KUBE_PROXY_MODE="${KUBE_PROXY_MODE:-iptables}"
 
 # Optional: duration of cluster signed certificates.
 CLUSTER_SIGNING_DURATION="${CLUSTER_SIGNING_DURATION:-}"

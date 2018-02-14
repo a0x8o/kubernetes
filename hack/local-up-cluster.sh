@@ -23,7 +23,7 @@ DOCKER_OPTS=${DOCKER_OPTS:-""}
 DOCKER=(docker ${DOCKER_OPTS})
 DOCKERIZE_KUBELET=${DOCKERIZE_KUBELET:-""}
 ALLOW_PRIVILEGED=${ALLOW_PRIVILEGED:-""}
-ALLOW_SECURITY_CONTEXT=${ALLOW_SECURITY_CONTEXT:-""}
+DENY_SECURITY_CONTEXT_ADMISSION=${DENY_SECURITY_CONTEXT_ADMISSION:-""}
 PSP_ADMISSION=${PSP_ADMISSION:-""}
 NODE_ADMISSION=${NODE_ADMISSION:-""}
 RUNTIME_CONFIG=${RUNTIME_CONFIG:-""}
@@ -57,7 +57,7 @@ EVICTION_PRESSURE_TRANSITION_PERIOD=${EVICTION_PRESSURE_TRANSITION_PERIOD:-"1m"}
 # and we don't know the IP of the DNS pod to pass in as --cluster-dns.
 # To set this up by hand, set this flag and change DNS_SERVER_IP.
 # Note also that you need API_HOST (defined above) for correct DNS.
-KUBEPROXY_MODE=${KUBEPROXY_MODE:-""}
+KUBE_PROXY_MODE=${KUBE_PROXY_MODE:-""}
 ENABLE_CLUSTER_DNS=${KUBE_ENABLE_CLUSTER_DNS:-true}
 DNS_SERVER_IP=${KUBE_DNS_SERVER_IP:-10.0.0.10}
 DNS_DOMAIN=${KUBE_DNS_NAME:-"cluster.local"}
@@ -418,7 +418,7 @@ function set_service_accounts {
 
 function start_apiserver {
     security_admission=""
-    if [[ -z "${ALLOW_SECURITY_CONTEXT}" ]]; then
+    if [[ -n "${DENY_SECURITY_CONTEXT_ADMISSION}" ]]; then
       security_admission=",SecurityContextDeny"
     fi
     if [[ -n "${PSP_ADMISSION}" ]]; then

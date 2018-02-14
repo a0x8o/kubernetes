@@ -1359,6 +1359,15 @@ func (kl *Kubelet) generateAPIPodStatus(pod *v1.Pod, podStatus *kubecontainer.Po
 	spec := &pod.Spec
 	allStatus := append(append([]v1.ContainerStatus{}, s.ContainerStatuses...), s.InitContainerStatuses...)
 	s.Phase = getPhase(spec, allStatus)
+	// Check for illegal phase transition
+	if pod.Status.Phase == v1.PodFailed || pod.Status.Phase == v1.PodSucceeded {
+		// API server shows terminal phase; transitions are not allowed
+		if s.Phase != pod.Status.Phase {
+			glog.Errorf("Pod attempted illegal phase transition from %s to %s: %v", pod.Status.Phase, s.Phase, s)
+			// Force back to phase from the API server
+			s.Phase = pod.Status.Phase
+		}
+	}
 	kl.probeManager.UpdatePodStatus(pod.UID, s)
 	s.Conditions = append(s.Conditions, status.GeneratePodInitializedCondition(spec, s.InitContainerStatuses, s.Phase))
 	s.Conditions = append(s.Conditions, status.GeneratePodReadyCondition(spec, s.ContainerStatuses, s.Phase))
@@ -1373,18 +1382,15 @@ func (kl *Kubelet) generateAPIPodStatus(pod *v1.Pod, podStatus *kubecontainer.Po
 		Status: v1.ConditionTrue,
 	})
 
-	if kl.kubeClient != nil {
-		hostIP, err := kl.getHostIPAnyWay()
-		if err != nil {
-			glog.V(4).Infof("Cannot get host IP: %v", err)
-		} else {
-			s.HostIP = hostIP.String()
-			if kubecontainer.IsHostNetworkPod(pod) && s.PodIP == "" {
-				s.PodIP = hostIP.String()
-			}
-		}
+	hostIP, err := kl.getHostIPAnyWay()
+	if err != nil {
+		glog.V(4).Infof("Cannot get host IP: %v", err)
+		return *s
 	}
-
+	s.HostIP = hostIP.String()
+	if kubecontainer.IsHostNetworkPod(pod) && s.PodIP == "" {
+		s.PodIP = hostIP.String()
+	}
 	return *s
 }
 

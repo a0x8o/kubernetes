@@ -23,6 +23,7 @@ spec:
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ''
     spec:
+      priorityClassName: system-node-critical
       serviceAccountName: fluentd-gcp
       dnsPolicy: Default
       containers:
@@ -122,4 +123,4 @@ spec:
           path: /usr/lib64
       - name: config-volume
         configMap:
-          name: fluentd-gcp-config-v1.2.3
+          name: fluentd-gcp-config-v1.2.4
