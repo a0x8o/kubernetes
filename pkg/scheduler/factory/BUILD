@@ -16,6 +16,7 @@ go_library(
     deps = [
         "//pkg/api/v1/pod:go_default_library",
         "//pkg/apis/core/helper:go_default_library",
+        "//pkg/apis/core/v1/helper:go_default_library",
         "//pkg/features:go_default_library",
         "//pkg/kubelet/apis:go_default_library",
         "//pkg/scheduler:go_default_library",
@@ -62,7 +63,6 @@ go_test(
         "plugins_test.go",
     ],
     embed = [":go_default_library"],
-    importpath = "k8s.io/kubernetes/pkg/scheduler/factory",
     deps = [
         "//pkg/api/legacyscheme:go_default_library",
         "//pkg/api/testing:go_default_library",

@@ -19,7 +19,7 @@ package v1alpha1
 import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kubeletconfigv1alpha1 "k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/v1alpha1"
+	kubeletconfigv1beta1 "k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/v1beta1"
 	kubeproxyconfigv1alpha1 "k8s.io/kubernetes/pkg/proxy/apis/kubeproxyconfig/v1alpha1"
 )
 
@@ -66,6 +66,9 @@ type MasterConfiguration struct {
 	Token string `json:"token"`
 	// TokenTTL is a ttl for Token. Defaults to 24h.
 	TokenTTL *metav1.Duration `json:"tokenTTL,omitempty"`
+
+	// CRISocket is used to retrieve container runtime info.
+	CRISocket string `json:"criSocket,omitempty"`
 
 	// APIServerExtraArgs is a set of extra flags to pass to the API Server or override
 	// default ones in form of <flagname>=<value>.
@@ -209,6 +212,8 @@ type NodeConfiguration struct {
 	TLSBootstrapToken string `json:"tlsBootstrapToken"`
 	// Token is used for both discovery and TLS bootstrapping.
 	Token string `json:"token"`
+	// CRISocket is used to retrieve container runtime info.
+	CRISocket string `json:"criSocket,omitempty"`
 
 	// DiscoveryTokenCACertHashes specifies a set of public key pins to verify
 	// when token-based discovery is used. The root CA found during discovery
@@ -231,7 +236,7 @@ type NodeConfiguration struct {
 
 // KubeletConfiguration contains elements describing initial remote configuration of kubelet.
 type KubeletConfiguration struct {
-	BaseConfig *kubeletconfigv1alpha1.KubeletConfiguration `json:"baseConfig,omitempty"`
+	BaseConfig *kubeletconfigv1beta1.KubeletConfiguration `json:"baseConfig,omitempty"`
 }
 
 // HostPathMount contains elements describing volumes that are mounted from the

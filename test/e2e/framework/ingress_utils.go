@@ -1128,12 +1128,12 @@ func (j *IngressTestJig) CreateIngress(manifestPath, ns string, ingAnnotations m
 		j.Ingress.Annotations[k] = v
 	}
 	j.Logger.Infof(fmt.Sprintf("creating" + j.Ingress.Name + " ingress"))
-	j.Ingress, err = j.RunCreate(j.Ingress)
+	j.Ingress, err = j.runCreate(j.Ingress)
 	ExpectNoError(err)
 }
 
-// RunCreate runs the required command to create the given ingress.
-func (j *IngressTestJig) RunCreate(ing *extensions.Ingress) (*extensions.Ingress, error) {
+// runCreate runs the required command to create the given ingress.
+func (j *IngressTestJig) runCreate(ing *extensions.Ingress) (*extensions.Ingress, error) {
 	if j.Class != MulticlusterIngressClassValue {
 		return j.Client.ExtensionsV1beta1().Ingresses(ing.Namespace).Create(ing)
 	}
@@ -1142,12 +1142,12 @@ func (j *IngressTestJig) RunCreate(ing *extensions.Ingress) (*extensions.Ingress
 	if err := manifest.IngressToManifest(ing, filePath); err != nil {
 		return nil, err
 	}
-	_, err := RunKubemciCmd("create", ing.Name, fmt.Sprintf("--ingress=%s", filePath))
+	_, err := runKubemciWithKubeconfig("create", ing.Name, fmt.Sprintf("--ingress=%s", filePath))
 	return ing, err
 }
 
-// RunUpdate runs the required command to update the given ingress.
-func (j *IngressTestJig) RunUpdate(ing *extensions.Ingress) (*extensions.Ingress, error) {
+// runUpdate runs the required command to update the given ingress.
+func (j *IngressTestJig) runUpdate(ing *extensions.Ingress) (*extensions.Ingress, error) {
 	if j.Class != MulticlusterIngressClassValue {
 		return j.Client.ExtensionsV1beta1().Ingresses(ing.Namespace).Update(ing)
 	}
@@ -1157,7 +1157,7 @@ func (j *IngressTestJig) RunUpdate(ing *extensions.Ingress) (*extensions.Ingress
 	if err := manifest.IngressToManifest(ing, filePath); err != nil {
 		return nil, err
 	}
-	_, err := RunKubemciCmd("create", ing.Name, fmt.Sprintf("--ingress=%s", filePath), "--force")
+	_, err := runKubemciWithKubeconfig("create", ing.Name, fmt.Sprintf("--ingress=%s", filePath), "--force")
 	return ing, err
 }
 
@@ -1171,7 +1171,7 @@ func (j *IngressTestJig) Update(update func(ing *extensions.Ingress)) {
 			Failf("failed to get ingress %q: %v", name, err)
 		}
 		update(j.Ingress)
-		j.Ingress, err = j.RunUpdate(j.Ingress)
+		j.Ingress, err = j.runUpdate(j.Ingress)
 		if err == nil {
 			DescribeIng(j.Ingress.Namespace)
 			return
@@ -1223,7 +1223,7 @@ func (j *IngressTestJig) TryDeleteIngress() {
 }
 
 func (j *IngressTestJig) TryDeleteGivenIngress(ing *extensions.Ingress) {
-	if err := j.RunDelete(ing, j.Class); err != nil {
+	if err := j.runDelete(ing, j.Class); err != nil {
 		j.Logger.Infof("Error while deleting the ingress %v/%v with class %s: %v", ing.Namespace, ing.Name, j.Class, err)
 	}
 }
@@ -1235,8 +1235,8 @@ func (j *IngressTestJig) TryDeleteGivenService(svc *v1.Service) {
 	}
 }
 
-// RunDelete runs the required command to delete the given ingress.
-func (j *IngressTestJig) RunDelete(ing *extensions.Ingress, class string) error {
+// runDelete runs the required command to delete the given ingress.
+func (j *IngressTestJig) runDelete(ing *extensions.Ingress, class string) error {
 	if j.Class != MulticlusterIngressClassValue {
 		return j.Client.ExtensionsV1beta1().Ingresses(ing.Namespace).Delete(ing.Name, nil)
 	}
@@ -1245,19 +1245,23 @@ func (j *IngressTestJig) RunDelete(ing *extensions.Ingress, class string) error 
 	if err := manifest.IngressToManifest(ing, filePath); err != nil {
 		return err
 	}
-	_, err := RunKubemciCmd("delete", ing.Name, fmt.Sprintf("--ingress=%s", filePath))
+	_, err := runKubemciWithKubeconfig("delete", ing.Name, fmt.Sprintf("--ingress=%s", filePath))
 	return err
 }
 
 // getIngressAddressFromKubemci returns the IP address of the given multicluster ingress using kubemci.
 // TODO(nikhiljindal): Update this to be able to return hostname as well.
 func getIngressAddressFromKubemci(name string) ([]string, error) {
-	out, err := RunKubemciCmd("get-status", name)
+	var addresses []string
+	out, err := runKubemciCmd("get-status", name)
 	if err != nil {
-		return []string{}, err
+		return addresses, err
 	}
 	ip := findIPv4(out)
-	return []string{ip}, err
+	if ip != "" {
+		addresses = append(addresses, ip)
+	}
+	return addresses, err
 }
 
 // findIPv4 returns the first IPv4 address found in the given string.
@@ -1278,7 +1282,7 @@ func getIngressAddress(client clientset.Interface, ns, name, class string) ([]st
 	if err != nil {
 		return nil, err
 	}
-	addresses := []string{}
+	var addresses []string
 	for _, a := range ing.Status.LoadBalancer.Ingress {
 		if a.IP != "" {
 			addresses = append(addresses, a.IP)

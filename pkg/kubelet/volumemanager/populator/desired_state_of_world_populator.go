@@ -83,6 +83,7 @@ func NewDesiredStateOfWorldPopulator(
 	podManager pod.Manager,
 	podStatusProvider status.PodStatusProvider,
 	desiredStateOfWorld cache.DesiredStateOfWorld,
+	actualStateOfWorld cache.ActualStateOfWorld,
 	kubeContainerRuntime kubecontainer.Runtime,
 	keepTerminatedPodVolumes bool) DesiredStateOfWorldPopulator {
 	return &desiredStateOfWorldPopulator{
@@ -92,6 +93,7 @@ func NewDesiredStateOfWorldPopulator(
 		podManager:                podManager,
 		podStatusProvider:         podStatusProvider,
 		desiredStateOfWorld:       desiredStateOfWorld,
+		actualStateOfWorld:        actualStateOfWorld,
 		pods: processedPods{
 			processedPods: make(map[volumetypes.UniquePodName]bool)},
 		kubeContainerRuntime:     kubeContainerRuntime,
@@ -108,6 +110,7 @@ type desiredStateOfWorldPopulator struct {
 	podManager                pod.Manager
 	podStatusProvider         status.PodStatusProvider
 	desiredStateOfWorld       cache.DesiredStateOfWorld
+	actualStateOfWorld        cache.ActualStateOfWorld
 	pods                      processedPods
 	kubeContainerRuntime      kubecontainer.Runtime
 	timeOfLastGetPodStatus    time.Time
@@ -236,13 +239,13 @@ func (dswp *desiredStateOfWorldPopulator) findAndRemoveDeletedPods() {
 		}
 
 		if runningContainers {
-			glog.V(5).Infof(
+			glog.V(4).Infof(
 				"Pod %q has been removed from pod manager. However, it still has one or more containers in the non-exited state. Therefore, it will not be removed from volume manager.",
 				format.Pod(volumeToMount.Pod))
 			continue
 		}
 
-		glog.V(5).Infof(volumeToMount.GenerateMsgDetailed("Removing volume from desired state", ""))
+		glog.V(4).Infof(volumeToMount.GenerateMsgDetailed("Removing volume from desired state", ""))
 
 		dswp.desiredStateOfWorld.DeletePodFromVolume(
 			volumeToMount.PodName, volumeToMount.VolumeName)
@@ -292,7 +295,7 @@ func (dswp *desiredStateOfWorldPopulator) processPodVolumes(pod *v1.Pod) {
 			allVolumesAdded = false
 		}
 
-		glog.V(10).Infof(
+		glog.V(4).Infof(
 			"Added volume %q (volSpec=%q) for pod %q to desired state.",
 			podVolume.Name,
 			volumeSpec.Name(),
@@ -302,6 +305,9 @@ func (dswp *desiredStateOfWorldPopulator) processPodVolumes(pod *v1.Pod) {
 	// some of the volume additions may have failed, should not mark this pod as fully processed
 	if allVolumesAdded {
 		dswp.markPodProcessed(uniquePodName)
+		// New pod has been synced. Re-mount all volumes that need it
+		// (e.g. DownwardAPI)
+		dswp.actualStateOfWorld.MarkRemountRequired(uniquePodName)
 	}
 
 }
@@ -343,7 +349,7 @@ func (dswp *desiredStateOfWorldPopulator) createVolumeSpec(
 	podVolume v1.Volume, podName string, podNamespace string, mountsMap map[string]bool, devicesMap map[string]bool) (*volume.Spec, string, error) {
 	if pvcSource :=
 		podVolume.VolumeSource.PersistentVolumeClaim; pvcSource != nil {
-		glog.V(10).Infof(
+		glog.V(5).Infof(
 			"Found PVC, ClaimName: %q/%q",
 			podNamespace,
 			pvcSource.ClaimName)
@@ -359,7 +365,7 @@ func (dswp *desiredStateOfWorldPopulator) createVolumeSpec(
 				err)
 		}
 
-		glog.V(10).Infof(
+		glog.V(5).Infof(
 			"Found bound PV for PVC (ClaimName %q/%q pvcUID %v): pvName=%q",
 			podNamespace,
 			pvcSource.ClaimName,
@@ -377,7 +383,7 @@ func (dswp *desiredStateOfWorldPopulator) createVolumeSpec(
 				err)
 		}
 
-		glog.V(10).Infof(
+		glog.V(5).Infof(
 			"Extracted volumeSpec (%v) from bound PV (pvName %q) and PVC (ClaimName %q/%q pvcUID %v)",
 			volumeSpec.Name,
 			pvName,
@@ -435,7 +441,7 @@ func (dswp *desiredStateOfWorldPopulator) getPVCExtractPV(
 			err)
 	}
 
-	if utilfeature.DefaultFeatureGate.Enabled(features.StorageProtection) {
+	if utilfeature.DefaultFeatureGate.Enabled(features.StorageObjectInUseProtection) {
 		// Pods that uses a PVC that is being deleted must not be started.
 		//
 		// In case an old kubelet is running without this check or some kubelets

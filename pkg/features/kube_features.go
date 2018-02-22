@@ -203,10 +203,10 @@ const (
 	BlockVolume utilfeature.Feature = "BlockVolume"
 
 	// owner: @pospispa
-	// alpha: v1.9
+	// beta: v1.10
 	//
 	// Postpone deletion of a PV or a PVC when they are being used
-	StorageProtection utilfeature.Feature = "StorageProtection"
+	StorageObjectInUseProtection utilfeature.Feature = "StorageObjectInUseProtection"
 
 	// owner: @aveshagarwal
 	// alpha: v1.9
@@ -238,6 +238,12 @@ const (
 	// Mount secret, configMap, downwardAPI and projected volumes ReadOnly. Note: this feature
 	// gate is present only for backward compatibility, it will be removed in the 1.11 release.
 	ReadOnlyAPIDataVolumes utilfeature.Feature = "ReadOnlyAPIDataVolumes"
+
+	// owner: @k82cn
+	// alpha: v1.10
+	//
+	// Schedule DaemonSet Pods by default scheduler instead of DaemonSet controller
+	NoDaemonSetScheduler utilfeature.Feature = "NoDaemonSetScheduler"
 )
 
 func init() {
@@ -257,7 +263,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	TaintBasedEvictions:                         {Default: false, PreRelease: utilfeature.Alpha},
 	RotateKubeletServerCertificate:              {Default: false, PreRelease: utilfeature.Alpha},
 	RotateKubeletClientCertificate:              {Default: true, PreRelease: utilfeature.Beta},
-	PersistentLocalVolumes:                      {Default: false, PreRelease: utilfeature.Alpha},
+	PersistentLocalVolumes:                      {Default: true, PreRelease: utilfeature.Beta},
 	LocalStorageCapacityIsolation:               {Default: false, PreRelease: utilfeature.Alpha},
 	HugePages:                                   {Default: true, PreRelease: utilfeature.Beta},
 	DebugContainers:                             {Default: false, PreRelease: utilfeature.Alpha},
@@ -270,15 +276,16 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	CPUManager:                                  {Default: true, PreRelease: utilfeature.Beta},
 	ServiceNodeExclusion:                        {Default: false, PreRelease: utilfeature.Alpha},
 	MountContainers:                             {Default: false, PreRelease: utilfeature.Alpha},
-	VolumeScheduling:                            {Default: false, PreRelease: utilfeature.Alpha},
+	VolumeScheduling:                            {Default: true, PreRelease: utilfeature.Beta},
 	CSIPersistentVolume:                         {Default: true, PreRelease: utilfeature.Beta},
 	CustomPodDNS:                                {Default: false, PreRelease: utilfeature.Alpha},
 	BlockVolume:                                 {Default: false, PreRelease: utilfeature.Alpha},
-	StorageProtection:                           {Default: false, PreRelease: utilfeature.Alpha},
+	StorageObjectInUseProtection:                {Default: true, PreRelease: utilfeature.Beta},
 	ResourceLimitsPriorityFunction:              {Default: false, PreRelease: utilfeature.Alpha},
 	SupportIPVSProxyMode:                        {Default: false, PreRelease: utilfeature.Beta},
 	SupportPodPidsLimit:                         {Default: false, PreRelease: utilfeature.Alpha},
 	HyperVContainer:                             {Default: false, PreRelease: utilfeature.Alpha},
+	NoDaemonSetScheduler:                        {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

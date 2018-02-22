@@ -24,7 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
-	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/v1alpha1"
+	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/v1beta1"
 	"k8s.io/kubernetes/pkg/kubelet/qos"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/master/ports"
@@ -50,7 +50,6 @@ func Funcs(codecs runtimeserializer.CodecFactory) []interface{} {
 			obj.EventRecordQPS = 5
 			obj.EnableControllerAttachDetach = true
 			obj.EnableDebuggingHandlers = true
-			obj.EnableServer = true
 			obj.FileCheckFrequency = metav1.Duration{Duration: 20 * time.Second}
 			obj.HealthzBindAddress = "127.0.0.1"
 			obj.HealthzPort = 10248
@@ -76,7 +75,7 @@ func Funcs(codecs runtimeserializer.CodecFactory) []interface{} {
 			obj.ContentType = "application/vnd.kubernetes.protobuf"
 			obj.KubeAPIQPS = 5
 			obj.KubeAPIBurst = 10
-			obj.HairpinMode = v1alpha1.PromiscuousBridge
+			obj.HairpinMode = v1beta1.PromiscuousBridge
 			obj.EvictionHard = map[string]string{
 				"memory.available":  "100Mi",
 				"nodefs.available":  "10%",
@@ -85,11 +84,11 @@ func Funcs(codecs runtimeserializer.CodecFactory) []interface{} {
 			}
 			obj.EvictionPressureTransitionPeriod = metav1.Duration{Duration: 5 * time.Minute}
 			obj.MakeIPTablesUtilChains = true
-			obj.IPTablesMasqueradeBit = v1alpha1.DefaultIPTablesMasqueradeBit
-			obj.IPTablesDropBit = v1alpha1.DefaultIPTablesDropBit
+			obj.IPTablesMasqueradeBit = v1beta1.DefaultIPTablesMasqueradeBit
+			obj.IPTablesDropBit = v1beta1.DefaultIPTablesDropBit
 			obj.CgroupsPerQOS = true
 			obj.CgroupDriver = "cgroupfs"
-			obj.EnforceNodeAllocatable = v1alpha1.DefaultNodeAllocatableEnforcement
+			obj.EnforceNodeAllocatable = v1beta1.DefaultNodeAllocatableEnforcement
 			obj.ManifestURLHeader = make(map[string][]string)
 		},
 	}

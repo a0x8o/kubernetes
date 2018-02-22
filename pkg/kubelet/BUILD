@@ -62,6 +62,7 @@ go_library(
         "//pkg/kubelet/kuberuntime:go_default_library",
         "//pkg/kubelet/lifecycle:go_default_library",
         "//pkg/kubelet/metrics:go_default_library",
+        "//pkg/kubelet/metrics/collectors:go_default_library",
         "//pkg/kubelet/mountpod:go_default_library",
         "//pkg/kubelet/network:go_default_library",
         "//pkg/kubelet/network/dns:go_default_library",
@@ -162,7 +163,6 @@ go_test(
         "//conditions:default": [],
     }),
     embed = [":go_default_library"],
-    importpath = "k8s.io/kubernetes/pkg/kubelet",
     deps = [
         "//pkg/api/legacyscheme:go_default_library",
         "//pkg/apis/core/install:go_default_library",

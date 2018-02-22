@@ -75,6 +75,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/kuberuntime"
 	"k8s.io/kubernetes/pkg/kubelet/lifecycle"
 	"k8s.io/kubernetes/pkg/kubelet/metrics"
+	"k8s.io/kubernetes/pkg/kubelet/metrics/collectors"
 	"k8s.io/kubernetes/pkg/kubelet/network"
 	"k8s.io/kubernetes/pkg/kubelet/network/dns"
 	"k8s.io/kubernetes/pkg/kubelet/pleg"
@@ -694,7 +695,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 				klet.podManager,
 				klet.runtimeCache,
 				runtimeService,
-				imageService)
+				imageService,
+				stats.NewLogMetricsService())
 		}
 	} else {
 		// rkt uses the legacy, non-CRI, integration. Configure it the old way.
@@ -1271,7 +1273,7 @@ func (kl *Kubelet) StartGarbageCollection() {
 // Note that the modules here must not depend on modules that are not initialized here.
 func (kl *Kubelet) initializeModules() error {
 	// Prometheus metrics.
-	metrics.Register(kl.runtimeCache)
+	metrics.Register(kl.runtimeCache, collectors.NewVolumeStatsCollector(kl))
 
 	// Setup filesystem directories.
 	if err := kl.setupDataDirs(); err != nil {
@@ -1291,16 +1293,6 @@ func (kl *Kubelet) initializeModules() error {
 	// Start the certificate manager.
 	if utilfeature.DefaultFeatureGate.Enabled(features.RotateKubeletServerCertificate) {
 		kl.serverCertificateManager.Start()
-	}
-
-	// Start container manager.
-	node, err := kl.getNodeAnyWay()
-	if err != nil {
-		return fmt.Errorf("Kubelet failed to get node info: %v", err)
-	}
-
-	if err := kl.containerManager.Start(node, kl.GetActivePods, kl.sourcesReady, kl.statusManager, kl.runtimeService); err != nil {
-		return fmt.Errorf("Failed to start ContainerManager %v", err)
 	}
 
 	// Start out of memory watcher.
@@ -1327,7 +1319,22 @@ func (kl *Kubelet) initializeRuntimeDependentModules() {
 		glog.Fatalf("Failed to start cAdvisor %v", err)
 	}
 	// eviction manager must start after cadvisor because it needs to know if the container runtime has a dedicated imagefs
-	kl.evictionManager.Start(kl.StatsProvider, kl.GetActivePods, kl.podResourcesAreReclaimed, kl.containerManager, evictionMonitoringPeriod)
+	kl.evictionManager.Start(kl.StatsProvider, kl.GetActivePods, kl.podResourcesAreReclaimed, evictionMonitoringPeriod)
+
+	// trigger on-demand stats collection once so that we have capacity information for ephemeral storage.
+	// ignore any errors, since if stats collection is not successful, the container manager will fail to start below.
+	kl.StatsProvider.GetCgroupStats("/", true)
+	// Start container manager.
+	node, err := kl.getNodeAnyWay()
+	if err != nil {
+		// Fail kubelet and rely on the babysitter to retry starting kubelet.
+		glog.Fatalf("Kubelet failed to get node info: %v", err)
+	}
+	// containerManager must start after cAdvisor because it needs filesystem capacity information
+	if err := kl.containerManager.Start(node, kl.GetActivePods, kl.sourcesReady, kl.statusManager, kl.runtimeService); err != nil {
+		// Fail kubelet and rely on the babysitter to retry starting kubelet.
+		glog.Fatalf("Failed to start ContainerManager %v", err)
+	}
 }
 
 // Run starts the kubelet reacting to config updates

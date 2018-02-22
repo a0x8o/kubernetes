@@ -24,6 +24,7 @@ go_library(
         "//pkg/cloudprovider:go_default_library",
         "//pkg/controller:go_default_library",
         "//pkg/controller/volume/events:go_default_library",
+        "//pkg/controller/volume/persistentvolume/metrics:go_default_library",
         "//pkg/features:go_default_library",
         "//pkg/util/goroutinemap:go_default_library",
         "//pkg/util/goroutinemap/exponentialbackoff:go_default_library",
@@ -74,11 +75,9 @@ go_test(
         "scheduler_binder_test.go",
     ],
     embed = [":go_default_library"],
-    importpath = "k8s.io/kubernetes/pkg/controller/volume/persistentvolume",
     deps = [
         "//pkg/api/testapi:go_default_library",
         "//pkg/apis/core:go_default_library",
-        "//pkg/apis/core/v1/helper:go_default_library",
         "//pkg/controller:go_default_library",
         "//pkg/volume:go_default_library",
         "//vendor/github.com/golang/glog:go_default_library",
@@ -117,6 +116,7 @@ filegroup(
     name = "all-srcs",
     srcs = [
         ":package-srcs",
+        "//pkg/controller/volume/persistentvolume/metrics:all-srcs",
         "//pkg/controller/volume/persistentvolume/options:all-srcs",
     ],
     tags = ["automanaged"],

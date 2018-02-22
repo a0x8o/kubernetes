@@ -1,7 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
-
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -9,15 +7,11 @@ load(
 
 go_library(
     name = "go_default_library",
-    srcs = [
-        "flags.go",
-        "string_flag.go",
-        "tristate.go",
-    ],
-    tags = ["automanaged"],
+    srcs = ["flags.go"],
+    importpath = "k8s.io/kubernetes/pkg/util/flag",
     deps = [
-        "//vendor:github.com/golang/glog",
-        "//vendor:github.com/spf13/pflag",
+        "//vendor/github.com/golang/glog:go_default_library",
+        "//vendor/github.com/spf13/pflag:go_default_library",
     ],
 )
 

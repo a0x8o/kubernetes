@@ -1377,20 +1377,23 @@ func (kl *Kubelet) generateAPIPodStatus(pod *v1.Pod, podStatus *kubecontainer.Po
 	if _, oldPodScheduled := podutil.GetPodCondition(&pod.Status, v1.PodScheduled); oldPodScheduled != nil {
 		s.Conditions = append(s.Conditions, *oldPodScheduled)
 	}
-	podutil.UpdatePodCondition(&pod.Status, &v1.PodCondition{
+	podutil.UpdatePodCondition(s, &v1.PodCondition{
 		Type:   v1.PodScheduled,
 		Status: v1.ConditionTrue,
 	})
 
-	hostIP, err := kl.getHostIPAnyWay()
-	if err != nil {
-		glog.V(4).Infof("Cannot get host IP: %v", err)
-		return *s
+	if kl.kubeClient != nil {
+		hostIP, err := kl.getHostIPAnyWay()
+		if err != nil {
+			glog.V(4).Infof("Cannot get host IP: %v", err)
+		} else {
+			s.HostIP = hostIP.String()
+			if kubecontainer.IsHostNetworkPod(pod) && s.PodIP == "" {
+				s.PodIP = hostIP.String()
+			}
+		}
 	}
-	s.HostIP = hostIP.String()
-	if kubecontainer.IsHostNetworkPod(pod) && s.PodIP == "" {
-		s.PodIP = hostIP.String()
-	}
+
 	return *s
 }
 
