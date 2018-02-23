@@ -244,6 +244,12 @@ const (
 	//
 	// Schedule DaemonSet Pods by default scheduler instead of DaemonSet controller
 	NoDaemonSetScheduler utilfeature.Feature = "NoDaemonSetScheduler"
+
+	// owner: @mikedanese
+	// alpha: v1.10
+	//
+	// Implement TokenRequest endpoint on service account resources.
+	TokenRequest utilfeature.Feature = "TokenRequest"
 )
 
 func init() {
@@ -286,6 +292,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	SupportPodPidsLimit:                         {Default: false, PreRelease: utilfeature.Alpha},
 	HyperVContainer:                             {Default: false, PreRelease: utilfeature.Alpha},
 	NoDaemonSetScheduler:                        {Default: false, PreRelease: utilfeature.Alpha},
+	TokenRequest:                                {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:
@@ -297,7 +304,8 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 
 	// inherited features from apiextensions-apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:
-	apiextensionsfeatures.CustomResourceValidation: {Default: true, PreRelease: utilfeature.Beta},
+	apiextensionsfeatures.CustomResourceValidation:   {Default: true, PreRelease: utilfeature.Beta},
+	apiextensionsfeatures.CustomResourceSubresources: {Default: false, PreRelease: utilfeature.Alpha},
 
 	// features that enable backwards compatibility but are scheduled to be removed
 	ServiceProxyAllowExternalIPs: {Default: false, PreRelease: utilfeature.Deprecated},
