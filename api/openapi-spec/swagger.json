@@ -8687,6 +8687,37 @@
       "core_v1"
      ],
      "operationId": "deleteCoreV1NamespacedService",
+     "parameters": [
+      {
+       "name": "body",
+       "in": "body",
+       "required": true,
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.DeleteOptions"
+       }
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "The duration in seconds before the object should be deleted. Value must be non-negative integer. The value zero indicates delete immediately. If this value is nil, the default grace period for the specified type will be used. Defaults to a per object value if not specified. zero means delete immediately.",
+       "name": "gracePeriodSeconds",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Deprecated: please use the PropagationPolicy, this field will be deprecated in 1.7. Should the dependent objects be orphaned. If true/false, the \"orphan\" finalizer will be added to/removed from the object's finalizers list. Either this field or PropagationPolicy may be set, but not both.",
+       "name": "orphanDependents",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "Whether and how garbage collection will be performed. Either this field or OrphanDependents may be set, but not both. The default policy is decided by the existing finalizer set in the metadata.finalizers and the resource-specific default policy. Acceptable values are: 'Orphan' - orphan the dependents; 'Background' - allow the garbage collector to delete the dependents in the background; 'Foreground' - a cascading policy that deletes all dependents in the foreground.",
+       "name": "propagationPolicy",
+       "in": "query"
+      }
+     ],
      "responses": {
       "200": {
        "description": "OK",
@@ -74123,6 +74154,55 @@
      }
     }
    },
+   "io.k8s.api.autoscaling.v2beta1.ExternalMetricSource": {
+    "description": "ExternalMetricSource indicates how to scale on a metric not associated with any Kubernetes object (for example length of queue in cloud messaging service, or QPS from loadbalancer running outside of cluster). Exactly one \"target\" type should be set.",
+    "required": [
+     "metricName"
+    ],
+    "properties": {
+     "metricName": {
+      "description": "metricName is the name of the metric in question.",
+      "type": "string"
+     },
+     "metricSelector": {
+      "description": "metricSelector is used to identify a specific time series within a given metric.",
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector"
+     },
+     "targetAverageValue": {
+      "description": "targetAverageValue is the target per-pod value of global metric (as a quantity). Mutually exclusive with TargetValue.",
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.api.resource.Quantity"
+     },
+     "targetValue": {
+      "description": "targetValue is the target value of the metric (as a quantity). Mutually exclusive with TargetAverageValue.",
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.api.resource.Quantity"
+     }
+    }
+   },
+   "io.k8s.api.autoscaling.v2beta1.ExternalMetricStatus": {
+    "description": "ExternalMetricStatus indicates the current value of a global metric not associated with any Kubernetes object.",
+    "required": [
+     "metricName",
+     "currentValue"
+    ],
+    "properties": {
+     "currentAverageValue": {
+      "description": "currentAverageValue is the current value of metric averaged over autoscaled pods.",
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.api.resource.Quantity"
+     },
+     "currentValue": {
+      "description": "currentValue is the current value of the metric (as a quantity)",
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.api.resource.Quantity"
+     },
+     "metricName": {
+      "description": "metricName is the name of a metric used for autoscaling in metric system.",
+      "type": "string"
+     },
+     "metricSelector": {
+      "description": "metricSelector is used to identify a specific time series within a given metric.",
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector"
+     }
+    }
+   },
    "io.k8s.api.autoscaling.v2beta1.HorizontalPodAutoscaler": {
     "description": "HorizontalPodAutoscaler is the configuration for a horizontal pod autoscaler, which automatically manages the replica count of any resource implementing the scale subresource based on the metrics specified.",
     "properties": {
@@ -74298,6 +74378,10 @@
      "type"
     ],
     "properties": {
+     "external": {
+      "description": "external refers to a global metric that is not associated with any Kubernetes object. It allows autoscaling based on information coming from components running outside of cluster (for example length of queue in cloud messaging service, or QPS from loadbalancer running outside of cluster).",
+      "$ref": "#/definitions/io.k8s.api.autoscaling.v2beta1.ExternalMetricSource"
+     },
      "object": {
       "description": "object refers to a metric describing a single kubernetes object (for example, hits-per-second on an Ingress object).",
       "$ref": "#/definitions/io.k8s.api.autoscaling.v2beta1.ObjectMetricSource"
@@ -74322,6 +74406,10 @@
      "type"
     ],
     "properties": {
+     "external": {
+      "description": "external refers to a global metric that is not associated with any Kubernetes object. It allows autoscaling based on information coming from components running outside of cluster (for example length of queue in cloud messaging service, or QPS from loadbalancer running outside of cluster).",
+      "$ref": "#/definitions/io.k8s.api.autoscaling.v2beta1.ExternalMetricStatus"
+     },
      "object": {
       "description": "object refers to a metric describing a single kubernetes object (for example, hits-per-second on an Ingress object).",
       "$ref": "#/definitions/io.k8s.api.autoscaling.v2beta1.ObjectMetricStatus"
@@ -75229,6 +75317,10 @@
      "volumeHandle"
     ],
     "properties": {
+     "controllerPublishSecretRef": {
+      "description": "ControllerPublishSecretRef is a reference to the secret object containing sensitive information to pass to the CSI driver to complete the CSI ControllerPublishVolume and ControllerUnpublishVolume calls. This field is optional, and  may be empty if no secret is required. If the secret object contains more than one secret, all secrets are passed.",
+      "$ref": "#/definitions/io.k8s.api.core.v1.SecretReference"
+     },
      "driver": {
       "description": "Driver is the name of the driver to use for this volume. Required.",
       "type": "string"
@@ -75237,9 +75329,24 @@
       "description": "Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.",
       "type": "string"
      },
+     "nodePublishSecretRef": {
+      "description": "NodePublishSecretRef is a reference to the secret object containing sensitive information to pass to the CSI driver to complete the CSI NodePublishVolume and NodeUnpublishVolume calls. This field is optional, and  may be empty if no secret is required. If the secret object contains more than one secret, all secrets are passed.",
+      "$ref": "#/definitions/io.k8s.api.core.v1.SecretReference"
+     },
+     "nodeStageSecretRef": {
+      "description": "NodeStageSecretRef is a reference to the secret object containing sensitive information to pass to the CSI driver to complete the CSI NodeStageVolume and NodeStageVolume and NodeUnstageVolume calls. This field is optional, and  may be empty if no secret is required. If the secret object contains more than one secret, all secrets are passed.",
+      "$ref": "#/definitions/io.k8s.api.core.v1.SecretReference"
+     },
      "readOnly": {
       "description": "Optional: The value to pass to ControllerPublishVolumeRequest. Defaults to false (read/write).",
       "type": "boolean"
+     },
+     "volumeAttributes": {
+      "description": "Attributes of the volume to publish.",
+      "type": "object",
+      "additionalProperties": {
+       "type": "string"
+      }
      },
      "volumeHandle": {
       "description": "VolumeHandle is the unique volume name returned by the CSI volume plugin’s CreateVolume to refer to the volume on all subsequent calls. Required.",
@@ -77799,7 +77906,7 @@
       "$ref": "#/definitions/io.k8s.api.core.v1.VolumeNodeAffinity"
      },
      "persistentVolumeReclaimPolicy": {
-      "description": "What happens to a persistent volume when released from its claim. Valid options are Retain (default) and Recycle. Recycling must be supported by the volume plugin underlying this persistent volume. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#reclaiming",
+      "description": "What happens to a persistent volume when released from its claim. Valid options are Retain (default for manually created PersistentVolumes), Delete (default for dynamically provisioned PersistentVolumes), and Recycle (deprecated). Recycle must be supported by the volume plugin underlying this PersistentVolume. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#reclaiming",
       "type": "string"
      },
      "photonPersistentDisk": {
@@ -83859,6 +83966,13 @@
      "kind"
     ],
     "properties": {
+     "categories": {
+      "description": "Categories is a list of grouped resources custom resources belong to (e.g. 'all')",
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
      "kind": {
       "description": "Kind is the serialized kind of the resource.  It is normally CamelCase and singular.",
       "type": "string"

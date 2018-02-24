@@ -87,8 +87,6 @@ func getTargetPath(uid types.UID, specVolumeID string, host volume.VolumeHost) s
 var _ volume.Mounter = &csiMountMgr{}
 
 func (c *csiMountMgr) CanMount() error {
-	//TODO (vladimirvivien) use this method to probe controller using CSI.NodeProbe() call
-	// to ensure Node service is ready in the CSI plugin
 	return nil
 }
 
@@ -129,13 +127,6 @@ func (c *csiMountMgr) SetUpAt(dir string, fsGroup *int64) error {
 		return err
 	}
 
-	// probe driver
-	// TODO (vladimirvivien) move probe call where it is done only when it is needed.
-	if err := csi.NodeProbe(ctx, csiVersion); err != nil {
-		glog.Error(log("mounter.SetUpAt failed to probe driver: %v", err))
-		return err
-	}
-
 	// search for attachment by VolumeAttachment.Spec.Source.PersistentVolumeName
 	if c.volumeInfo == nil {
 		attachment, err := c.k8s.StorageV1beta1().VolumeAttachments().Get(attachID, meta.GetOptions{})
@@ -151,14 +142,7 @@ func (c *csiMountMgr) SetUpAt(dir string, fsGroup *int64) error {
 		c.volumeInfo = attachment.Status.AttachmentMetadata
 	}
 
-	// get volume attributes
-	// TODO: for alpha vol attributes are passed via PV.Annotations
-	// Beta will fix that
-	attribs, err := getVolAttribsFromSpec(c.spec)
-	if err != nil {
-		glog.Error(log("mounter.SetUpAt failed to extract volume attributes from PV annotations: %v", err))
-		return err
-	}
+	attribs := csiSource.VolumeAttributes
 
 	// create target_dir before call to NodePublish
 	if err := os.MkdirAll(dir, 0750); err != nil {
@@ -195,7 +179,10 @@ func (c *csiMountMgr) SetUpAt(dir string, fsGroup *int64) error {
 	if len(fsType) == 0 {
 		fsType = defaultFSType
 	}
-
+	nodePublishCredentials := map[string]string{}
+	if csiSource.NodePublishSecretRef != nil {
+		nodePublishCredentials = getCredentialsFromSecret(c.k8s, csiSource.NodePublishSecretRef)
+	}
 	err = csi.NodePublishVolume(
 		ctx,
 		c.volumeID,
@@ -204,6 +191,7 @@ func (c *csiMountMgr) SetUpAt(dir string, fsGroup *int64) error {
 		accessMode,
 		c.volumeInfo,
 		attribs,
+		nodePublishCredentials,
 		fsType,
 	)
 
@@ -251,6 +239,12 @@ func (c *csiMountMgr) TearDownAt(dir string) error {
 		return nil
 	}
 
+	csiSource, err := getCSISourceFromSpec(c.spec)
+	if err != nil {
+		glog.Error(log("mounter.TearDownAt failed to get CSI persistent source: %v", err))
+		return err
+	}
+
 	// load volume info from file
 	dataDir := path.Dir(dir) // dropoff /mount at end
 	data, err := loadVolumeData(dataDir, volDataFileName)
@@ -280,7 +274,11 @@ func (c *csiMountMgr) TearDownAt(dir string) error {
 		return err
 	}
 
-	if err := csi.NodeUnpublishVolume(ctx, volID, dir); err != nil {
+	nodeUnpublishCredentials := map[string]string{}
+	if csiSource.NodePublishSecretRef != nil {
+		nodeUnpublishCredentials = getCredentialsFromSecret(c.k8s, csiSource.NodePublishSecretRef)
+	}
+	if err := csi.NodeUnpublishVolume(ctx, volID, dir, nodeUnpublishCredentials); err != nil {
 		glog.Errorf(log("mounter.TearDownAt failed: %v", err))
 		return err
 	}
@@ -293,29 +291,6 @@ func (c *csiMountMgr) TearDownAt(dir string) error {
 	glog.V(4).Infof(log("mounte.TearDownAt successfully unmounted dir [%s]", dir))
 
 	return nil
-}
-
-// getVolAttribsFromSpec extracts CSI VolumeAttributes information from PV.Annotations
-// using key csi.kubernetes.io/volume-attributes.  The annotation value is expected
-// to be a JSON-encoded object of form {"key0":"val0",...,"keyN":"valN"}
-func getVolAttribsFromSpec(spec *volume.Spec) (map[string]string, error) {
-	if spec == nil {
-		return nil, errors.New("missing volume spec")
-	}
-	annotations := spec.PersistentVolume.GetAnnotations()
-	if annotations == nil {
-		return nil, nil // no annotations found
-	}
-	jsonAttribs := annotations[csiVolAttribsAnnotationKey]
-	if jsonAttribs == "" {
-		return nil, nil // csi annotation not found
-	}
-	attribs := map[string]string{}
-	if err := json.Unmarshal([]byte(jsonAttribs), &attribs); err != nil {
-		glog.Error(log("error parsing csi PV.Annotation [%s]=%s: %v", csiVolAttribsAnnotationKey, jsonAttribs, err))
-		return nil, err
-	}
-	return attribs, nil
 }
 
 // saveVolumeData persists parameter data as json file using the location
