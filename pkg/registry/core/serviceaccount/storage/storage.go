@@ -22,6 +22,9 @@ import (
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/registry/rest"
 	api "k8s.io/kubernetes/pkg/apis/core"
+	"k8s.io/kubernetes/pkg/printers"
+	printersinternal "k8s.io/kubernetes/pkg/printers/internalversion"
+	printerstorage "k8s.io/kubernetes/pkg/printers/storage"
 	"k8s.io/kubernetes/pkg/registry/core/serviceaccount"
 	token "k8s.io/kubernetes/pkg/serviceaccount"
 )
@@ -32,7 +35,7 @@ type REST struct {
 }
 
 // NewREST returns a RESTStorage object that will work against service accounts.
-func NewREST(optsGetter generic.RESTOptionsGetter, issuer token.TokenGenerator, podStorage, secretStorage *genericregistry.Store) *REST {
+func NewREST(optsGetter generic.RESTOptionsGetter, issuer token.TokenGenerator, auds []string, podStorage, secretStorage *genericregistry.Store) *REST {
 	store := &genericregistry.Store{
 		NewFunc:                  func() runtime.Object { return &api.ServiceAccount{} },
 		NewListFunc:              func() runtime.Object { return &api.ServiceAccountList{} },
@@ -42,6 +45,8 @@ func NewREST(optsGetter generic.RESTOptionsGetter, issuer token.TokenGenerator, 
 		UpdateStrategy:      serviceaccount.Strategy,
 		DeleteStrategy:      serviceaccount.Strategy,
 		ReturnDeletedObject: true,
+
+		TableConvertor: printerstorage.TableConvertor{TablePrinter: printers.NewTablePrinter().With(printersinternal.AddHandlers)},
 	}
 	options := &generic.StoreOptions{RESTOptions: optsGetter}
 	if err := store.CompleteWithOptions(options); err != nil {
@@ -52,9 +57,10 @@ func NewREST(optsGetter generic.RESTOptionsGetter, issuer token.TokenGenerator, 
 	if issuer != nil && podStorage != nil && secretStorage != nil {
 		trest = &TokenREST{
 			svcaccts: store,
-			issuer:   issuer,
 			pods:     podStorage,
 			secrets:  secretStorage,
+			issuer:   issuer,
+			auds:     auds,
 		}
 	}
 

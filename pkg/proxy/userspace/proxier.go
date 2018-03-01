@@ -36,7 +36,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
-	proxyutil "k8s.io/kubernetes/pkg/proxy/util"
+	utilproxy "k8s.io/kubernetes/pkg/proxy/util"
 	"k8s.io/kubernetes/pkg/util/conntrack"
 	"k8s.io/kubernetes/pkg/util/iptables"
 	utilexec "k8s.io/utils/exec"
@@ -155,18 +155,15 @@ func IsProxyLocked(err error) bool {
 // if iptables fails to update or acquire the initial lock. Once a proxier is
 // created, it will keep iptables up to date in the background and will not
 // terminate if a particular iptables call fails.
-func NewProxier(loadBalancer LoadBalancer, listenIP net.IP, iptables iptables.Interface, exec utilexec.Interface, pr utilnet.PortRange, syncPeriod, minSyncPeriod, udpIdleTimeout time.Duration) (*Proxier, error) {
-	return NewCustomProxier(loadBalancer, listenIP, iptables, exec, pr, syncPeriod, minSyncPeriod, udpIdleTimeout, newProxySocket)
+func NewProxier(loadBalancer LoadBalancer, listenIP net.IP, iptables iptables.Interface, exec utilexec.Interface, pr utilnet.PortRange, syncPeriod, minSyncPeriod, udpIdleTimeout time.Duration, nodePortAddresses []string) (*Proxier, error) {
+	return NewCustomProxier(loadBalancer, listenIP, iptables, exec, pr, syncPeriod, minSyncPeriod, udpIdleTimeout, nodePortAddresses, newProxySocket)
 }
 
 // NewCustomProxier functions similarly to NewProxier, returning a new Proxier
 // for the given LoadBalancer and address.  The new proxier is constructed using
 // the ProxySocket constructor provided, however, instead of constructing the
 // default ProxySockets.
-func NewCustomProxier(loadBalancer LoadBalancer, listenIP net.IP, iptables iptables.Interface, exec utilexec.Interface, pr utilnet.PortRange, syncPeriod, minSyncPeriod, udpIdleTimeout time.Duration, makeProxySocket ProxySocketFunc) (*Proxier, error) {
-	if listenIP == nil {
-		return nil, fmt.Errorf("invalid listen ip for kube-proxy")
-	}
+func NewCustomProxier(loadBalancer LoadBalancer, listenIP net.IP, iptables iptables.Interface, exec utilexec.Interface, pr utilnet.PortRange, syncPeriod, minSyncPeriod, udpIdleTimeout time.Duration, nodePortAddresses []string, makeProxySocket ProxySocketFunc) (*Proxier, error) {
 	if listenIP.Equal(localhostIPv4) || listenIP.Equal(localhostIPv6) {
 		return nil, ErrProxyOnLocalhost
 	}
@@ -591,7 +588,7 @@ func (proxier *Proxier) openPortal(service proxy.ServicePortName, info *ServiceI
 }
 
 func (proxier *Proxier) openOnePortal(portal portal, protocol api.Protocol, proxyIP net.IP, proxyPort int, name proxy.ServicePortName) error {
-	if local, err := proxyutil.IsLocalIP(portal.ip.String()); err != nil {
+	if local, err := utilproxy.IsLocalIP(portal.ip.String()); err != nil {
 		return fmt.Errorf("can't determine if IP %s is local, assuming not: %v", portal.ip, err)
 	} else if local {
 		err := proxier.claimNodePort(portal.ip, portal.port, protocol, name)
@@ -770,7 +767,7 @@ func (proxier *Proxier) closePortal(service proxy.ServicePortName, info *Service
 func (proxier *Proxier) closeOnePortal(portal portal, protocol api.Protocol, proxyIP net.IP, proxyPort int, name proxy.ServicePortName) []error {
 	el := []error{}
 
-	if local, err := proxyutil.IsLocalIP(portal.ip.String()); err != nil {
+	if local, err := utilproxy.IsLocalIP(portal.ip.String()); err != nil {
 		el = append(el, fmt.Errorf("can't determine if IP %s is local, assuming not: %v", portal.ip, err))
 	} else if local {
 		if err := proxier.releaseNodePort(portal.ip, portal.port, protocol, name); err != nil {
@@ -970,7 +967,7 @@ func iptablesCommonPortalArgs(destIP net.IP, addPhysicalInterfaceMatch bool, add
 	}
 
 	if destIP != nil {
-		args = append(args, "-d", proxyutil.ToCIDR(destIP))
+		args = append(args, "-d", utilproxy.ToCIDR(destIP))
 	}
 
 	if addPhysicalInterfaceMatch {

@@ -1021,8 +1021,8 @@ type FlockerVolumeSource struct {
 type StorageMedium string
 
 const (
-	StorageMediumDefault   StorageMedium = ""          // use whatever the default is for the node
-	StorageMediumMemory    StorageMedium = "Memory"    // use memory (tmpfs)
+	StorageMediumDefault   StorageMedium = ""          // use whatever the default is for the node, assume anything we don't explicitly handle is this
+	StorageMediumMemory    StorageMedium = "Memory"    // use memory (e.g. tmpfs on linux)
 	StorageMediumHugePages StorageMedium = "HugePages" // use hugepages
 )
 
@@ -2847,7 +2847,6 @@ type PodSpec struct {
 	// DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy.
 	// To have DNS options set along with hostNetwork, you have to specify DNS policy
 	// explicitly to 'ClusterFirstWithHostNet'.
-	// Note that 'None' policy is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it.
 	// +optional
 	DNSPolicy DNSPolicy `json:"dnsPolicy,omitempty" protobuf:"bytes,6,opt,name=dnsPolicy,casttype=DNSPolicy"`
 	// NodeSelector is a selector which must be true for the pod to fit on a node.
@@ -2953,7 +2952,6 @@ type PodSpec struct {
 	// Specifies the DNS parameters of a pod.
 	// Parameters specified here will be merged to the generated DNS
 	// configuration based on DNSPolicy.
-	// This is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it.
 	// +optional
 	DNSConfig *PodDNSConfig `json:"dnsConfig,omitempty" protobuf:"bytes,26,opt,name=dnsConfig"`
 }
@@ -3723,7 +3721,8 @@ type Endpoints struct {
 	// subsets for the different ports. No address will appear in both Addresses and
 	// NotReadyAddresses in the same subset.
 	// Sets of addresses and ports that comprise a service.
-	Subsets []EndpointSubset `json:"subsets" protobuf:"bytes,2,rep,name=subsets"`
+	// +optional
+	Subsets []EndpointSubset `json:"subsets,omitempty" protobuf:"bytes,2,rep,name=subsets"`
 }
 
 // EndpointSubset is a group of addresses with a common set of ports. The
