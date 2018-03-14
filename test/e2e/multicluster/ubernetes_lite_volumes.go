@@ -121,9 +121,14 @@ func OnlyAllowNodeZones(f *framework.Framework, zoneCount int, image string) {
 	defer func() {
 		// Teardown of the compute instance
 		framework.Logf("Deleting compute resource: %v", name)
+<<<<<<< HEAD
 		resp, err := gceCloud.DeleteInstance(project, zone, name)
 		Expect(err).NotTo(HaveOccurred())
 		framework.Logf("Compute deletion response: %v\n", resp)
+=======
+		err := gceCloud.DeleteInstance(project, zone, name)
+		Expect(err).NotTo(HaveOccurred())
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 	}()
 
 	By("Creating zoneCount+1 PVCs and making sure PDs are only provisioned in zones with nodes")

@@ -17,6 +17,7 @@ limitations under the License.
 package proxy
 
 import (
+	"bytes"
 	"fmt"
 	"runtime"
 
@@ -33,7 +34,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	kubeproxyconfigscheme "k8s.io/kubernetes/pkg/proxy/apis/kubeproxyconfig/scheme"
 	kubeproxyconfigv1alpha1 "k8s.io/kubernetes/pkg/proxy/apis/kubeproxyconfig/v1alpha1"
-	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm"
+	"k8s.io/kubernetes/pkg/scheduler/algorithm"
 )
 
 const (
@@ -57,11 +58,13 @@ func EnsureProxyAddon(cfg *kubeadmapi.MasterConfiguration, client clientset.Inte
 		return err
 	}
 
-	proxyBytes, err := kubeadmutil.MarshalToYamlForCodecsWithShift(cfg.KubeProxy.Config, kubeproxyconfigv1alpha1.SchemeGroupVersion,
+	proxyBytes, err := kubeadmutil.MarshalToYamlForCodecs(cfg.KubeProxy.Config, kubeproxyconfigv1alpha1.SchemeGroupVersion,
 		kubeproxyconfigscheme.Codecs)
 	if err != nil {
 		return fmt.Errorf("error when marshaling: %v", err)
 	}
+	var prefixBytes bytes.Buffer
+	apiclient.PrintBytesWithLinePrefix(&prefixBytes, proxyBytes, "    ")
 	var proxyConfigMapBytes, proxyDaemonSetBytes []byte
 	proxyConfigMapBytes, err = kubeadmutil.ParseTemplate(KubeProxyConfigMap19,
 		struct {
@@ -69,12 +72,12 @@ func EnsureProxyAddon(cfg *kubeadmapi.MasterConfiguration, client clientset.Inte
 			ProxyConfig    string
 		}{
 			MasterEndpoint: masterEndpoint,
-			ProxyConfig:    proxyBytes,
+			ProxyConfig:    prefixBytes.String(),
 		})
 	if err != nil {
 		return fmt.Errorf("error when parsing kube-proxy configmap template: %v", err)
 	}
-	proxyDaemonSetBytes, err = kubeadmutil.ParseTemplate(KubeProxyDaemonSet19, struct{ ImageRepository, Arch, Version, ImageOverride, ClusterCIDR, MasterTaintKey, CloudTaintKey string }{
+	proxyDaemonSetBytes, err = kubeadmutil.ParseTemplate(KubeProxyDaemonSet19, struct{ ImageRepository, Arch, Version, ImageOverride, MasterTaintKey, CloudTaintKey string }{
 		ImageRepository: cfg.GetControlPlaneImageRepository(),
 		Arch:            runtime.GOARCH,
 		Version:         kubeadmutil.KubernetesVersionToImageTag(cfg.KubernetesVersion),
@@ -150,11 +153,4 @@ func createClusterRoleBindings(client clientset.Interface) error {
 			},
 		},
 	})
-}
-
-func getClusterCIDR(podsubnet string) string {
-	if len(podsubnet) == 0 {
-		return ""
-	}
-	return "- --cluster-cidr=" + podsubnet
 }

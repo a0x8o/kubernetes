@@ -387,6 +387,7 @@ func newAvailabilitySet(az *Cloud) VMSet {
 // not exist or is no longer running.
 func (as *availabilitySet) GetInstanceIDByNodeName(name string) (string, error) {
 	var machine compute.VirtualMachine
+<<<<<<< HEAD
 	var exists bool
 	var err error
 
@@ -396,6 +397,15 @@ func (as *availabilitySet) GetInstanceIDByNodeName(name string) (string, error) 
 		if as.CloudProviderBackoff {
 			glog.V(2).Infof("InstanceID(%s) backing off", name)
 			machine, exists, err = as.GetVirtualMachineWithRetry(types.NodeName(name))
+=======
+	var err error
+
+	machine, err = as.getVirtualMachine(types.NodeName(name))
+	if err != nil {
+		if as.CloudProviderBackoff {
+			glog.V(2).Infof("InstanceID(%s) backing off", name)
+			machine, err = as.GetVirtualMachineWithRetry(types.NodeName(name))
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 			if err != nil {
 				glog.V(2).Infof("InstanceID(%s) abort backoff", name)
 				return "", err
@@ -403,8 +413,11 @@ func (as *availabilitySet) GetInstanceIDByNodeName(name string) (string, error) 
 		} else {
 			return "", err
 		}
+<<<<<<< HEAD
 	} else if !exists {
 		return "", cloudprovider.InstanceNotFound
+=======
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 	}
 	return *machine.ID, nil
 }
@@ -422,12 +435,19 @@ func (as *availabilitySet) GetNodeNameByProviderID(providerID string) (types.Nod
 
 // GetInstanceTypeByNodeName gets the instance type by node name.
 func (as *availabilitySet) GetInstanceTypeByNodeName(name string) (string, error) {
+<<<<<<< HEAD
 	machine, exists, err := as.getVirtualMachine(types.NodeName(name))
 	if err != nil {
 		glog.Errorf("error: as.GetInstanceTypeByNodeName(%s), as.getVirtualMachine(%s) err=%v", name, name, err)
 		return "", err
 	} else if !exists {
 		return "", cloudprovider.InstanceNotFound
+=======
+	machine, err := as.getVirtualMachine(types.NodeName(name))
+	if err != nil {
+		glog.Errorf("error: as.GetInstanceTypeByNodeName(%s), as.getVirtualMachine(%s) err=%v", name, name, err)
+		return "", err
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 	}
 
 	return string(machine.HardwareProfile.VMSize), nil
@@ -435,15 +455,22 @@ func (as *availabilitySet) GetInstanceTypeByNodeName(name string) (string, error
 
 // GetZoneByNodeName gets zone from instance view.
 func (as *availabilitySet) GetZoneByNodeName(name string) (cloudprovider.Zone, error) {
+<<<<<<< HEAD
 	vm, exists, err := as.getVirtualMachine(types.NodeName(name))
+=======
+	vm, err := as.getVirtualMachine(types.NodeName(name))
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 	if err != nil {
 		return cloudprovider.Zone{}, err
 	}
 
+<<<<<<< HEAD
 	if !exists {
 		return cloudprovider.Zone{}, cloudprovider.InstanceNotFound
 	}
 
+=======
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 	failureDomain := strconv.Itoa(int(*vm.VirtualMachineProperties.InstanceView.PlatformFaultDomain))
 	zone := cloudprovider.Zone{
 		FailureDomain: failureDomain,
@@ -572,14 +599,21 @@ func (as *availabilitySet) GetVMSetNames(service *v1.Service, nodes []*v1.Node) 
 func (as *availabilitySet) GetPrimaryInterface(nodeName, vmSetName string) (network.Interface, error) {
 	var machine compute.VirtualMachine
 
+<<<<<<< HEAD
 	as.operationPollRateLimiter.Accept()
 	glog.V(10).Infof("VirtualMachinesClient.Get(%q): start", nodeName)
 	machine, err := as.VirtualMachineClientGetWithRetry(as.ResourceGroup, nodeName, "")
+=======
+	machine, err := as.GetVirtualMachineWithRetry(types.NodeName(nodeName))
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 	if err != nil {
 		glog.V(2).Infof("GetPrimaryInterface(%s, %s) abort backoff", nodeName, vmSetName)
 		return network.Interface{}, err
 	}
+<<<<<<< HEAD
 	glog.V(10).Infof("VirtualMachinesClient.Get(%q): end", nodeName)
+=======
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 
 	primaryNicID, err := getPrimaryInterfaceID(machine)
 	if err != nil {
@@ -600,10 +634,14 @@ func (as *availabilitySet) GetPrimaryInterface(nodeName, vmSetName string) (netw
 		}
 	}
 
+<<<<<<< HEAD
 	as.operationPollRateLimiter.Accept()
 	glog.V(10).Infof("InterfacesClient.Get(%q): start", nicName)
 	nic, err := as.InterfacesClient.Get(as.ResourceGroup, nicName, "")
 	glog.V(10).Infof("InterfacesClient.Get(%q): end", nicName)
+=======
+	nic, err := as.InterfacesClient.Get(as.ResourceGroup, nicName, "")
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 	if err != nil {
 		return network.Interface{}, err
 	}
@@ -653,8 +691,11 @@ func (as *availabilitySet) ensureHostInPool(serviceName string, nodeName types.N
 
 		nicName := *nic.Name
 		glog.V(3).Infof("nicupdate(%s): nic(%s) - updating", serviceName, nicName)
+<<<<<<< HEAD
 		as.operationPollRateLimiter.Accept()
 		glog.V(10).Infof("InterfacesClient.CreateOrUpdate(%q): start", *nic.Name)
+=======
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 		respChan, errChan := as.InterfacesClient.CreateOrUpdate(as.ResourceGroup, *nic.Name, nic, nil)
 		resp := <-respChan
 		err := <-errChan

@@ -1,10 +1,4 @@
-package(default_visibility = ["//visibility:public"])
-
-load(
-    "@io_bazel_rules_go//go:def.bzl",
-    "go_library",
-    "go_test",
-)
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
@@ -14,6 +8,8 @@ go_library(
         "docker_checkpoint.go",
         "docker_container.go",
         "docker_image.go",
+        "docker_legacy_service.go",
+        "docker_logs.go",
         "docker_sandbox.go",
         "docker_service.go",
         "docker_streaming.go",
@@ -81,16 +77,17 @@ go_library(
         "//conditions:default": [],
     }),
     importpath = "k8s.io/kubernetes/pkg/kubelet/dockershim",
+    visibility = ["//visibility:public"],
     deps = [
         "//pkg/credentialprovider:go_default_library",
-        "//pkg/kubelet/apis/cri:go_default_library",
-        "//pkg/kubelet/apis/cri/v1alpha1/runtime:go_default_library",
+        "//pkg/kubelet/apis/cri/runtime/v1alpha2:go_default_library",
         "//pkg/kubelet/apis/kubeletconfig:go_default_library",
         "//pkg/kubelet/cm:go_default_library",
         "//pkg/kubelet/container:go_default_library",
         "//pkg/kubelet/dockershim/cm:go_default_library",
         "//pkg/kubelet/dockershim/libdocker:go_default_library",
         "//pkg/kubelet/dockershim/metrics:go_default_library",
+        "//pkg/kubelet/kuberuntime:go_default_library",
         "//pkg/kubelet/leaky:go_default_library",
         "//pkg/kubelet/network:go_default_library",
         "//pkg/kubelet/network/cni:go_default_library",
@@ -115,12 +112,20 @@ go_library(
         "//vendor/github.com/docker/docker/pkg/jsonmessage:go_default_library",
         "//vendor/github.com/docker/go-connections/nat:go_default_library",
         "//vendor/github.com/golang/glog:go_default_library",
+        "//vendor/golang.org/x/net/context:go_default_library",
         "//vendor/k8s.io/api/core/v1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/types:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/errors:go_default_library",
         "//vendor/k8s.io/client-go/tools/remotecommand:go_default_library",
-    ],
+        "//vendor/k8s.io/utils/exec:go_default_library",
+    ] + select({
+        "@io_bazel_rules_go//go/platform:windows": [
+            "//pkg/kubelet/apis:go_default_library",
+            "//pkg/kubelet/winstats:go_default_library",
+        ],
+        "//conditions:default": [],
+    }),
 )
 
 go_test(
@@ -142,12 +147,9 @@ go_test(
         ],
         "//conditions:default": [],
     }),
-    data = [
-    ],
     embed = [":go_default_library"],
-    importpath = "k8s.io/kubernetes/pkg/kubelet/dockershim",
     deps = [
-        "//pkg/kubelet/apis/cri/v1alpha1/runtime:go_default_library",
+        "//pkg/kubelet/apis/cri/runtime/v1alpha2:go_default_library",
         "//pkg/kubelet/container:go_default_library",
         "//pkg/kubelet/container/testing:go_default_library",
         "//pkg/kubelet/dockershim/libdocker:go_default_library",
@@ -165,6 +167,7 @@ go_test(
         "//vendor/github.com/golang/mock/gomock:go_default_library",
         "//vendor/github.com/stretchr/testify/assert:go_default_library",
         "//vendor/github.com/stretchr/testify/require:go_default_library",
+        "//vendor/golang.org/x/net/context:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/clock:go_default_library",
     ],
 )
@@ -187,4 +190,5 @@ filegroup(
         "//pkg/kubelet/dockershim/testing:all-srcs",
     ],
     tags = ["automanaged"],
+    visibility = ["//visibility:public"],
 )

@@ -19,7 +19,10 @@ package scheduler
 // This file tests the VolumeScheduling feature.
 
 import (
+<<<<<<< HEAD
 	"encoding/json"
+=======
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -40,10 +43,16 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/api/testapi"
+<<<<<<< HEAD
 	"k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	"k8s.io/kubernetes/pkg/controller/volume/persistentvolume"
 	"k8s.io/kubernetes/plugin/pkg/scheduler"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/factory"
+=======
+	"k8s.io/kubernetes/pkg/controller/volume/persistentvolume"
+	"k8s.io/kubernetes/pkg/scheduler"
+	"k8s.io/kubernetes/pkg/scheduler/factory"
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 	"k8s.io/kubernetes/test/integration/framework"
 )
 
@@ -82,7 +91,11 @@ func TestLocalPVNegativeAffinity(t *testing.T) {
 		}
 		// Give time to shceduler to attempt to schedule pod
 		if err := waitForPodToSchedule(config.client, pod); err == nil {
+<<<<<<< HEAD
 			t.Errorf("Failed as Pod %s was scheduled sucessfully but expected to fail", pod.Name)
+=======
+			t.Errorf("Failed as Pod %s was scheduled successfully but expected to fail", pod.Name)
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 		}
 		// Deleting test pod
 		p, err := config.client.CoreV1().Pods(config.ns).Get(podName, metav1.GetOptions{})
@@ -95,8 +108,13 @@ func TestLocalPVNegativeAffinity(t *testing.T) {
 		if strings.Compare(p.Status.Conditions[0].Reason, "Unschedulable") != 0 {
 			t.Fatalf("Failed as Pod %s reason was: %s but expected: Unschedulable", podName, p.Status.Conditions[0].Reason)
 		}
+<<<<<<< HEAD
 		if !strings.Contains(p.Status.Conditions[0].Message, "MatchNodeSelector") || !strings.Contains(p.Status.Conditions[0].Message, "VolumeNodeAffinityConflict") {
 			t.Fatalf("Failed as Pod's %s failure message does not contain expected keywords: MatchNodeSelector, VolumeNodeAffinityConflict", podName)
+=======
+		if !strings.Contains(p.Status.Conditions[0].Message, "node(s) didn't match node selector") || !strings.Contains(p.Status.Conditions[0].Message, "node(s) had volume node affinity conflict") {
+			t.Fatalf("Failed as Pod's %s failure message does not contain expected message: node(s) didn't match node selector, node(s) had volume node affinity conflict", podName)
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 		}
 		if err := config.client.CoreV1().Pods(config.ns).Delete(podName, &metav1.DeleteOptions{}); err != nil {
 			t.Fatalf("Failed to delete Pod %s: %v", podName, err)
@@ -136,6 +154,10 @@ func setupNodes(t *testing.T, nsName string, numberOfNodes int) *testConfig {
 		VolumeInformer:            informers.Core().V1().PersistentVolumes(),
 		ClaimInformer:             informers.Core().V1().PersistentVolumeClaims(),
 		ClassInformer:             informers.Storage().V1().StorageClasses(),
+<<<<<<< HEAD
+=======
+		PodInformer:               informers.Core().V1().Pods(),
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 		EventRecorder:             nil, // TODO: add one so we can test PV events
 		EnableDynamicProvisioning: true,
 	}
@@ -253,6 +275,7 @@ func makeHostBoundPV(t *testing.T, name, scName, pvcName, ns string, node string
 					Path: "/tmp/" + node + "/test-path",
 				},
 			},
+<<<<<<< HEAD
 		},
 	}
 
@@ -269,15 +292,34 @@ func makeHostBoundPV(t *testing.T, name, scName, pvcName, ns string, node string
 							Key:      affinityLabelKey,
 							Operator: v1.NodeSelectorOpIn,
 							Values:   []string{node},
+=======
+			NodeAffinity: &v1.VolumeNodeAffinity{
+				Required: &v1.NodeSelector{
+					NodeSelectorTerms: []v1.NodeSelectorTerm{
+						{
+							MatchExpressions: []v1.NodeSelectorRequirement{
+								{
+									Key:      affinityLabelKey,
+									Operator: v1.NodeSelectorOpIn,
+									Values:   []string{node},
+								},
+							},
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 						},
 					},
 				},
 			},
 		},
 	}
+<<<<<<< HEAD
 	err := helper.StorageNodeAffinityToAlphaAnnotation(pv.Annotations, testNodeAffinity)
 	if err != nil {
 		t.Fatalf("Setting storage node affinity failed: %v", err)
+=======
+
+	if pvcName != "" {
+		pv.Spec.ClaimRef = &v1.ObjectReference{Name: pvcName, Namespace: ns}
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 	}
 
 	return pv
@@ -310,6 +352,7 @@ func markNodeSelector(pod *v1.Pod, node string) {
 	}
 	pod.Spec.NodeSelector = ns
 }
+<<<<<<< HEAD
 
 func printIndentedJson(data interface{}) string {
 	var indentedJSON []byte
@@ -320,3 +363,5 @@ func printIndentedJson(data interface{}) string {
 	}
 	return string(indentedJSON)
 }
+=======
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e

@@ -38,7 +38,10 @@ go_test(
     name = "go_default_test",
     srcs = ["helper_test.go"],
     embed = [":go_default_library"],
+<<<<<<< HEAD
     importpath = "k8s.io/kubernetes/pkg/client/unversioned",
+=======
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
     deps = [
         "//pkg/api/legacyscheme:go_default_library",
         "//pkg/api/testapi:go_default_library",

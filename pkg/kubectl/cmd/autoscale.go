@@ -52,7 +52,8 @@ func NewCmdAutoscale(f cmdutil.Factory, out io.Writer) *cobra.Command {
 	argAliases := kubectl.ResourceAliases(validArgs)
 
 	cmd := &cobra.Command{
-		Use:     "autoscale (-f FILENAME | TYPE NAME | TYPE/NAME) [--min=MINPODS] --max=MAXPODS [--cpu-percent=CPU] [flags]",
+		Use: "autoscale (-f FILENAME | TYPE NAME | TYPE/NAME) [--min=MINPODS] --max=MAXPODS [--cpu-percent=CPU]",
+		DisableFlagsInUseLine: true,
 		Short:   i18n.T("Auto-scale a Deployment, ReplicaSet, or ReplicationController"),
 		Long:    autoscaleLong,
 		Example: autoscaleExample,
@@ -142,7 +143,7 @@ func RunAutoscale(f cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []s
 			ObjectTyper:  typer,
 			RESTMapper:   mapper,
 			ClientMapper: resource.ClientMapperFunc(f.ClientForMapping),
-			Decoder:      f.Decoder(true),
+			Decoder:      cmdutil.InternalVersionDecoder(),
 		}
 		hpa, err := resourceMapper.InfoForObject(object, nil)
 		if err != nil {
@@ -155,10 +156,10 @@ func RunAutoscale(f cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []s
 			object = hpa.Object
 		}
 		if cmdutil.GetDryRunFlag(cmd) {
-			return f.PrintObject(cmd, false, mapper, object, out)
+			return cmdutil.PrintObject(cmd, object, out)
 		}
 
-		if err := kubectl.CreateOrUpdateAnnotation(cmdutil.GetFlagBool(cmd, cmdutil.ApplyAnnotationsFlag), hpa, f.JSONEncoder()); err != nil {
+		if err := kubectl.CreateOrUpdateAnnotation(cmdutil.GetFlagBool(cmd, cmdutil.ApplyAnnotationsFlag), hpa, cmdutil.InternalVersionJSONEncoder()); err != nil {
 			return err
 		}
 
@@ -169,10 +170,10 @@ func RunAutoscale(f cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []s
 
 		count++
 		if len(cmdutil.GetFlagString(cmd, "output")) > 0 {
-			return f.PrintObject(cmd, false, mapper, object, out)
+			return cmdutil.PrintObject(cmd, object, out)
 		}
 
-		f.PrintSuccess(mapper, false, out, info.Mapping.Resource, info.Name, cmdutil.GetDryRunFlag(cmd), "autoscaled")
+		cmdutil.PrintSuccess(false, out, info.Object, cmdutil.GetDryRunFlag(cmd), "autoscaled")
 		return nil
 	})
 	if err != nil {

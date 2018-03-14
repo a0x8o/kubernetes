@@ -211,6 +211,11 @@ func (kl *Kubelet) GetNodeConfig() cm.NodeConfig {
 	return kl.containerManager.GetNodeConfig()
 }
 
+// GetPodCgroupRoot returns the listeral cgroupfs value for the cgroup containing all pods
+func (kl *Kubelet) GetPodCgroupRoot() string {
+	return kl.containerManager.GetPodCgroupRoot()
+}
+
 // GetHostIP returns host IP or nil in case of error.
 func (kl *Kubelet) GetHostIP() (net.IP, error) {
 	node, err := kl.GetNode()
@@ -276,12 +281,5 @@ func (kl *Kubelet) GetVersionInfo() (*cadvisorapiv1.VersionInfo, error) {
 
 // GetCachedMachineInfo assumes that the machine info can't change without a reboot
 func (kl *Kubelet) GetCachedMachineInfo() (*cadvisorapiv1.MachineInfo, error) {
-	if kl.machineInfo == nil {
-		info, err := kl.cadvisor.MachineInfo()
-		if err != nil {
-			return nil, err
-		}
-		kl.machineInfo = info
-	}
 	return kl.machineInfo, nil
 }

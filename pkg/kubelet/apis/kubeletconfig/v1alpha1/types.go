@@ -47,9 +47,6 @@ const (
 type KubeletConfiguration struct {
 	metav1.TypeMeta `json:",inline"`
 
-	// Only used for dynamic configuration.
-	// The length of the trial period for this configuration. This configuration will become the last-known-good after this duration.
-	ConfigTrialDuration *metav1.Duration `json:"configTrialDuration"`
 	// podManifestPath is the path to the directory containing pod manifests to
 	// run, or the path to a single manifest file
 	PodManifestPath string `json:"podManifestPath"`
@@ -82,26 +79,19 @@ type KubeletConfiguration struct {
 	// and key are generated for the public address and saved to the directory
 	// passed to certDir.
 	TLSCertFile string `json:"tlsCertFile"`
-	// tlsPrivateKeyFile is the ile containing x509 private key matching
+	// tlsPrivateKeyFile is the file containing x509 private key matching
 	// tlsCertFile.
 	TLSPrivateKeyFile string `json:"tlsPrivateKeyFile"`
+	// TLSCipherSuites is the list of allowed cipher suites for the server.
+	// Values are from tls package constants (https://golang.org/pkg/crypto/tls/#pkg-constants).
+	TLSCipherSuites []string `json:"tlsCipherSuites"`
+	// TLSMinVersion is the minimum TLS version supported.
+	// Values are from tls package constants (https://golang.org/pkg/crypto/tls/#pkg-constants).
+	TLSMinVersion string `json:"tlsMinVersion"`
 	// authentication specifies how requests to the Kubelet's server are authenticated
 	Authentication KubeletAuthentication `json:"authentication"`
 	// authorization specifies how requests to the Kubelet's server are authorized
 	Authorization KubeletAuthorization `json:"authorization"`
-	// allowPrivileged enables containers to request privileged mode.
-	// Defaults to false.
-	AllowPrivileged *bool `json:"allowPrivileged"`
-	// hostNetworkSources is a comma-separated list of sources from which the
-	// Kubelet allows pods to use of host network. Defaults to "*". Valid
-	// options are "file", "http", "api", and "*" (all sources).
-	HostNetworkSources []string `json:"hostNetworkSources"`
-	// hostPIDSources is a comma-separated list of sources from which the
-	// Kubelet allows pods to use the host pid namespace. Defaults to "*".
-	HostPIDSources []string `json:"hostPIDSources"`
-	// hostIPCSources is a comma-separated list of sources from which the
-	// Kubelet allows pods to use the host ipc namespace. Defaults to "*".
-	HostIPCSources []string `json:"hostIPCSources"`
 	// registryPullQPS is the limit of registry pulls per second. If 0,
 	// unlimited. Set to 0 for no limit. Defaults to 5.0.
 	RegistryPullQPS *int32 `json:"registryPullQPS"`
@@ -121,8 +111,6 @@ type KubeletConfiguration struct {
 	EnableDebuggingHandlers *bool `json:"enableDebuggingHandlers"`
 	// enableContentionProfiling enables lock contention profiling, if enableDebuggingHandlers is true.
 	EnableContentionProfiling bool `json:"enableContentionProfiling"`
-	// cAdvisorPort is the port of the localhost cAdvisor endpoint (set to 0 to disable)
-	CAdvisorPort *int32 `json:"cAdvisorPort"`
 	// healthzPort is the port of the localhost healthz endpoint (set to 0 to disable)
 	HealthzPort *int32 `json:"healthzPort"`
 	// healthzBindAddress is the IP address for the healthz server to serve
@@ -190,13 +178,19 @@ type KubeletConfiguration struct {
 	//   "hairpin-veth":       set the hairpin flag on container veth interfaces.
 	//   "none":               do nothing.
 	// Generally, one must set --hairpin-mode=hairpin-veth to achieve hairpin NAT,
+<<<<<<< HEAD
 	// because promiscous-bridge assumes the existence of a container bridge named cbr0.
+=======
+	// because promiscuous-bridge assumes the existence of a container bridge named cbr0.
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
 	HairpinMode string `json:"hairpinMode"`
 	// maxPods is the number of pods that can run on this Kubelet.
 	MaxPods int32 `json:"maxPods"`
 	// The CIDR to use for pod IP addresses, only used in standalone mode.
 	// In cluster mode, this is obtained from the master.
 	PodCIDR string `json:"podCIDR"`
+	// PodPidsLimit is the maximum number of pids in any pod.
+	PodPidsLimit *int64 `json:"podPidsLimit"`
 	// ResolverConfig is the resolver configuration file used as the basis
 	// for the container DNS resolution configuration.
 	ResolverConfig string `json:"resolvConf"`
@@ -219,10 +213,10 @@ type KubeletConfiguration struct {
 	SerializeImagePulls *bool `json:"serializeImagePulls"`
 	// Map of signal names to quantities that defines hard eviction thresholds. For example: {"memory.available": "300Mi"}.
 	// +optional
-	EvictionHard map[string]string `json:"evictionHard"`
+	EvictionHard map[string]string `json:"evictionHard,omitempty"`
 	// Map of signal names to quantities that defines soft eviction thresholds.  For example: {"memory.available": "300Mi"}.
 	// +optional
-	EvictionSoft map[string]string `json:"evictionSoft"`
+	EvictionSoft map[string]string `json:"evictionSoft,omitempty"`
 	// Map of signal names to quantities that defines grace periods for each soft eviction signal. For example: {"memory.available": "30s"}.
 	// +optional
 	EvictionSoftGracePeriod map[string]string `json:"evictionSoftGracePeriod"`
@@ -280,9 +274,10 @@ type KubeletConfiguration struct {
 	// Refer to [Node Allocatable](https://git.k8s.io/community/contributors/design-proposals/node/node-allocatable.md) doc for more information.
 	KubeReservedCgroup string `json:"kubeReservedCgroup,omitempty"`
 	// This flag specifies the various Node Allocatable enforcements that Kubelet needs to perform.
-	// This flag accepts a list of options. Acceptible options are `pods`, `system-reserved` & `kube-reserved`.
+	// This flag accepts a list of options. Acceptable options are `none`, `pods`, `system-reserved` & `kube-reserved`.
+	// If `none` is specified, no other options may be specified.
 	// Refer to [Node Allocatable](https://git.k8s.io/community/contributors/design-proposals/node/node-allocatable.md) doc for more information.
-	EnforceNodeAllocatable []string `json:"enforceNodeAllocatable"`
+	EnforceNodeAllocatable []string `json:"enforceNodeAllocatable,omitempty"`
 }
 
 type KubeletAuthorizationMode string

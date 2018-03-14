@@ -193,7 +193,7 @@ func (e *EndpointController) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
 	services, err := e.getPodServiceMemberships(pod)
 	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("Unable to get pod %v/%v's service memberships: %v", pod.Namespace, pod.Name, err))
+		utilruntime.HandleError(fmt.Errorf("Unable to get pod %s/%s's service memberships: %v", pod.Namespace, pod.Name, err))
 		return
 	}
 	for key := range services {
@@ -269,7 +269,7 @@ func (e *EndpointController) updatePod(old, cur interface{}) {
 
 	podChangedFlag := podChanged(oldPod, newPod)
 
-	// Check if the pod labels have changed, indicating a possibe
+	// Check if the pod labels have changed, indicating a possible
 	// change in the service membership
 	labelsChanged := false
 	if !reflect.DeepEqual(newPod.Labels, oldPod.Labels) ||
@@ -328,7 +328,7 @@ func (e *EndpointController) deletePod(obj interface{}) {
 		utilruntime.HandleError(fmt.Errorf("Tombstone contained object that is not a Pod: %#v", obj))
 		return
 	}
-	glog.V(4).Infof("Enqueuing services of deleted pod %s having final state unrecorded", pod.Name)
+	glog.V(4).Infof("Enqueuing services of deleted pod %s/%s having final state unrecorded", pod.Namespace, pod.Name)
 	e.addPod(pod)
 }
 
@@ -394,7 +394,15 @@ func (e *EndpointController) syncService(key string) error {
 	}
 	service, err := e.serviceLister.Services(namespace).Get(name)
 	if err != nil {
-		// Service has been deleted. So no need to do any more operations.
+		// Delete the corresponding endpoint, as the service has been deleted.
+		// TODO: Please note that this will delete an endpoint when a
+		// service is deleted. However, if we're down at the time when
+		// the service is deleted, we will miss that deletion, so this
+		// doesn't completely solve the problem. See #6877.
+		err = e.client.CoreV1().Endpoints(namespace).Delete(name, nil)
+		if err != nil && !errors.IsNotFound(err) {
+			return err
+		}
 		return nil
 	}
 
@@ -563,7 +571,7 @@ func addEndpointSubset(subsets []v1.EndpointSubset, pod *v1.Pod, epa v1.Endpoint
 		})
 		readyEps++
 	} else if shouldPodBeInEndpoints(pod) {
-		glog.V(5).Infof("Pod is out of service: %v/%v", pod.Namespace, pod.Name)
+		glog.V(5).Infof("Pod is out of service: %s/%s", pod.Namespace, pod.Name)
 		subsets = append(subsets, v1.EndpointSubset{
 			NotReadyAddresses: []v1.EndpointAddress{epa},
 			Ports:             []v1.EndpointPort{epp},

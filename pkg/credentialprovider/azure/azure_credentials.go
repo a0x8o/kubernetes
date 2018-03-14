@@ -34,7 +34,7 @@ import (
 )
 
 var flagConfigFile = pflag.String("azure-container-registry-config", "",
-	"Path to the file container Azure container registry configuration information.")
+	"Path to the file containing Azure container registry configuration information.")
 
 const dummyRegistryEmail = "name@contoso.com"
 
@@ -173,7 +173,7 @@ func getLoginServer(registry containerregistry.Registry) string {
 }
 
 func getACRDockerEntryFromARMToken(a *acrProvider, loginServer string) (*credentialprovider.DockerConfigEntry, error) {
-	armAccessToken := a.servicePrincipalToken.AccessToken
+	armAccessToken := a.servicePrincipalToken.OAuthToken()
 
 	glog.V(4).Infof("discovering auth redirects for: %s", loginServer)
 	directive, err := receiveChallengeFromLoginServer(loginServer)

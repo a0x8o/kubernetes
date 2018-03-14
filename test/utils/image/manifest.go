@@ -23,7 +23,7 @@ import (
 
 const (
 	e2eRegistry     = "gcr.io/kubernetes-e2e-test-images"
-	gcRegistry      = "gcr.io/google-containers"
+	gcRegistry      = "k8s.gcr.io"
 	PrivateRegistry = "gcr.io/k8s-authenticated-test"
 	sampleRegistry  = "gcr.io/google-samples"
 )
@@ -48,11 +48,11 @@ func (i *ImageConfig) SetVersion(version string) {
 }
 
 var (
-	AdmissionWebhook         = ImageConfig{e2eRegistry, "k8s-sample-admission-webhook", "1.8v7", true}
+	AdmissionWebhook         = ImageConfig{e2eRegistry, "k8s-sample-admission-webhook", "1.9v2", true}
 	APIServer                = ImageConfig{e2eRegistry, "k8s-aggregator-sample-apiserver", "1.7v2", true}
 	AppArmorLoader           = ImageConfig{gcRegistry, "apparmor-loader", "0.1", false}
 	BusyBox                  = ImageConfig{gcRegistry, "busybox", "1.24", false}
-	CheckMetadataConcealment = ImageConfig{gcRegistry, "check-metadata-concealment", "v0.0.2", false}
+	CheckMetadataConcealment = ImageConfig{gcRegistry, "check-metadata-concealment", "v0.0.3", false}
 	ClusterTester            = ImageConfig{e2eRegistry, "clusterapi-tester", "1.0", true}
 	CudaVectorAdd            = ImageConfig{e2eRegistry, "cuda-vector-add", "1.0", true}
 	Dnsutils                 = ImageConfig{e2eRegistry, "dnsutils", "1.0", true}
@@ -64,7 +64,8 @@ var (
 	GBFrontend               = ImageConfig{sampleRegistry, "gb-frontend", "v5", true}
 	GBRedisSlave             = ImageConfig{sampleRegistry, "gb-redisslave", "v2", true}
 	Goproxy                  = ImageConfig{e2eRegistry, "goproxy", "1.0", true}
-	Hostexec                 = ImageConfig{e2eRegistry, "hostexec", "1.0", true}
+	Hostexec                 = ImageConfig{e2eRegistry, "hostexec", "1.1", true}
+	IpcUtils                 = ImageConfig{e2eRegistry, "ipc-utils", "1.0", true}
 	Iperf                    = ImageConfig{e2eRegistry, "iperf", "1.0", true}
 	JessieDnsutils           = ImageConfig{e2eRegistry, "jessie-dnsutils", "1.0", true}
 	Kitten                   = ImageConfig{e2eRegistry, "kitten", "1.0", true}
@@ -82,8 +83,8 @@ var (
 	NoSnatTest               = ImageConfig{e2eRegistry, "no-snat-test", "1.0", true}
 	NoSnatTestProxy          = ImageConfig{e2eRegistry, "no-snat-test-proxy", "1.0", true}
 	NWayHTTP                 = ImageConfig{e2eRegistry, "n-way-http", "1.0", true}
-	// When these values are updated, also update cmd/kubelet/app/options/options.go
-	Pause               = ImageConfig{gcRegistry, "pause", "3.0", true}
+	// When these values are updated, also update cmd/kubelet/app/options/container_runtime.go
+	Pause               = ImageConfig{gcRegistry, "pause", "3.1", true}
 	Porter              = ImageConfig{e2eRegistry, "porter", "1.0", true}
 	PortForwardTester   = ImageConfig{e2eRegistry, "port-forward-tester", "1.0", true}
 	Redis               = ImageConfig{e2eRegistry, "redis", "1.0", true}
@@ -110,4 +111,9 @@ func GetE2EImageWithArch(image ImageConfig, arch string) string {
 		return fmt.Sprintf("%s/%s:%s", image.registry, image.name, image.version)
 
 	}
+}
+
+// GetPauseImageNameForHostArch fetches the pause image name for the same architecture the test is running on.
+func GetPauseImageNameForHostArch() string {
+	return GetE2EImage(Pause)
 }

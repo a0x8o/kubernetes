@@ -29,7 +29,10 @@ go_test(
     name = "go_default_test",
     srcs = ["admission_test.go"],
     embed = [":go_default_library"],
+<<<<<<< HEAD
     importpath = "k8s.io/kubernetes/plugin/pkg/admission/storageclass/setdefault",
+=======
+>>>>>>> ed33434d70185d616b1d32c0ec4e636dad8cfd9e
     deps = [
         "//pkg/apis/core:go_default_library",
         "//pkg/apis/storage:go_default_library",
