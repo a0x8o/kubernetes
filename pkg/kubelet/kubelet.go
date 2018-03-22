@@ -79,6 +79,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/metrics"
 	"k8s.io/kubernetes/pkg/kubelet/metrics/collectors"
 	"k8s.io/kubernetes/pkg/kubelet/network"
+	"k8s.io/kubernetes/pkg/kubelet/network/cni"
 	"k8s.io/kubernetes/pkg/kubelet/network/dns"
 	"k8s.io/kubernetes/pkg/kubelet/pleg"
 	kubepod "k8s.io/kubernetes/pkg/kubelet/pod"
@@ -587,7 +588,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		NonMasqueradeCIDR: nonMasqueradeCIDR,
 		PluginName:        crOptions.NetworkPluginName,
 		PluginConfDir:     crOptions.CNIConfDir,
-		PluginBinDir:      crOptions.CNIBinDir,
+		PluginBinDirs:     cni.SplitDirs(crOptions.CNIBinDir),
 		MTU:               int(crOptions.NetworkPluginMTU),
 	}
 
@@ -1195,9 +1196,6 @@ type Kubelet struct {
 	// StatsProvider provides the node and the container stats.
 	*stats.StatsProvider
 
-	// containerized should be set to true if the kubelet is running in a container
-	containerized bool
-
 	// This flag, if set, instructs the kubelet to keep volumes from terminated pods mounted to the node.
 	// This can be useful for debugging volume related issues.
 	keepTerminatedPodVolumes bool // DEPRECATED
@@ -1266,6 +1264,14 @@ func (kl *Kubelet) StartGarbageCollection() {
 		}
 	}, ContainerGCPeriod, wait.NeverStop)
 
+	stopChan := make(chan struct{})
+	defer close(stopChan)
+	// when the high threshold is set to 100, stub the image GC manager
+	if kl.kubeletConfiguration.ImageGCHighThresholdPercent == 100 {
+		glog.V(2).Infof("ImageGCHighThresholdPercent is set 100, Disable image GC")
+		go func() { stopChan <- struct{}{} }()
+	}
+
 	prevImageGCFailed := false
 	go wait.Until(func() {
 		if err := kl.imageManager.GarbageCollect(); err != nil {
@@ -1286,7 +1292,7 @@ func (kl *Kubelet) StartGarbageCollection() {
 
 			glog.V(vLevel).Infof("Image garbage collection succeeded")
 		}
-	}, ImageGCPeriod, wait.NeverStop)
+	}, ImageGCPeriod, stopChan)
 }
 
 // initializeModules will initialize internal modules that do not require the container runtime to be up.
@@ -1406,13 +1412,6 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 	// Start the pod lifecycle event generator.
 	kl.pleg.Start()
 	kl.syncLoop(updates, kl)
-}
-
-// GetKubeClient returns the Kubernetes client.
-// TODO: This is currently only required by network plugins. Replace
-// with more specific methods.
-func (kl *Kubelet) GetKubeClient() clientset.Interface {
-	return kl.kubeClient
 }
 
 // syncPod is the transaction script for the sync of a single pod.

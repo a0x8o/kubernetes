@@ -348,6 +348,16 @@ func SkipUnlessMultizone(c clientset.Interface) {
 	}
 }
 
+func SkipIfMultizone(c clientset.Interface) {
+	zones, err := GetClusterZones(c)
+	if err != nil {
+		Skipf("Error listing cluster zones")
+	}
+	if zones.Len() > 1 {
+		Skipf("Requires more than one zone")
+	}
+}
+
 func SkipUnlessClusterMonitoringModeIs(supportedMonitoring ...string) {
 	if !ClusterMonitoringModeIs(supportedMonitoring...) {
 		Skipf("Only next monitoring modes are supported %v (not %s)", supportedMonitoring, TestContext.ClusterMonitoringMode)
@@ -2801,7 +2811,11 @@ func WaitForControlledPodsRunning(c clientset.Interface, ns, name string, kind s
 	if err != nil {
 		return err
 	}
-	err = testutils.WaitForPodsWithLabelRunning(c, ns, selector)
+	replicas, err := getReplicasFromRuntimeObject(rtObject)
+	if err != nil {
+		return err
+	}
+	err = testutils.WaitForEnoughPodsWithLabelRunning(c, ns, selector, int(replicas))
 	if err != nil {
 		return fmt.Errorf("Error while waiting for replication controller %s pods to be running: %v", name, err)
 	}
