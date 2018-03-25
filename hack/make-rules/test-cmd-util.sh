@@ -77,6 +77,7 @@ selfsubjectaccessreviews="selfsubjectaccessreviews"
 customresourcedefinitions="customresourcedefinitions"
 daemonsets="daemonsets"
 controllerrevisions="controllerrevisions"
+job="jobs"
 
 
 # include shell2junit library
@@ -3868,7 +3869,7 @@ run_assert_categories_tests() {
   set -o errexit
 
   kube::log::status "Testing propagation of categories for resources"
-  output_message=$(kubectl get --raw=/api/v1 | grep -Po '"name":"pods".*?}')
+  output_message=$(kubectl get --raw=/api/v1 | grep -o '"name":"pods"[^}]*}')
   kube::test::if_has_string "${output_message}" '"categories":\["all"\]'
 
   set +o nounset
@@ -4001,6 +4002,46 @@ run_service_accounts_tests() {
   kubectl delete serviceaccount test-service-account --namespace=test-service-accounts
   # Clean up
   kubectl delete namespace test-service-accounts
+
+  set +o nounset
+  set +o errexit
+}
+
+run_job_tests() {
+  set -o nounset
+  set -o errexit
+
+  create_and_use_new_namespace
+  kube::log::status "Testing job"
+
+  ### Create a new namespace
+  # Pre-condition: the test-jobs namespace does not exist
+  kube::test::get_object_assert 'namespaces' '{{range.items}}{{ if eq $id_field \"test-jobs\" }}found{{end}}{{end}}:' ':'
+  # Command
+  kubectl create namespace test-jobs
+  # Post-condition: namespace 'test-jobs' is created.
+  kube::test::get_object_assert 'namespaces/test-jobs' "{{$id_field}}" 'test-jobs'
+
+  ### Create a cronjob in a specific namespace
+  kubectl run pi --schedule="59 23 31 2 *" --namespace=test-jobs --generator=cronjob/v1beta1 "--image=$IMAGE_PERL" --restart=OnFailure -- perl -Mbignum=bpi -wle 'print bpi(20)' "${kube_flags[@]}"
+  # Post-Condition: assertion object exists
+  kube::test::get_object_assert 'cronjob/pi --namespace=test-jobs' "{{$id_field}}" 'pi'
+
+  ### Create a job in dry-run mode
+  output_message=$(kubectl create job test-job --from=cronjob/pi --dry-run=true --namespace=test-jobs -o name)
+  # Post-condition: The text 'job.batch/test-job' should be part of the output
+  kube::test::if_has_string "${output_message}" 'job.batch/test-job'
+  # Post-condition: The test-job wasn't created actually
+  kube::test::get_object_assert jobs "{{range.items}}{{$id_field}}{{end}}" ''
+
+  ### Create a job in a specific namespace
+  kubectl create job test-job --from=cronjob/pi --namespace=test-jobs
+  # Post-Condition: assertion object exists
+  kube::test::get_object_assert 'job/test-job --namespace=test-jobs' "{{$id_field}}" 'test-job'
+  #Clean up
+  kubectl delete job test-job --namespace=test-jobs
+  kubectl delete cronjob pi --namespace=test-jobs
+  kubectl delete namespace test-jobs
 
   set +o nounset
   set +o errexit
@@ -4729,13 +4770,15 @@ runTests() {
   kube::log::status "Checking kubectl version"
   kubectl version
 
-  # use timestamp as the name of namespace because increasing the variable inside subshell
-  # does not affect the value of the variable outside the subshell.
+  # Generate a random namespace name, based on the current time (to make
+  # debugging slightly easier) and a random number. Don't use `date +%N`
+  # because that doesn't work on OSX.
   create_and_use_new_namespace() {
-    namespace_number=$(date +%s%N)
-    kube::log::status "Creating namespace namespace${namespace_number}"
-    kubectl create namespace "namespace${namespace_number}"
-    kubectl config set-context "${CONTEXT}" --namespace="namespace${namespace_number}"
+    local ns_name
+    ns_name="namespace-$(date +%s)-${RANDOM}"
+    kube::log::status "Creating namespace ${ns_name}"
+    kubectl create namespace "${ns_name}"
+    kubectl config set-context "${CONTEXT}" --namespace="${ns_name}"
   }
 
   kube_flags=(
@@ -4978,6 +5021,14 @@ runTests() {
 
   if kube::test::if_supports_resource "${namespaces}" && kube::test::if_supports_resource "${serviceaccounts}" ; then
     record_command run_service_accounts_tests
+  fi
+
+  ####################
+  # Job              #
+  ####################
+
+  if kube::test::if_supports_resource "${job}" ; then
+    record_command run_job_tests
   fi
 
   #################
@@ -5253,8 +5304,6 @@ run_initializer_tests() {
   output_message=$(kubectl get deployments web 2>&1 "${kube_flags[@]}")
   # Post-condition: I assume "web" is the deployment name
   kube::test::if_has_string "${output_message}" 'web'
-  # Command
-  output_message=$(kubectl get deployments --show-all 2>&1 "${kube_flags[@]}")
   # Post-condition: The text "No resources found" should be part of the output
   kube::test::if_has_string "${output_message}" 'No resources found'
 
