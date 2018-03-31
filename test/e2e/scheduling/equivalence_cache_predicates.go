@@ -91,8 +91,8 @@ var _ = framework.KubeDescribe("EquivalenceCache [Serial]", func() {
 		WaitForSchedulerAfterAction(f, func() error {
 			err := CreateNodeSelectorPods(f, rcName, 2, nodeSelector, false)
 			return err
-		}, rcName, false)
-		defer framework.DeleteRCAndPods(f.ClientSet, f.InternalClientset, ns, rcName)
+		}, ns, rcName, false)
+		defer framework.DeleteRCAndPods(f.ClientSet, f.InternalClientset, f.ScalesGetter, ns, rcName)
 		// the first replica pod is scheduled, and the second pod will be rejected.
 		verifyResult(cs, 1, 1, ns)
 	})
@@ -140,7 +140,7 @@ var _ = framework.KubeDescribe("EquivalenceCache [Serial]", func() {
 			},
 		}
 		rc := getRCWithInterPodAffinity(affinityRCName, labelsMap, replica, affinity, framework.GetPauseImageName(f.ClientSet))
-		defer framework.DeleteRCAndPods(f.ClientSet, f.InternalClientset, ns, affinityRCName)
+		defer framework.DeleteRCAndPods(f.ClientSet, f.InternalClientset, f.ScalesGetter, ns, affinityRCName)
 
 		// RC should be running successfully
 		// TODO: WaitForSchedulerAfterAction() can on be used to wait for failure event,
@@ -157,7 +157,7 @@ var _ = framework.KubeDescribe("EquivalenceCache [Serial]", func() {
 		WaitForSchedulerAfterAction(f, func() error {
 			err := framework.ScaleRC(f.ClientSet, f.InternalClientset, f.ScalesGetter, ns, affinityRCName, uint(replica+1), false)
 			return err
-		}, affinityRCName, false)
+		}, ns, affinityRCName, false)
 		// and this new pod should be rejected since node label has been updated
 		verifyReplicasResult(cs, replica, 1, ns, affinityRCName)
 	})
@@ -166,7 +166,7 @@ var _ = framework.KubeDescribe("EquivalenceCache [Serial]", func() {
 	It("validates pod anti-affinity works properly when new replica pod is scheduled", func() {
 		By("Launching two pods on two distinct nodes to get two node names")
 		CreateHostPortPods(f, "host-port", 2, true)
-		defer framework.DeleteRCAndPods(f.ClientSet, f.InternalClientset, ns, "host-port")
+		defer framework.DeleteRCAndPods(f.ClientSet, f.InternalClientset, f.ScalesGetter, ns, "host-port")
 		podList, err := cs.CoreV1().Pods(ns).List(metav1.ListOptions{})
 		framework.ExpectNoError(err)
 		Expect(len(podList.Items)).To(Equal(2))
@@ -217,12 +217,12 @@ var _ = framework.KubeDescribe("EquivalenceCache [Serial]", func() {
 		}
 		rc := getRCWithInterPodAffinityNodeSelector(labelRCName, labelsMap, replica, affinity,
 			framework.GetPauseImageName(f.ClientSet), map[string]string{k: v})
-		defer framework.DeleteRCAndPods(f.ClientSet, f.InternalClientset, ns, labelRCName)
+		defer framework.DeleteRCAndPods(f.ClientSet, f.InternalClientset, f.ScalesGetter, ns, labelRCName)
 
 		WaitForSchedulerAfterAction(f, func() error {
 			_, err := cs.CoreV1().ReplicationControllers(ns).Create(rc)
 			return err
-		}, labelRCName, false)
+		}, ns, labelRCName, false)
 
 		// these two replicas should all be rejected since podAntiAffinity says it they anit-affinity with pod {"service": "S1"}
 		verifyReplicasResult(cs, 0, replica, ns, labelRCName)

@@ -196,7 +196,6 @@ pkg/kubelet/prober/results
 pkg/kubelet/prober/testing
 pkg/kubelet/qos
 pkg/kubelet/remote
-pkg/kubelet/rkt
 pkg/kubelet/secret
 pkg/kubelet/server
 pkg/kubelet/server/portforward
@@ -323,7 +322,6 @@ pkg/registry/storage/rest
 pkg/registry/storage/storageclass
 pkg/registry/storage/storageclass/storage
 pkg/routes
-pkg/scheduler/api
 pkg/security/apparmor
 pkg/security/podsecuritypolicy
 pkg/security/podsecuritypolicy/group
