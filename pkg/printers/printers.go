@@ -34,10 +34,7 @@ func GetStandardPrinter(typer runtime.ObjectTyper, encoder runtime.Encoder, deco
 
 	case "json", "yaml":
 		jsonYamlFlags := NewJSONYamlPrintFlags()
-		p, matched, err := jsonYamlFlags.ToPrinter(format)
-		if !matched {
-			return nil, fmt.Errorf("unable to match a printer to handle current print options")
-		}
+		p, err := jsonYamlFlags.ToPrinter(format)
 		if err != nil {
 			return nil, err
 		}
@@ -45,11 +42,8 @@ func GetStandardPrinter(typer runtime.ObjectTyper, encoder runtime.Encoder, deco
 		printer = p
 
 	case "name":
-		nameFlags := NewNamePrintFlags("", false)
-		namePrinter, matched, err := nameFlags.ToPrinter(format)
-		if !matched {
-			return nil, fmt.Errorf("unable to match a name printer to handle current print options")
-		}
+		nameFlags := NewNamePrintFlags("")
+		namePrinter, err := nameFlags.ToPrinter(format)
 		if err != nil {
 			return nil, err
 		}
@@ -69,10 +63,7 @@ func GetStandardPrinter(typer runtime.ObjectTyper, encoder runtime.Encoder, deco
 			},
 		}
 
-		kubeTemplatePrinter, matched, err := kubeTemplateFlags.ToPrinter(format)
-		if !matched {
-			return nil, fmt.Errorf("unable to match a template printer to handle current print options")
-		}
+		kubeTemplatePrinter, err := kubeTemplateFlags.ToPrinter(format)
 		if err != nil {
 			return nil, err
 		}
@@ -97,8 +88,24 @@ func GetStandardPrinter(typer runtime.ObjectTyper, encoder runtime.Encoder, deco
 	case "wide":
 		fallthrough
 	case "":
+		humanPrintFlags := NewHumanPrintFlags(options.Kind, options.NoHeaders, options.WithNamespace, options.AbsoluteTimestamps)
 
-		printer = NewHumanReadablePrinter(encoder, decoders[0], options)
+		// TODO: these should be bound through a call to humanPrintFlags#AddFlags(cmd) once we instantiate PrintFlags at the command level
+		humanPrintFlags.ShowKind = &options.WithKind
+		humanPrintFlags.ShowLabels = &options.ShowLabels
+		humanPrintFlags.ColumnLabels = &options.ColumnLabels
+		humanPrintFlags.SortBy = &options.SortBy
+
+		humanPrinter, matches, err := humanPrintFlags.ToPrinter(format)
+		if !matches {
+			return nil, fmt.Errorf("unable to match a printer to handle current print options")
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		printer = humanPrinter
+
 	default:
 		return nil, fmt.Errorf("output format %q not recognized", format)
 	}

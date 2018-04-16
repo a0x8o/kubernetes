@@ -720,9 +720,9 @@ run_pod_tests() {
   kube::test::get_object_assert pods "{{range.items}}{{$image_field}}:{{end}}" 'changed-with-yaml:'
   ## Patch pod from JSON can change image
   # Command
-  kubectl patch "${kube_flags[@]}" -f test/fixtures/doc-yaml/admin/limitrange/valid-pod.yaml -p='{"spec":{"containers":[{"name": "kubernetes-serve-hostname", "image": "k8s.gcr.io/pause-amd64:3.1"}]}}'
+  kubectl patch "${kube_flags[@]}" -f test/fixtures/doc-yaml/admin/limitrange/valid-pod.yaml -p='{"spec":{"containers":[{"name": "kubernetes-serve-hostname", "image": "k8s.gcr.io/pause:3.1"}]}}'
   # Post-condition: valid-pod POD has expected image
-  kube::test::get_object_assert pods "{{range.items}}{{$image_field}}:{{end}}" 'k8s.gcr.io/pause-amd64:3.1:'
+  kube::test::get_object_assert pods "{{range.items}}{{$image_field}}:{{end}}" 'k8s.gcr.io/pause:3.1:'
 
   ## If resourceVersion is specified in the patch, it will be treated as a precondition, i.e., if the resourceVersion is different from that is stored in the server, the Patch should be rejected
   ERROR_FILE="${KUBE_TEMP}/conflict-error"
@@ -2387,11 +2387,12 @@ run_secrets_test() {
   create_and_use_new_namespace
   kube::log::status "Testing secrets"
 
-  # Ensure dry run succeeds and includes kind, apiVersion and data
-  output_message=$(kubectl create secret generic test --from-literal=key1=value1 --dry-run -o yaml)
+  # Ensure dry run succeeds and includes kind, apiVersion and data, and doesn't require a server connection
+  output_message=$(kubectl create secret generic test --from-literal=key1=value1 --dry-run -o yaml --server=example.com --v=6)
   kube::test::if_has_string "${output_message}" 'kind: Secret'
   kube::test::if_has_string "${output_message}" 'apiVersion: v1'
   kube::test::if_has_string "${output_message}" 'key1: dmFsdWUx'
+  kube::test::if_has_not_string "${output_message}" 'example.com'
 
   ### Create a new namespace
   # Pre-condition: the test-secrets namespace does not exist
@@ -4883,6 +4884,8 @@ runTests() {
   ################
   # Cluster Role #
   ################
+
+  kubectl "${kube_flags[@]}" api-resources
 
   if kube::test::if_supports_resource "${clusterroles}" ; then
     record_command run_clusterroles_tests

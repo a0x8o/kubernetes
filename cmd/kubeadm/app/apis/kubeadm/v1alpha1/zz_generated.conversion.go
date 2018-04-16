@@ -259,6 +259,7 @@ func autoConvert_v1alpha1_MasterConfiguration_To_kubeadm_MasterConfiguration(in 
 		return err
 	}
 	out.FeatureGates = *(*map[string]bool)(unsafe.Pointer(&in.FeatureGates))
+	out.ClusterName = in.ClusterName
 	return nil
 }
 
@@ -310,6 +311,7 @@ func autoConvert_kubeadm_MasterConfiguration_To_v1alpha1_MasterConfiguration(in 
 		return err
 	}
 	out.FeatureGates = *(*map[string]bool)(unsafe.Pointer(&in.FeatureGates))
+	out.ClusterName = in.ClusterName
 	return nil
 }
 
@@ -347,10 +349,12 @@ func autoConvert_v1alpha1_NodeConfiguration_To_kubeadm_NodeConfiguration(in *Nod
 	out.DiscoveryFile = in.DiscoveryFile
 	out.DiscoveryToken = in.DiscoveryToken
 	out.DiscoveryTokenAPIServers = *(*[]string)(unsafe.Pointer(&in.DiscoveryTokenAPIServers))
+	out.DiscoveryTimeout = (*v1.Duration)(unsafe.Pointer(in.DiscoveryTimeout))
 	out.NodeName = in.NodeName
 	out.TLSBootstrapToken = in.TLSBootstrapToken
 	out.Token = in.Token
 	out.CRISocket = in.CRISocket
+	out.ClusterName = in.ClusterName
 	out.DiscoveryTokenCACertHashes = *(*[]string)(unsafe.Pointer(&in.DiscoveryTokenCACertHashes))
 	out.DiscoveryTokenUnsafeSkipCAVerification = in.DiscoveryTokenUnsafeSkipCAVerification
 	out.FeatureGates = *(*map[string]bool)(unsafe.Pointer(&in.FeatureGates))
@@ -367,10 +371,12 @@ func autoConvert_kubeadm_NodeConfiguration_To_v1alpha1_NodeConfiguration(in *kub
 	out.DiscoveryFile = in.DiscoveryFile
 	out.DiscoveryToken = in.DiscoveryToken
 	out.DiscoveryTokenAPIServers = *(*[]string)(unsafe.Pointer(&in.DiscoveryTokenAPIServers))
+	out.DiscoveryTimeout = (*v1.Duration)(unsafe.Pointer(in.DiscoveryTimeout))
 	out.NodeName = in.NodeName
 	out.TLSBootstrapToken = in.TLSBootstrapToken
 	out.Token = in.Token
 	out.CRISocket = in.CRISocket
+	out.ClusterName = in.ClusterName
 	out.DiscoveryTokenCACertHashes = *(*[]string)(unsafe.Pointer(&in.DiscoveryTokenCACertHashes))
 	out.DiscoveryTokenUnsafeSkipCAVerification = in.DiscoveryTokenUnsafeSkipCAVerification
 	out.FeatureGates = *(*map[string]bool)(unsafe.Pointer(&in.FeatureGates))

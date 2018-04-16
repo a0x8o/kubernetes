@@ -19,10 +19,10 @@ limitations under the License.
 package mount
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 )
 
 type FileType string
@@ -232,13 +232,6 @@ func GetDeviceNameFromMount(mounter Interface, mountPath string) (string, int, e
 	return device, refCount, nil
 }
 
-func isNotDirErr(err error) bool {
-	if e, ok := err.(*os.PathError); ok && e.Err == syscall.ENOTDIR {
-		return true
-	}
-	return false
-}
-
 // IsNotMountPoint determines if a directory is a mountpoint.
 // It should return ErrNotExist when the directory does not exist.
 // This method uses the List() of all mountpoints
@@ -254,7 +247,7 @@ func IsNotMountPoint(mounter Interface, file string) (bool, error) {
 		notMnt = true
 		notMntErr = nil
 	}
-	if notMntErr != nil && isNotDirErr(notMntErr) {
+	if notMntErr != nil {
 		return notMnt, notMntErr
 	}
 	// identified as mountpoint, so return this fact
@@ -336,4 +329,38 @@ func pathWithinBase(fullPath, basePath string) bool {
 func startsWithBackstep(rel string) bool {
 	// normalize to / and check for ../
 	return rel == ".." || strings.HasPrefix(filepath.ToSlash(rel), "../")
+}
+
+// getFileType checks for file/directory/socket and block/character devices
+func getFileType(pathname string) (FileType, error) {
+	var pathType FileType
+	info, err := os.Stat(pathname)
+	if os.IsNotExist(err) {
+		return pathType, fmt.Errorf("path %q does not exist", pathname)
+	}
+	// err in call to os.Stat
+	if err != nil {
+		return pathType, err
+	}
+
+	// checks whether the mode is the target mode
+	isSpecificMode := func(mode, targetMode os.FileMode) bool {
+		return mode&targetMode == targetMode
+	}
+
+	mode := info.Mode()
+	if mode.IsDir() {
+		return FileTypeDirectory, nil
+	} else if mode.IsRegular() {
+		return FileTypeFile, nil
+	} else if isSpecificMode(mode, os.ModeSocket) {
+		return FileTypeSocket, nil
+	} else if isSpecificMode(mode, os.ModeDevice) {
+		if isSpecificMode(mode, os.ModeCharDevice) {
+			return FileTypeCharDev, nil
+		}
+		return FileTypeBlockDev, nil
+	}
+
+	return pathType, fmt.Errorf("only recognise file, directory, socket, block device and character device")
 }

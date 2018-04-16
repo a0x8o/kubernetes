@@ -17,10 +17,12 @@ limitations under the License.
 package printers
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"k8s.io/kubernetes/pkg/api/legacyscheme"
+	kubectlscheme "k8s.io/kubernetes/pkg/kubectl/scheme"
 )
 
 // JSONYamlPrintFlags provides default flags necessary for json/yaml printing.
@@ -32,18 +34,22 @@ type JSONYamlPrintFlags struct{}
 // handling --output=(yaml|json) printing.
 // Returns false if the specified outputFormat does not match a supported format.
 // Supported Format types can be found in pkg/printers/printers.go
-func (f *JSONYamlPrintFlags) ToPrinter(outputFormat string) (ResourcePrinter, bool, error) {
+func (f *JSONYamlPrintFlags) ToPrinter(outputFormat string) (ResourcePrinter, error) {
+	var printer ResourcePrinter
+
 	outputFormat = strings.ToLower(outputFormat)
 	switch outputFormat {
 	case "json":
-		return &JSONPrinter{}, true, nil
+		printer = &JSONPrinter{}
 	case "yaml":
-		return &YAMLPrinter{}, true, nil
-	case "":
-		return nil, false, fmt.Errorf("missing output format")
+		printer = &YAMLPrinter{}
 	default:
-		return nil, false, nil
+		return nil, NoCompatiblePrinterError{f}
 	}
+
+	// wrap the printer in a versioning printer that understands when to convert and when not to convert
+	return NewVersionedPrinter(printer, legacyscheme.Scheme, legacyscheme.Scheme, kubectlscheme.Versions...), nil
+
 }
 
 // AddFlags receives a *cobra.Command reference and binds

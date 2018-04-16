@@ -195,23 +195,19 @@ const (
 	KubeletBaseConfigurationConfigMap = "kubelet-base-config-1.9"
 
 	// KubeletBaseConfigurationConfigMapKey specifies in what ConfigMap key the initial remote configuration of kubelet should be stored
-	// TODO: Use the constant ("kubelet.config.k8s.io") defined in pkg/kubelet/kubeletconfig/util/keys/keys.go
-	// after https://github.com/kubernetes/kubernetes/pull/53833 being merged.
 	KubeletBaseConfigurationConfigMapKey = "kubelet"
 
 	// KubeletBaseConfigurationDir specifies the directory on the node where stores the initial remote configuration of kubelet
 	KubeletBaseConfigurationDir = "/var/lib/kubelet/config/init"
 
 	// KubeletBaseConfigurationFile specifies the file name on the node which stores initial remote configuration of kubelet
-	// TODO: Use the constant ("kubelet.config.k8s.io") defined in pkg/kubelet/kubeletconfig/util/keys/keys.go
-	// after https://github.com/kubernetes/kubernetes/pull/53833 being merged.
 	KubeletBaseConfigurationFile = "kubelet"
 
 	// MinExternalEtcdVersion indicates minimum external etcd version which kubeadm supports
-	MinExternalEtcdVersion = "3.1.12"
+	MinExternalEtcdVersion = "3.2.17"
 
 	// DefaultEtcdVersion indicates the default etcd version that kubeadm uses
-	DefaultEtcdVersion = "3.1.12"
+	DefaultEtcdVersion = "3.2.18"
 
 	// Etcd defines variable used internally when referring to etcd component
 	Etcd = "etcd"
@@ -298,7 +294,7 @@ var (
 	SupportedEtcdVersion = map[uint8]string{
 		9:  "3.1.12",
 		10: "3.1.12",
-		11: "3.1.12",
+		11: "3.2.18",
 	}
 )
 

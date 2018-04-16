@@ -1113,7 +1113,8 @@ function start-kubelet {
   echo "Using kubelet binary at ${kubelet_bin}"
 
   local -r kubelet_env_file="/etc/default/kubelet"
-  echo "KUBELET_OPTS=\"${KUBELET_ARGS}\"" > "${kubelet_env_file}"
+  local kubelet_opts="${KUBELET_ARGS} ${KUBELET_CONFIG_FILE_ARG:-}"
+  echo "KUBELET_OPTS=\"${kubelet_opts}\"" > "${kubelet_env_file}"
 
   # Write the systemd service file for kubelet.
   cat <<EOF >/etc/systemd/system/kubelet.service
@@ -1680,6 +1681,22 @@ function start-kube-apiserver {
     container_env="\"env\":[{${container_env}}],"
   fi
 
+  if [[ -n "${ETCD_KMS_KEY_ID:-}" ]]; then
+    ENCRYPTION_PROVIDER_CONFIG=$(cat << EOM | base64 | tr -d '\r\n'
+kind: EncryptionConfig
+apiVersion: v1
+resources:
+  - resources:
+    - secrets
+    providers:
+    - kms:
+       name: grpc-kms-provider
+       cachesize: 1000
+       endpoint: unix:///var/run/kmsplugin/socket.sock
+EOM
+)
+  fi
+
   if [[ -n "${ENCRYPTION_PROVIDER_CONFIG:-}" ]]; then
     local encryption_provider_config_path="/etc/srv/kubernetes/encryption-provider-config.yml"
     echo "${ENCRYPTION_PROVIDER_CONFIG}" | base64 --decode > "${encryption_provider_config_path}"
@@ -1715,6 +1732,67 @@ function start-kube-apiserver {
   sed -i -e "s@{{admission_controller_config_volume}}@${admission_controller_config_volume}@g" "${src_file}"
   sed -i -e "s@{{image_policy_webhook_config_mount}}@${image_policy_webhook_config_mount}@g" "${src_file}"
   sed -i -e "s@{{image_policy_webhook_config_volume}}@${image_policy_webhook_config_volume}@g" "${src_file}"
+
+  if [[ -z "${ETCD_KMS_KEY_ID:-}" ]]; then
+    # Removing KMS related placeholders.
+    sed -i -e " {
+      s@{{kms_plugin_container}}@@
+
+      s@{{kms_socket_mount}}@@
+      s@{{encryption_provider_mount}}@@
+
+      s@{{kms_socket_volume}}@@
+      s@{{encryption_provider_volume}}@@
+    } " "${src_file}"
+  else
+    local kms_plugin_src_file="${src_dir}/kms-plugin-container.manifest"
+
+    if [[ ! -f "${kms_plugin_src_file}" ]]; then
+      echo "Error: KMS Integration was requested, but "${kms_plugin_src_file}" is missing."
+      exit 1
+    fi
+
+    if [[ ! -f "${encryption_provider_config_path}" ]]; then
+      echo "Error: KMS Integration was requested, but "${encryption_provider_config_path}" is missing."
+      exit 1
+    fi
+
+    # TODO: Validate that the encryption config is for KMS.
+
+    local kms_socket_dir="/var/run/kmsplugin"
+
+    # kms_socket_mnt is used by both kms_plugin and kube-apiserver - this is how these containers talk.
+    local kms_socket_mnt="{ \"name\": \"kmssocket\", \"mountPath\": \"${kms_socket_dir}\", \"readOnly\": false}"
+
+    local kms_socket_vol="{ \"name\": \"kmssocket\", \"hostPath\": {\"path\": \"${kms_socket_dir}\", \"type\": \"DirectoryOrCreate\"}}"
+    local kms_path_to_socket="${kms_socket_dir}/socket.sock"
+
+    local encryption_provider_mnt="{ \"name\": \"encryptionconfig\", \"mountPath\": \"${encryption_provider_config_path}\", \"readOnly\": true}"
+    local encryption_provider_vol="{ \"name\": \"encryptionconfig\", \"hostPath\": {\"path\": \"${encryption_provider_config_path}\", \"type\": \"File\"}}"
+
+    # TODO these are used in other places, convert to global.
+    local gce_conf_path="/etc/gce.conf"
+    local cloud_config_mount="{\"name\": \"cloudconfigmount\",\"mountPath\": \"/etc/gce.conf\", \"readOnly\": true}"
+
+    local kms_plugin_container=$(echo $(sed " {
+      s@{{kms_key_uri}}@${ETCD_KMS_KEY_ID}@
+      s@{{gce_conf_path}}@${gce_conf_path}@
+      s@{{kms_path_to_socket}}@${kms_path_to_socket}@
+      s@{{kms_socket_mount}}@${kms_socket_mnt}@
+      s@{{cloud_config_mount}}@${cloud_config_mount}@
+    } " "${kms_plugin_src_file}") | tr "\n" "\\n")
+
+    sed -i -e " {
+      s@{{kms_plugin_container}}@${kms_plugin_container},@
+
+      s@{{kms_socket_mount}}@${kms_socket_mnt},@
+      s@{{encryption_provider_mount}}@${encryption_provider_mnt},@
+
+      s@{{kms_socket_volume}}@${kms_socket_vol},@
+      s@{{encryption_provider_volume}}@${encryption_provider_vol},@
+    } " "${src_file}"
+  fi
+
   cp "${src_file}" /etc/kubernetes/manifests
 }
 
@@ -2051,6 +2129,36 @@ function setup-coredns-manifest {
   sed -i -e "s@{{ *pillar\['service_cluster_ip_range'\] *}}@${SERVICE_CLUSTER_IP_RANGE}@g" "${coredns_file}"
 }
 
+# Sets up the manifests of Fluentd configmap and yamls for k8s addons.
+function setup-fluentd {
+  local -r dst_dir="$1"
+  local -r fluentd_gcp_yaml="${dst_dir}/fluentd-gcp/fluentd-gcp-ds.yaml"
+  # Ingest logs against new resources like "k8s_container" and "k8s_node" if
+  # LOGGING_STACKDRIVER_RESOURCE_TYPES is "new".
+  # Ingest logs against old resources like "gke_container" and "gce_instance" if
+  # LOGGING_STACKDRIVER_RESOURCE_TYPES is "old".
+  if [[ "${LOGGING_STACKDRIVER_RESOURCE_TYPES:-old}" == "new" ]]; then
+    local -r fluentd_gcp_configmap_yaml="${dst_dir}/fluentd-gcp/fluentd-gcp-configmap.yaml"
+    fluentd_gcp_configmap_name="fluentd-gcp-config"
+  else
+    local -r fluentd_gcp_configmap_yaml="${dst_dir}/fluentd-gcp/fluentd-gcp-configmap-old.yaml"
+    fluentd_gcp_configmap_name="fluentd-gcp-config-old"
+  fi
+  sed -i -e "s@{{ fluentd_gcp_configmap_name }}@${fluentd_gcp_configmap_name}@g" "${fluentd_gcp_yaml}"
+  fluentd_gcp_version="${FLUENTD_GCP_VERSION:-0.2-1.5.30-1-k8s}"
+  sed -i -e "s@{{ fluentd_gcp_version }}@${fluentd_gcp_version}@g" "${fluentd_gcp_yaml}"
+  if [[ "${STACKDRIVER_METADATA_AGENT_URL:-}" != "" ]]; then
+    metadata_agent_url="${STACKDRIVER_METADATA_AGENT_URL}"
+  else
+    metadata_agent_url="http://${HOSTNAME}:8799"
+  fi
+  sed -i -e "s@{{ stackdriver_metadata_agent_url }}@${metadata_agent_url}@g" "${fluentd_gcp_yaml}"
+  update-prometheus-to-sd-parameters ${fluentd_gcp_yaml}
+  start-fluentd-resource-update ${fluentd_gcp_yaml}
+  update-container-runtime ${fluentd_gcp_configmap_yaml}
+  update-node-journal ${fluentd_gcp_configmap_yaml}
+}
+
 # Sets up the manifests of kube-dns for k8s addons.
 function setup-kube-dns-manifest {
   local -r kubedns_file="${dst_dir}/dns/kube-dns.yaml"
@@ -2156,11 +2264,15 @@ EOF
        [[ "${METADATA_AGENT_VERSION:-}" != "" ]]; then
       metadata_agent_cpu_request="${METADATA_AGENT_CPU_REQUEST:-40m}"
       metadata_agent_memory_request="${METADATA_AGENT_MEMORY_REQUEST:-50Mi}"
+      metadata_agent_cluster_level_cpu_request="${METADATA_AGENT_CLUSTER_LEVEL_CPU_REQUEST:-40m}"
+      metadata_agent_cluster_level_memory_request="${METADATA_AGENT_CLUSTER_LEVEL_MEMORY_REQUEST:-50Mi}"
       setup-addon-manifests "addons" "metadata-agent/stackdriver"
-      daemon_set_yaml="${dst_dir}/metadata-agent/stackdriver/metadata-agent.yaml"
-      sed -i -e "s@{{ metadata_agent_version }}@${METADATA_AGENT_VERSION}@g" "${daemon_set_yaml}"
-      sed -i -e "s@{{ metadata_agent_cpu_request }}@${metadata_agent_cpu_request}@g" "${daemon_set_yaml}"
-      sed -i -e "s@{{ metadata_agent_memory_request }}@${metadata_agent_memory_request}@g" "${daemon_set_yaml}"
+      metadata_agent_yaml="${dst_dir}/metadata-agent/stackdriver/metadata-agent.yaml"
+      sed -i -e "s@{{ metadata_agent_version }}@${METADATA_AGENT_VERSION}@g" "${metadata_agent_yaml}"
+      sed -i -e "s@{{ metadata_agent_cpu_request }}@${metadata_agent_cpu_request}@g" "${metadata_agent_yaml}"
+      sed -i -e "s@{{ metadata_agent_memory_request }}@${metadata_agent_memory_request}@g" "${metadata_agent_yaml}"
+      sed -i -e "s@{{ metadata_agent_cluster_level_cpu_request }}@${metadata_agent_cluster_level_cpu_request}@g" "${metadata_agent_yaml}"
+      sed -i -e "s@{{ metadata_agent_cluster_level_memory_request }}@${metadata_agent_cluster_level_memory_request}@g" "${metadata_agent_yaml}"
     fi
   fi
   if [[ "${ENABLE_METRICS_SERVER:-}" == "true" ]]; then
@@ -2187,17 +2299,10 @@ EOF
   if [[ "${ENABLE_NODE_LOGGING:-}" == "true" ]] && \
      [[ "${LOGGING_DESTINATION:-}" == "gcp" ]]; then
     setup-addon-manifests "addons" "fluentd-gcp"
+    setup-fluentd ${dst_dir}
     local -r event_exporter_yaml="${dst_dir}/fluentd-gcp/event-exporter.yaml"
-    local -r fluentd_gcp_yaml="${dst_dir}/fluentd-gcp/fluentd-gcp-ds.yaml"
-    local -r fluentd_gcp_configmap_yaml="${dst_dir}/fluentd-gcp/fluentd-gcp-configmap.yaml"
     update-event-exporter ${event_exporter_yaml}
-    fluentd_gcp_version="${FLUENTD_GCP_VERSION:-0.2-1.5.28-1}"
-    sed -i -e "s@{{ fluentd_gcp_version }}@${fluentd_gcp_version}@g" "${fluentd_gcp_yaml}"
     update-prometheus-to-sd-parameters ${event_exporter_yaml}
-    update-prometheus-to-sd-parameters ${fluentd_gcp_yaml}
-    start-fluentd-resource-update ${fluentd_gcp_yaml}
-    update-container-runtime ${fluentd_gcp_configmap_yaml}
-    update-node-journal ${fluentd_gcp_configmap_yaml}
   fi
   if [[ "${ENABLE_CLUSTER_UI:-}" == "true" ]]; then
     setup-addon-manifests "addons" "dashboard"
@@ -2378,6 +2483,12 @@ if [[ ! -e "${KUBE_HOME}/kube-env" ]]; then
 fi
 
 source "${KUBE_HOME}/kube-env"
+
+
+if [[ -f "${KUBE_HOME}/kubelet-config.yaml" ]]; then
+  echo "Found Kubelet config file at ${KUBE_HOME}/kubelet-config.yaml"
+  KUBELET_CONFIG_FILE_ARG="--config ${KUBE_HOME}/kubelet-config.yaml"
+fi
 
 if [[ -e "${KUBE_HOME}/kube-master-certs" ]]; then
   source "${KUBE_HOME}/kube-master-certs"

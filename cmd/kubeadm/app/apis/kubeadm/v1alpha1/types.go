@@ -116,6 +116,9 @@ type MasterConfiguration struct {
 
 	// FeatureGates enabled by the user.
 	FeatureGates map[string]bool `json:"featureGates,omitempty"`
+
+	// The cluster name
+	ClusterName string `json:"clusterName,omitempty"`
 }
 
 // API struct contains elements of API server address.
@@ -214,6 +217,8 @@ type NodeConfiguration struct {
 	// will be fetched. Currently we only pay attention to one API server but
 	// hope to support >1 in the future.
 	DiscoveryTokenAPIServers []string `json:"discoveryTokenAPIServers,omitempty"`
+	// DiscoveryTimeout modifies the discovery timeout
+	DiscoveryTimeout *metav1.Duration `json:"discoveryTimeout,omitempty"`
 	// NodeName is the name of the node to join the cluster. Defaults
 	// to the name of the host.
 	NodeName string `json:"nodeName"`
@@ -224,6 +229,8 @@ type NodeConfiguration struct {
 	Token string `json:"token"`
 	// CRISocket is used to retrieve container runtime info.
 	CRISocket string `json:"criSocket,omitempty"`
+	// ClusterName is the name for the cluster in kubeconfig.
+	ClusterName string `json:"clusterName,omitempty"`
 
 	// DiscoveryTokenCACertHashes specifies a set of public key pins to verify
 	// when token-based discovery is used. The root CA found during discovery
