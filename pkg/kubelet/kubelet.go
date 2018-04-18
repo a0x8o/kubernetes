@@ -61,6 +61,7 @@ import (
 	kubeletconfiginternal "k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
 	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
 	kubeletcertificate "k8s.io/kubernetes/pkg/kubelet/certificate"
+	"k8s.io/kubernetes/pkg/kubelet/checkpointmanager"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
 	"k8s.io/kubernetes/pkg/kubelet/config"
 	"k8s.io/kubernetes/pkg/kubelet/configmap"
@@ -553,8 +554,15 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	klet.livenessManager = proberesults.NewManager()
 
 	klet.podCache = kubecontainer.NewCache()
+	var checkpointManager checkpointmanager.CheckpointManager
+	if bootstrapCheckpointPath != "" {
+		checkpointManager, err = checkpointmanager.NewCheckpointManager(bootstrapCheckpointPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize checkpoint manager: %+v", err)
+		}
+	}
 	// podManager is also responsible for keeping secretManager and configMapManager contents up-to-date.
-	klet.podManager = kubepod.NewBasicPodManager(kubepod.NewBasicMirrorClient(klet.kubeClient), secretManager, configMapManager)
+	klet.podManager = kubepod.NewBasicPodManager(kubepod.NewBasicMirrorClient(klet.kubeClient), secretManager, configMapManager, checkpointManager)
 
 	if remoteRuntimeEndpoint != "" {
 		// remoteImageEndpoint is same as remoteRuntimeEndpoint if not explicitly specified
@@ -707,7 +715,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 
 	klet.statusManager = status.NewManager(klet.kubeClient, klet.podManager, klet)
 
-	if utilfeature.DefaultFeatureGate.Enabled(features.RotateKubeletServerCertificate) && kubeDeps.TLSOptions != nil {
+	if kubeCfg.ServerTLSBootstrap && kubeDeps.TLSOptions != nil && utilfeature.DefaultFeatureGate.Enabled(features.RotateKubeletServerCertificate) {
 		var (
 			ips   []net.IP
 			names []string
@@ -1233,8 +1241,8 @@ func (kl *Kubelet) initializeModules() error {
 	// Start the image manager.
 	kl.imageManager.Start()
 
-	// Start the certificate manager.
-	if utilfeature.DefaultFeatureGate.Enabled(features.RotateKubeletServerCertificate) {
+	// Start the certificate manager if it was enabled.
+	if kl.serverCertificateManager != nil {
 		kl.serverCertificateManager.Start()
 	}
 
