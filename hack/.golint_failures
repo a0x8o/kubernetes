@@ -9,7 +9,6 @@ cmd/kubeadm/app/apis/kubeadm/v1alpha1
 cmd/kubelet/app
 cmd/kubelet/app/options
 cmd/kubemark
-examples/guestbook-go
 pkg/api/endpoints
 pkg/api/ref
 pkg/api/testapi
@@ -140,6 +139,7 @@ pkg/kubectl/cmd
 pkg/kubectl/cmd/auth
 pkg/kubectl/cmd/config
 pkg/kubectl/cmd/create
+pkg/kubectl/cmd/get
 pkg/kubectl/cmd/rollout
 pkg/kubectl/cmd/set
 pkg/kubectl/cmd/templates

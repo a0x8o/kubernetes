@@ -147,8 +147,11 @@ func TestServerSidePrint(t *testing.T) {
 	printer := newFakePrinter(printersinternal.AddHandlers)
 
 	factory := util.NewFactory(clientcmd.NewDefaultClientConfig(*createKubeConfig(s.URL), &clientcmd.ConfigOverrides{}))
-	mapper, _ := factory.Object()
-
+	mapper, err := factory.RESTMapper()
+	if err != nil {
+		t.Errorf("unexpected error getting mapper: %v", err)
+		return
+	}
 	for gvk, apiType := range legacyscheme.Scheme.AllKnownTypes() {
 		// we do not care about internal objects or lists // TODO make sure this is always true
 		if gvk.Version == runtime.APIVersionInternal || strings.HasSuffix(apiType.Name(), "List") {
@@ -174,7 +177,7 @@ func TestServerSidePrint(t *testing.T) {
 		if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
 			req = req.Namespace(ns.Name)
 		}
-		body, err := req.Resource(mapping.Resource).SetHeader("Accept", tableParam).Do().Raw()
+		body, err := req.Resource(mapping.Resource.Resource).SetHeader("Accept", tableParam).Do().Raw()
 		if err != nil {
 			t.Errorf("unexpected error getting %s: %v", gvk, err)
 			continue
@@ -192,7 +195,7 @@ func TestServerSidePrint(t *testing.T) {
 			continue
 		}
 		intGV := gvk.GroupKind().WithVersion(runtime.APIVersionInternal).GroupVersion()
-		intObj, err := mapping.ConvertToVersion(obj, intGV)
+		intObj, err := legacyscheme.Scheme.ConvertToVersion(obj, intGV)
 		if err != nil {
 			t.Errorf("unexpected error converting %s to internal: %v", gvk, err)
 			continue

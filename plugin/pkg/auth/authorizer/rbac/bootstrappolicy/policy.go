@@ -105,7 +105,7 @@ func NodeRules() []rbac.PolicyRule {
 		// Use the NodeRestriction admission plugin to limit a node to creating/updating its own API object.
 		rbac.NewRule("create", "get", "list", "watch").Groups(legacyGroup).Resources("nodes").RuleOrDie(),
 		rbac.NewRule("update", "patch").Groups(legacyGroup).Resources("nodes/status").RuleOrDie(),
-		rbac.NewRule("update", "patch", "delete").Groups(legacyGroup).Resources("nodes").RuleOrDie(),
+		rbac.NewRule("update", "patch").Groups(legacyGroup).Resources("nodes").RuleOrDie(),
 
 		// TODO: restrict to the bound node as creator in the NodeRestrictions admission plugin
 		rbac.NewRule("create", "update", "patch").Groups(legacyGroup).Resources("events").RuleOrDie(),
@@ -236,7 +236,8 @@ func ClusterRoles() []rbac.ClusterRole {
 				rbac.NewRule(Read...).Groups(legacyGroup).Resources("namespaces").RuleOrDie(),
 				rbac.NewRule("impersonate").Groups(legacyGroup).Resources("serviceaccounts").RuleOrDie(),
 
-				rbac.NewRule(ReadWrite...).Groups(appsGroup).Resources("statefulsets",
+				rbac.NewRule(ReadWrite...).Groups(appsGroup).Resources(
+					"statefulsets", "statefulsets/scale",
 					"daemonsets",
 					"deployments", "deployments/scale", "deployments/rollback",
 					"replicasets", "replicasets/scale").RuleOrDie(),
@@ -275,7 +276,8 @@ func ClusterRoles() []rbac.ClusterRole {
 				rbac.NewRule(Read...).Groups(legacyGroup).Resources("namespaces").RuleOrDie(),
 				rbac.NewRule("impersonate").Groups(legacyGroup).Resources("serviceaccounts").RuleOrDie(),
 
-				rbac.NewRule(ReadWrite...).Groups(appsGroup).Resources("statefulsets",
+				rbac.NewRule(ReadWrite...).Groups(appsGroup).Resources(
+					"statefulsets", "statefulsets/scale",
 					"daemonsets",
 					"deployments", "deployments/scale", "deployments/rollback",
 					"replicasets", "replicasets/scale").RuleOrDie(),
@@ -307,7 +309,8 @@ func ClusterRoles() []rbac.ClusterRole {
 				// indicator of which namespaces you have access to.
 				rbac.NewRule(Read...).Groups(legacyGroup).Resources("namespaces").RuleOrDie(),
 
-				rbac.NewRule(Read...).Groups(appsGroup).Resources("statefulsets",
+				rbac.NewRule(Read...).Groups(appsGroup).Resources(
+					"statefulsets", "statefulsets/scale",
 					"daemonsets",
 					"deployments", "deployments/scale",
 					"replicasets", "replicasets/scale").RuleOrDie(),

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Copyright 2016 The Kubernetes Authors.
 #
@@ -227,7 +227,7 @@ function wait-for-pods-with-label()
 {
   local i
   for i in $(seq 1 10); do
-    kubeout=`kubectl get po -l $1 --template '{{range.items}}{{.metadata.name}}{{end}}' --sort-by metadata.name "${kube_flags[@]}"`
+    kubeout=`kubectl get po -l $1 --output=go-template --template='{{range.items}}{{.metadata.name}}{{end}}' --sort-by metadata.name "${kube_flags[@]}"`
     if [[ $kubeout = $2 ]]; then
         return
     fi
@@ -533,7 +533,7 @@ run_pod_tests() {
   kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" ''
   # Command
   kubectl create -f test/fixtures/doc-yaml/admin/limitrange/valid-pod.yaml "${kube_flags[@]}"
-  kubectl create -f examples/storage/redis/redis-master.yaml "${kube_flags[@]}"
+  kubectl create -f test/e2e/testing-manifests/kubectl/redis-master-pod.yaml "${kube_flags[@]}"
   # Post-condition: valid-pod and redis-master PODs are created
   kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" 'redis-master:valid-pod:'
 
@@ -592,9 +592,10 @@ run_pod_tests() {
   # Post-condition: valid-pod's record annotation still contains command with --record=true
   kube::test::get_object_assert 'pod valid-pod' "{{range$annotations_field}}{{.}}:{{end}}" ".*--record=true.*"
 
-  ### Record label change with unspecified flag and previous change already recorded
+  ### Record label change with specified flag and previous change already recorded
+  ### we are no longer tricked by data from another user into revealing more information about our client
   # Command
-  kubectl label pods valid-pod new-record-change=true "${kube_flags[@]}"
+  kubectl label pods valid-pod new-record-change=true --record=true "${kube_flags[@]}"
   # Post-condition: valid-pod's record annotation contains new change
   kube::test::get_object_assert 'pod valid-pod' "{{range$annotations_field}}{{.}}:{{end}}" ".*new-record-change=true.*"
 
@@ -656,7 +657,7 @@ run_pod_tests() {
   kube::test::get_object_assert rc "{{range.items}}{{$id_field}}:{{end}}" ''
   ## kubectl create --edit can update the label filed of multiple resources. tmp-editor.sh is a fake editor
   TEMP=$(mktemp /tmp/tmp-editor-XXXXXXXX.sh)
-  echo -e "#!/bin/bash\n${SED} -i \"s/mock/modified/g\" \$1" > ${TEMP}
+  echo -e "#!/usr/bin/env bash\n${SED} -i \"s/mock/modified/g\" \$1" > ${TEMP}
   chmod +x ${TEMP}
   # Command
   EDITOR=${TEMP} kubectl create --edit -f hack/testdata/multi-resource-json.json "${kube_flags[@]}"
@@ -692,7 +693,7 @@ run_pod_tests() {
   kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" 'valid-pod:'
 
   ## Patch can modify a local object
-  kubectl patch --local -f pkg/kubectl/validation/testdata/v1/validPod.yaml --patch='{"spec": {"restartPolicy":"Never"}}' -o jsonpath='{.spec.restartPolicy}' | grep -q "Never"
+  kubectl patch --local -f pkg/kubectl/validation/testdata/v1/validPod.yaml --patch='{"spec": {"restartPolicy":"Never"}}' -o yaml | grep -q "Never"
 
   ## Patch fails with error message "not patched" and exit code 1
   output_message=$(! kubectl patch "${kube_flags[@]}" pod valid-pod -p='{"spec":{"replicas":7}}' 2>&1)
@@ -803,7 +804,7 @@ __EOF__
   kubectl delete node node-v1-test "${kube_flags[@]}"
 
   ## kubectl edit can update the image field of a POD. tmp-editor.sh is a fake editor
-  echo -e "#!/bin/bash\n${SED} -i \"s/nginx/k8s.gcr.io\/serve_hostname/g\" \$1" > /tmp/tmp-editor.sh
+  echo -e "#!/usr/bin/env bash\n${SED} -i \"s/nginx/k8s.gcr.io\/serve_hostname/g\" \$1" > /tmp/tmp-editor.sh
   chmod +x /tmp/tmp-editor.sh
   # Pre-condition: valid-pod POD has image nginx
   kube::test::get_object_assert pods "{{range.items}}{{$image_field}}:{{end}}" 'nginx:'
@@ -1209,7 +1210,7 @@ run_save_config_tests() {
   ! [[ "$(kubectl get pods test-pod -o yaml "${kube_flags[@]}" | grep kubectl.kubernetes.io/last-applied-configuration)" ]]
   # Command: edit the pod "test-pod"
   temp_editor="${KUBE_TEMP}/tmp-editor.sh"
-  echo -e "#!/bin/bash\n${SED} -i \"s/test-pod-label/test-pod-label-edited/g\" \$@" > "${temp_editor}"
+  echo -e "#!/usr/bin/env bash\n${SED} -i \"s/test-pod-label/test-pod-label-edited/g\" \$@" > "${temp_editor}"
   chmod +x "${temp_editor}"
   EDITOR=${temp_editor} kubectl edit pod test-pod --save-config "${kube_flags[@]}"
   # Post-Condition: pod "test-pod" has configuration annotation
@@ -1296,9 +1297,9 @@ run_kubectl_run_tests() {
   kubectl run nginx-extensions "--image=$IMAGE_NGINX" "${kube_flags[@]}"
   # Post-Condition: Deployment "nginx" is created
   kube::test::get_object_assert deployment.extensions "{{range.items}}{{$id_field}}:{{end}}" 'nginx-extensions:'
-  # and old generator was used, iow. old defaults are applied
+  # new generator was used
   output_message=$(kubectl get deployment.extensions/nginx-extensions -o jsonpath='{.spec.revisionHistoryLimit}')
-  kube::test::if_has_not_string "${output_message}" '2'
+  kube::test::if_has_string "${output_message}" '2'
   # Clean up
   kubectl delete deployment nginx-extensions "${kube_flags[@]}"
   # Command
@@ -1317,6 +1318,18 @@ run_kubectl_run_tests() {
   kubectl run pi --schedule="*/5 * * * *" --generator=cronjob/v1beta1 "--image=$IMAGE_PERL" --restart=OnFailure -- perl -Mbignum=bpi -wle 'print bpi(20)' "${kube_flags[@]}"
   # Post-Condition: CronJob "pi" is created
   kube::test::get_object_assert cronjobs "{{range.items}}{{$id_field}}:{{end}}" 'pi:'
+
+  # Pre-condition: cronjob has perl image, not custom image
+  output_message=$(kubectl get cronjob/pi -o jsonpath='{..image}')
+  kube::test::if_has_not_string "${output_message}" "custom-image"
+  kube::test::if_has_string     "${output_message}" "${IMAGE_PERL}"
+  # Set cronjob image
+  kubectl set image cronjob/pi '*=custom-image'
+  # Post-condition: cronjob has custom image, not perl image
+  output_message=$(kubectl get cronjob/pi -o jsonpath='{..image}')
+  kube::test::if_has_string     "${output_message}" "custom-image"
+  kube::test::if_has_not_string "${output_message}" "${IMAGE_PERL}"
+
   # Clean up
   kubectl delete cronjobs pi "${kube_flags[@]}"
 
@@ -2080,7 +2093,7 @@ run_recursive_resources_tests() {
   # Pre-condition: busybox0 & busybox1 PODs exist
   kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" 'busybox0:busybox1:'
   # Command
-  echo -e '#!/bin/bash\nsed -i "s/image: busybox/image: prom\/busybox/g" $1' > /tmp/tmp-editor.sh
+  echo -e '#!/usr/bin/env bash\nsed -i "s/image: busybox/image: prom\/busybox/g" $1' > /tmp/tmp-editor.sh
   chmod +x /tmp/tmp-editor.sh
   output_message=$(! EDITOR=/tmp/tmp-editor.sh kubectl edit -f hack/testdata/recursive/pod --recursive 2>&1 "${kube_flags[@]}")
   # Post-condition: busybox0 & busybox1 PODs are not edited, and since busybox2 is malformed, it should error
@@ -2138,8 +2151,7 @@ run_recursive_resources_tests() {
   kube::test::get_object_assert deployment "{{range.items}}{{$id_field}}:{{end}}" 'nginx:'
   kube::test::get_object_assert deployment "{{range.items}}{{$image_field0}}:{{end}}" "${IMAGE_DEPLOYMENT_R1}:"
   # Command
-  output_message=$(kubectl convert --local -f hack/testdata/deployment-revision1.yaml --output-version=apps/v1beta1 -o go-template='{{ .apiVersion }}' "${kube_flags[@]}")
-  echo $output_message
+  output_message=$(kubectl convert --local -f hack/testdata/deployment-revision1.yaml --output-version=apps/v1beta1 -o yaml "${kube_flags[@]}")
   # Post-condition: apiVersion is still extensions/v1beta1 in the live deployment, but command output is the new value
   kube::test::get_object_assert 'deployment nginx' "{{ .apiVersion }}" 'extensions/v1beta1'
   kube::test::if_has_string "${output_message}" "apps/v1beta1"
@@ -2533,7 +2545,7 @@ run_service_tests() {
   # Pre-condition: Only the default kubernetes services exist
   kube::test::get_object_assert services "{{range.items}}{{$id_field}}:{{end}}" 'kubernetes:'
   # Command
-  kubectl create -f examples/guestbook/redis-master-service.yaml "${kube_flags[@]}"
+  kubectl create -f test/e2e/testing-manifests/guestbook/redis-master-service.yaml "${kube_flags[@]}"
   # Post-condition: redis-master service exists
   kube::test::get_object_assert services "{{range.items}}{{$id_field}}:{{end}}" 'kubernetes:redis-master:'
   # Describe command should print detailed information
@@ -2558,14 +2570,14 @@ run_service_tests() {
   kube::test::get_object_assert 'services redis-master' "{{range$service_selector_field}}{{.}}:{{end}}" "redis:master:backend:"
 
   # Set selector of a local file without talking to the server
-  kubectl set selector -f examples/guestbook/redis-master-service.yaml role=padawan --local -o yaml "${kube_flags[@]}"
-  ! kubectl set selector -f examples/guestbook/redis-master-service.yaml role=padawan --dry-run -o yaml "${kube_flags[@]}"
+  kubectl set selector -f test/e2e/testing-manifests/guestbook/redis-master-service.yaml role=padawan --local -o yaml "${kube_flags[@]}"
+  ! kubectl set selector -f test/e2e/testing-manifests/guestbook/redis-master-service.yaml role=padawan --dry-run -o yaml "${kube_flags[@]}"
   # Set command to change the selector.
-  kubectl set selector -f examples/guestbook/redis-master-service.yaml role=padawan
+  kubectl set selector -f test/e2e/testing-manifests/guestbook/redis-master-service.yaml role=padawan
   # prove role=padawan
   kube::test::get_object_assert 'services redis-master' "{{range$service_selector_field}}{{.}}:{{end}}" "padawan:"
   # Set command to reset the selector back to the original one.
-  kubectl set selector -f examples/guestbook/redis-master-service.yaml app=redis,role=master,tier=backend
+  kubectl set selector -f test/e2e/testing-manifests/guestbook/redis-master-service.yaml app=redis,role=master,tier=backend
   # prove role=master
   kube::test::get_object_assert 'services redis-master' "{{range$service_selector_field}}{{.}}:{{end}}" "redis:master:backend:"
   # Show dry-run works on running selector
@@ -2639,8 +2651,8 @@ __EOF__
   # Pre-condition: Only the default kubernetes services exist
   kube::test::get_object_assert services "{{range.items}}{{$id_field}}:{{end}}" 'kubernetes:'
   # Command
-  kubectl create -f examples/guestbook/redis-master-service.yaml "${kube_flags[@]}"
-  kubectl create -f examples/guestbook/redis-slave-service.yaml "${kube_flags[@]}"
+  kubectl create -f test/e2e/testing-manifests/guestbook/redis-master-service.yaml "${kube_flags[@]}"
+  kubectl create -f test/e2e/testing-manifests/guestbook/redis-slave-service.yaml "${kube_flags[@]}"
   # Post-condition: redis-master and redis-slave services are created
   kube::test::get_object_assert services "{{range.items}}{{$id_field}}:{{end}}" 'kubernetes:redis-master:redis-slave:'
 
@@ -2759,8 +2771,8 @@ run_rc_tests() {
   kubectl delete rc frontend "${kube_flags[@]}"
 
   ### Scale multiple replication controllers
-  kubectl create -f examples/guestbook/legacy/redis-master-controller.yaml "${kube_flags[@]}"
-  kubectl create -f examples/guestbook/legacy/redis-slave-controller.yaml "${kube_flags[@]}"
+  kubectl create -f test/e2e/testing-manifests/guestbook/legacy/redis-master-controller.yaml "${kube_flags[@]}"
+  kubectl create -f test/e2e/testing-manifests/guestbook/legacy/redis-slave-controller.yaml "${kube_flags[@]}"
   # Command
   kubectl scale rc/redis-master rc/redis-slave --replicas=4 "${kube_flags[@]}"
   # Post-condition: 4 replicas each
@@ -2842,7 +2854,7 @@ run_rc_tests() {
   # Pre-condition: default run without --name flag; should succeed by truncating the inherited name
   output_message=$(kubectl expose -f hack/testdata/pod-with-large-name.yaml --port=8081 2>&1 "${kube_flags[@]}")
   # Post-condition: inherited name from pod has been truncated
-  kube::test::if_has_string "${output_message}" '\"kubernetes-serve-hostname-testing-sixty-three-characters-in-len\" exposed'
+  kube::test::if_has_string "${output_message}" 'kubernetes-serve-hostname-testing-sixty-three-characters-in-len exposed'
   # Clean-up
   kubectl delete svc kubernetes-serve-hostname-testing-sixty-three-characters-in-len "${kube_flags[@]}"
 
@@ -2850,7 +2862,7 @@ run_rc_tests() {
   # Pre-condition: don't use --port flag
   output_message=$(kubectl expose -f test/fixtures/doc-yaml/admin/high-availability/etcd.yaml --selector=test=etcd 2>&1 "${kube_flags[@]}")
   # Post-condition: expose succeeded
-  kube::test::if_has_string "${output_message}" '\"etcd-server\" exposed'
+  kube::test::if_has_string "${output_message}" 'etcd-server exposed'
   # Post-condition: generated service has both ports from the exposed pod
   kube::test::get_object_assert 'service etcd-server' "{{$port_name}} {{$port_field}}" 'port-1 2380'
   kube::test::get_object_assert 'service etcd-server' "{{$second_port_name}} {{$second_port_field}}" 'port-2 2379'
@@ -2870,7 +2882,7 @@ run_rc_tests() {
   kube::test::get_object_assert rc "{{range.items}}{{$id_field}}:{{end}}" ''
   # Command
   kubectl create -f hack/testdata/frontend-controller.yaml "${kube_flags[@]}"
-  kubectl create -f examples/guestbook/legacy/redis-slave-controller.yaml "${kube_flags[@]}"
+  kubectl create -f test/e2e/testing-manifests/guestbook/legacy/redis-slave-controller.yaml "${kube_flags[@]}"
   # Post-condition: frontend and redis-slave
   kube::test::get_object_assert rc "{{range.items}}{{$id_field}}:{{end}}" 'frontend:redis-slave:'
 
@@ -3132,7 +3144,7 @@ run_deployment_tests() {
   # Set env of deployments for all container
   kubectl set env deployment nginx-deployment env=prod "${kube_flags[@]}"
   # Set env of deployments for specific container
-  kubectl set env deployment nginx-deployment env=prod -c=nginx "${kube_flags[@]}"
+  kubectl set env deployment nginx-deployment superenv=superprod -c=nginx "${kube_flags[@]}"
   # Set env of deployments by configmap
   kubectl set env deployment nginx-deployment --from=configmap/test-set-env-config "${kube_flags[@]}"
   # Set env of deployments by secret
@@ -3556,7 +3568,7 @@ run_multi_resources_tests() {
     fi
     # Command: kubectl edit multiple resources
     temp_editor="${KUBE_TEMP}/tmp-editor.sh"
-    echo -e "#!/bin/bash\n${SED} -i \"s/status\:\ replaced/status\:\ edited/g\" \$@" > "${temp_editor}"
+    echo -e "#!/usr/bin/env bash\n${SED} -i \"s/status\:\ replaced/status\:\ edited/g\" \$@" > "${temp_editor}"
     chmod +x "${temp_editor}"
     EDITOR="${temp_editor}" kubectl edit "${kube_flags[@]}" -f "${file}"
     # Post-condition: mock service (and mock2) and mock rc (and mock2) are edited
@@ -3924,7 +3936,7 @@ run_cmd_with_img_tests() {
 
   # Test that a valid image reference value is provided as the value of --image in `kubectl run <name> --image`
   output_message=$(kubectl run test1 --image=validname)
-  kube::test::if_has_string "${output_message}" 'deployment.apps "test1" created'
+  kube::test::if_has_string "${output_message}" 'deployment.apps/test1 created'
   kubectl delete deployments test1
   # test invalid image name
   output_message=$(! kubectl run test2 --image=InvalidImageName 2>&1)
@@ -4034,6 +4046,8 @@ run_job_tests() {
   kubectl run pi --schedule="59 23 31 2 *" --namespace=test-jobs --generator=cronjob/v1beta1 "--image=$IMAGE_PERL" --restart=OnFailure -- perl -Mbignum=bpi -wle 'print bpi(20)' "${kube_flags[@]}"
   # Post-Condition: assertion object exists
   kube::test::get_object_assert 'cronjob/pi --namespace=test-jobs' "{{$id_field}}" 'pi'
+  kubectl get cronjob/pi --namespace=test-jobs
+  kubectl describe cronjob/pi --namespace=test-jobs
 
   ### Create a job in dry-run mode
   output_message=$(kubectl create job test-job --from=cronjob/pi --dry-run=true --namespace=test-jobs -o name)
@@ -4046,6 +4060,8 @@ run_job_tests() {
   kubectl create job test-job --from=cronjob/pi --namespace=test-jobs
   # Post-Condition: assertion object exists
   kube::test::get_object_assert 'job/test-job --namespace=test-jobs' "{{$id_field}}" 'test-job'
+  kubectl get job/test-job --namespace=test-jobs
+  kubectl describe job/test-job --namespace=test-jobs
   #Clean up
   kubectl delete job test-job --namespace=test-jobs
   kubectl delete cronjob pi --namespace=test-jobs
@@ -4470,6 +4486,20 @@ run_kubectl_all_namespace_tests() {
   # Command
   kubectl get pods --all-namespaces --namespace=default
 
+  ### Check --all-namespaces option shows namespaces
+  # Create objects in multiple namespaces
+  kubectl create "${kube_flags[@]}" namespace all-ns-test-1
+  kubectl create "${kube_flags[@]}" serviceaccount test -n all-ns-test-1
+  kubectl create "${kube_flags[@]}" namespace all-ns-test-2
+  kubectl create "${kube_flags[@]}" serviceaccount test -n all-ns-test-2
+  # Ensure listing across namespaces displays the namespace
+  output_message=$(kubectl get serviceaccounts --all-namespaces "${kube_flags[@]}")
+  kube::test::if_has_string "${output_message}" "all-ns-test-1"
+  kube::test::if_has_string "${output_message}" "all-ns-test-2"
+  # Clean up
+  kubectl delete "${kube_flags[@]}" namespace all-ns-test-1
+  kubectl delete "${kube_flags[@]}" namespace all-ns-test-2
+
   ### Clean up
   # Pre-condition: valid-pod exists
   kube::test::get_object_assert pods "{{range.items}}{{$id_field}}:{{end}}" 'valid-pod:'
@@ -4642,7 +4672,7 @@ __EOF__
   kube::test::if_has_string "${response}" 'must provide one or more resources'
   # test=label matches our node
   response=$(kubectl cordon --selector test=label)
-  kube::test::if_has_string "${response}" 'node "127.0.0.1" cordoned'
+  kube::test::if_has_string "${response}" 'node/127.0.0.1 cordoned'
   # invalid=label does not match any nodes
   response=$(kubectl cordon --selector invalid=label)
   kube::test::if_has_not_string "${response}" 'cordoned'
@@ -4881,11 +4911,14 @@ runTests() {
 
   record_command run_RESTMapper_evaluation_tests
 
+  # find all resources
+  kubectl "${kube_flags[@]}" api-resources
+  # find all namespaced resources that support list by name and get them
+  kubectl "${kube_flags[@]}" api-resources --verbs=list --namespaced -o name | xargs -n 1 kubectl "${kube_flags[@]}" get -o name
+
   ################
   # Cluster Role #
   ################
-
-  kubectl "${kube_flags[@]}" api-resources
 
   if kube::test::if_supports_resource "${clusterroles}" ; then
     record_command run_clusterroles_tests

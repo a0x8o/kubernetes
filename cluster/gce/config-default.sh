@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Copyright 2014 The Kubernetes Authors.
 #
@@ -144,6 +144,9 @@ ENABLE_L7_LOADBALANCING="${KUBE_ENABLE_L7_LOADBALANCING:-glbc}"
 #   standalone     - Heapster only. Metrics available via Heapster REST API.
 ENABLE_CLUSTER_MONITORING="${KUBE_ENABLE_CLUSTER_MONITORING:-influxdb}"
 
+# Optional: Enable deploying separate prometheus stack for monitoring kubernetes cluster
+ENABLE_PROMETHEUS_MONITORING="${KUBE_ENABLE_PROMETHEUS_MONITORING:-false}"
+
 # Optional: Enable Metrics Server. Metrics Server should be enable everywhere,
 # since it's a critical component, but in the first release we need a way to disable
 # this in case of stability issues.
@@ -156,9 +159,6 @@ ENABLE_METRICS_SERVER="${KUBE_ENABLE_METRICS_SERVER:-true}"
 # Metadata agent is a daemon set that provides metadata of kubernetes objects
 # running on the same node for exporting metrics and logs.
 ENABLE_METADATA_AGENT="${KUBE_ENABLE_METADATA_AGENT:-none}"
-
-# Version tag of metadata agent
-METADATA_AGENT_VERSION="${KUBE_METADATA_AGENT_VERSION:-0.2-0.0.19-1}"
 
 # One special node out of NUM_NODES would be created of this type if specified.
 # Useful for scheduling heapster in large clusters with nodes of small size.
@@ -295,7 +295,7 @@ if [ ${ENABLE_IP_ALIASES} = true ]; then
   # If we're using custom network, use the subnet we already create for it as the one for ip-alias.
   # Note that this means SUBNETWORK would override KUBE_GCE_IP_ALIAS_SUBNETWORK in case of custom network.
   if [[ "${CREATE_CUSTOM_NETWORK}" == true ]]; then
-    IP_ALIAS_SUBNETWORK="${SUBNETWORK:-IP_ALIAS_SUBNETWORK}"
+    IP_ALIAS_SUBNETWORK="${SUBNETWORK}"
   fi
   # Reserve the services IP space to avoid being allocated for other GCP resources.
   SERVICE_CLUSTER_IP_SUBNETWORK=${KUBE_GCE_SERVICE_CLUSTER_IP_SUBNETWORK:-${INSTANCE_PREFIX}-subnet-services}

@@ -44,12 +44,15 @@ import (
 
 var unstructuredSerializer = dynamic.ContentConfig().NegotiatedSerializer
 
-var fakecmd = &cobra.Command{
-	Use: "delete ([-f FILENAME] | TYPE [(NAME | -l label | --all)])",
-	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
-		cmdutil.CheckErr(cmdutil.ValidateOutputArgs(cmd))
-	},
+func fakecmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use: "delete ([-f FILENAME] | TYPE [(NAME | -l label | --all)])",
+		DisableFlagsInUseLine: true,
+		Run: func(cmd *cobra.Command, args []string) {
+			cmdutil.CheckErr(cmdutil.ValidateOutputArgs(cmd))
+		},
+	}
+	return cmd
 }
 
 func TestDeleteObjectByTuple(t *testing.T) {
@@ -248,7 +251,7 @@ func TestDeleteObject(t *testing.T) {
 	buf, errBuf := bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{})
 
 	cmd := NewCmdDelete(tf, buf, errBuf)
-	cmd.Flags().Set("filename", "../../../examples/guestbook/legacy/redis-master-controller.yaml")
+	cmd.Flags().Set("filename", "../../../test/e2e/testing-manifests/guestbook/legacy/redis-master-controller.yaml")
 	cmd.Flags().Set("cascade", "false")
 	cmd.Flags().Set("output", "name")
 	cmd.Run(cmd, []string{})
@@ -360,13 +363,13 @@ func TestDeleteObjectNotFound(t *testing.T) {
 
 	options := &DeleteOptions{
 		FilenameOptions: resource.FilenameOptions{
-			Filenames: []string{"../../../examples/guestbook/legacy/redis-master-controller.yaml"},
+			Filenames: []string{"../../../test/e2e/testing-manifests/guestbook/legacy/redis-master-controller.yaml"},
 		},
 		GracePeriod: -1,
 		Cascade:     false,
 		Output:      "name",
 	}
-	err := options.Complete(tf, buf, errBuf, []string{}, fakecmd)
+	err := options.Complete(tf, buf, errBuf, []string{}, fakecmd())
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -397,7 +400,7 @@ func TestDeleteObjectIgnoreNotFound(t *testing.T) {
 	buf, errBuf := bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{})
 
 	cmd := NewCmdDelete(tf, buf, errBuf)
-	cmd.Flags().Set("filename", "../../../examples/guestbook/legacy/redis-master-controller.yaml")
+	cmd.Flags().Set("filename", "../../../test/e2e/testing-manifests/guestbook/legacy/redis-master-controller.yaml")
 	cmd.Flags().Set("cascade", "false")
 	cmd.Flags().Set("ignore-not-found", "true")
 	cmd.Flags().Set("output", "name")
@@ -448,7 +451,7 @@ func TestDeleteAllNotFound(t *testing.T) {
 		IgnoreNotFound:  false,
 		Output:          "name",
 	}
-	err := options.Complete(tf, buf, errBuf, []string{"services"}, fakecmd)
+	err := options.Complete(tf, buf, errBuf, []string{"services"}, fakecmd())
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -528,8 +531,8 @@ func TestDeleteMultipleObject(t *testing.T) {
 	buf, errBuf := bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{})
 
 	cmd := NewCmdDelete(tf, buf, errBuf)
-	cmd.Flags().Set("filename", "../../../examples/guestbook/legacy/redis-master-controller.yaml")
-	cmd.Flags().Set("filename", "../../../examples/guestbook/frontend-service.yaml")
+	cmd.Flags().Set("filename", "../../../test/e2e/testing-manifests/guestbook/legacy/redis-master-controller.yaml")
+	cmd.Flags().Set("filename", "../../../test/e2e/testing-manifests/guestbook/frontend-service.yaml")
 	cmd.Flags().Set("cascade", "false")
 	cmd.Flags().Set("output", "name")
 	cmd.Run(cmd, []string{})
@@ -567,13 +570,13 @@ func TestDeleteMultipleObjectContinueOnMissing(t *testing.T) {
 
 	options := &DeleteOptions{
 		FilenameOptions: resource.FilenameOptions{
-			Filenames: []string{"../../../examples/guestbook/legacy/redis-master-controller.yaml", "../../../examples/guestbook/frontend-service.yaml"},
+			Filenames: []string{"../../../test/e2e/testing-manifests/guestbook/legacy/redis-master-controller.yaml", "../../../test/e2e/testing-manifests/guestbook/frontend-service.yaml"},
 		},
 		GracePeriod: -1,
 		Cascade:     false,
 		Output:      "name",
 	}
-	err := options.Complete(tf, buf, errBuf, []string{}, fakecmd)
+	err := options.Complete(tf, buf, errBuf, []string{}, fakecmd())
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -652,7 +655,7 @@ func TestDeleteDirectory(t *testing.T) {
 	buf, errBuf := bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{})
 
 	cmd := NewCmdDelete(tf, buf, errBuf)
-	cmd.Flags().Set("filename", "../../../examples/guestbook/legacy")
+	cmd.Flags().Set("filename", "../../../test/e2e/testing-manifests/guestbook/legacy")
 	cmd.Flags().Set("cascade", "false")
 	cmd.Flags().Set("output", "name")
 	cmd.Run(cmd, []string{})
@@ -749,7 +752,7 @@ func TestResourceErrors(t *testing.T) {
 				Cascade:         false,
 				Output:          "name",
 			}
-			err := options.Complete(tf, buf, errBuf, testCase.args, fakecmd)
+			err := options.Complete(tf, buf, errBuf, testCase.args, fakecmd())
 			if !testCase.errFn(err) {
 				t.Errorf("%s: unexpected error: %v", k, err)
 				return

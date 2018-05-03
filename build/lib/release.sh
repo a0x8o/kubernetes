@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Copyright 2016 The Kubernetes Authors.
 #
@@ -389,6 +389,7 @@ function kube::release::package_kube_manifests_tarball() {
   cp "${src_dir}/glbc.manifest" "${dst_dir}"
   cp "${src_dir}/rescheduler.manifest" "${dst_dir}/"
   cp "${src_dir}/e2e-image-puller.manifest" "${dst_dir}/"
+  cp "${src_dir}/etcd-empty-dir-cleanup.yaml" "${dst_dir}/"
   cp "${KUBE_ROOT}/cluster/gce/gci/configure-helper.sh" "${dst_dir}/gci-configure-helper.sh"
   cp "${KUBE_ROOT}/cluster/gce/gci/health-monitor.sh" "${dst_dir}/health-monitor.sh"
   local objects
@@ -481,7 +482,6 @@ EOF
   mkdir -p "${release_stage}/hack"
   cp -R "${KUBE_ROOT}/hack/lib" "${release_stage}/hack/"
 
-  cp -R "${KUBE_ROOT}/examples" "${release_stage}/"
   cp -R "${KUBE_ROOT}/docs" "${release_stage}/"
   cp "${KUBE_ROOT}/README.md" "${release_stage}/"
   cp "${KUBE_ROOT}/Godeps/LICENSES" "${release_stage}/"

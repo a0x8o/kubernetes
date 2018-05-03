@@ -36,6 +36,7 @@ import (
 	"k8s.io/kubernetes/cmd/kubeadm/app/util/apiclient"
 	configutil "k8s.io/kubernetes/cmd/kubeadm/app/util/config"
 	dryrunutil "k8s.io/kubernetes/cmd/kubeadm/app/util/dryrun"
+	etcdutil "k8s.io/kubernetes/cmd/kubeadm/app/util/etcd"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/util/version"
 )
@@ -208,7 +209,7 @@ func RunApply(flags *applyFlags) error {
 	glog.Infoln("")
 	glog.Infof("[upgrade/successful] SUCCESS! Your cluster was upgraded to %q. Enjoy!\n", flags.newK8sVersionStr)
 	glog.Infoln("")
-	glog.Infoln("[upgrade/kubelet] Now that your control plane is upgraded, please proceed with upgrading your kubelets in turn.")
+	glog.Infoln("[upgrade/kubelet] Now that your control plane is upgraded, please proceed with upgrading your kubelets if you haven't already done so.")
 
 	return nil
 }
@@ -281,7 +282,9 @@ func PerformStaticPodUpgrade(client clientset.Interface, waiter apiclient.Waiter
 		return err
 	}
 
-	return upgrade.StaticPodControlPlane(waiter, pathManager, internalcfg, etcdUpgrade)
+	// These are uninitialized because passing in the clients allow for mocking the client during testing
+	var oldEtcdClient, newEtdClient etcdutil.Client
+	return upgrade.StaticPodControlPlane(waiter, pathManager, internalcfg, etcdUpgrade, oldEtcdClient, newEtdClient)
 }
 
 // DryRunStaticPodUpgrade fakes an upgrade of the control plane

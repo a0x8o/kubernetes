@@ -4025,7 +4025,7 @@ func TestValidateEnv(t *testing.T) {
 			Name: "abc",
 			ValueFrom: &core.EnvVarSource{
 				FieldRef: &core.ObjectFieldSelector{
-					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 					FieldPath:  "metadata.annotations['key']",
 				},
 			},
@@ -4034,7 +4034,7 @@ func TestValidateEnv(t *testing.T) {
 			Name: "abc",
 			ValueFrom: &core.EnvVarSource{
 				FieldRef: &core.ObjectFieldSelector{
-					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 					FieldPath:  "metadata.labels['key']",
 				},
 			},
@@ -4043,7 +4043,7 @@ func TestValidateEnv(t *testing.T) {
 			Name: "abc",
 			ValueFrom: &core.EnvVarSource{
 				FieldRef: &core.ObjectFieldSelector{
-					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 					FieldPath:  "metadata.name",
 				},
 			},
@@ -4052,7 +4052,7 @@ func TestValidateEnv(t *testing.T) {
 			Name: "abc",
 			ValueFrom: &core.EnvVarSource{
 				FieldRef: &core.ObjectFieldSelector{
-					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 					FieldPath:  "metadata.namespace",
 				},
 			},
@@ -4061,7 +4061,7 @@ func TestValidateEnv(t *testing.T) {
 			Name: "abc",
 			ValueFrom: &core.EnvVarSource{
 				FieldRef: &core.ObjectFieldSelector{
-					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 					FieldPath:  "metadata.uid",
 				},
 			},
@@ -4070,7 +4070,7 @@ func TestValidateEnv(t *testing.T) {
 			Name: "abc",
 			ValueFrom: &core.EnvVarSource{
 				FieldRef: &core.ObjectFieldSelector{
-					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 					FieldPath:  "spec.nodeName",
 				},
 			},
@@ -4079,7 +4079,7 @@ func TestValidateEnv(t *testing.T) {
 			Name: "abc",
 			ValueFrom: &core.EnvVarSource{
 				FieldRef: &core.ObjectFieldSelector{
-					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 					FieldPath:  "spec.serviceAccountName",
 				},
 			},
@@ -4088,7 +4088,7 @@ func TestValidateEnv(t *testing.T) {
 			Name: "abc",
 			ValueFrom: &core.EnvVarSource{
 				FieldRef: &core.ObjectFieldSelector{
-					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 					FieldPath:  "status.hostIP",
 				},
 			},
@@ -4097,7 +4097,7 @@ func TestValidateEnv(t *testing.T) {
 			Name: "abc",
 			ValueFrom: &core.EnvVarSource{
 				FieldRef: &core.ObjectFieldSelector{
-					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+					APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 					FieldPath:  "status.podIP",
 				},
 			},
@@ -4166,7 +4166,7 @@ func TestValidateEnv(t *testing.T) {
 				Value: "foo",
 				ValueFrom: &core.EnvVarSource{
 					FieldRef: &core.ObjectFieldSelector{
-						APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+						APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 						FieldPath:  "metadata.name",
 					},
 				},
@@ -4187,7 +4187,7 @@ func TestValidateEnv(t *testing.T) {
 				Name: "abc",
 				ValueFrom: &core.EnvVarSource{
 					FieldRef: &core.ObjectFieldSelector{
-						APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+						APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 						FieldPath:  "metadata.name",
 					},
 					SecretKeyRef: &core.SecretKeySelector{
@@ -4206,7 +4206,7 @@ func TestValidateEnv(t *testing.T) {
 				Name: "some_var_name",
 				ValueFrom: &core.EnvVarSource{
 					FieldRef: &core.ObjectFieldSelector{
-						APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+						APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 						FieldPath:  "metadata.name",
 					},
 					ConfigMapKeyRef: &core.ConfigMapKeySelector{
@@ -4225,7 +4225,7 @@ func TestValidateEnv(t *testing.T) {
 				Name: "abc",
 				ValueFrom: &core.EnvVarSource{
 					FieldRef: &core.ObjectFieldSelector{
-						APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+						APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 						FieldPath:  "metadata.name",
 					},
 					SecretKeyRef: &core.SecretKeySelector{
@@ -4278,7 +4278,7 @@ func TestValidateEnv(t *testing.T) {
 				Name: "abc",
 				ValueFrom: &core.EnvVarSource{
 					FieldRef: &core.ObjectFieldSelector{
-						APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+						APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 					},
 				},
 			}},
@@ -4303,7 +4303,7 @@ func TestValidateEnv(t *testing.T) {
 				ValueFrom: &core.EnvVarSource{
 					FieldRef: &core.ObjectFieldSelector{
 						FieldPath:  "metadata.whoops",
-						APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+						APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 					},
 				},
 			}},
@@ -4381,7 +4381,7 @@ func TestValidateEnv(t *testing.T) {
 				ValueFrom: &core.EnvVarSource{
 					FieldRef: &core.ObjectFieldSelector{
 						FieldPath:  "status.phase",
-						APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersion.String(),
+						APIVersion: legacyscheme.Registry.GroupOrDie(core.GroupName).GroupVersions[0].String(),
 					},
 				},
 			}},
@@ -5163,7 +5163,7 @@ func TestValidateContainers(t *testing.T) {
 		},
 		{Name: "abc-1234", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File", SecurityContext: fakeValidSecurityContext(true)},
 	}
-	if errs := validateContainers(successCase, volumeDevices, field.NewPath("field")); len(errs) != 0 {
+	if errs := validateContainers(successCase, false, volumeDevices, field.NewPath("field")); len(errs) != 0 {
 		t.Errorf("expected success: %v", errs)
 	}
 
@@ -5390,7 +5390,67 @@ func TestValidateContainers(t *testing.T) {
 		},
 	}
 	for k, v := range errorCases {
-		if errs := validateContainers(v, volumeDevices, field.NewPath("field")); len(errs) == 0 {
+		if errs := validateContainers(v, false, volumeDevices, field.NewPath("field")); len(errs) == 0 {
+			t.Errorf("expected failure for %s", k)
+		}
+	}
+}
+
+func TestValidateInitContainers(t *testing.T) {
+	volumeDevices := make(map[string]core.VolumeSource)
+	capabilities.SetForTests(capabilities.Capabilities{
+		AllowPrivileged: true,
+	})
+
+	successCase := []core.Container{
+		{
+			Name:  "container-1-same-host-port-different-protocol",
+			Image: "image",
+			Ports: []core.ContainerPort{
+				{ContainerPort: 80, HostPort: 80, Protocol: "TCP"},
+				{ContainerPort: 80, HostPort: 80, Protocol: "UDP"},
+			},
+			ImagePullPolicy:          "IfNotPresent",
+			TerminationMessagePolicy: "File",
+		},
+		{
+			Name:  "container-2-same-host-port-different-protocol",
+			Image: "image",
+			Ports: []core.ContainerPort{
+				{ContainerPort: 80, HostPort: 80, Protocol: "TCP"},
+				{ContainerPort: 80, HostPort: 80, Protocol: "UDP"},
+			},
+			ImagePullPolicy:          "IfNotPresent",
+			TerminationMessagePolicy: "File",
+		},
+	}
+	if errs := validateContainers(successCase, true, volumeDevices, field.NewPath("field")); len(errs) != 0 {
+		t.Errorf("expected success: %v", errs)
+	}
+
+	capabilities.SetForTests(capabilities.Capabilities{
+		AllowPrivileged: false,
+	})
+	errorCases := map[string][]core.Container{
+		"duplicate ports": {
+			{
+				Name:  "abc",
+				Image: "image",
+				Ports: []core.ContainerPort{
+					{
+						ContainerPort: 8080, HostPort: 8080, Protocol: "TCP",
+					},
+					{
+						ContainerPort: 8080, HostPort: 8080, Protocol: "TCP",
+					},
+				},
+				ImagePullPolicy:          "IfNotPresent",
+				TerminationMessagePolicy: "File",
+			},
+		},
+	}
+	for k, v := range errorCases {
+		if errs := validateContainers(v, true, volumeDevices, field.NewPath("field")); len(errs) == 0 {
 			t.Errorf("expected failure for %s", k)
 		}
 	}
@@ -6048,6 +6108,13 @@ func TestValidatePod(t *testing.T) {
 											Values:   []string{"value1", "value2"},
 										},
 									},
+									MatchFields: []core.NodeSelectorRequirement{
+										{
+											Key:      "metadata.name",
+											Operator: core.NodeSelectorOpIn,
+											Values:   []string{"host1"},
+										},
+									},
 								},
 							},
 						},
@@ -6276,12 +6343,22 @@ func TestValidatePod(t *testing.T) {
 			},
 			Spec: extendPodSpecwithTolerations(validPodSpec(nil), []core.Toleration{{Key: "node.kubernetes.io/not-ready", Operator: "Exists", Effect: "NoExecute", TolerationSeconds: &[]int64{-2}[0]}}),
 		},
+		{ // runtime default seccomp profile
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "123",
+				Namespace: "ns",
+				Annotations: map[string]string{
+					core.SeccompPodAnnotationKey: core.SeccompProfileRuntimeDefault,
+				},
+			},
+			Spec: validPodSpec(nil),
+		},
 		{ // docker default seccomp profile
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "123",
 				Namespace: "ns",
 				Annotations: map[string]string{
-					core.SeccompPodAnnotationKey: "docker/default",
+					core.SeccompPodAnnotationKey: core.DeprecatedSeccompProfileDockerDefault,
 				},
 			},
 			Spec: validPodSpec(nil),
@@ -6506,6 +6583,108 @@ func TestValidatePod(t *testing.T) {
 									MatchExpressions: []core.NodeSelectorRequirement{
 										{
 											Key: "key1",
+										},
+									},
+								},
+							},
+						},
+					},
+				}),
+			},
+		},
+		"invalid node selector requirement in node affinity, key is invalid": {
+			expectedError: "spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key",
+			spec: core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "123",
+					Namespace: "ns",
+				},
+				Spec: validPodSpec(&core.Affinity{
+					NodeAffinity: &core.NodeAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &core.NodeSelector{
+							NodeSelectorTerms: []core.NodeSelectorTerm{
+								{
+									MatchExpressions: []core.NodeSelectorRequirement{
+										{
+											Key:      "invalid key ___@#",
+											Operator: core.NodeSelectorOpExists,
+										},
+									},
+								},
+							},
+						},
+					},
+				}),
+			},
+		},
+		"invalid node field selector requirement in node affinity, more values for field selector": {
+			expectedError: "spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchFields[0].values",
+			spec: core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "123",
+					Namespace: "ns",
+				},
+				Spec: validPodSpec(&core.Affinity{
+					NodeAffinity: &core.NodeAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &core.NodeSelector{
+							NodeSelectorTerms: []core.NodeSelectorTerm{
+								{
+									MatchFields: []core.NodeSelectorRequirement{
+										{
+											Key:      "metadata.name",
+											Operator: core.NodeSelectorOpIn,
+											Values:   []string{"host1", "host2"},
+										},
+									},
+								},
+							},
+						},
+					},
+				}),
+			},
+		},
+		"invalid node field selector requirement in node affinity, invalid operator": {
+			expectedError: "spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchFields[0].operator",
+			spec: core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "123",
+					Namespace: "ns",
+				},
+				Spec: validPodSpec(&core.Affinity{
+					NodeAffinity: &core.NodeAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &core.NodeSelector{
+							NodeSelectorTerms: []core.NodeSelectorTerm{
+								{
+									MatchFields: []core.NodeSelectorRequirement{
+										{
+											Key:      "metadata.name",
+											Operator: core.NodeSelectorOpExists,
+										},
+									},
+								},
+							},
+						},
+					},
+				}),
+			},
+		},
+		"invalid node field selector requirement in node affinity, invalid key": {
+			expectedError: "spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchFields[0].key",
+			spec: core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "123",
+					Namespace: "ns",
+				},
+				Spec: validPodSpec(&core.Affinity{
+					NodeAffinity: &core.NodeAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &core.NodeSelector{
+							NodeSelectorTerms: []core.NodeSelectorTerm{
+								{
+									MatchFields: []core.NodeSelectorRequirement{
+										{
+											Key:      "metadata.namespace",
+											Operator: core.NodeSelectorOpIn,
+											Values:   []string{"ns1"},
 										},
 									},
 								},
@@ -9364,9 +9543,6 @@ func TestValidateNode(t *testing.T) {
 					core.ResourceName("hugepages-1Gi"):     resource.MustParse("0"),
 				},
 			},
-			Spec: core.NodeSpec{
-				ExternalID: "external",
-			},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
@@ -9380,9 +9556,6 @@ func TestValidateNode(t *testing.T) {
 					core.ResourceName(core.ResourceCPU):    resource.MustParse("10"),
 					core.ResourceName(core.ResourceMemory): resource.MustParse("0"),
 				},
-			},
-			Spec: core.NodeSpec{
-				ExternalID: "external",
 			},
 		},
 		{
@@ -9399,7 +9572,6 @@ func TestValidateNode(t *testing.T) {
 				},
 			},
 			Spec: core.NodeSpec{
-				ExternalID: "external",
 				// Add a valid taint to a node
 				Taints: []core.Taint{{Key: "GPU", Value: "true", Effect: "NoSchedule"}},
 			},
@@ -9437,9 +9609,6 @@ func TestValidateNode(t *testing.T) {
 					core.ResourceName(core.ResourceMemory): resource.MustParse("0"),
 				},
 			},
-			Spec: core.NodeSpec{
-				ExternalID: "external",
-			},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
@@ -9455,8 +9624,7 @@ func TestValidateNode(t *testing.T) {
 				},
 			},
 			Spec: core.NodeSpec{
-				ExternalID: "external",
-				PodCIDR:    "192.168.0.0/16",
+				PodCIDR: "192.168.0.0/16",
 			},
 		},
 	}
@@ -9479,29 +9647,11 @@ func TestValidateNode(t *testing.T) {
 					core.ResourceName(core.ResourceMemory): resource.MustParse("10G"),
 				},
 			},
-			Spec: core.NodeSpec{
-				ExternalID: "external",
-			},
 		},
 		"invalid-labels": {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   "abc-123",
 				Labels: invalidSelector,
-			},
-			Status: core.NodeStatus{
-				Capacity: core.ResourceList{
-					core.ResourceName(core.ResourceCPU):    resource.MustParse("10"),
-					core.ResourceName(core.ResourceMemory): resource.MustParse("10G"),
-				},
-			},
-			Spec: core.NodeSpec{
-				ExternalID: "external",
-			},
-		},
-		"missing-external-id": {
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   "abc-123",
-				Labels: validSelector,
 			},
 			Status: core.NodeStatus{
 				Capacity: core.ResourceList{
@@ -9515,7 +9665,6 @@ func TestValidateNode(t *testing.T) {
 				Name: "dedicated-node1",
 			},
 			Spec: core.NodeSpec{
-				ExternalID: "external",
 				// Add a taint with an empty key to a node
 				Taints: []core.Taint{{Key: "", Value: "special-user-1", Effect: "NoSchedule"}},
 			},
@@ -9525,7 +9674,6 @@ func TestValidateNode(t *testing.T) {
 				Name: "dedicated-node1",
 			},
 			Spec: core.NodeSpec{
-				ExternalID: "external",
 				// Add a taint with an invalid  key to a node
 				Taints: []core.Taint{{Key: "NoUppercaseOrSpecialCharsLike=Equals", Value: "special-user-1", Effect: "NoSchedule"}},
 			},
@@ -9544,7 +9692,6 @@ func TestValidateNode(t *testing.T) {
 				},
 			},
 			Spec: core.NodeSpec{
-				ExternalID: "external",
 				// Add a taint with a bad value to a node
 				Taints: []core.Taint{{Key: "dedicated", Value: "some\\bad\\value", Effect: "NoSchedule"}},
 			},
@@ -9563,7 +9710,6 @@ func TestValidateNode(t *testing.T) {
 				},
 			},
 			Spec: core.NodeSpec{
-				ExternalID: "external",
 				// Add a taint with an empty effect to a node
 				Taints: []core.Taint{{Key: "dedicated", Value: "special-user-3", Effect: ""}},
 			},
@@ -9582,7 +9728,6 @@ func TestValidateNode(t *testing.T) {
 				},
 			},
 			Spec: core.NodeSpec{
-				ExternalID: "external",
 				// Add a taint with NoExecute effect to a node
 				Taints: []core.Taint{{Key: "dedicated", Value: "special-user-3", Effect: "NoScheduleNoAdmit"}},
 			},
@@ -9592,7 +9737,6 @@ func TestValidateNode(t *testing.T) {
 				Name: "dedicated-node1",
 			},
 			Spec: core.NodeSpec{
-				ExternalID: "external",
 				// Add two taints to the node with the same key and effect; should be rejected.
 				Taints: []core.Taint{
 					{Key: "dedicated", Value: "special-user-1", Effect: "NoSchedule"},
@@ -9621,9 +9765,6 @@ func TestValidateNode(t *testing.T) {
 					core.ResourceName(core.ResourceCPU):    resource.MustParse("10"),
 					core.ResourceName(core.ResourceMemory): resource.MustParse("0"),
 				},
-			},
-			Spec: core.NodeSpec{
-				ExternalID: "external",
 			},
 		},
 		"invalid-podController": {
@@ -9657,9 +9798,6 @@ func TestValidateNode(t *testing.T) {
 					core.ResourceName(core.ResourceMemory): resource.MustParse("0"),
 				},
 			},
-			Spec: core.NodeSpec{
-				ExternalID: "external",
-			},
 		},
 		"multiple-pre-allocated-hugepages": {
 			ObjectMeta: metav1.ObjectMeta{
@@ -9678,9 +9816,6 @@ func TestValidateNode(t *testing.T) {
 					core.ResourceName("hugepages-1Gi"):     resource.MustParse("10Gi"),
 				},
 			},
-			Spec: core.NodeSpec{
-				ExternalID: "external",
-			},
 		},
 		"invalid-pod-cidr": {
 			ObjectMeta: metav1.ObjectMeta{
@@ -9696,8 +9831,7 @@ func TestValidateNode(t *testing.T) {
 				},
 			},
 			Spec: core.NodeSpec{
-				ExternalID: "external",
-				PodCIDR:    "192.168.0.0",
+				PodCIDR: "192.168.0.0",
 			},
 		},
 	}

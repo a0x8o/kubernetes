@@ -118,8 +118,6 @@ type ClientAccessFactory interface {
 	// LabelsForObject returns the labels associated with the provided object
 	LabelsForObject(object runtime.Object) (map[string]string, error)
 
-	// Returns internal flagset
-	FlagSet() *pflag.FlagSet
 	// Command will stringify and return all environment arguments ie. a command run by a client
 	// using the factory.
 	Command(cmd *cobra.Command, showSecrets bool) string
@@ -166,7 +164,7 @@ type ClientAccessFactory interface {
 // Generally they provide object typing and functions that build requests based on the negotiated clients.
 type ObjectMappingFactory interface {
 	// Returns interfaces for dealing with arbitrary runtime.Objects.
-	Object() (meta.RESTMapper, runtime.ObjectTyper)
+	RESTMapper() (meta.RESTMapper, error)
 	// Returns interface for expanding categories like `all`.
 	CategoryExpander() categories.CategoryExpander
 	// Returns a RESTClient for working with the specified RESTMapping or an error. This is intended

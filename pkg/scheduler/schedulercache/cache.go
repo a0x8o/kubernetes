@@ -432,7 +432,7 @@ func (cache *schedulerCache) AddPDB(pdb *policy.PodDisruptionBudget) error {
 	defer cache.mu.Unlock()
 
 	// Unconditionally update cache.
-	cache.pdbs[pdb.Name] = pdb
+	cache.pdbs[string(pdb.UID)] = pdb
 	return nil
 }
 
@@ -444,7 +444,7 @@ func (cache *schedulerCache) RemovePDB(pdb *policy.PodDisruptionBudget) error {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 
-	delete(cache.pdbs, pdb.Name)
+	delete(cache.pdbs, string(pdb.UID))
 	return nil
 }
 
@@ -458,6 +458,13 @@ func (cache *schedulerCache) ListPDBs(selector labels.Selector) ([]*policy.PodDi
 		}
 	}
 	return pdbs, nil
+}
+
+func (cache *schedulerCache) IsUpToDate(n *NodeInfo) bool {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	node, ok := cache.nodes[n.Node().Name]
+	return ok && n.generation == node.generation
 }
 
 func (cache *schedulerCache) run() {

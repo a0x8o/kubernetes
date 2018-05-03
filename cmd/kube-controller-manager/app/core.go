@@ -29,14 +29,12 @@ import (
 	"github.com/golang/glog"
 
 	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/discovery"
 	cacheddiscovery "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/dynamic"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/controller"
 	endpointcontroller "k8s.io/kubernetes/pkg/controller/endpoint"
 	"k8s.io/kubernetes/pkg/controller/garbagecollector"
@@ -294,23 +292,24 @@ func startResourceQuotaController(ctx ControllerContext) (bool, error) {
 }
 
 func startNamespaceController(ctx ControllerContext) (bool, error) {
-	// TODO: should use a dynamic RESTMapper built from the discovery results.
-	restMapper := legacyscheme.Registry.RESTMapper()
-
 	// the namespace cleanup controller is very chatty.  It makes lots of discovery calls and then it makes lots of delete calls
 	// the ratelimiter negatively affects its speed.  Deleting 100 total items in a namespace (that's only a few of each resource
 	// including events), takes ~10 seconds by default.
 	nsKubeconfig := ctx.ClientBuilder.ConfigOrDie("namespace-controller")
-	nsKubeconfig.QPS *= 10
-	nsKubeconfig.Burst *= 10
+	nsKubeconfig.QPS *= 20
+	nsKubeconfig.Burst *= 100
 	namespaceKubeClient := clientset.NewForConfigOrDie(nsKubeconfig)
-	namespaceClientPool := dynamic.NewClientPool(nsKubeconfig, restMapper, dynamic.LegacyAPIPathResolverFunc)
 
 	discoverResourcesFn := namespaceKubeClient.Discovery().ServerPreferredNamespacedResources
 
+	dynamicClient, err := dynamic.NewForConfig(nsKubeconfig)
+	if err != nil {
+		return true, err
+	}
+
 	namespaceController := namespacecontroller.NewNamespaceController(
 		namespaceKubeClient,
-		namespaceClientPool,
+		dynamicClient,
 		discoverResourcesFn,
 		ctx.InformerFactory.Core().V1().Namespaces(),
 		ctx.ComponentConfig.NamespaceController.NamespaceSyncPeriod.Duration,
@@ -352,7 +351,7 @@ func startGarbageCollectorController(ctx ControllerContext) (bool, error) {
 
 	// Use a discovery client capable of being refreshed.
 	discoveryClient := cacheddiscovery.NewMemCacheClient(gcClientset.Discovery())
-	restMapper := discovery.NewDeferredDiscoveryRESTMapper(discoveryClient, meta.InterfacesForUnstructured)
+	restMapper := discovery.NewDeferredDiscoveryRESTMapper(discoveryClient)
 	restMapper.Reset()
 
 	config := ctx.ClientBuilder.ConfigOrDie("generic-garbage-collector")
@@ -395,24 +394,20 @@ func startGarbageCollectorController(ctx ControllerContext) (bool, error) {
 }
 
 func startPVCProtectionController(ctx ControllerContext) (bool, error) {
-	if utilfeature.DefaultFeatureGate.Enabled(features.StorageObjectInUseProtection) {
-		go pvcprotection.NewPVCProtectionController(
-			ctx.InformerFactory.Core().V1().PersistentVolumeClaims(),
-			ctx.InformerFactory.Core().V1().Pods(),
-			ctx.ClientBuilder.ClientOrDie("pvc-protection-controller"),
-		).Run(1, ctx.Stop)
-		return true, nil
-	}
-	return false, nil
+	go pvcprotection.NewPVCProtectionController(
+		ctx.InformerFactory.Core().V1().PersistentVolumeClaims(),
+		ctx.InformerFactory.Core().V1().Pods(),
+		ctx.ClientBuilder.ClientOrDie("pvc-protection-controller"),
+		utilfeature.DefaultFeatureGate.Enabled(features.StorageObjectInUseProtection),
+	).Run(1, ctx.Stop)
+	return true, nil
 }
 
 func startPVProtectionController(ctx ControllerContext) (bool, error) {
-	if utilfeature.DefaultFeatureGate.Enabled(features.StorageObjectInUseProtection) {
-		go pvprotection.NewPVProtectionController(
-			ctx.InformerFactory.Core().V1().PersistentVolumes(),
-			ctx.ClientBuilder.ClientOrDie("pv-protection-controller"),
-		).Run(1, ctx.Stop)
-		return true, nil
-	}
-	return false, nil
+	go pvprotection.NewPVProtectionController(
+		ctx.InformerFactory.Core().V1().PersistentVolumes(),
+		ctx.ClientBuilder.ClientOrDie("pv-protection-controller"),
+		utilfeature.DefaultFeatureGate.Enabled(features.StorageObjectInUseProtection),
+	).Run(1, ctx.Stop)
+	return true, nil
 }

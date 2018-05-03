@@ -409,7 +409,18 @@ func TestGenericScheduler(t *testing.T) {
 		pvcLister := schedulertesting.FakePersistentVolumeClaimLister(pvcs)
 
 		scheduler := NewGenericScheduler(
-			cache, nil, NewSchedulingQueue(), test.predicates, algorithm.EmptyPredicateMetadataProducer, test.prioritizers, algorithm.EmptyPriorityMetadataProducer, []algorithm.SchedulerExtender{}, nil, pvcLister, test.alwaysCheckAllPredicates)
+			cache,
+			nil,
+			NewSchedulingQueue(),
+			test.predicates,
+			algorithm.EmptyPredicateMetadataProducer,
+			test.prioritizers,
+			algorithm.EmptyPriorityMetadataProducer,
+			[]algorithm.SchedulerExtender{},
+			nil,
+			pvcLister,
+			test.alwaysCheckAllPredicates,
+			false)
 		machine, err := scheduler.Schedule(test.pod, schedulertesting.FakeNodeLister(makeNodeList(test.nodes)))
 
 		if !reflect.DeepEqual(err, test.wErr) {
@@ -421,16 +432,35 @@ func TestGenericScheduler(t *testing.T) {
 	}
 }
 
-func TestFindFitAllError(t *testing.T) {
+// makeScheduler makes a simple genericScheduler for testing.
+func makeScheduler(predicates map[string]algorithm.FitPredicate, nodes []*v1.Node) *genericScheduler {
 	algorithmpredicates.SetPredicatesOrdering(order)
-	nodes := []string{"3", "2", "1"}
-	predicates := map[string]algorithm.FitPredicate{"true": truePredicate, "false": falsePredicate}
-	nodeNameToInfo := map[string]*schedulercache.NodeInfo{
-		"3": schedulercache.NewNodeInfo(),
-		"2": schedulercache.NewNodeInfo(),
-		"1": schedulercache.NewNodeInfo(),
+	cache := schedulercache.New(time.Duration(0), wait.NeverStop)
+	for _, n := range nodes {
+		cache.AddNode(n)
 	}
-	_, predicateMap, err := findNodesThatFit(&v1.Pod{}, nodeNameToInfo, makeNodeList(nodes), predicates, nil, algorithm.EmptyPredicateMetadataProducer, nil, nil, false)
+	prioritizers := []algorithm.PriorityConfig{{Map: EqualPriorityMap, Weight: 1}}
+
+	s := NewGenericScheduler(
+		cache,
+		nil,
+		NewSchedulingQueue(),
+		predicates,
+		algorithm.EmptyPredicateMetadataProducer,
+		prioritizers,
+		algorithm.EmptyPriorityMetadataProducer,
+		nil, nil, nil, false, false)
+	cache.UpdateNodeNameToInfoMap(s.(*genericScheduler).cachedNodeInfoMap)
+	return s.(*genericScheduler)
+
+}
+
+func TestFindFitAllError(t *testing.T) {
+	predicates := map[string]algorithm.FitPredicate{"true": truePredicate, "matches": matchesPredicate}
+	nodes := makeNodeList([]string{"3", "2", "1"})
+	scheduler := makeScheduler(predicates, nodes)
+
+	_, predicateMap, err := scheduler.findNodesThatFit(&v1.Pod{}, nodes)
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -441,9 +471,9 @@ func TestFindFitAllError(t *testing.T) {
 	}
 
 	for _, node := range nodes {
-		failures, found := predicateMap[node]
+		failures, found := predicateMap[node.Name]
 		if !found {
-			t.Errorf("failed to find node: %s in %v", node, predicateMap)
+			t.Errorf("failed to find node: %s in %v", node.Name, predicateMap)
 		}
 		if len(failures) != 1 || failures[0] != algorithmpredicates.ErrFakePredicate {
 			t.Errorf("unexpected failures: %v", failures)
@@ -452,20 +482,13 @@ func TestFindFitAllError(t *testing.T) {
 }
 
 func TestFindFitSomeError(t *testing.T) {
-	algorithmpredicates.SetPredicatesOrdering(order)
-	nodes := []string{"3", "2", "1"}
 	predicates := map[string]algorithm.FitPredicate{"true": truePredicate, "matches": matchesPredicate}
-	pod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "1", UID: types.UID("1")}}
-	nodeNameToInfo := map[string]*schedulercache.NodeInfo{
-		"3": schedulercache.NewNodeInfo(),
-		"2": schedulercache.NewNodeInfo(),
-		"1": schedulercache.NewNodeInfo(pod),
-	}
-	for name := range nodeNameToInfo {
-		nodeNameToInfo[name].SetNode(&v1.Node{ObjectMeta: metav1.ObjectMeta{Name: name}})
-	}
+	nodes := makeNodeList([]string{"3", "2", "1"})
+	scheduler := makeScheduler(predicates, nodes)
 
-	_, predicateMap, err := findNodesThatFit(pod, nodeNameToInfo, makeNodeList(nodes), predicates, nil, algorithm.EmptyPredicateMetadataProducer, nil, nil, false)
+	pod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "1", UID: types.UID("1")}}
+	_, predicateMap, err := scheduler.findNodesThatFit(pod, nodes)
+
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -475,12 +498,12 @@ func TestFindFitSomeError(t *testing.T) {
 	}
 
 	for _, node := range nodes {
-		if node == pod.Name {
+		if node.Name == pod.Name {
 			continue
 		}
-		failures, found := predicateMap[node]
+		failures, found := predicateMap[node.Name]
 		if !found {
-			t.Errorf("failed to find node: %s in %v", node, predicateMap)
+			t.Errorf("failed to find node: %s in %v", node.Name, predicateMap)
 		}
 		if len(failures) != 1 || failures[0] != algorithmpredicates.ErrFakePredicate {
 			t.Errorf("unexpected failures: %v", failures)
@@ -1323,7 +1346,18 @@ func TestPreempt(t *testing.T) {
 			extenders = append(extenders, extender)
 		}
 		scheduler := NewGenericScheduler(
-			cache, nil, NewSchedulingQueue(), map[string]algorithm.FitPredicate{"matches": algorithmpredicates.PodFitsResources}, algorithm.EmptyPredicateMetadataProducer, []algorithm.PriorityConfig{{Function: numericPriority, Weight: 1}}, algorithm.EmptyPriorityMetadataProducer, extenders, nil, schedulertesting.FakePersistentVolumeClaimLister{}, false)
+			cache,
+			nil,
+			NewSchedulingQueue(),
+			map[string]algorithm.FitPredicate{"matches": algorithmpredicates.PodFitsResources},
+			algorithm.EmptyPredicateMetadataProducer,
+			[]algorithm.PriorityConfig{{Function: numericPriority, Weight: 1}},
+			algorithm.EmptyPriorityMetadataProducer,
+			extenders,
+			nil,
+			schedulertesting.FakePersistentVolumeClaimLister{},
+			false,
+			false)
 		// Call Preempt and check the expected results.
 		node, victims, _, err := scheduler.Preempt(test.pod, schedulertesting.FakeNodeLister(makeNodeList(nodeNames)), error(&FitError{Pod: test.pod, FailedPredicates: failedPredMap}))
 		if err != nil {

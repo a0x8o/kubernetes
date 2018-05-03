@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/kubernetes/pkg/features"
 	priorityutil "k8s.io/kubernetes/pkg/scheduler/algorithm/priorities/util"
@@ -1137,13 +1138,14 @@ func setupCacheWithAssumedPods(b *testing.B, podNum int, assumedTime time.Time) 
 	return cache
 }
 
-func makePDB(name, namespace string, labels map[string]string, minAvailable int) *v1beta1.PodDisruptionBudget {
+func makePDB(name, namespace string, uid types.UID, labels map[string]string, minAvailable int) *v1beta1.PodDisruptionBudget {
 	intstrMin := intstr.FromInt(minAvailable)
 	pdb := &v1beta1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      name,
 			Labels:    labels,
+			UID:       uid,
 		},
 		Spec: v1beta1.PodDisruptionBudgetSpec{
 			MinAvailable: &intstrMin,
@@ -1158,14 +1160,14 @@ func makePDB(name, namespace string, labels map[string]string, minAvailable int)
 func TestPDBOperations(t *testing.T) {
 	ttl := 10 * time.Second
 	testPDBs := []*v1beta1.PodDisruptionBudget{
-		makePDB("pdb0", "ns1", map[string]string{"tkey1": "tval1"}, 3),
-		makePDB("pdb1", "ns1", map[string]string{"tkey1": "tval1", "tkey2": "tval2"}, 1),
-		makePDB("pdb2", "ns3", map[string]string{"tkey3": "tval3", "tkey2": "tval2"}, 10),
+		makePDB("pdb0", "ns1", "uid0", map[string]string{"tkey1": "tval1"}, 3),
+		makePDB("pdb1", "ns1", "uid1", map[string]string{"tkey1": "tval1", "tkey2": "tval2"}, 1),
+		makePDB("pdb2", "ns3", "uid2", map[string]string{"tkey3": "tval3", "tkey2": "tval2"}, 10),
 	}
 	updatedPDBs := []*v1beta1.PodDisruptionBudget{
-		makePDB("pdb0", "ns1", map[string]string{"tkey4": "tval4"}, 8),
-		makePDB("pdb1", "ns1", map[string]string{"tkey1": "tval1"}, 1),
-		makePDB("pdb2", "ns3", map[string]string{"tkey3": "tval3", "tkey1": "tval1", "tkey2": "tval2"}, 10),
+		makePDB("pdb0", "ns1", "uid0", map[string]string{"tkey4": "tval4"}, 8),
+		makePDB("pdb1", "ns1", "uid1", map[string]string{"tkey1": "tval1"}, 1),
+		makePDB("pdb2", "ns3", "uid2", map[string]string{"tkey3": "tval3", "tkey1": "tval1", "tkey2": "tval2"}, 10),
 	}
 	tests := []struct {
 		pdbsToAdd    []*v1beta1.PodDisruptionBudget
@@ -1225,7 +1227,7 @@ func TestPDBOperations(t *testing.T) {
 			found := false
 			// find it among the cached ones
 			for _, cpdb := range cachedPDBs {
-				if pdb.Name == cpdb.Name {
+				if pdb.UID == cpdb.UID {
 					found = true
 					if !reflect.DeepEqual(pdb, cpdb) {
 						t.Errorf("%v is not equal to %v", pdb, cpdb)
@@ -1234,9 +1236,32 @@ func TestPDBOperations(t *testing.T) {
 				}
 			}
 			if !found {
-				t.Errorf("PDB with name '%v' was not found in the cache.", pdb.Name)
+				t.Errorf("PDB with uid '%v' was not found in the cache.", pdb.UID)
 			}
 
 		}
+	}
+}
+
+func TestIsUpToDate(t *testing.T) {
+	cache := New(time.Duration(0), wait.NeverStop)
+	if err := cache.AddNode(&v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n1"}}); err != nil {
+		t.Errorf("Could not add node: %v", err)
+	}
+	s := cache.Snapshot()
+	node := s.Nodes["n1"]
+	if !cache.IsUpToDate(node) {
+		t.Errorf("Node incorrectly marked as stale")
+	}
+	pod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "p1", UID: "p1"}, Spec: v1.PodSpec{NodeName: "n1"}}
+	if err := cache.AddPod(pod); err != nil {
+		t.Errorf("Could not add pod: %v", err)
+	}
+	if cache.IsUpToDate(node) {
+		t.Errorf("Node incorrectly marked as up to date")
+	}
+	badNode := &NodeInfo{node: &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n2"}}}
+	if cache.IsUpToDate(badNode) {
+		t.Errorf("Nonexistant node incorrectly marked as up to date")
 	}
 }

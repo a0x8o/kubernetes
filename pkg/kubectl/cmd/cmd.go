@@ -21,12 +21,13 @@ import (
 	"io"
 	"os"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apiserver/pkg/util/flag"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/auth"
 	cmdconfig "k8s.io/kubernetes/pkg/kubectl/cmd/config"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/create"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/resource"
+	"k8s.io/kubernetes/pkg/kubectl/cmd/get"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/rollout"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/set"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
@@ -34,6 +35,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubectl/util/i18n"
 
 	"github.com/spf13/cobra"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 )
 
 const (
@@ -246,74 +248,76 @@ func NewKubectlCommand(f cmdutil.Factory, in io.Reader, out, err io.Writer) *cob
 	// From this point and forward we get warnings on flags that contain "_" separators
 	cmds.SetGlobalNormalizationFunc(flag.WarnWordSepNormalizeFunc)
 
+	ioStreams := genericclioptions.IOStreams{In: in, Out: out, ErrOut: err}
+
 	groups := templates.CommandGroups{
 		{
 			Message: "Basic Commands (Beginner):",
 			Commands: []*cobra.Command{
-				create.NewCmdCreate(f, out, err),
-				NewCmdExposeService(f, out),
-				NewCmdRun(f, in, out, err),
-				set.NewCmdSet(f, in, out, err),
-				deprecatedAlias("run-container", NewCmdRun(f, in, out, err)),
+				create.NewCmdCreate(f, ioStreams),
+				NewCmdExposeService(f, ioStreams),
+				NewCmdRun(f, ioStreams),
+				set.NewCmdSet(f, ioStreams),
+				deprecatedAlias("run-container", NewCmdRun(f, ioStreams)),
 			},
 		},
 		{
 			Message: "Basic Commands (Intermediate):",
 			Commands: []*cobra.Command{
-				resource.NewCmdGet(f, out, err),
-				NewCmdExplain(f, out, err),
-				NewCmdEdit(f, out, err),
+				NewCmdExplain("kubectl", f, ioStreams),
+				get.NewCmdGet("kubectl", f, ioStreams),
+				NewCmdEdit(f, ioStreams),
 				NewCmdDelete(f, out, err),
 			},
 		},
 		{
 			Message: "Deploy Commands:",
 			Commands: []*cobra.Command{
-				rollout.NewCmdRollout(f, out, err),
-				NewCmdRollingUpdate(f, out),
-				NewCmdScale(f, out, err),
-				NewCmdAutoscale(f, out),
+				rollout.NewCmdRollout(f, ioStreams),
+				NewCmdRollingUpdate(f, ioStreams),
+				NewCmdScale(f, ioStreams),
+				NewCmdAutoscale(f, ioStreams),
 			},
 		},
 		{
 			Message: "Cluster Management Commands:",
 			Commands: []*cobra.Command{
-				NewCmdCertificate(f, out),
-				NewCmdClusterInfo(f, out),
+				NewCmdCertificate(f, ioStreams),
+				NewCmdClusterInfo(f, ioStreams),
 				NewCmdTop(f, out, err),
-				NewCmdCordon(f, out),
-				NewCmdUncordon(f, out),
-				NewCmdDrain(f, out, err),
-				NewCmdTaint(f, out),
+				NewCmdCordon(f, ioStreams),
+				NewCmdUncordon(f, ioStreams),
+				NewCmdDrain(f, ioStreams),
+				NewCmdTaint(f, ioStreams),
 			},
 		},
 		{
 			Message: "Troubleshooting and Debugging Commands:",
 			Commands: []*cobra.Command{
-				NewCmdDescribe(f, out, err),
+				NewCmdDescribe("kubectl", f, ioStreams),
 				NewCmdLogs(f, out, err),
 				NewCmdAttach(f, in, out, err),
 				NewCmdExec(f, in, out, err),
 				NewCmdPortForward(f, out, err),
 				NewCmdProxy(f, out),
-				NewCmdCp(f, out, err),
+				NewCmdCp(f, ioStreams),
 				auth.NewCmdAuth(f, out, err),
 			},
 		},
 		{
 			Message: "Advanced Commands:",
 			Commands: []*cobra.Command{
-				NewCmdApply("kubectl", f, out, err),
-				NewCmdPatch(f, out),
-				NewCmdReplace(f, out),
-				NewCmdConvert(f, out),
+				NewCmdApply("kubectl", f, ioStreams),
+				NewCmdPatch(f, ioStreams),
+				NewCmdReplace(f, out, err),
+				NewCmdConvert(f, ioStreams),
 			},
 		},
 		{
 			Message: "Settings Commands:",
 			Commands: []*cobra.Command{
-				NewCmdLabel(f, out, err),
-				NewCmdAnnotate(f, out),
+				NewCmdLabel(f, ioStreams),
+				NewCmdAnnotate("kubectl", f, ioStreams),
 				NewCmdCompletion(out, ""),
 			},
 		},
@@ -345,9 +349,9 @@ func NewKubectlCommand(f cmdutil.Factory, in io.Reader, out, err io.Writer) *cob
 	cmds.AddCommand(alpha)
 	cmds.AddCommand(cmdconfig.NewCmdConfig(f, clientcmd.NewDefaultPathOptions(), out, err))
 	cmds.AddCommand(NewCmdPlugin(f, in, out, err))
-	cmds.AddCommand(NewCmdVersion(f, out))
-	cmds.AddCommand(NewCmdApiVersions(f, out))
-	cmds.AddCommand(NewCmdApiResources(f, out))
+	cmds.AddCommand(NewCmdVersion(f, ioStreams))
+	cmds.AddCommand(NewCmdApiVersions(f, ioStreams))
+	cmds.AddCommand(NewCmdApiResources(f, ioStreams))
 	cmds.AddCommand(NewCmdOptions(out))
 
 	return cmds
@@ -375,3 +379,5 @@ func deprecatedAlias(deprecatedVersion string, cmd *cobra.Command) *cobra.Comman
 	cmd.Hidden = true
 	return cmd
 }
+
+var metadataAccessor = meta.NewAccessor()

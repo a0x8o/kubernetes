@@ -55,7 +55,7 @@ import (
 
 func init() {
 	legacyscheme.Scheme.AddKnownTypes(testapi.Default.InternalGroupVersion(), &TestPrintType{})
-	legacyscheme.Scheme.AddKnownTypes(legacyscheme.Registry.GroupOrDie(api.GroupName).GroupVersion, &TestPrintType{})
+	legacyscheme.Scheme.AddKnownTypes(legacyscheme.Registry.GroupOrDie(api.GroupName).GroupVersions[0], &TestPrintType{})
 }
 
 var testData = TestStruct{
@@ -92,30 +92,10 @@ func TestVersionedPrinter(t *testing.T) {
 		}),
 		legacyscheme.Scheme,
 		legacyscheme.Scheme,
-		legacyscheme.Registry.GroupOrDie(api.GroupName).GroupVersion,
+		legacyscheme.Registry.GroupOrDie(api.GroupName).GroupVersions[0],
 	)
 	if err := p.PrintObj(original, nil); err != nil {
 		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestPrintDefault(t *testing.T) {
-	printerTests := []struct {
-		Name   string
-		Format string
-	}{
-		{"test wide", "wide"},
-		{"test blank format", ""},
-	}
-
-	for _, test := range printerTests {
-		printer, err := printers.GetStandardPrinter(nil, legacyscheme.Codecs.LegacyCodec(legacyscheme.Registry.EnabledVersions()...), []runtime.Decoder{legacyscheme.Codecs.UniversalDecoder(), unstructured.UnstructuredJSONScheme}, printers.PrintOptions{AllowMissingKeys: false})
-		if err != nil {
-			t.Errorf("in %s, unexpected error: %#v", test.Name, err)
-		}
-		if printer.IsGeneric() {
-			t.Errorf("in %s, printer should not be generic: %#v", test.Name, printer)
-		}
 	}
 }
 
@@ -260,7 +240,7 @@ func TestPrinter(t *testing.T) {
 		},
 	}
 	emptyListTest := &api.PodList{}
-	testapi, err := legacyscheme.Scheme.ConvertToVersion(podTest, legacyscheme.Registry.GroupOrDie(api.GroupName).GroupVersion)
+	testapi, err := legacyscheme.Scheme.ConvertToVersion(podTest, legacyscheme.Registry.GroupOrDie(api.GroupName).GroupVersions[0])
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -284,7 +264,7 @@ func TestPrinter(t *testing.T) {
 	}
 	for _, test := range printerTests {
 		buf := bytes.NewBuffer([]byte{})
-		printer, err := printers.GetStandardPrinter(legacyscheme.Scheme, legacyscheme.Codecs.LegacyCodec(legacyscheme.Registry.EnabledVersions()...), []runtime.Decoder{legacyscheme.Codecs.UniversalDecoder(), unstructured.UnstructuredJSONScheme}, *test.PrintOpts)
+		printer, err := printers.GetStandardPrinter(legacyscheme.Scheme, legacyscheme.Codecs.LegacyCodec(legacyscheme.Registry.RegisteredGroupVersions()...), []runtime.Decoder{legacyscheme.Codecs.UniversalDecoder(), unstructured.UnstructuredJSONScheme}, *test.PrintOpts)
 		if err != nil {
 			t.Errorf("in %s, unexpected error: %#v", test.Name, err)
 		}
@@ -314,7 +294,7 @@ func TestBadPrinter(t *testing.T) {
 		{"unknown format", &printers.PrintOptions{OutputFormatType: "anUnknownFormat", OutputFormatArgument: "", AllowMissingKeys: false}, fmt.Errorf("output format \"anUnknownFormat\" not recognized")},
 	}
 	for _, test := range badPrinterTests {
-		_, err := printers.GetStandardPrinter(legacyscheme.Scheme, legacyscheme.Codecs.LegacyCodec(legacyscheme.Registry.EnabledVersions()...), []runtime.Decoder{legacyscheme.Codecs.UniversalDecoder(), unstructured.UnstructuredJSONScheme}, *test.PrintOpts)
+		_, err := printers.GetStandardPrinter(legacyscheme.Scheme, legacyscheme.Codecs.LegacyCodec(legacyscheme.Registry.RegisteredGroupVersions()...), []runtime.Decoder{legacyscheme.Codecs.UniversalDecoder(), unstructured.UnstructuredJSONScheme}, *test.PrintOpts)
 		if err == nil || err.Error() != test.Error.Error() {
 			t.Errorf("in %s, expect %s, got %s", test.Name, test.Error, err)
 		}
@@ -492,7 +472,7 @@ func TestNamePrinter(t *testing.T) {
 			"pod/foo\npod/bar\n"},
 	}
 	printOpts := &printers.PrintOptions{OutputFormatType: "name", AllowMissingKeys: false}
-	printer, _ := printers.GetStandardPrinter(legacyscheme.Scheme, legacyscheme.Codecs.LegacyCodec(legacyscheme.Registry.EnabledVersions()...), []runtime.Decoder{legacyscheme.Codecs.UniversalDecoder(), unstructured.UnstructuredJSONScheme}, *printOpts)
+	printer, _ := printers.GetStandardPrinter(legacyscheme.Scheme, legacyscheme.Codecs.LegacyCodec(legacyscheme.Registry.RegisteredGroupVersions()...), []runtime.Decoder{legacyscheme.Codecs.UniversalDecoder(), unstructured.UnstructuredJSONScheme}, *printOpts)
 	for name, item := range tests {
 		buff := &bytes.Buffer{}
 		err := printer.PrintObj(item.obj, buff)
@@ -607,7 +587,7 @@ func TestTemplateStrings(t *testing.T) {
 		t.Fatalf("tmpl fail: %v", err)
 	}
 
-	printer := printers.NewVersionedPrinter(p, legacyscheme.Scheme, legacyscheme.Scheme, legacyscheme.Registry.GroupOrDie(api.GroupName).GroupVersion)
+	printer := printers.NewVersionedPrinter(p, legacyscheme.Scheme, legacyscheme.Scheme, legacyscheme.Registry.GroupOrDie(api.GroupName).GroupVersions[0])
 
 	for name, item := range table {
 		buffer := &bytes.Buffer{}
@@ -1699,6 +1679,22 @@ func TestPrintPod(t *testing.T) {
 				},
 			},
 			[]metav1beta1.TableRow{{Cells: []interface{}{"test5", "1/2", "podReason", 6, "<unknown>"}}},
+		},
+		{
+			// Test pod has 2 containers, one is running and the other is completed.
+			api.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "test6"},
+				Spec:       api.PodSpec{Containers: make([]api.Container, 2)},
+				Status: api.PodStatus{
+					Phase:  "Running",
+					Reason: "",
+					ContainerStatuses: []api.ContainerStatus{
+						{Ready: true, RestartCount: 3, State: api.ContainerState{Terminated: &api.ContainerStateTerminated{Reason: "Completed", ExitCode: 0}}},
+						{Ready: true, RestartCount: 3, State: api.ContainerState{Running: &api.ContainerStateRunning{}}},
+					},
+				},
+			},
+			[]metav1beta1.TableRow{{Cells: []interface{}{"test6", "1/2", "Running", 6, "<unknown>"}}},
 		},
 	}
 
@@ -3006,7 +3002,7 @@ func TestAllowMissingKeys(t *testing.T) {
 	}
 	for _, test := range tests {
 		buf := bytes.NewBuffer([]byte{})
-		printer, err := printers.GetStandardPrinter(legacyscheme.Scheme, legacyscheme.Codecs.LegacyCodec(legacyscheme.Registry.EnabledVersions()...), []runtime.Decoder{legacyscheme.Codecs.UniversalDecoder(), unstructured.UnstructuredJSONScheme}, *test.PrintOpts)
+		printer, err := printers.GetStandardPrinter(legacyscheme.Scheme, legacyscheme.Codecs.LegacyCodec(legacyscheme.Registry.RegisteredGroupVersions()...), []runtime.Decoder{legacyscheme.Codecs.UniversalDecoder(), unstructured.UnstructuredJSONScheme}, *test.PrintOpts)
 		if err != nil {
 			t.Errorf("in %s, unexpected error: %#v", test.Name, err)
 		}

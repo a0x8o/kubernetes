@@ -29,11 +29,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 
-	"github.com/Azure/azure-sdk-for-go/arm/compute"
-	"github.com/Azure/azure-sdk-for-go/arm/disk"
-	"github.com/Azure/azure-sdk-for-go/arm/storage"
-	computepreview "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2017-12-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2017-12-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2017-09-01/network"
+	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2017-10-01/storage"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/to"
 )
@@ -50,19 +48,10 @@ func newFakeAzureLBClient() *fakeAzureLBClient {
 	return fLBC
 }
 
-func (fLBC *fakeAzureLBClient) CreateOrUpdate(resourceGroupName string, loadBalancerName string, parameters network.LoadBalancer, cancel <-chan struct{}) (<-chan network.LoadBalancer, <-chan error) {
+func (fLBC *fakeAzureLBClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, loadBalancerName string, parameters network.LoadBalancer) (resp *http.Response, err error) {
 	fLBC.mutex.Lock()
 	defer fLBC.mutex.Unlock()
-	resultChan := make(chan network.LoadBalancer, 1)
-	errChan := make(chan error, 1)
-	var result network.LoadBalancer
-	var err error
-	defer func() {
-		resultChan <- result
-		errChan <- err
-		close(resultChan)
-		close(errChan)
-	}()
+
 	if _, ok := fLBC.FakeStore[resourceGroupName]; !ok {
 		fLBC.FakeStore[resourceGroupName] = make(map[string]network.LoadBalancer)
 	}
@@ -78,48 +67,27 @@ func (fLBC *fakeAzureLBClient) CreateOrUpdate(resourceGroupName string, loadBala
 		}
 	}
 	fLBC.FakeStore[resourceGroupName][loadBalancerName] = parameters
-	result = fLBC.FakeStore[resourceGroupName][loadBalancerName]
-	result.Response.Response = &http.Response{
-		StatusCode: http.StatusOK,
-	}
-	err = nil
-	return resultChan, errChan
+
+	return nil, nil
 }
 
-func (fLBC *fakeAzureLBClient) Delete(resourceGroupName string, loadBalancerName string, cancel <-chan struct{}) (<-chan autorest.Response, <-chan error) {
+func (fLBC *fakeAzureLBClient) Delete(ctx context.Context, resourceGroupName string, loadBalancerName string) (resp *http.Response, err error) {
 	fLBC.mutex.Lock()
 	defer fLBC.mutex.Unlock()
-	respChan := make(chan autorest.Response, 1)
-	errChan := make(chan error, 1)
-	var resp autorest.Response
-	var err error
-	defer func() {
-		respChan <- resp
-		errChan <- err
-		close(respChan)
-		close(errChan)
-	}()
+
 	if rgLBs, ok := fLBC.FakeStore[resourceGroupName]; ok {
 		if _, ok := rgLBs[loadBalancerName]; ok {
 			delete(rgLBs, loadBalancerName)
-			resp.Response = &http.Response{
-				StatusCode: http.StatusAccepted,
-			}
-			err = nil
-			return respChan, errChan
+			return nil, nil
 		}
 	}
-	resp.Response = &http.Response{
+
+	return &http.Response{
 		StatusCode: http.StatusNotFound,
-	}
-	err = autorest.DetailedError{
-		StatusCode: http.StatusNotFound,
-		Message:    "Not such LB",
-	}
-	return respChan, errChan
+	}, nil
 }
 
-func (fLBC *fakeAzureLBClient) Get(resourceGroupName string, loadBalancerName string, expand string) (result network.LoadBalancer, err error) {
+func (fLBC *fakeAzureLBClient) Get(ctx context.Context, resourceGroupName string, loadBalancerName string, expand string) (result network.LoadBalancer, err error) {
 	fLBC.mutex.Lock()
 	defer fLBC.mutex.Unlock()
 	if _, ok := fLBC.FakeStore[resourceGroupName]; ok {
@@ -133,48 +101,17 @@ func (fLBC *fakeAzureLBClient) Get(resourceGroupName string, loadBalancerName st
 	}
 }
 
-type fakeLoadBalancerListResultPage struct {
-	next   LoadBalancerListResultPage
-	value  network.LoadBalancerListResult
-	values []network.LoadBalancer
-	err    error
-}
-
-func (pg *fakeLoadBalancerListResultPage) Next() error {
-	return nil
-}
-func (pg *fakeLoadBalancerListResultPage) NotDone() bool {
-	return pg.next != nil
-}
-
-func (pg *fakeLoadBalancerListResultPage) Response() network.LoadBalancerListResult {
-	return pg.value
-}
-func (pg *fakeLoadBalancerListResultPage) Values() []network.LoadBalancer {
-	return pg.values
-}
-
-func (fLBC *fakeAzureLBClient) List(resourceGroupName string) (result LoadBalancerListResultPage, err error) {
+func (fLBC *fakeAzureLBClient) List(ctx context.Context, resourceGroupName string) (result []network.LoadBalancer, err error) {
 	fLBC.mutex.Lock()
 	defer fLBC.mutex.Unlock()
+
 	var value []network.LoadBalancer
 	if _, ok := fLBC.FakeStore[resourceGroupName]; ok {
 		for _, v := range fLBC.FakeStore[resourceGroupName] {
 			value = append(value, v)
 		}
 	}
-	return &fakeLoadBalancerListResultPage{
-		value: network.LoadBalancerListResult{
-			Value: &value,
-		},
-		values: value,
-	}, nil
-}
-
-func (fLBC *fakeAzureLBClient) ListNextResults(resourceGroupName string, lastResult LoadBalancerListResultPage) (result LoadBalancerListResultPage, err error) {
-	fLBC.mutex.Lock()
-	defer fLBC.mutex.Unlock()
-	return &fakeLoadBalancerListResultPage{}, nil
+	return value, nil
 }
 
 type fakeAzurePIPClient struct {
@@ -202,19 +139,10 @@ func newFakeAzurePIPClient(subscriptionID string) *fakeAzurePIPClient {
 	return fAPC
 }
 
-func (fAPC *fakeAzurePIPClient) CreateOrUpdate(resourceGroupName string, publicIPAddressName string, parameters network.PublicIPAddress, cancel <-chan struct{}) (<-chan network.PublicIPAddress, <-chan error) {
+func (fAPC *fakeAzurePIPClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, publicIPAddressName string, parameters network.PublicIPAddress) (resp *http.Response, err error) {
 	fAPC.mutex.Lock()
 	defer fAPC.mutex.Unlock()
-	resultChan := make(chan network.PublicIPAddress, 1)
-	errChan := make(chan error, 1)
-	var result network.PublicIPAddress
-	var err error
-	defer func() {
-		resultChan <- result
-		errChan <- err
-		close(resultChan)
-		close(errChan)
-	}()
+
 	if _, ok := fAPC.FakeStore[resourceGroupName]; !ok {
 		fAPC.FakeStore[resourceGroupName] = make(map[string]network.PublicIPAddress)
 	}
@@ -231,48 +159,27 @@ func (fAPC *fakeAzurePIPClient) CreateOrUpdate(resourceGroupName string, publicI
 	}
 
 	fAPC.FakeStore[resourceGroupName][publicIPAddressName] = parameters
-	result = fAPC.FakeStore[resourceGroupName][publicIPAddressName]
-	result.Response.Response = &http.Response{
-		StatusCode: http.StatusOK,
-	}
-	err = nil
-	return resultChan, errChan
+
+	return nil, nil
 }
 
-func (fAPC *fakeAzurePIPClient) Delete(resourceGroupName string, publicIPAddressName string, cancel <-chan struct{}) (<-chan autorest.Response, <-chan error) {
+func (fAPC *fakeAzurePIPClient) Delete(ctx context.Context, resourceGroupName string, publicIPAddressName string) (resp *http.Response, err error) {
 	fAPC.mutex.Lock()
 	defer fAPC.mutex.Unlock()
-	respChan := make(chan autorest.Response, 1)
-	errChan := make(chan error, 1)
-	var resp autorest.Response
-	var err error
-	defer func() {
-		respChan <- resp
-		errChan <- err
-		close(respChan)
-		close(errChan)
-	}()
+
 	if rgPIPs, ok := fAPC.FakeStore[resourceGroupName]; ok {
 		if _, ok := rgPIPs[publicIPAddressName]; ok {
 			delete(rgPIPs, publicIPAddressName)
-			resp.Response = &http.Response{
-				StatusCode: http.StatusAccepted,
-			}
-			err = nil
-			return respChan, errChan
+			return nil, nil
 		}
 	}
-	resp.Response = &http.Response{
+
+	return &http.Response{
 		StatusCode: http.StatusNotFound,
-	}
-	err = autorest.DetailedError{
-		StatusCode: http.StatusNotFound,
-		Message:    "Not such PIP",
-	}
-	return respChan, errChan
+	}, nil
 }
 
-func (fAPC *fakeAzurePIPClient) Get(resourceGroupName string, publicIPAddressName string, expand string) (result network.PublicIPAddress, err error) {
+func (fAPC *fakeAzurePIPClient) Get(ctx context.Context, resourceGroupName string, publicIPAddressName string, expand string) (result network.PublicIPAddress, err error) {
 	fAPC.mutex.Lock()
 	defer fAPC.mutex.Unlock()
 	if _, ok := fAPC.FakeStore[resourceGroupName]; ok {
@@ -286,49 +193,18 @@ func (fAPC *fakeAzurePIPClient) Get(resourceGroupName string, publicIPAddressNam
 	}
 }
 
-type fakePublicIPAddressListResultPage struct {
-	next   PublicIPAddressListResultPage
-	value  network.PublicIPAddressListResult
-	values []network.PublicIPAddress
-	err    error
-}
-
-func (pg *fakePublicIPAddressListResultPage) Next() error {
-	return nil
-}
-func (pg *fakePublicIPAddressListResultPage) NotDone() bool {
-	return pg.next != nil
-}
-
-func (pg *fakePublicIPAddressListResultPage) Response() network.PublicIPAddressListResult {
-	return pg.value
-}
-func (pg *fakePublicIPAddressListResultPage) Values() []network.PublicIPAddress {
-	return pg.values
-}
-
-func (fAPC *fakeAzurePIPClient) ListNextResults(resourceGroupName string, lastResults PublicIPAddressListResultPage) (result PublicIPAddressListResultPage, err error) {
+func (fAPC *fakeAzurePIPClient) List(ctx context.Context, resourceGroupName string) (result []network.PublicIPAddress, err error) {
 	fAPC.mutex.Lock()
 	defer fAPC.mutex.Unlock()
-	return &fakePublicIPAddressListResultPage{}, nil
-}
 
-func (fAPC *fakeAzurePIPClient) List(resourceGroupName string) (result PublicIPAddressListResultPage, err error) {
-	fAPC.mutex.Lock()
-	defer fAPC.mutex.Unlock()
 	var value []network.PublicIPAddress
 	if _, ok := fAPC.FakeStore[resourceGroupName]; ok {
 		for _, v := range fAPC.FakeStore[resourceGroupName] {
 			value = append(value, v)
 		}
 	}
-	result = &fakePublicIPAddressListResultPage{
-		value: network.PublicIPAddressListResult{
-			Value: &value,
-		},
-		values: value,
-	}
-	return result, nil
+
+	return value, nil
 }
 
 type fakeAzureInterfacesClient struct {
@@ -400,32 +276,19 @@ func newFakeAzureVirtualMachinesClient() *fakeAzureVirtualMachinesClient {
 	return fVMC
 }
 
-func (fVMC *fakeAzureVirtualMachinesClient) CreateOrUpdate(resourceGroupName string, VMName string, parameters compute.VirtualMachine, cancel <-chan struct{}) (<-chan compute.VirtualMachine, <-chan error) {
+func (fVMC *fakeAzureVirtualMachinesClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, VMName string, parameters compute.VirtualMachine) (resp *http.Response, err error) {
 	fVMC.mutex.Lock()
 	defer fVMC.mutex.Unlock()
-	resultChan := make(chan compute.VirtualMachine, 1)
-	errChan := make(chan error, 1)
-	var result compute.VirtualMachine
-	var err error
-	defer func() {
-		resultChan <- result
-		errChan <- err
-		close(resultChan)
-		close(errChan)
-	}()
+
 	if _, ok := fVMC.FakeStore[resourceGroupName]; !ok {
 		fVMC.FakeStore[resourceGroupName] = make(map[string]compute.VirtualMachine)
 	}
 	fVMC.FakeStore[resourceGroupName][VMName] = parameters
-	result = fVMC.FakeStore[resourceGroupName][VMName]
-	result.Response.Response = &http.Response{
-		StatusCode: http.StatusOK,
-	}
-	err = nil
-	return resultChan, errChan
+
+	return nil, nil
 }
 
-func (fVMC *fakeAzureVirtualMachinesClient) Get(resourceGroupName string, VMName string, expand compute.InstanceViewTypes) (result compute.VirtualMachine, err error) {
+func (fVMC *fakeAzureVirtualMachinesClient) Get(ctx context.Context, resourceGroupName string, VMName string, expand compute.InstanceViewTypes) (result compute.VirtualMachine, err error) {
 	fVMC.mutex.Lock()
 	defer fVMC.mutex.Unlock()
 	if _, ok := fVMC.FakeStore[resourceGroupName]; ok {
@@ -439,26 +302,18 @@ func (fVMC *fakeAzureVirtualMachinesClient) Get(resourceGroupName string, VMName
 	}
 }
 
-func (fVMC *fakeAzureVirtualMachinesClient) List(resourceGroupName string) (result compute.VirtualMachineListResult, err error) {
+func (fVMC *fakeAzureVirtualMachinesClient) List(ctx context.Context, resourceGroupName string) (result []compute.VirtualMachine, err error) {
 	fVMC.mutex.Lock()
 	defer fVMC.mutex.Unlock()
-	var value []compute.VirtualMachine
+
+	result = []compute.VirtualMachine{}
 	if _, ok := fVMC.FakeStore[resourceGroupName]; ok {
 		for _, v := range fVMC.FakeStore[resourceGroupName] {
-			value = append(value, v)
+			result = append(result, v)
 		}
 	}
-	result.Response.Response = &http.Response{
-		StatusCode: http.StatusOK,
-	}
-	result.NextLink = nil
-	result.Value = &value
+
 	return result, nil
-}
-func (fVMC *fakeAzureVirtualMachinesClient) ListNextResults(resourceGroupName string, lastResults compute.VirtualMachineListResult) (result compute.VirtualMachineListResult, err error) {
-	fVMC.mutex.Lock()
-	defer fVMC.mutex.Unlock()
-	return compute.VirtualMachineListResult{}, nil
 }
 
 type fakeAzureSubnetsClient struct {
@@ -717,29 +572,29 @@ func getRandomIPPtr() *string {
 
 type fakeVirtualMachineScaleSetVMsClient struct {
 	mutex     *sync.Mutex
-	FakeStore map[string]map[string]computepreview.VirtualMachineScaleSetVM
+	FakeStore map[string]map[string]compute.VirtualMachineScaleSetVM
 }
 
 func newFakeVirtualMachineScaleSetVMsClient() *fakeVirtualMachineScaleSetVMsClient {
 	fVMC := &fakeVirtualMachineScaleSetVMsClient{}
-	fVMC.FakeStore = make(map[string]map[string]computepreview.VirtualMachineScaleSetVM)
+	fVMC.FakeStore = make(map[string]map[string]compute.VirtualMachineScaleSetVM)
 	fVMC.mutex = &sync.Mutex{}
 
 	return fVMC
 }
 
-func (fVMC *fakeVirtualMachineScaleSetVMsClient) setFakeStore(store map[string]map[string]computepreview.VirtualMachineScaleSetVM) {
+func (fVMC *fakeVirtualMachineScaleSetVMsClient) setFakeStore(store map[string]map[string]compute.VirtualMachineScaleSetVM) {
 	fVMC.mutex.Lock()
 	defer fVMC.mutex.Unlock()
 
 	fVMC.FakeStore = store
 }
 
-func (fVMC *fakeVirtualMachineScaleSetVMsClient) List(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string, filter string, selectParameter string, expand string) (result []computepreview.VirtualMachineScaleSetVM, err error) {
+func (fVMC *fakeVirtualMachineScaleSetVMsClient) List(ctx context.Context, resourceGroupName string, virtualMachineScaleSetName string, filter string, selectParameter string, expand string) (result []compute.VirtualMachineScaleSetVM, err error) {
 	fVMC.mutex.Lock()
 	defer fVMC.mutex.Unlock()
 
-	result = []computepreview.VirtualMachineScaleSetVM{}
+	result = []compute.VirtualMachineScaleSetVM{}
 	if _, ok := fVMC.FakeStore[resourceGroupName]; ok {
 		for _, v := range fVMC.FakeStore[resourceGroupName] {
 			result = append(result, v)
@@ -749,7 +604,7 @@ func (fVMC *fakeVirtualMachineScaleSetVMsClient) List(ctx context.Context, resou
 	return result, nil
 }
 
-func (fVMC *fakeVirtualMachineScaleSetVMsClient) Get(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string) (result computepreview.VirtualMachineScaleSetVM, err error) {
+func (fVMC *fakeVirtualMachineScaleSetVMsClient) Get(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string) (result compute.VirtualMachineScaleSetVM, err error) {
 	fVMC.mutex.Lock()
 	defer fVMC.mutex.Unlock()
 
@@ -766,7 +621,7 @@ func (fVMC *fakeVirtualMachineScaleSetVMsClient) Get(ctx context.Context, resour
 	}
 }
 
-func (fVMC *fakeVirtualMachineScaleSetVMsClient) GetInstanceView(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string) (result computepreview.VirtualMachineScaleSetVMInstanceView, err error) {
+func (fVMC *fakeVirtualMachineScaleSetVMsClient) GetInstanceView(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string) (result compute.VirtualMachineScaleSetVMInstanceView, err error) {
 	_, err = fVMC.Get(ctx, resourceGroupName, VMScaleSetName, instanceID)
 	if err != nil {
 		return result, err
@@ -775,7 +630,7 @@ func (fVMC *fakeVirtualMachineScaleSetVMsClient) GetInstanceView(ctx context.Con
 	return result, nil
 }
 
-func (fVMC *fakeVirtualMachineScaleSetVMsClient) Update(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters computepreview.VirtualMachineScaleSetVM) (resp *http.Response, err error) {
+func (fVMC *fakeVirtualMachineScaleSetVMsClient) Update(ctx context.Context, resourceGroupName string, VMScaleSetName string, instanceID string, parameters compute.VirtualMachineScaleSetVM) (resp *http.Response, err error) {
 	fVMC.mutex.Lock()
 	defer fVMC.mutex.Unlock()
 
@@ -791,37 +646,37 @@ func (fVMC *fakeVirtualMachineScaleSetVMsClient) Update(ctx context.Context, res
 
 type fakeVirtualMachineScaleSetsClient struct {
 	mutex     *sync.Mutex
-	FakeStore map[string]map[string]computepreview.VirtualMachineScaleSet
+	FakeStore map[string]map[string]compute.VirtualMachineScaleSet
 }
 
 func newFakeVirtualMachineScaleSetsClient() *fakeVirtualMachineScaleSetsClient {
 	fVMSSC := &fakeVirtualMachineScaleSetsClient{}
-	fVMSSC.FakeStore = make(map[string]map[string]computepreview.VirtualMachineScaleSet)
+	fVMSSC.FakeStore = make(map[string]map[string]compute.VirtualMachineScaleSet)
 	fVMSSC.mutex = &sync.Mutex{}
 
 	return fVMSSC
 }
 
-func (fVMSSC *fakeVirtualMachineScaleSetsClient) setFakeStore(store map[string]map[string]computepreview.VirtualMachineScaleSet) {
+func (fVMSSC *fakeVirtualMachineScaleSetsClient) setFakeStore(store map[string]map[string]compute.VirtualMachineScaleSet) {
 	fVMSSC.mutex.Lock()
 	defer fVMSSC.mutex.Unlock()
 
 	fVMSSC.FakeStore = store
 }
 
-func (fVMSSC *fakeVirtualMachineScaleSetsClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, VMScaleSetName string, parameters computepreview.VirtualMachineScaleSet) (resp *http.Response, err error) {
+func (fVMSSC *fakeVirtualMachineScaleSetsClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, VMScaleSetName string, parameters compute.VirtualMachineScaleSet) (resp *http.Response, err error) {
 	fVMSSC.mutex.Lock()
 	defer fVMSSC.mutex.Unlock()
 
 	if _, ok := fVMSSC.FakeStore[resourceGroupName]; !ok {
-		fVMSSC.FakeStore[resourceGroupName] = make(map[string]computepreview.VirtualMachineScaleSet)
+		fVMSSC.FakeStore[resourceGroupName] = make(map[string]compute.VirtualMachineScaleSet)
 	}
 	fVMSSC.FakeStore[resourceGroupName][VMScaleSetName] = parameters
 
 	return nil, nil
 }
 
-func (fVMSSC *fakeVirtualMachineScaleSetsClient) Get(ctx context.Context, resourceGroupName string, VMScaleSetName string) (result computepreview.VirtualMachineScaleSet, err error) {
+func (fVMSSC *fakeVirtualMachineScaleSetsClient) Get(ctx context.Context, resourceGroupName string, VMScaleSetName string) (result compute.VirtualMachineScaleSet, err error) {
 	fVMSSC.mutex.Lock()
 	defer fVMSSC.mutex.Unlock()
 
@@ -837,11 +692,11 @@ func (fVMSSC *fakeVirtualMachineScaleSetsClient) Get(ctx context.Context, resour
 	}
 }
 
-func (fVMSSC *fakeVirtualMachineScaleSetsClient) List(ctx context.Context, resourceGroupName string) (result []computepreview.VirtualMachineScaleSet, err error) {
+func (fVMSSC *fakeVirtualMachineScaleSetsClient) List(ctx context.Context, resourceGroupName string) (result []compute.VirtualMachineScaleSet, err error) {
 	fVMSSC.mutex.Lock()
 	defer fVMSSC.mutex.Unlock()
 
-	result = []computepreview.VirtualMachineScaleSet{}
+	result = []compute.VirtualMachineScaleSet{}
 	if _, ok := fVMSSC.FakeStore[resourceGroupName]; ok {
 		for _, v := range fVMSSC.FakeStore[resourceGroupName] {
 			result = append(result, v)
@@ -851,7 +706,7 @@ func (fVMSSC *fakeVirtualMachineScaleSetsClient) List(ctx context.Context, resou
 	return result, nil
 }
 
-func (fVMSSC *fakeVirtualMachineScaleSetsClient) UpdateInstances(ctx context.Context, resourceGroupName string, VMScaleSetName string, VMInstanceIDs computepreview.VirtualMachineScaleSetVMInstanceRequiredIDs) (resp *http.Response, err error) {
+func (fVMSSC *fakeVirtualMachineScaleSetsClient) UpdateInstances(ctx context.Context, resourceGroupName string, VMScaleSetName string, VMInstanceIDs compute.VirtualMachineScaleSetVMInstanceRequiredIDs) (resp *http.Response, err error) {
 	return nil, nil
 }
 
@@ -1018,20 +873,9 @@ func newFakeStorageAccountClient() *fakeStorageAccountClient {
 	return fSAC
 }
 
-func (fSAC *fakeStorageAccountClient) Create(resourceGroupName string, accountName string, parameters storage.AccountCreateParameters, cancel <-chan struct{}) (<-chan storage.Account, <-chan error) {
+func (fSAC *fakeStorageAccountClient) Create(ctx context.Context, resourceGroupName string, accountName string, parameters storage.AccountCreateParameters) (resp *http.Response, err error) {
 	fSAC.mutex.Lock()
 	defer fSAC.mutex.Unlock()
-
-	resultChan := make(chan storage.Account, 1)
-	errChan := make(chan error, 1)
-	var result storage.Account
-	var err error
-	defer func() {
-		resultChan <- result
-		errChan <- err
-		close(resultChan)
-		close(errChan)
-	}()
 
 	if _, ok := fSAC.FakeStore[resourceGroupName]; !ok {
 		fSAC.FakeStore[resourceGroupName] = make(map[string]storage.Account)
@@ -1045,15 +889,11 @@ func (fSAC *fakeStorageAccountClient) Create(resourceGroupName string, accountNa
 		Tags:              parameters.Tags,
 		AccountProperties: &storage.AccountProperties{},
 	}
-	result = fSAC.FakeStore[resourceGroupName][accountName]
-	result.Response.Response = &http.Response{
-		StatusCode: http.StatusOK,
-	}
-	err = nil
-	return resultChan, errChan
+
+	return nil, nil
 }
 
-func (fSAC *fakeStorageAccountClient) Delete(resourceGroupName string, accountName string) (result autorest.Response, err error) {
+func (fSAC *fakeStorageAccountClient) Delete(ctx context.Context, resourceGroupName string, accountName string) (result autorest.Response, err error) {
 	fSAC.mutex.Lock()
 	defer fSAC.mutex.Unlock()
 
@@ -1077,15 +917,15 @@ func (fSAC *fakeStorageAccountClient) Delete(resourceGroupName string, accountNa
 	return result, err
 }
 
-func (fSAC *fakeStorageAccountClient) ListKeys(resourceGroupName string, accountName string) (result storage.AccountListKeysResult, err error) {
+func (fSAC *fakeStorageAccountClient) ListKeys(ctx context.Context, resourceGroupName string, accountName string) (result storage.AccountListKeysResult, err error) {
 	return fSAC.Keys, fSAC.Err
 }
 
-func (fSAC *fakeStorageAccountClient) ListByResourceGroup(resourceGroupName string) (result storage.AccountListResult, err error) {
+func (fSAC *fakeStorageAccountClient) ListByResourceGroup(ctx context.Context, resourceGroupName string) (result storage.AccountListResult, err error) {
 	return fSAC.Accounts, fSAC.Err
 }
 
-func (fSAC *fakeStorageAccountClient) GetProperties(resourceGroupName string, accountName string) (result storage.Account, err error) {
+func (fSAC *fakeStorageAccountClient) GetProperties(ctx context.Context, resourceGroupName string, accountName string) (result storage.Account, err error) {
 	fSAC.mutex.Lock()
 	defer fSAC.mutex.Unlock()
 
@@ -1103,83 +943,45 @@ func (fSAC *fakeStorageAccountClient) GetProperties(resourceGroupName string, ac
 
 type fakeDisksClient struct {
 	mutex     *sync.Mutex
-	FakeStore map[string]map[string]disk.Model
+	FakeStore map[string]map[string]compute.Disk
 }
 
 func newFakeDisksClient() *fakeDisksClient {
 	fDC := &fakeDisksClient{}
-	fDC.FakeStore = make(map[string]map[string]disk.Model)
+	fDC.FakeStore = make(map[string]map[string]compute.Disk)
 	fDC.mutex = &sync.Mutex{}
 	return fDC
 }
 
-func (fDC *fakeDisksClient) CreateOrUpdate(resourceGroupName string, diskName string, diskParameter disk.Model, cancel <-chan struct{}) (<-chan disk.Model, <-chan error) {
+func (fDC *fakeDisksClient) CreateOrUpdate(ctx context.Context, resourceGroupName string, diskName string, diskParameter compute.Disk) (resp *http.Response, err error) {
 	fDC.mutex.Lock()
 	defer fDC.mutex.Unlock()
-
-	resultChan := make(chan disk.Model, 1)
-	errChan := make(chan error, 1)
-	var result disk.Model
-	var err error
-	defer func() {
-		resultChan <- result
-		errChan <- err
-		close(resultChan)
-		close(errChan)
-	}()
 
 	if _, ok := fDC.FakeStore[resourceGroupName]; !ok {
-		fDC.FakeStore[resourceGroupName] = make(map[string]disk.Model)
+		fDC.FakeStore[resourceGroupName] = make(map[string]compute.Disk)
 	}
 	fDC.FakeStore[resourceGroupName][diskName] = diskParameter
-	result = fDC.FakeStore[resourceGroupName][diskName]
-	result.Response.Response = &http.Response{
-		StatusCode: http.StatusOK,
-	}
-	err = nil
-	return resultChan, errChan
+
+	return nil, nil
 }
 
-func (fDC *fakeDisksClient) Delete(resourceGroupName string, diskName string, cancel <-chan struct{}) (<-chan disk.OperationStatusResponse, <-chan error) {
+func (fDC *fakeDisksClient) Delete(ctx context.Context, resourceGroupName string, diskName string) (resp *http.Response, err error) {
 	fDC.mutex.Lock()
 	defer fDC.mutex.Unlock()
 
-	respChan := make(chan disk.OperationStatusResponse, 1)
-	errChan := make(chan error, 1)
-	var resp disk.OperationStatusResponse
-	var err error
-	defer func() {
-		respChan <- resp
-		errChan <- err
-		close(respChan)
-		close(errChan)
-	}()
 	if rgDisks, ok := fDC.FakeStore[resourceGroupName]; ok {
 		if _, ok := rgDisks[diskName]; ok {
 			delete(rgDisks, diskName)
-			resp.Response = autorest.Response{
-				Response: &http.Response{
-					StatusCode: http.StatusAccepted,
-				},
-			}
-
-			err = nil
-			return respChan, errChan
+			return nil, nil
 		}
 	}
-	resp.Response = autorest.Response{
-		Response: &http.Response{
-			StatusCode: http.StatusNotFound,
-		},
-	}
-	err = autorest.DetailedError{
-		StatusCode: http.StatusNotFound,
-		Message:    "Not such Disk",
-	}
-	return respChan, errChan
+
+	return &http.Response{
+		StatusCode: http.StatusAccepted,
+	}, nil
 }
 
-func (fDC *fakeDisksClient) Get(resourceGroupName string, diskName string) (result disk.Model, err error) {
+func (fDC *fakeDisksClient) Get(ctx context.Context, resourceGroupName string, diskName string) (result compute.Disk, err error) {
 	fDC.mutex.Lock()
 	defer fDC.mutex.Unlock()
 
@@ -1244,7 +1046,7 @@ func (f *fakeVMSet) EnsureHostsInPool(serviceName string, nodes []*v1.Node, back
 	return fmt.Errorf("unimplemented")
 }
 
-func (f *fakeVMSet) EnsureBackendPoolDeleted(poolID, vmSetName string) error {
+func (f *fakeVMSet) EnsureBackendPoolDeleted(poolID, vmSetName string, backendAddressPools *[]network.BackendAddressPool) error {
 	return fmt.Errorf("unimplemented")
 }
 
@@ -1256,14 +1058,6 @@ func (f *fakeVMSet) DetachDiskByName(diskName, diskURI string, nodeName types.No
 	return fmt.Errorf("unimplemented")
 }
 
-func (f *fakeVMSet) GetDiskLun(diskName, diskURI string, nodeName types.NodeName) (int32, error) {
-	return -1, fmt.Errorf("unimplemented")
-}
-
-func (f *fakeVMSet) GetNextDiskLun(nodeName types.NodeName) (int32, error) {
-	return -1, fmt.Errorf("unimplemented")
-}
-
-func (f *fakeVMSet) DisksAreAttached(diskNames []string, nodeName types.NodeName) (map[string]bool, error) {
+func (f *fakeVMSet) GetDataDisks(nodeName types.NodeName) ([]compute.DataDisk, error) {
 	return nil, fmt.Errorf("unimplemented")
 }

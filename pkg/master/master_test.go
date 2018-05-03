@@ -35,7 +35,6 @@ import (
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/version"
-	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/options"
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
@@ -79,7 +78,7 @@ func setUp(t *testing.T) (*etcdtesting.EtcdTestServer, Config, informers.SharedI
 	}
 
 	resourceEncoding := serverstorage.NewDefaultResourceEncodingConfig(legacyscheme.Registry)
-	resourceEncoding.SetVersionEncoding(api.GroupName, legacyscheme.Registry.GroupOrDie(api.GroupName).GroupVersion, schema.GroupVersion{Group: api.GroupName, Version: runtime.APIVersionInternal})
+	resourceEncoding.SetVersionEncoding(api.GroupName, legacyscheme.Registry.GroupOrDie(api.GroupName).GroupVersions[0], schema.GroupVersion{Group: api.GroupName, Version: runtime.APIVersionInternal})
 	resourceEncoding.SetVersionEncoding(autoscaling.GroupName, *testapi.Autoscaling.GroupVersion(), schema.GroupVersion{Group: autoscaling.GroupName, Version: runtime.APIVersionInternal})
 	resourceEncoding.SetVersionEncoding(batch.GroupName, *testapi.Batch.GroupVersion(), schema.GroupVersion{Group: batch.GroupName, Version: runtime.APIVersionInternal})
 	// FIXME (soltysh): this GroupVersionResource override should be configurable
@@ -277,7 +276,7 @@ func TestAPIVersionOfDiscoveryEndpoints(t *testing.T) {
 	master, etcdserver, _, assert := newMaster(t)
 	defer etcdserver.Terminate(t)
 
-	server := httptest.NewServer(genericapirequest.WithRequestContext(master.GenericAPIServer.Handler.GoRestfulContainer.ServeMux, master.GenericAPIServer.RequestContextMapper()))
+	server := httptest.NewServer(master.GenericAPIServer.Handler.GoRestfulContainer.ServeMux)
 
 	// /api exists in release-1.1
 	resp, err := http.Get(server.URL + "/api")

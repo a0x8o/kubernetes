@@ -37,6 +37,8 @@ import (
 	clientretry "k8s.io/client-go/util/retry"
 	nodeutilv1 "k8s.io/kubernetes/pkg/api/v1/node"
 	"k8s.io/kubernetes/pkg/cloudprovider"
+	"k8s.io/kubernetes/pkg/controller"
+	nodectrlutil "k8s.io/kubernetes/pkg/controller/util/node"
 	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm"
 	nodeutil "k8s.io/kubernetes/pkg/util/node"
@@ -152,7 +154,7 @@ func (cnc *CloudNodeController) updateNodeAddress(node *v1.Node, instances cloud
 		return
 	}
 	// Node that isn't present according to the cloud provider shouldn't have its address updated
-	exists, err := ensureNodeExistsByProviderIDOrExternalID(instances, node)
+	exists, err := ensureNodeExistsByProviderID(instances, node)
 	if err != nil {
 		// Continue to update node address when not sure the node is not exists
 		glog.Errorf("%v", err)
@@ -243,9 +245,27 @@ func (cnc *CloudNodeController) MonitorNode() {
 		// from the cloud provider. If node cannot be found in cloudprovider, then delete the node immediately
 		if currentReadyCondition != nil {
 			if currentReadyCondition.Status != v1.ConditionTrue {
+				// we need to check this first to get taint working in similar in all cloudproviders
+				// current problem is that shutdown nodes are not working in similar way ie. all cloudproviders
+				// does not delete node from kubernetes cluster when instance it is shutdown see issue #46442
+				shutdown, err := nodectrlutil.ShutdownInCloudProvider(context.TODO(), cnc.cloud, node)
+				if err != nil {
+					glog.Errorf("Error getting data for node %s from cloud: %v", node.Name, err)
+				}
+
+				if shutdown && err == nil {
+					// if node is shutdown add shutdown taint
+					err = controller.AddOrUpdateTaintOnNode(cnc.kubeClient, node.Name, controller.ShutdownTaint)
+					if err != nil {
+						glog.Errorf("Error patching node taints: %v", err)
+					}
+					// Continue checking the remaining nodes since the current one is shutdown.
+					continue
+				}
+
 				// Check with the cloud provider to see if the node still exists. If it
 				// doesn't, delete the node immediately.
-				exists, err := ensureNodeExistsByProviderIDOrExternalID(instances, node)
+				exists, err := ensureNodeExistsByProviderID(instances, node)
 				if err != nil {
 					glog.Errorf("Error getting data for node %s from cloud: %v", node.Name, err)
 					continue
@@ -275,6 +295,12 @@ func (cnc *CloudNodeController) MonitorNode() {
 					}
 				}(node.Name)
 
+			} else {
+				// if taint exist remove taint
+				err = controller.RemoveTaintOffNode(cnc.kubeClient, node.Name, node, controller.ShutdownTaint)
+				if err != nil {
+					glog.Errorf("Error patching node taints: %v", err)
+				}
 			}
 		}
 	}
@@ -412,21 +438,24 @@ func excludeTaintFromList(taints []v1.Taint, toExclude v1.Taint) []v1.Taint {
 	return newTaints
 }
 
-// ensureNodeExistsByProviderIDOrExternalID first checks if the instance exists by the provider id and then by calling external id with node name
-func ensureNodeExistsByProviderIDOrExternalID(instances cloudprovider.Instances, node *v1.Node) (bool, error) {
-	exists, err := instances.InstanceExistsByProviderID(context.TODO(), node.Spec.ProviderID)
-	if err != nil {
-		providerIDErr := err
-		_, err = instances.InstanceID(context.TODO(), types.NodeName(node.Name))
-		//<anupn> Changing the check as InstanceID does not return error
-		if err == nil {
-			return false, nil
+// ensureNodeExistsByProviderID checks if the instance exists by the provider id,
+// If provider id in spec is empty it calls instanceId with node name to get provider id
+func ensureNodeExistsByProviderID(instances cloudprovider.Instances, node *v1.Node) (bool, error) {
+	providerID := node.Spec.ProviderID
+	if providerID == "" {
+		var err error
+		providerID, err = instances.InstanceID(context.TODO(), types.NodeName(node.Name))
+		if err != nil {
+			return false, err
 		}
 
-		return false, fmt.Errorf("InstanceExistsByProviderID: Error fetching by providerID: %v Error fetching by NodeName: %v", providerIDErr, err)
+		if providerID == "" {
+			glog.Warningf("Cannot find valid providerID for node name %q, assuming non existence", node.Name)
+			return false, nil
+		}
 	}
 
-	return exists, nil
+	return instances.InstanceExistsByProviderID(context.TODO(), providerID)
 }
 
 func getNodeAddressesByProviderIDOrName(instances cloudprovider.Instances, node *v1.Node) ([]v1.NodeAddress, error) {

@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/meta/testrestmapper"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -49,7 +50,6 @@ import (
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util/openapi"
 	openapitesting "k8s.io/kubernetes/pkg/kubectl/cmd/util/openapi/testing"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
-	"k8s.io/kubernetes/pkg/kubectl/scheme"
 	"k8s.io/kubernetes/pkg/kubectl/validation"
 	"k8s.io/kubernetes/pkg/printers"
 )
@@ -179,7 +179,7 @@ func versionErrIfFalse(b bool) error {
 	return versionErr
 }
 
-var ValidVersion = legacyscheme.Registry.GroupOrDie(api.GroupName).GroupVersion.Version
+var ValidVersion = legacyscheme.Registry.GroupOrDie(api.GroupName).GroupVersions[0].Version
 var InternalGV = schema.GroupVersion{Group: "apitest", Version: runtime.APIVersionInternal}
 var UnlikelyGV = schema.GroupVersion{Group: "apitest", Version: "unlikelyversion"}
 var ValidVersionGV = schema.GroupVersion{Group: "apitest", Version: ValidVersion}
@@ -203,12 +203,7 @@ func AddToScheme(scheme *runtime.Scheme) (meta.RESTMapper, runtime.Codec) {
 
 	codecs := serializer.NewCodecFactory(scheme)
 	codec := codecs.LegacyCodec(UnlikelyGV)
-	mapper := meta.NewDefaultRESTMapper([]schema.GroupVersion{UnlikelyGV, ValidVersionGV}, func(version schema.GroupVersion) (*meta.VersionInterfaces, error) {
-		return &meta.VersionInterfaces{
-			ObjectConvertor:  scheme,
-			MetadataAccessor: meta.NewAccessor(),
-		}, versionErrIfFalse(version == ValidVersionGV || version == UnlikelyGV)
-	})
+	mapper := meta.NewDefaultRESTMapper([]schema.GroupVersion{UnlikelyGV, ValidVersionGV})
 	for _, gv := range []schema.GroupVersion{UnlikelyGV, ValidVersionGV} {
 		for kind := range scheme.KnownTypes(gv) {
 			gvk := gv.WithKind(kind)
@@ -343,23 +338,21 @@ func (f *TestFactory) Command(*cobra.Command, bool) string {
 }
 
 func (f *TestFactory) NewBuilder() *resource.Builder {
-	mapper, typer := f.Object()
+	mapper, err := f.RESTMapper()
 
 	return resource.NewBuilder(
 		&resource.Mapper{
 			RESTMapper:   mapper,
-			ObjectTyper:  typer,
 			ClientMapper: resource.ClientMapperFunc(f.ClientForMapping),
 			Decoder:      cmdutil.InternalVersionDecoder(),
 		},
 		&resource.Mapper{
 			RESTMapper:   mapper,
-			ObjectTyper:  typer,
 			ClientMapper: resource.ClientMapperFunc(f.UnstructuredClientForMapping),
 			Decoder:      unstructured.UnstructuredJSONScheme,
 		},
 		f.CategoryExpander(),
-	)
+	).AddError(err)
 }
 
 func (f *TestFactory) KubernetesClientSet() (*kubernetes.Clientset, error) {
@@ -433,38 +426,22 @@ func (f *TestFactory) ClientSetForVersion(requiredVersion *schema.GroupVersion) 
 	return f.ClientSet()
 }
 
-func (f *TestFactory) Object() (meta.RESTMapper, runtime.ObjectTyper) {
+func (f *TestFactory) RESTMapper() (meta.RESTMapper, error) {
 	groupResources := testDynamicResources()
-	mapper := discovery.NewRESTMapper(
-		groupResources,
-		meta.InterfacesForUnstructuredConversion(func(version schema.GroupVersion) (*meta.VersionInterfaces, error) {
-			switch version {
-			// provide typed objects for these two versions
-			case ValidVersionGV, UnlikelyGV:
-				return &meta.VersionInterfaces{
-					ObjectConvertor:  scheme.Scheme,
-					MetadataAccessor: meta.NewAccessor(),
-				}, nil
-				// otherwise fall back to the legacy scheme
-			default:
-				return legacyscheme.Registry.InterfacesFor(version)
-			}
-		}),
-	)
+	mapper := discovery.NewRESTMapper(groupResources)
 	// for backwards compatibility with existing tests, allow rest mappings from the scheme to show up
 	// TODO: make this opt-in?
 	mapper = meta.FirstHitRESTMapper{
 		MultiRESTMapper: meta.MultiRESTMapper{
 			mapper,
-			legacyscheme.Registry.RESTMapper(),
+			testrestmapper.TestOnlyStaticRESTMapper(legacyscheme.Registry, legacyscheme.Scheme),
 		},
 	}
 
 	// TODO: should probably be the external scheme
-	typer := discovery.NewUnstructuredObjectTyper(groupResources, legacyscheme.Scheme)
 	fakeDs := &fakeCachedDiscoveryClient{}
 	expander := cmdutil.NewShortcutExpander(mapper, fakeDs)
-	return expander, typer
+	return expander, nil
 }
 
 func (f *TestFactory) LogsForObject(object, options runtime.Object, timeout time.Duration) (*restclient.Request, error) {

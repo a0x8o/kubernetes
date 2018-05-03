@@ -47,7 +47,6 @@ import (
 	"k8s.io/apimachinery/pkg/apimachinery/announced"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
@@ -65,29 +64,11 @@ func init() {
 		&announced.GroupMetaFactoryArgs{
 			GroupName:              corev1.GroupName,
 			VersionPreferenceOrder: []string{corev1.SchemeGroupVersion.Version},
-			RootScopedKinds: sets.NewString(
-				"Node",
-				"Namespace",
-				"PersistentVolume",
-				"ComponentStatus",
-			),
-			IgnoredKinds: sets.NewString(
-				"ListOptions",
-				"DeleteOptions",
-				"Status",
-				"PodLogOptions",
-				"PodExecOptions",
-				"PodAttachOptions",
-				"PodPortForwardOptions",
-				"PodProxyOptions",
-				"NodeProxyOptions",
-				"ServiceProxyOptions",
-			),
 		},
 		announced.VersionToSchemeFunc{
 			corev1.SchemeGroupVersion.Version: corev1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -96,12 +77,11 @@ func init() {
 		&announced.GroupMetaFactoryArgs{
 			GroupName:              admissionv1alpha1.GroupName,
 			VersionPreferenceOrder: []string{admissionv1alpha1.SchemeGroupVersion.Version},
-			RootScopedKinds:        sets.NewString("AdmissionReview"),
 		},
 		announced.VersionToSchemeFunc{
 			admissionv1alpha1.SchemeGroupVersion.Version: admissionv1alpha1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -109,13 +89,12 @@ func init() {
 	if err := announced.NewGroupMetaFactory(
 		&announced.GroupMetaFactoryArgs{
 			GroupName:              admissionregistrationv1alpha1.GroupName,
-			RootScopedKinds:        sets.NewString("InitializerConfiguration", "ValidatingWebhookConfiguration", "MutatingWebhookConfiguration"),
 			VersionPreferenceOrder: []string{admissionregistrationv1alpha1.SchemeGroupVersion.Version},
 		},
 		announced.VersionToSchemeFunc{
 			admissionregistrationv1alpha1.SchemeGroupVersion.Version: admissionregistrationv1alpha1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -130,7 +109,7 @@ func init() {
 			appsv1beta2.SchemeGroupVersion.Version: appsv1beta2.AddToScheme,
 			appsv1.SchemeGroupVersion.Version:      appsv1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -139,13 +118,12 @@ func init() {
 		&announced.GroupMetaFactoryArgs{
 			GroupName:              authenticationv1beta1.GroupName,
 			VersionPreferenceOrder: []string{authenticationv1.SchemeGroupVersion.Version, authenticationv1beta1.SchemeGroupVersion.Version},
-			RootScopedKinds:        sets.NewString("TokenReview"),
 		},
 		announced.VersionToSchemeFunc{
 			authenticationv1beta1.SchemeGroupVersion.Version: authenticationv1beta1.AddToScheme,
 			authenticationv1.SchemeGroupVersion.Version:      authenticationv1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -154,13 +132,12 @@ func init() {
 		&announced.GroupMetaFactoryArgs{
 			GroupName:              authorizationv1.GroupName,
 			VersionPreferenceOrder: []string{authorizationv1.SchemeGroupVersion.Version, authorizationv1beta1.SchemeGroupVersion.Version},
-			RootScopedKinds:        sets.NewString("SubjectAccessReview", "SelfSubjectAccessReview", "SelfSubjectRulesReview"),
 		},
 		announced.VersionToSchemeFunc{
 			authorizationv1beta1.SchemeGroupVersion.Version: authorizationv1beta1.AddToScheme,
 			authorizationv1.SchemeGroupVersion.Version:      authorizationv1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -174,7 +151,7 @@ func init() {
 			autoscalingv1.SchemeGroupVersion.Version:      autoscalingv1.AddToScheme,
 			autoscalingv2beta1.SchemeGroupVersion.Version: autoscalingv2beta1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -189,7 +166,7 @@ func init() {
 			batchv1beta1.SchemeGroupVersion.Version:  batchv1beta1.AddToScheme,
 			batchv2alpha1.SchemeGroupVersion.Version: batchv2alpha1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -198,12 +175,11 @@ func init() {
 		&announced.GroupMetaFactoryArgs{
 			GroupName:              certificatesv1beta1.GroupName,
 			VersionPreferenceOrder: []string{certificatesv1beta1.SchemeGroupVersion.Version},
-			RootScopedKinds:        sets.NewString("CertificateSigningRequest"),
 		},
 		announced.VersionToSchemeFunc{
 			certificatesv1beta1.SchemeGroupVersion.Version: certificatesv1beta1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -212,12 +188,11 @@ func init() {
 		&announced.GroupMetaFactoryArgs{
 			GroupName:              extensionsv1beta1.GroupName,
 			VersionPreferenceOrder: []string{extensionsv1beta1.SchemeGroupVersion.Version},
-			RootScopedKinds:        sets.NewString("PodSecurityPolicy"),
 		},
 		announced.VersionToSchemeFunc{
 			extensionsv1beta1.SchemeGroupVersion.Version: extensionsv1beta1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -226,12 +201,11 @@ func init() {
 		&announced.GroupMetaFactoryArgs{
 			GroupName:              imagepolicyv1alpha1.GroupName,
 			VersionPreferenceOrder: []string{imagepolicyv1alpha1.SchemeGroupVersion.Version},
-			RootScopedKinds:        sets.NewString("ImageReview"),
 		},
 		announced.VersionToSchemeFunc{
 			imagepolicyv1alpha1.SchemeGroupVersion.Version: imagepolicyv1alpha1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -244,7 +218,7 @@ func init() {
 		announced.VersionToSchemeFunc{
 			networkingv1.SchemeGroupVersion.Version: networkingv1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -257,7 +231,7 @@ func init() {
 		announced.VersionToSchemeFunc{
 			policyv1beta1.SchemeGroupVersion.Version: policyv1beta1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -266,14 +240,13 @@ func init() {
 		&announced.GroupMetaFactoryArgs{
 			GroupName:              rbacv1.GroupName,
 			VersionPreferenceOrder: []string{rbacv1.SchemeGroupVersion.Version, rbacv1beta1.SchemeGroupVersion.Version, rbacv1alpha1.SchemeGroupVersion.Version},
-			RootScopedKinds:        sets.NewString("ClusterRole", "ClusterRoleBinding"),
 		},
 		announced.VersionToSchemeFunc{
 			rbacv1.SchemeGroupVersion.Version:       rbacv1.AddToScheme,
 			rbacv1beta1.SchemeGroupVersion.Version:  rbacv1beta1.AddToScheme,
 			rbacv1alpha1.SchemeGroupVersion.Version: rbacv1alpha1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -282,12 +255,11 @@ func init() {
 		&announced.GroupMetaFactoryArgs{
 			GroupName:              schedulingv1alpha1.GroupName,
 			VersionPreferenceOrder: []string{schedulingv1alpha1.SchemeGroupVersion.Version},
-			RootScopedKinds:        sets.NewString("PriorityClass"),
 		},
 		announced.VersionToSchemeFunc{
 			schedulingv1alpha1.SchemeGroupVersion.Version: schedulingv1alpha1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -300,7 +272,7 @@ func init() {
 		announced.VersionToSchemeFunc{
 			settingsv1alpha1.SchemeGroupVersion.Version: settingsv1alpha1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 
@@ -309,13 +281,12 @@ func init() {
 		&announced.GroupMetaFactoryArgs{
 			GroupName:              storagev1.GroupName,
 			VersionPreferenceOrder: []string{storagev1.SchemeGroupVersion.Version, storagev1beta1.SchemeGroupVersion.Version},
-			RootScopedKinds:        sets.NewString("StorageClass"),
 		},
 		announced.VersionToSchemeFunc{
 			storagev1.SchemeGroupVersion.Version:      storagev1.AddToScheme,
 			storagev1beta1.SchemeGroupVersion.Version: storagev1beta1.AddToScheme,
 		},
-	).Announce(GroupFactoryRegistry).RegisterAndEnable(Registry, Scheme); err != nil {
+	).Register(Registry, Scheme); err != nil {
 		panic(err)
 	}
 }

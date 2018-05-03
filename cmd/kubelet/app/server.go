@@ -145,6 +145,13 @@ HTTP server: The kubelet can also listen for HTTP and respond to a simple API
 				glog.Fatal(err)
 			}
 
+			// check if there are non-flag arguments in the command line
+			cmds := cleanFlagSet.Args()
+			if len(cmds) > 0 {
+				cmd.Usage()
+				glog.Fatalf("unknown command: %s", cmds[0])
+			}
+
 			// short-circuit on help
 			help, err := cleanFlagSet.GetBool("help")
 			if err != nil {
@@ -167,6 +174,10 @@ HTTP server: The kubelet can also listen for HTTP and respond to a simple API
 			// validate the initial KubeletFlags
 			if err := options.ValidateKubeletFlags(kubeletFlags); err != nil {
 				glog.Fatal(err)
+			}
+
+			if kubeletFlags.ContainerRuntime == "remote" && cleanFlagSet.Changed("pod-infra-container-image") {
+				glog.Warning("Warning: For remote container runtime, --pod-infra-container-image is ignored in kubelet, which should be set in that remote runtime instead")
 			}
 
 			// load kubelet config file, if provided
@@ -335,7 +346,10 @@ func UnsecuredDependencies(s *options.KubeletServer) (*kubelet.Dependencies, err
 	var writer kubeio.Writer = &kubeio.StdWriter{}
 	if s.Containerized {
 		glog.V(2).Info("Running kubelet in containerized mode")
-		mounter = mount.NewNsenterMounter()
+		mounter, err = mount.NewNsenterMounter()
+		if err != nil {
+			return nil, err
+		}
 		writer = &kubeio.NsenterWriter{}
 	}
 
@@ -629,7 +643,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies) (err error) {
 				return err
 			}
 		}
-		experimentalQOSReserved, err := cm.ParseQOSReserved(s.ExperimentalQOSReserved)
+		experimentalQOSReserved, err := cm.ParseQOSReserved(s.QOSReserved)
 		if err != nil {
 			return err
 		}
@@ -657,7 +671,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies) (err error) {
 					SystemReserved:           systemReserved,
 					HardEvictionThresholds:   hardEvictionThresholds,
 				},
-				ExperimentalQOSReserved:               *experimentalQOSReserved,
+				QOSReserved:                           *experimentalQOSReserved,
 				ExperimentalCPUManagerPolicy:          s.CPUManagerPolicy,
 				ExperimentalCPUManagerReconcilePeriod: s.CPUManagerReconcilePeriod.Duration,
 				ExperimentalPodPidsLimit:              s.PodPidsLimit,
@@ -736,7 +750,7 @@ func getNodeName(cloud cloudprovider.Interface, hostname string) (types.NodeName
 // InitializeTLS checks for a configured TLSCertFile and TLSPrivateKeyFile: if unspecified a new self-signed
 // certificate and key file are generated. Returns a configured server.TLSOptions object.
 func InitializeTLS(kf *options.KubeletFlags, kc *kubeletconfiginternal.KubeletConfiguration) (*server.TLSOptions, error) {
-	if !utilfeature.DefaultFeatureGate.Enabled(features.RotateKubeletServerCertificate) && kc.TLSCertFile == "" && kc.TLSPrivateKeyFile == "" {
+	if !kc.ServerTLSBootstrap && kc.TLSCertFile == "" && kc.TLSPrivateKeyFile == "" {
 		kc.TLSCertFile = path.Join(kf.CertDirectory, "kubelet.crt")
 		kc.TLSPrivateKeyFile = path.Join(kf.CertDirectory, "kubelet.key")
 

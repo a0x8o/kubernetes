@@ -23,6 +23,7 @@ go_test(
     tags = ["integration"],
     deps = [
         "//cmd/kube-scheduler/app:go_default_library",
+        "//cmd/kube-scheduler/app/config:go_default_library",
         "//pkg/api/legacyscheme:go_default_library",
         "//pkg/api/testapi:go_default_library",
         "//pkg/apis/componentconfig:go_default_library",
@@ -51,6 +52,7 @@ go_test(
         "//vendor/k8s.io/apimachinery/pkg/api/resource:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/labels:go_default_library",
+        "//vendor/k8s.io/apimachinery/pkg/types:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/diff:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/intstr:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/rand:go_default_library",

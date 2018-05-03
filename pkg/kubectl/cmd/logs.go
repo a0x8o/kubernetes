@@ -25,10 +25,12 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	restclient "k8s.io/client-go/rest"
+	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/core/validation"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
@@ -122,7 +124,6 @@ func NewCmdLogs(f cmdutil.Factory, out, errOut io.Writer) *cobra.Command {
 	cmd.Flags().StringP("container", "c", "", "Print the logs of this container")
 	cmd.Flags().Bool("interactive", false, "If true, prompt the user for input when required.")
 	cmd.Flags().MarkDeprecated("interactive", "This flag is no longer respected and there is no replacement.")
-	cmdutil.AddInclude3rdPartyFlags(cmd)
 	cmdutil.AddPodRunningTimeoutFlag(cmd, defaultPodLogsTimeout)
 	cmd.Flags().StringP("selector", "l", "", "Selector (label query) to filter on.")
 	return cmd
@@ -201,7 +202,7 @@ func (o *LogsOptions) Complete(f cmdutil.Factory, out io.Writer, cmd *cobra.Comm
 
 	if o.Object == nil {
 		builder := f.NewBuilder().
-			Internal().
+			Internal(legacyscheme.Scheme).
 			NamespaceParam(o.Namespace).DefaultNamespace().
 			SingleResourceType()
 		if o.ResourceArg != "" {

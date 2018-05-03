@@ -125,6 +125,7 @@ func NewFakeProxier(ipt utiliptables.Interface, ipvs utilipvs.Interface, ipset u
 		serviceChanges:      proxy.NewServiceChangeTracker(newServiceInfo, nil, nil),
 		endpointsMap:        make(proxy.EndpointsMap),
 		endpointsChanges:    proxy.NewEndpointChangeTracker(testHostname, nil, nil, nil),
+		excludeCIDRs:        make([]string, 0),
 		iptables:            ipt,
 		ipvs:                ipvs,
 		ipset:               ipset,
@@ -976,6 +977,71 @@ func TestLoadBalanceSourceRanges(t *testing.T) {
 		}, {
 			JumpChain: string(KubeMarkDropChain), MatchSet: "",
 		}},
+	}
+	checkIptables(t, ipt, epIpt)
+}
+
+func TestAcceptIPVSTraffic(t *testing.T) {
+	ipt, fp := buildFakeProxier(nil)
+
+	ingressIP := "1.2.3.4"
+	externalIP := []string{"5.6.7.8"}
+	svcInfos := []struct {
+		svcType api.ServiceType
+		svcIP   string
+		svcName string
+		epIP    string
+	}{
+		{api.ServiceTypeClusterIP, "10.20.30.40", "svc1", "10.180.0.1"},
+		{api.ServiceTypeLoadBalancer, "10.20.30.41", "svc2", "10.180.0.2"},
+		{api.ServiceTypeNodePort, "10.20.30.42", "svc3", "10.180.0.3"},
+	}
+
+	for _, svcInfo := range svcInfos {
+		makeServiceMap(fp,
+			makeTestService("ns1", svcInfo.svcName, func(svc *api.Service) {
+				svc.Spec.Type = svcInfo.svcType
+				svc.Spec.ClusterIP = svcInfo.svcIP
+				svc.Spec.Ports = []api.ServicePort{{
+					Name:     "p80",
+					Port:     80,
+					Protocol: api.ProtocolTCP,
+					NodePort: 80,
+				}}
+				if svcInfo.svcType == api.ServiceTypeLoadBalancer {
+					svc.Status.LoadBalancer.Ingress = []api.LoadBalancerIngress{{
+						IP: ingressIP,
+					}}
+				}
+				if svcInfo.svcType == api.ServiceTypeClusterIP {
+					svc.Spec.ExternalIPs = externalIP
+				}
+			}),
+		)
+
+		makeEndpointsMap(fp,
+			makeTestEndpoints("ns1", "p80", func(ept *api.Endpoints) {
+				ept.Subsets = []api.EndpointSubset{{
+					Addresses: []api.EndpointAddress{{
+						IP: svcInfo.epIP,
+					}},
+					Ports: []api.EndpointPort{{
+						Name: "p80",
+						Port: 80,
+					}},
+				}}
+			}),
+		)
+	}
+	fp.syncProxyRules()
+
+	// Check iptables chain and rules
+	epIpt := netlinktest.ExpectedIptablesChain{
+		string(kubeServicesChain): {
+			{JumpChain: "ACCEPT", MatchSet: KubeClusterIPSet},
+			{JumpChain: "ACCEPT", MatchSet: KubeLoadBalancerSet},
+			{JumpChain: "ACCEPT", MatchSet: KubeExternalIPSet},
+		},
 	}
 	checkIptables(t, ipt, epIpt)
 }
@@ -2391,6 +2457,87 @@ func Test_syncService(t *testing.T) {
 		}
 		if !list[0].Equal(testCases[i].newVirtualServer) {
 			t.Errorf("Case [%d], unexpected mismatch, expect: %#v, got: %#v", i, testCases[i].newVirtualServer, list[0])
+		}
+	}
+}
+
+func Test_cleanLegacyService(t *testing.T) {
+	// All ipvs services that were processed in the latest sync loop.
+	activeServices := map[string]bool{"ipvs0": true, "ipvs1": true}
+	// All ipvs services in the system.
+	currentServices := map[string]*utilipvs.VirtualServer{
+		// Created by kube-proxy.
+		"ipvs0": {
+			Address:   net.ParseIP("1.1.1.1"),
+			Protocol:  string(api.ProtocolUDP),
+			Port:      53,
+			Scheduler: "rr",
+			Flags:     utilipvs.FlagHashed,
+		},
+		// Created by kube-proxy.
+		"ipvs1": {
+			Address:   net.ParseIP("2.2.2.2"),
+			Protocol:  string(api.ProtocolUDP),
+			Port:      54,
+			Scheduler: "rr",
+			Flags:     utilipvs.FlagHashed,
+		},
+		// Created by an external party.
+		"ipvs2": {
+			Address:   net.ParseIP("3.3.3.3"),
+			Protocol:  string(api.ProtocolUDP),
+			Port:      55,
+			Scheduler: "rr",
+			Flags:     utilipvs.FlagHashed,
+		},
+		// Created by an external party.
+		"ipvs3": {
+			Address:   net.ParseIP("4.4.4.4"),
+			Protocol:  string(api.ProtocolUDP),
+			Port:      56,
+			Scheduler: "rr",
+			Flags:     utilipvs.FlagHashed,
+		},
+		// Created by an external party.
+		"ipvs4": {
+			Address:   net.ParseIP("5.5.5.5"),
+			Protocol:  string(api.ProtocolUDP),
+			Port:      57,
+			Scheduler: "rr",
+			Flags:     utilipvs.FlagHashed,
+		},
+		// Created by kube-proxy, but now stale.
+		"ipvs5": {
+			Address:   net.ParseIP("6.6.6.6"),
+			Protocol:  string(api.ProtocolUDP),
+			Port:      58,
+			Scheduler: "rr",
+			Flags:     utilipvs.FlagHashed,
+		},
+	}
+
+	ipt := iptablestest.NewFake()
+	ipvs := ipvstest.NewFake()
+	ipset := ipsettest.NewFake(testIPSetVersion)
+	proxier := NewFakeProxier(ipt, ipvs, ipset, nil)
+	// These CIDRs cover only ipvs2 and ipvs3.
+	proxier.excludeCIDRs = []string{"3.3.3.0/24", "4.4.4.0/24"}
+	for v := range currentServices {
+		proxier.ipvs.AddVirtualServer(currentServices[v])
+	}
+	proxier.cleanLegacyService(activeServices, currentServices)
+	// ipvs4 and ipvs5 should have been cleaned.
+	remainingVirtualServers, _ := proxier.ipvs.GetVirtualServers()
+	if len(remainingVirtualServers) != 4 {
+		t.Errorf("Expected number of remaining IPVS services after cleanup to be %v. Got %v", 4, len(remainingVirtualServers))
+	}
+	for _, vs := range remainingVirtualServers {
+		// Checking that ipvs4 and ipvs5 were removed.
+		if vs.Port == 57 {
+			t.Errorf("Expected ipvs4 to be removed after cleanup. It still remains")
+		}
+		if vs.Port == 58 {
+			t.Errorf("Expected ipvs5 to be removed after cleanup. It still remains")
 		}
 	}
 }

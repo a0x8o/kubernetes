@@ -17,7 +17,6 @@ limitations under the License.
 package create
 
 import (
-	"bytes"
 	"testing"
 
 	rbac "k8s.io/api/rbac/v1"
@@ -29,6 +28,7 @@ import (
 	"k8s.io/client-go/rest/fake"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	cmdtesting "k8s.io/kubernetes/pkg/kubectl/cmd/testing"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 	"k8s.io/kubernetes/pkg/kubectl/scheme"
 )
 
@@ -133,8 +133,8 @@ func TestCreateClusterRole(t *testing.T) {
 	}
 
 	for name, test := range tests {
-		buf := bytes.NewBuffer([]byte{})
-		cmd := NewCmdCreateClusterRole(tf, buf)
+		ioStreams, _, buf, _ := genericclioptions.NewTestIOStreams()
+		cmd := NewCmdCreateClusterRole(tf, ioStreams)
 		cmd.Flags().Set("dry-run", "true")
 		cmd.Flags().Set("output", "yaml")
 		cmd.Flags().Set("verb", test.verbs)
@@ -437,8 +437,12 @@ func TestClusterRoleValidate(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			test.clusterRoleOptions.Mapper, _ = tf.Object()
-			err := test.clusterRoleOptions.Validate()
+			var err error
+			test.clusterRoleOptions.Mapper, err = tf.RESTMapper()
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = test.clusterRoleOptions.Validate()
 			if test.expectErr && err == nil {
 				t.Errorf("%s: expect error happens, but validate passes.", name)
 			}

@@ -17,10 +17,8 @@ limitations under the License.
 package scheme
 
 import (
-	"os"
-
-	"k8s.io/apimachinery/pkg/apimachinery/announced"
 	"k8s.io/apimachinery/pkg/apimachinery/registered"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -28,11 +26,8 @@ import (
 
 // All kubectl code should eventually switch to use this Registry and Scheme instead of the global ones.
 
-// GroupFactoryRegistry is the APIGroupFactoryRegistry (overlaps a bit with Registry, see comments in package for details)
-var GroupFactoryRegistry = make(announced.APIGroupFactoryRegistry)
-
 // Registry is an instance of an API registry.
-var Registry = registered.NewOrDie(os.Getenv("KUBE_API_VERSIONS"))
+var Registry = registered.NewAPIRegistrationManager()
 
 // Scheme is the default instance of runtime.Scheme to which types in the Kubernetes API are already registered.
 var Scheme = runtime.NewScheme()
@@ -50,5 +45,5 @@ var Versions = []schema.GroupVersion{}
 
 // DefaultJSONEncoder returns a default encoder for our scheme
 func DefaultJSONEncoder() runtime.Encoder {
-	return Codecs.LegacyCodec(Versions...)
+	return unstructured.JSONFallbackEncoder{Encoder: Codecs.LegacyCodec(Versions...)}
 }

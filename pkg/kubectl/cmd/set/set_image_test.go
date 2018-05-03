@@ -17,7 +17,6 @@ limitations under the License.
 package set
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -42,6 +41,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	cmdtesting "k8s.io/kubernetes/pkg/kubectl/cmd/testing"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
 	"k8s.io/kubernetes/pkg/kubectl/scheme"
 )
@@ -65,13 +65,13 @@ func TestImageLocal(t *testing.T) {
 
 	outputFormat := "name"
 
-	buf := bytes.NewBuffer([]byte{})
-	cmd := NewCmdImage(tf, buf, buf)
+	streams, _, buf, _ := genericclioptions.NewTestIOStreams()
+	cmd := NewCmdImage(tf, streams)
 	cmd.SetOutput(buf)
 	cmd.Flags().Set("output", outputFormat)
 	cmd.Flags().Set("local", "true")
 
-	opts := ImageOptions{
+	opts := SetImageOptions{
 		PrintFlags: &printers.PrintFlags{
 			JSONYamlPrintFlags: printers.NewJSONYamlPrintFlags(),
 			NamePrintFlags:     printers.NewNamePrintFlags(""),
@@ -80,8 +80,9 @@ func TestImageLocal(t *testing.T) {
 		},
 		FilenameOptions: resource.FilenameOptions{
 			Filenames: []string{"../../../../test/e2e/testing-manifests/statefulset/cassandra/controller.yaml"}},
-		Out:   buf,
-		Local: true}
+		Local:     true,
+		IOStreams: streams,
+	}
 	err := opts.Complete(tf, cmd, []string{"cassandra=thingy"})
 	if err == nil {
 		err = opts.Validate()
@@ -105,17 +106,17 @@ func TestSetImageValidation(t *testing.T) {
 
 	testCases := []struct {
 		name         string
-		imageOptions *ImageOptions
+		imageOptions *SetImageOptions
 		expectErr    string
 	}{
 		{
 			name:         "test resource < 1 and filenames empty",
-			imageOptions: &ImageOptions{PrintFlags: printFlags},
+			imageOptions: &SetImageOptions{PrintFlags: printFlags},
 			expectErr:    "[one or more resources must be specified as <resource> <name> or <resource>/<name>, at least one image update is required]",
 		},
 		{
 			name: "test containerImages < 1",
-			imageOptions: &ImageOptions{
+			imageOptions: &SetImageOptions{
 				PrintFlags: printFlags,
 				Resources:  []string{"a", "b", "c"},
 
@@ -127,7 +128,7 @@ func TestSetImageValidation(t *testing.T) {
 		},
 		{
 			name: "test containerImages > 1 and all containers are already specified by *",
-			imageOptions: &ImageOptions{
+			imageOptions: &SetImageOptions{
 				PrintFlags: printFlags,
 				Resources:  []string{"a", "b", "c"},
 				FilenameOptions: resource.FilenameOptions{
@@ -142,7 +143,7 @@ func TestSetImageValidation(t *testing.T) {
 		},
 		{
 			name: "success case",
-			imageOptions: &ImageOptions{
+			imageOptions: &SetImageOptions{
 				PrintFlags: printFlags,
 				Resources:  []string{"a", "b", "c"},
 				FilenameOptions: resource.FilenameOptions{
@@ -187,13 +188,13 @@ func TestSetMultiResourcesImageLocal(t *testing.T) {
 
 	outputFormat := "name"
 
-	buf := bytes.NewBuffer([]byte{})
-	cmd := NewCmdImage(tf, buf, buf)
+	streams, _, buf, _ := genericclioptions.NewTestIOStreams()
+	cmd := NewCmdImage(tf, streams)
 	cmd.SetOutput(buf)
 	cmd.Flags().Set("output", outputFormat)
 	cmd.Flags().Set("local", "true")
 
-	opts := ImageOptions{
+	opts := SetImageOptions{
 		PrintFlags: &printers.PrintFlags{
 			JSONYamlPrintFlags: printers.NewJSONYamlPrintFlags(),
 			NamePrintFlags:     printers.NewNamePrintFlags(""),
@@ -202,8 +203,9 @@ func TestSetMultiResourcesImageLocal(t *testing.T) {
 		},
 		FilenameOptions: resource.FilenameOptions{
 			Filenames: []string{"../../../../test/fixtures/pkg/kubectl/cmd/set/multi-resource-yaml.yaml"}},
-		Out:   buf,
-		Local: true}
+		Local:     true,
+		IOStreams: streams,
+	}
 	err := opts.Complete(tf, cmd, []string{"*=thingy"})
 	if err == nil {
 		err = opts.Validate()
@@ -583,11 +585,10 @@ func TestSetImageRemote(t *testing.T) {
 
 			outputFormat := "yaml"
 
-			out := new(bytes.Buffer)
-			cmd := NewCmdImage(tf, out, out)
-			cmd.SetOutput(out)
+			streams := genericclioptions.NewTestIOStreamsDiscard()
+			cmd := NewCmdImage(tf, streams)
 			cmd.Flags().Set("output", outputFormat)
-			opts := ImageOptions{
+			opts := SetImageOptions{
 				PrintFlags: &printers.PrintFlags{
 					JSONYamlPrintFlags: printers.NewJSONYamlPrintFlags(),
 					NamePrintFlags:     printers.NewNamePrintFlags(""),
@@ -595,8 +596,9 @@ func TestSetImageRemote(t *testing.T) {
 					OutputFormat: &outputFormat,
 				},
 
-				Out:   out,
-				Local: false}
+				Local:     false,
+				IOStreams: streams,
+			}
 			err := opts.Complete(tf, cmd, input.args)
 			assert.NoError(t, err)
 			err = opts.Run()

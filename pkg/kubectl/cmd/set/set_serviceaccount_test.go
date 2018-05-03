@@ -42,6 +42,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	cmdtesting "k8s.io/kubernetes/pkg/kubectl/cmd/testing"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
 	"k8s.io/kubernetes/pkg/kubectl/scheme"
 )
@@ -83,13 +84,12 @@ func TestSetServiceAccountLocal(t *testing.T) {
 			outputFormat := "yaml"
 
 			tf.Namespace = "test"
-			out := new(bytes.Buffer)
-			cmd := NewCmdServiceAccount(tf, out, out)
-			cmd.SetOutput(out)
+			streams, _, buf, _ := genericclioptions.NewTestIOStreams()
+			cmd := NewCmdServiceAccount(tf, streams)
 			cmd.Flags().Set("output", outputFormat)
 			cmd.Flags().Set("local", "true")
 			testapi.Default = testapi.Groups[input.apiGroup]
-			saConfig := serviceAccountConfig{
+			saConfig := SetServiceAccountOptions{
 				PrintFlags: &printers.PrintFlags{
 					JSONYamlPrintFlags: printers.NewJSONYamlPrintFlags(),
 					NamePrintFlags:     printers.NewNamePrintFlags(""),
@@ -98,13 +98,14 @@ func TestSetServiceAccountLocal(t *testing.T) {
 				},
 				fileNameOptions: resource.FilenameOptions{
 					Filenames: []string{input.yaml}},
-				out:   out,
-				local: true}
+				local:     true,
+				IOStreams: streams,
+			}
 			err := saConfig.Complete(tf, cmd, []string{serviceAccount})
 			assert.NoError(t, err)
 			err = saConfig.Run()
 			assert.NoError(t, err)
-			assert.Contains(t, out.String(), "serviceAccountName: "+serviceAccount, fmt.Sprintf("serviceaccount not updated for %s", input.yaml))
+			assert.Contains(t, buf.String(), "serviceAccountName: "+serviceAccount, fmt.Sprintf("serviceaccount not updated for %s", input.yaml))
 		})
 	}
 }
@@ -128,12 +129,11 @@ func TestSetServiceAccountMultiLocal(t *testing.T) {
 
 	outputFormat := "name"
 
-	buf := bytes.NewBuffer([]byte{})
-	cmd := NewCmdServiceAccount(tf, buf, buf)
-	cmd.SetOutput(buf)
+	streams, _, buf, _ := genericclioptions.NewTestIOStreams()
+	cmd := NewCmdServiceAccount(tf, streams)
 	cmd.Flags().Set("output", outputFormat)
 	cmd.Flags().Set("local", "true")
-	opts := serviceAccountConfig{
+	opts := SetServiceAccountOptions{
 		PrintFlags: &printers.PrintFlags{
 			JSONYamlPrintFlags: printers.NewJSONYamlPrintFlags(),
 			NamePrintFlags:     printers.NewNamePrintFlags(""),
@@ -142,8 +142,9 @@ func TestSetServiceAccountMultiLocal(t *testing.T) {
 		},
 		fileNameOptions: resource.FilenameOptions{
 			Filenames: []string{"../../../../test/fixtures/pkg/kubectl/cmd/set/multi-resource-yaml.yaml"}},
-		out:   buf,
-		local: true}
+		local:     true,
+		IOStreams: streams,
+	}
 
 	err := opts.Complete(tf, cmd, []string{serviceAccount})
 	if err == nil {
@@ -373,11 +374,10 @@ func TestSetServiceAccountRemote(t *testing.T) {
 
 			outputFormat := "yaml"
 
-			out := new(bytes.Buffer)
-			cmd := NewCmdServiceAccount(tf, out, out)
-			cmd.SetOutput(out)
+			streams := genericclioptions.NewTestIOStreamsDiscard()
+			cmd := NewCmdServiceAccount(tf, streams)
 			cmd.Flags().Set("output", outputFormat)
-			saConfig := serviceAccountConfig{
+			saConfig := SetServiceAccountOptions{
 				PrintFlags: &printers.PrintFlags{
 					JSONYamlPrintFlags: printers.NewJSONYamlPrintFlags(),
 					NamePrintFlags:     printers.NewNamePrintFlags(""),
@@ -385,8 +385,9 @@ func TestSetServiceAccountRemote(t *testing.T) {
 					OutputFormat: &outputFormat,
 				},
 
-				out:   out,
-				local: false}
+				local:     false,
+				IOStreams: streams,
+			}
 			err := saConfig.Complete(tf, cmd, input.args)
 			assert.NoError(t, err)
 			err = saConfig.Run()
@@ -420,17 +421,17 @@ func TestServiceAccountValidation(t *testing.T) {
 			outputFormat := ""
 
 			tf.Namespace = "test"
-			out := bytes.NewBuffer([]byte{})
-			cmd := NewCmdServiceAccount(tf, out, out)
-			cmd.SetOutput(out)
+			streams := genericclioptions.NewTestIOStreamsDiscard()
+			cmd := NewCmdServiceAccount(tf, streams)
 
-			saConfig := &serviceAccountConfig{
+			saConfig := &SetServiceAccountOptions{
 				PrintFlags: &printers.PrintFlags{
 					JSONYamlPrintFlags: printers.NewJSONYamlPrintFlags(),
 					NamePrintFlags:     printers.NewNamePrintFlags(""),
 
 					OutputFormat: &outputFormat,
 				},
+				IOStreams: streams,
 			}
 			err := saConfig.Complete(tf, cmd, input.args)
 			assert.EqualError(t, err, input.errorString)
