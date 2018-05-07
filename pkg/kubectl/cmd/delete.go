@@ -115,7 +115,6 @@ type DeleteOptions struct {
 
 func NewCmdDelete(f cmdutil.Factory, out, errOut io.Writer) *cobra.Command {
 	deleteFlags := NewDeleteCommandFlags("containing the resource to delete.")
-	validArgs := cmdutil.ValidArgList(f)
 
 	cmd := &cobra.Command{
 		Use: "delete ([-f FILENAME] | TYPE [(NAME | -l label | --all)])",
@@ -138,8 +137,6 @@ func NewCmdDelete(f cmdutil.Factory, out, errOut io.Writer) *cobra.Command {
 			}
 		},
 		SuggestFor: []string{"rm"},
-		ValidArgs:  validArgs,
-		ArgAliases: kubectl.ResourceAliases(validArgs),
 	}
 
 	deleteFlags.AddFlags(cmd)
@@ -174,7 +171,11 @@ func (o *DeleteOptions) Complete(f cmdutil.Factory, out, errOut io.Writer, args 
 		return err
 	}
 	o.Result = r
-	o.Mapper = r.Mapper().RESTMapper
+
+	o.Mapper, err = f.RESTMapper()
+	if err != nil {
+		return err
+	}
 
 	// Set up writer
 	o.Out = out

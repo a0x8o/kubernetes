@@ -24,6 +24,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
+
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -171,7 +172,7 @@ func (o *TaintOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args []st
 		return cmdutil.UsageErrorf(cmd, err.Error())
 	}
 	o.builder = f.NewBuilder().
-		Internal(legacyscheme.Scheme).
+		WithScheme(legacyscheme.Scheme).
 		ContinueOnError().
 		NamespaceParam(namespace).DefaultNamespace()
 	if o.selector != "" {
@@ -253,9 +254,10 @@ func (o TaintOptions) RunTaint() error {
 			return err
 		}
 
-		obj, err := legacyscheme.Scheme.ConvertToVersion(info.Object, info.Mapping.GroupVersionKind.GroupVersion())
+		obj, err := legacyscheme.Scheme.ConvertToVersion(info.Object, v1.SchemeGroupVersion)
 		if err != nil {
-			return err
+			glog.V(1).Info(err)
+			return fmt.Errorf("object was not a node.v1.: %T", info.Object)
 		}
 		name, namespace := info.Name, info.Namespace
 		oldData, err := json.Marshal(obj)

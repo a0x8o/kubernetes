@@ -53,10 +53,10 @@ import (
 
 // GetOptions contains the input to the get command.
 type GetOptions struct {
-	PrintFlags           *PrintFlags
-	ToPrinter            func(*meta.RESTMapping, bool) (printers.ResourcePrinterFunc, error)
-	IsGeneric            bool
-	PrintWithOpenAPICols bool
+	PrintFlags             *PrintFlags
+	ToPrinter              func(*meta.RESTMapping, bool) (printers.ResourcePrinterFunc, error)
+	IsHumanReadablePrinter bool
+	PrintWithOpenAPICols   bool
 
 	CmdParent string
 
@@ -148,7 +148,6 @@ func NewGetOptions(parent string, streams genericclioptions.IOStreams) *GetOptio
 // retrieves one or more resources from a server.
 func NewCmdGet(parent string, f cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
 	o := NewGetOptions(parent, streams)
-	validArgs := cmdutil.ValidArgList(f)
 
 	cmd := &cobra.Command{
 		Use: "get [(-o|--output=)json|yaml|wide|custom-columns=...|custom-columns-file=...|go-template=...|go-template-file=...|jsonpath=...|jsonpath-file=...] (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
@@ -162,8 +161,6 @@ func NewCmdGet(parent string, f cmdutil.Factory, streams genericclioptions.IOStr
 			cmdutil.CheckErr(o.Run(f, cmd, args))
 		},
 		SuggestFor: []string{"list", "ps"},
-		ValidArgs:  validArgs,
-		ArgAliases: kubectl.ResourceAliases(validArgs),
 	}
 
 	o.PrintFlags.AddFlags(cmd)
@@ -219,13 +216,10 @@ func (o *GetOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args []stri
 		o.ServerPrint = false
 	}
 
-	// obtain printer here in order to determine if we are
-	// printing humanreadable or generic output.
-	printer, err := o.PrintFlags.ToPrinter()
-	if err != nil {
-		return err
+	// human readable printers have special conversion rules, so we determine if we're using one.
+	if len(*o.PrintFlags.OutputFormat) == 0 || *o.PrintFlags.OutputFormat == "wide" {
+		o.IsHumanReadablePrinter = true
 	}
-	o.IsGeneric = printer.IsGeneric()
 
 	o.IncludeUninitialized = cmdutil.ShouldIncludeUninitialized(cmd, false)
 	o.PrintWithOpenAPICols = cmdutil.GetFlagBool(cmd, useOpenAPIPrintColumnFlagLabel)
@@ -321,7 +315,7 @@ func (o *GetOptions) Run(f cmdutil.Factory, cmd *cobra.Command, args []string) e
 		Latest().
 		Flatten().
 		TransformRequests(func(req *rest.Request) {
-			if o.ServerPrint && !o.IsGeneric && !o.Sort {
+			if o.ServerPrint && o.IsHumanReadablePrinter && !o.Sort {
 				group := metav1beta1.GroupName
 				version := metav1beta1.SchemeGroupVersion.Version
 
@@ -338,7 +332,7 @@ func (o *GetOptions) Run(f cmdutil.Factory, cmd *cobra.Command, args []string) e
 		return err
 	}
 
-	if o.IsGeneric {
+	if !o.IsHumanReadablePrinter {
 		return o.printGeneric(r)
 	}
 
@@ -547,7 +541,7 @@ func (o *GetOptions) watch(f cmdutil.Factory, cmd *cobra.Command, args []string)
 			objsToPrint = append(objsToPrint, obj)
 		}
 		for _, objToPrint := range objsToPrint {
-			if !o.IsGeneric {
+			if o.IsHumanReadablePrinter {
 				// printing always takes the internal version, but the watch event uses externals
 				internalGV := mapping.GroupVersionKind.GroupKind().WithVersion(runtime.APIVersionInternal).GroupVersion()
 				objToPrint = attemptToConvertToInternal(objToPrint, legacyscheme.Scheme, internalGV)
