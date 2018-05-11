@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -30,11 +29,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/kubectl"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
-	"k8s.io/kubernetes/pkg/kubectl/resource"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions/resource"
 	"k8s.io/kubernetes/pkg/kubectl/util/i18n"
 	"k8s.io/kubernetes/pkg/kubectl/validation"
 	"k8s.io/kubernetes/pkg/printers"
@@ -86,11 +86,10 @@ type ReplaceOptions struct {
 
 	Recorder genericclioptions.Recorder
 
-	Out    io.Writer
-	ErrOut io.Writer
+	genericclioptions.IOStreams
 }
 
-func NewReplaceOptions(out, errOut io.Writer) *ReplaceOptions {
+func NewReplaceOptions(streams genericclioptions.IOStreams) *ReplaceOptions {
 	outputFormat := ""
 
 	return &ReplaceOptions{
@@ -98,17 +97,16 @@ func NewReplaceOptions(out, errOut io.Writer) *ReplaceOptions {
 		// we only support "-o name" for this command, so only register the name printer
 		PrintFlags: &printers.PrintFlags{
 			OutputFormat:   &outputFormat,
-			NamePrintFlags: printers.NewNamePrintFlags("replaced"),
+			NamePrintFlags: printers.NewNamePrintFlags("replaced", legacyscheme.Scheme),
 		},
 		DeleteFlags: NewDeleteFlags("to use to replace the resource."),
 
-		Out:    out,
-		ErrOut: errOut,
+		IOStreams: streams,
 	}
 }
 
-func NewCmdReplace(f cmdutil.Factory, out, errOut io.Writer) *cobra.Command {
-	o := NewReplaceOptions(out, errOut)
+func NewCmdReplace(f cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+	o := NewReplaceOptions(streams)
 
 	cmd := &cobra.Command{
 		Use: "replace -f FILENAME",
@@ -154,7 +152,7 @@ func (o *ReplaceOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args []
 		return printer.PrintObj(obj, o.Out)
 	}
 
-	deleteOpts := o.DeleteFlags.ToOptions(o.Out, o.ErrOut)
+	deleteOpts := o.DeleteFlags.ToOptions(o.IOStreams)
 
 	//Replace will create a resource if it doesn't exist already, so ignore not found error
 	deleteOpts.IgnoreNotFound = true

@@ -103,6 +103,14 @@ var (
 		If you are on a systemd-powered system, you can try to troubleshoot the error with the following commands:
 			- 'systemctl status kubelet'
 			- 'journalctl -xeu kubelet'
+		
+		Additionally a control plane component may not have come up in docker. If that's the case, you can enumerate 
+		all docker containers that have been started (including ones that have crashed and exited) by running the
+		following commands:
+			- 'docker ps -a'
+		
+		Once you have that list, you can inspect the logs for any pod with:
+			- 'docker logs $CONTAINERID'
 		`)))
 )
 
@@ -187,7 +195,7 @@ func AddInitConfigFlags(flagSet *flag.FlagSet, cfg *kubeadmapiext.MasterConfigur
 	)
 	flagSet.StringVar(
 		&cfg.Token, "token", cfg.Token,
-		"The token to use for establishing bidirectional trust between nodes and masters.",
+		"The token to use for establishing bidirectional trust between nodes and masters. The format is [a-z0-9]{6}\\.[a-z0-9]{16} - e.g. abcdef.0123456789abcdef",
 	)
 	flagSet.DurationVar(
 		&cfg.TokenTTL.Duration, "token-ttl", cfg.TokenTTL.Duration,

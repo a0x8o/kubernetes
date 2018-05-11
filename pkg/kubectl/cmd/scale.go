@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	batchclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/batch/internalversion"
 	"k8s.io/kubernetes/pkg/kubectl"
@@ -33,7 +34,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
-	"k8s.io/kubernetes/pkg/kubectl/resource"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions/resource"
 	"k8s.io/kubernetes/pkg/kubectl/util/i18n"
 	"k8s.io/kubernetes/pkg/printers"
 )
@@ -100,7 +101,7 @@ func NewScaleOptions(ioStreams genericclioptions.IOStreams) *ScaleOptions {
 		// we only support "-o name" for this command, so only register the name printer
 		PrintFlags: &printers.PrintFlags{
 			OutputFormat:   &outputFormat,
-			NamePrintFlags: printers.NewNamePrintFlags("scaled"),
+			NamePrintFlags: printers.NewNamePrintFlags("scaled", legacyscheme.Scheme),
 		},
 		RecordFlags:     genericclioptions.NewRecordFlags(),
 		CurrentReplicas: -1,
@@ -114,7 +115,6 @@ func NewCmdScale(f cmdutil.Factory, ioStreams genericclioptions.IOStreams) *cobr
 	o := NewScaleOptions(ioStreams)
 
 	validArgs := []string{"deployment", "replicaset", "replicationcontroller", "statefulset"}
-	argAliases := kubectl.ResourceAliases(validArgs)
 
 	cmd := &cobra.Command{
 		Use: "scale [--resource-version=version] [--current-replicas=count] --replicas=COUNT (-f FILENAME | TYPE NAME)",
@@ -127,8 +127,7 @@ func NewCmdScale(f cmdutil.Factory, ioStreams genericclioptions.IOStreams) *cobr
 			cmdutil.CheckErr(o.Validate(cmd))
 			cmdutil.CheckErr(o.RunScale())
 		},
-		ValidArgs:  validArgs,
-		ArgAliases: argAliases,
+		ValidArgs: validArgs,
 	}
 
 	o.RecordFlags.AddFlags(cmd)
