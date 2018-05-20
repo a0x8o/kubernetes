@@ -350,6 +350,9 @@ func (kl *Kubelet) updateNodeStatus() error {
 	glog.V(5).Infof("Updating node status")
 	for i := 0; i < nodeStatusUpdateRetry; i++ {
 		if err := kl.tryUpdateNodeStatus(i); err != nil {
+			if i > 0 && kl.onRepeatedHeartbeatFailure != nil {
+				kl.onRepeatedHeartbeatFailure()
+			}
 			glog.Errorf("Error updating node status, will retry: %v", err)
 		} else {
 			return nil
@@ -381,7 +384,9 @@ func (kl *Kubelet) tryUpdateNodeStatus(tryNumber int) error {
 		return fmt.Errorf("nil %q node object", kl.nodeName)
 	}
 
-	kl.updatePodCIDR(node.Spec.PodCIDR)
+	if node.Spec.PodCIDR != "" {
+		kl.updatePodCIDR(node.Spec.PodCIDR)
+	}
 
 	kl.setNodeStatus(node)
 	// Patch the current status on the API server

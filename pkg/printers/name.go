@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
 // NamePrinter is an implementation of ResourcePrinter which outputs "resource/name" pair of an object.
@@ -38,9 +37,6 @@ type NamePrinter struct {
 	// took place on an object, to be included in the
 	// finalized "successful" message.
 	Operation string
-
-	Decoders []runtime.Decoder
-	Typer    runtime.ObjectTyper
 }
 
 // PrintObj is an implementation of ResourcePrinter.PrintObj which decodes the object
@@ -54,12 +50,16 @@ func (p *NamePrinter) PrintObj(obj runtime.Object, w io.Writer) error {
 	}
 
 	if meta.IsListType(obj) {
+		// we allow unstructured lists for now because they always contain the GVK information.  We should chase down
+		// callers and stop them from passing unflattened lists
+		// TODO chase the caller that is setting this and remove it.
+		if _, ok := obj.(*unstructured.UnstructuredList); !ok {
+			return fmt.Errorf("list types are not supported by name printing: %T", obj)
+		}
+
 		items, err := meta.ExtractList(obj)
 		if err != nil {
 			return err
-		}
-		if errs := runtime.DecodeList(items, p.Decoders...); len(errs) > 0 {
-			return utilerrors.NewAggregate(errs)
 		}
 		for _, obj := range items {
 			if err := p.PrintObj(obj, w); err != nil {
@@ -69,6 +69,10 @@ func (p *NamePrinter) PrintObj(obj runtime.Object, w io.Writer) error {
 		return nil
 	}
 
+	if obj.GetObjectKind().GroupVersionKind().Empty() {
+		return fmt.Errorf("missing apiVersion or kind; try GetObjectKind().SetGroupVersionKind() if you know the type")
+	}
+
 	name := "<unknown>"
 	if acc, err := meta.Accessor(obj); err == nil {
 		if n := acc.GetName(); len(n) > 0 {
@@ -76,25 +80,16 @@ func (p *NamePrinter) PrintObj(obj runtime.Object, w io.Writer) error {
 		}
 	}
 
-	return printObj(w, name, p.Operation, p.ShortOutput, GetObjectGroupKind(obj, p.Typer))
+	return printObj(w, name, p.Operation, p.ShortOutput, GetObjectGroupKind(obj))
 }
 
-func GetObjectGroupKind(obj runtime.Object, typer runtime.ObjectTyper) schema.GroupKind {
+func GetObjectGroupKind(obj runtime.Object) schema.GroupKind {
 	if obj == nil {
 		return schema.GroupKind{Kind: "<unknown>"}
 	}
 	groupVersionKind := obj.GetObjectKind().GroupVersionKind()
 	if len(groupVersionKind.Kind) > 0 {
 		return groupVersionKind.GroupKind()
-	}
-
-	if gvks, _, err := typer.ObjectKinds(obj); err == nil {
-		for _, gvk := range gvks {
-			if len(gvk.Kind) == 0 {
-				continue
-			}
-			return gvk.GroupKind()
-		}
 	}
 
 	if uns, ok := obj.(*unstructured.Unstructured); ok {

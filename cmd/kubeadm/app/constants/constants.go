@@ -255,6 +255,11 @@ const (
 	KubeAuditPolicyLogVolumeName = "audit-log"
 	// StaticPodAuditPolicyLogDir is the name of the directory in the static pod that will have the audit logs
 	StaticPodAuditPolicyLogDir = "/var/log/kubernetes/audit"
+
+	// LeaseEndpointReconcilerType will select a storage based reconciler
+	// Copied from pkg/master/reconcilers to avoid pulling extra dependencies
+	// TODO: Import this constant from a consts only package, that does not pull any further dependencies.
+	LeaseEndpointReconcilerType = "lease"
 )
 
 var (
@@ -285,16 +290,16 @@ var (
 	MasterComponents = []string{KubeAPIServer, KubeControllerManager, KubeScheduler}
 
 	// MinimumControlPlaneVersion specifies the minimum control plane version kubeadm can deploy
-	MinimumControlPlaneVersion = version.MustParseSemantic("v1.9.0")
+	MinimumControlPlaneVersion = version.MustParseSemantic("v1.10.0")
 
 	// MinimumKubeletVersion specifies the minimum version of kubelet which kubeadm supports
-	MinimumKubeletVersion = version.MustParseSemantic("v1.9.0")
+	MinimumKubeletVersion = version.MustParseSemantic("v1.10.0")
 
 	// SupportedEtcdVersion lists officially supported etcd versions with corresponding kubernetes releases
 	SupportedEtcdVersion = map[uint8]string{
-		9:  "3.1.12",
 		10: "3.1.12",
 		11: "3.2.18",
+		12: "3.2.18",
 	}
 )
 
