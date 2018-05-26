@@ -45,10 +45,6 @@ type MasterConfiguration struct {
 	// NodeName is the name of the node that will host the k8s control plane.
 	// Defaults to the hostname if not provided.
 	NodeName string `json:"nodeName"`
-	// AuthorizationModes is a set of authorization modes used inside the cluster.
-	// If not specified, defaults to Node and RBAC, meaning both the node
-	// authorizer and RBAC are enabled.
-	AuthorizationModes []string `json:"authorizationModes,omitempty"`
 	// NoTaintMaster will, if set, suppress the tainting of the
 	// master node allowing workloads to be run on it (e.g. in
 	// single node configurations).
@@ -98,8 +94,6 @@ type MasterConfiguration struct {
 
 	// ImageRepository what container registry to pull control plane images from
 	ImageRepository string `json:"imageRepository"`
-	// ImagePullPolicy that control plane images. Can be Always, IfNotPresent or Never.
-	ImagePullPolicy v1.PullPolicy `json:"imagePullPolicy,omitempty"`
 	// UnifiedControlPlaneImage specifies if a specific container image should
 	// be used for all control plane components.
 	UnifiedControlPlaneImage string `json:"unifiedControlPlaneImage"`
@@ -159,6 +153,41 @@ type Networking struct {
 
 // Etcd contains elements describing Etcd configuration.
 type Etcd struct {
+
+	// Local provides configuration knobs for configuring the local etcd instance
+	// Local and External are mutually exclusive
+	Local *LocalEtcd `json:"local,omitempty"`
+
+	// External describes how to connect to an external etcd cluster
+	// Local and External are mutually exclusive
+	External *ExternalEtcd `json:"external,omitempty"`
+}
+
+// LocalEtcd describes that kubeadm should run an etcd cluster locally
+type LocalEtcd struct {
+
+	// Image specifies which container image to use for running etcd.
+	// If empty, automatically populated by kubeadm using the image
+	// repository and default etcd version.
+	Image string `json:"image"`
+
+	// DataDir is the directory etcd will place its data.
+	// Defaults to "/var/lib/etcd".
+	DataDir string `json:"dataDir"`
+
+	// ExtraArgs are extra arguments provided to the etcd binary
+	// when run inside a static pod.
+	ExtraArgs map[string]string `json:"extraArgs,omitempty"`
+
+	// ServerCertSANs sets extra Subject Alternative Names for the etcd server signing cert.
+	ServerCertSANs []string `json:"serverCertSANs,omitempty"`
+	// PeerCertSANs sets extra Subject Alternative Names for the etcd peer signing cert.
+	PeerCertSANs []string `json:"peerCertSANs,omitempty"`
+}
+
+// ExternalEtcd describes an external etcd cluster
+type ExternalEtcd struct {
+
 	// Endpoints of etcd members. Useful for using external etcd.
 	// If not provided, kubeadm will run etcd in a static pod.
 	Endpoints []string `json:"endpoints"`
@@ -168,20 +197,6 @@ type Etcd struct {
 	CertFile string `json:"certFile"`
 	// KeyFile is an SSL key file used to secure etcd communication.
 	KeyFile string `json:"keyFile"`
-	// DataDir is the directory etcd will place its data.
-	// Defaults to "/var/lib/etcd".
-	DataDir string `json:"dataDir"`
-	// ExtraArgs are extra arguments provided to the etcd binary
-	// when run inside a static pod.
-	ExtraArgs map[string]string `json:"extraArgs,omitempty"`
-	// Image specifies which container image to use for running etcd.
-	// If empty, automatically populated by kubeadm using the image
-	// repository and default etcd version.
-	Image string `json:"image"`
-	// ServerCertSANs sets extra Subject Alternative Names for the etcd server signing cert.
-	ServerCertSANs []string `json:"serverCertSANs,omitempty"`
-	// PeerCertSANs sets extra Subject Alternative Names for the etcd peer signing cert.
-	PeerCertSANs []string `json:"peerCertSANs,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -47,9 +47,9 @@ import (
 	kubeadmdefaults "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha1"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/pkg/apis/core/validation"
-	authzmodes "k8s.io/kubernetes/pkg/kubeapiserver/authorizer/modes"
 	"k8s.io/kubernetes/pkg/registry/core/service/ipallocator"
 	"k8s.io/kubernetes/pkg/util/initsystem"
+	ipvsutil "k8s.io/kubernetes/pkg/util/ipvs"
 	"k8s.io/kubernetes/pkg/util/procfs"
 	versionutil "k8s.io/kubernetes/pkg/util/version"
 	kubeadmversion "k8s.io/kubernetes/pkg/version"
@@ -689,8 +689,15 @@ func (ExternalEtcdVersionCheck) Name() string {
 }
 
 // Check validates external etcd version
+// TODO: Use the official etcd Golang client for this instead?
 func (evc ExternalEtcdVersionCheck) Check() (warnings, errors []error) {
 	glog.V(1).Infoln("validating the external etcd version")
+
+	// Return quickly if the user isn't using external etcd
+	if evc.Etcd.External.Endpoints == nil {
+		return nil, nil
+	}
+
 	var config *tls.Config
 	var err error
 	if config, err = evc.configRootCAs(config); err != nil {
@@ -703,7 +710,7 @@ func (evc ExternalEtcdVersionCheck) Check() (warnings, errors []error) {
 	}
 
 	client := evc.getHTTPClient(config)
-	for _, endpoint := range evc.Etcd.Endpoints {
+	for _, endpoint := range evc.Etcd.External.Endpoints {
 		if _, err := url.Parse(endpoint); err != nil {
 			errors = append(errors, fmt.Errorf("failed to parse external etcd endpoint %s : %v", endpoint, err))
 			continue
@@ -739,10 +746,10 @@ func (evc ExternalEtcdVersionCheck) Check() (warnings, errors []error) {
 // configRootCAs configures and returns a reference to tls.Config instance if CAFile is provided
 func (evc ExternalEtcdVersionCheck) configRootCAs(config *tls.Config) (*tls.Config, error) {
 	var CACertPool *x509.CertPool
-	if evc.Etcd.CAFile != "" {
-		CACert, err := ioutil.ReadFile(evc.Etcd.CAFile)
+	if evc.Etcd.External.CAFile != "" {
+		CACert, err := ioutil.ReadFile(evc.Etcd.External.CAFile)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't load external etcd's server certificate %s: %v", evc.Etcd.CAFile, err)
+			return nil, fmt.Errorf("couldn't load external etcd's server certificate %s: %v", evc.Etcd.External.CAFile, err)
 		}
 		CACertPool = x509.NewCertPool()
 		CACertPool.AppendCertsFromPEM(CACert)
@@ -759,11 +766,11 @@ func (evc ExternalEtcdVersionCheck) configRootCAs(config *tls.Config) (*tls.Conf
 // configCertAndKey configures and returns a reference to tls.Config instance if CertFile and KeyFile pair is provided
 func (evc ExternalEtcdVersionCheck) configCertAndKey(config *tls.Config) (*tls.Config, error) {
 	var cert tls.Certificate
-	if evc.Etcd.CertFile != "" && evc.Etcd.KeyFile != "" {
+	if evc.Etcd.External.CertFile != "" && evc.Etcd.External.KeyFile != "" {
 		var err error
-		cert, err = tls.LoadX509KeyPair(evc.Etcd.CertFile, evc.Etcd.KeyFile)
+		cert, err = tls.LoadX509KeyPair(evc.Etcd.External.CertFile, evc.Etcd.External.KeyFile)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't load external etcd's certificate and key pair %s, %s: %v", evc.Etcd.CertFile, evc.Etcd.KeyFile, err)
+			return nil, fmt.Errorf("couldn't load external etcd's certificate and key pair %s, %s: %v", evc.Etcd.External.CertFile, evc.Etcd.External.KeyFile, err)
 		}
 		if config == nil {
 			config = &tls.Config{}
@@ -867,36 +874,33 @@ func RunInitMasterChecks(execer utilsexec.Interface, cfg *kubeadmapi.MasterConfi
 	}
 	checks = addCommonChecks(execer, cfg, checks)
 
-	if len(cfg.Etcd.Endpoints) == 0 {
-		// Only do etcd related checks when no external endpoints were specified
+	// Check ipvs required kernel module once we use ipvs kube-proxy mode
+	if cfg.KubeProxy.Config.Mode == ipvsutil.IPVSProxyMode {
 		checks = append(checks,
-			PortOpenCheck{port: 2379},
-			DirAvailableCheck{Path: cfg.Etcd.DataDir},
-		)
-	} else {
-		// Only check etcd version when external endpoints are specified
-		if cfg.Etcd.CAFile != "" {
-			checks = append(checks, FileExistingCheck{Path: cfg.Etcd.CAFile})
-		}
-		if cfg.Etcd.CertFile != "" {
-			checks = append(checks, FileExistingCheck{Path: cfg.Etcd.CertFile})
-		}
-		if cfg.Etcd.KeyFile != "" {
-			checks = append(checks, FileExistingCheck{Path: cfg.Etcd.KeyFile})
-		}
-		checks = append(checks,
-			ExternalEtcdVersionCheck{Etcd: cfg.Etcd},
+			ipvsutil.RequiredIPVSKernelModulesAvailableCheck{Executor: execer},
 		)
 	}
 
-	// Check the config for authorization mode
-	for _, authzMode := range cfg.AuthorizationModes {
-		switch authzMode {
-		case authzmodes.ModeABAC:
-			checks = append(checks, FileExistingCheck{Path: kubeadmconstants.AuthorizationPolicyPath})
-		case authzmodes.ModeWebhook:
-			checks = append(checks, FileExistingCheck{Path: kubeadmconstants.AuthorizationWebhookConfigPath})
+	if cfg.Etcd.Local != nil {
+		// Only do etcd related checks when no external endpoints were specified
+		checks = append(checks,
+			PortOpenCheck{port: 2379},
+			DirAvailableCheck{Path: cfg.Etcd.Local.DataDir},
+		)
+	}
+
+	if cfg.Etcd.External != nil {
+		// Only check etcd version when external endpoints are specified
+		if cfg.Etcd.External.CAFile != "" {
+			checks = append(checks, FileExistingCheck{Path: cfg.Etcd.External.CAFile})
 		}
+		if cfg.Etcd.External.CertFile != "" {
+			checks = append(checks, FileExistingCheck{Path: cfg.Etcd.External.CertFile})
+		}
+		if cfg.Etcd.External.KeyFile != "" {
+			checks = append(checks, FileExistingCheck{Path: cfg.Etcd.External.KeyFile})
+		}
+		checks = append(checks, ExternalEtcdVersionCheck{Etcd: cfg.Etcd})
 	}
 
 	if ip := net.ParseIP(cfg.API.AdvertiseAddress); ip != nil {
@@ -922,6 +926,7 @@ func RunJoinNodeChecks(execer utilsexec.Interface, cfg *kubeadmapi.NodeConfigura
 		FileAvailableCheck{Path: cfg.CACertPath},
 		FileAvailableCheck{Path: filepath.Join(kubeadmconstants.KubernetesDir, kubeadmconstants.KubeletKubeConfigFileName)},
 		FileAvailableCheck{Path: filepath.Join(kubeadmconstants.KubernetesDir, kubeadmconstants.KubeletBootstrapKubeConfigFileName)},
+		ipvsutil.RequiredIPVSKernelModulesAvailableCheck{Executor: execer},
 	}
 	checks = addCommonChecks(execer, cfg, checks)
 
@@ -1054,10 +1059,11 @@ func TryStartKubelet(ignorePreflightErrors sets.String) {
 	initSystem, err := initsystem.GetInitSystem()
 	if err != nil {
 		glog.Infoln("[preflight] no supported init system detected, won't ensure kubelet is running.")
-	} else if initSystem.ServiceExists("kubelet") && !initSystem.ServiceIsActive("kubelet") {
+	} else if initSystem.ServiceExists("kubelet") {
 
-		glog.Infoln("[preflight] starting the kubelet service")
-		if err := initSystem.ServiceStart("kubelet"); err != nil {
+		glog.Infoln("[preflight] Activating the kubelet service")
+		// This runs "systemctl daemon-reload && systemctl restart kubelet"
+		if err := initSystem.ServiceRestart("kubelet"); err != nil {
 			glog.Warningf("[preflight] unable to start the kubelet service: [%v]\n", err)
 			glog.Warningf("[preflight] please ensure kubelet is running manually.")
 		}

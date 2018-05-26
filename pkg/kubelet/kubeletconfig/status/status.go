@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
 	utillog "k8s.io/kubernetes/pkg/kubelet/kubeletconfig/util/log"
+	"k8s.io/kubernetes/pkg/kubelet/metrics"
 	nodeutil "k8s.io/kubernetes/pkg/util/node"
 )
 
@@ -80,9 +81,12 @@ type nodeConfigStatus struct {
 
 // NewNodeConfigStatus returns a new NodeConfigStatus interface
 func NewNodeConfigStatus() NodeConfigStatus {
+	// channels must have capacity at least 1, since we signal with non-blocking writes
+	syncCh := make(chan bool, 1)
+	// prime new status managers to sync with the API server on the first call to Sync
+	syncCh <- true
 	return &nodeConfigStatus{
-		// channels must have capacity at least 1, since we signal with non-blocking writes
-		syncCh: make(chan bool, 1),
+		syncCh: syncCh,
 	}
 }
 
@@ -142,6 +146,8 @@ func (s *nodeConfigStatus) Sync(client clientset.Interface, nodeName string) {
 		return
 	}
 
+	utillog.Infof("updating Node.Status.Config")
+
 	// grab the lock
 	s.mux.Lock()
 	defer s.mux.Unlock()
@@ -169,6 +175,24 @@ func (s *nodeConfigStatus) Sync(client clientset.Interface, nodeName string) {
 		// with the override
 		status = status.DeepCopy()
 		status.Error = s.errorOverride
+	}
+
+	// update metrics based on the status we will sync
+	metrics.SetConfigError(len(status.Error) > 0)
+	err = metrics.SetAssignedConfig(status.Assigned)
+	if err != nil {
+		err = fmt.Errorf("failed to update Assigned config metric, error: %v", err)
+		return
+	}
+	err = metrics.SetActiveConfig(status.Active)
+	if err != nil {
+		err = fmt.Errorf("failed to update Active config metric, error: %v", err)
+		return
+	}
+	err = metrics.SetLastKnownGoodConfig(status.LastKnownGood)
+	if err != nil {
+		err = fmt.Errorf("failed to update LastKnownGood config metric, error: %v", err)
+		return
 	}
 
 	// apply the status to a copy of the node so we don't modify the object in the informer's store

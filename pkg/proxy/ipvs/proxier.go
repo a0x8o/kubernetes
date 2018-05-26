@@ -877,7 +877,7 @@ func (proxier *Proxier) syncProxyRules() {
 			}
 			if err := proxier.syncService(svcNameString, serv, true); err == nil {
 				activeIPVSServices[serv.String()] = true
-				if err := proxier.syncEndpoint(svcName, svcInfo.OnlyNodeLocalEndpoints, serv); err != nil {
+				if err := proxier.syncEndpoint(svcName, false, serv); err != nil {
 					glog.Errorf("Failed to sync endpoint for service: %v, err: %v", serv, err)
 				}
 			} else {
@@ -976,8 +976,10 @@ func (proxier *Proxier) syncProxyRules() {
 					serv.Timeout = uint32(svcInfo.StickyMaxAgeSeconds)
 				}
 				if err := proxier.syncService(svcNameString, serv, true); err == nil {
+					// check if service need skip endpoints that not in same host as kube-proxy
+					onlyLocal := svcInfo.SessionAffinityType == api.ServiceAffinityClientIP && svcInfo.OnlyNodeLocalEndpoints
 					activeIPVSServices[serv.String()] = true
-					if err := proxier.syncEndpoint(svcName, svcInfo.OnlyNodeLocalEndpoints, serv); err != nil {
+					if err := proxier.syncEndpoint(svcName, onlyLocal, serv); err != nil {
 						glog.Errorf("Failed to sync endpoint for service: %v, err: %v", serv, err)
 					}
 				} else {
@@ -1105,7 +1107,7 @@ func (proxier *Proxier) syncProxyRules() {
 				// There is no need to bind Node IP to dummy interface, so set parameter `bindAddr` to `false`.
 				if err := proxier.syncService(svcNameString, serv, false); err == nil {
 					activeIPVSServices[serv.String()] = true
-					if err := proxier.syncEndpoint(svcName, svcInfo.OnlyNodeLocalEndpoints, serv); err != nil {
+					if err := proxier.syncEndpoint(svcName, false, serv); err != nil {
 						glog.Errorf("Failed to sync endpoint for service: %v, err: %v", serv, err)
 					}
 				} else {
@@ -1216,17 +1218,25 @@ func (proxier *Proxier) writeIptablesRules() {
 			"-A", string(kubeServicesChain),
 			"-m", "comment", "--comment", proxier.ipsetList[kubeClusterIPSet].getComment(),
 			"-m", "set", "--match-set", kubeClusterIPSet,
-			"dst,dst",
 		)
 		if proxier.masqueradeAll {
-			writeLine(proxier.natRules, append(args, "-j", string(KubeMarkMasqChain))...)
+			writeLine(proxier.natRules, append(args, "dst,dst", "-j", string(KubeMarkMasqChain))...)
 		} else if len(proxier.clusterCIDR) > 0 {
 			// This masquerades off-cluster traffic to a service VIP.  The idea
 			// is that you can establish a static route for your Service range,
 			// routing to any node, and that node will bridge into the Service
 			// for you.  Since that might bounce off-node, we masquerade here.
 			// If/when we support "Local" policy for VIPs, we should update this.
-			writeLine(proxier.natRules, append(args, "! -s", proxier.clusterCIDR, "-j", string(KubeMarkMasqChain))...)
+			writeLine(proxier.natRules, append(args, "dst,dst", "! -s", proxier.clusterCIDR, "-j", string(KubeMarkMasqChain))...)
+		} else {
+			// Masquerade all OUTPUT traffic coming from a service ip.
+			// The kube dummy interface has all service VIPs assigned which
+			// results in the service VIP being picked as the source IP to reach
+			// a VIP. This leads to a connection from VIP:<random port> to
+			// VIP:<service port>.
+			// Always masquerading OUTPUT (node-originating) traffic with a VIP
+			// source ip and service port destination fixes the outgoing connections.
+			writeLine(proxier.natRules, append(args, "src,dst", "-j", string(KubeMarkMasqChain))...)
 		}
 	}
 
@@ -1498,6 +1508,9 @@ func (proxier *Proxier) syncEndpoint(svcPortName proxy.ServicePortName, onlyNode
 	}
 
 	for _, epInfo := range proxier.endpointsMap[svcPortName] {
+		if onlyNodeLocalEndpoints && !epInfo.GetIsLocal() {
+			continue
+		}
 		newEndpoints.Insert(epInfo.String())
 	}
 

@@ -35,6 +35,7 @@ const (
 
 	// owner: @mtaufen
 	// alpha: v1.4
+	// beta: v1.11
 	DynamicKubeletConfig utilfeature.Feature = "DynamicKubeletConfig"
 
 	// owner: @pweil-
@@ -94,7 +95,7 @@ const (
 	LocalStorageCapacityIsolation utilfeature.Feature = "LocalStorageCapacityIsolation"
 
 	// owner: @gnufied
-	// alpha: v1.8
+	// beta: v1.11
 	// Ability to Expand persistent volumes
 	ExpandPersistentVolumes utilfeature.Feature = "ExpandPersistentVolumes"
 
@@ -248,7 +249,7 @@ const (
 	TokenRequest utilfeature.Feature = "TokenRequest"
 
 	// owner: @Random-Liu
-	// alpha: v1.10
+	// beta: v1.11
 	//
 	// Enable container log rotation for cri container runtime
 	CRIContainerLogRotation utilfeature.Feature = "CRIContainerLogRotation"
@@ -279,6 +280,12 @@ const (
 	// A node which has closer cpu,memory utilization and volume count is favoured by scheduler
 	// while making decisions.
 	BalanceAttachedNodeVolumes utilfeature.Feature = "BalanceAttachedNodeVolumes"
+
+	// owner: @lichuqiang
+	// alpha: v1.11
+	//
+	// Extend the default scheduler to be aware of volume topology and handle PV provisioning
+	DynamicProvisioningScheduling utilfeature.Feature = "DynamicProvisioningScheduling"
 )
 
 func init() {
@@ -290,7 +297,7 @@ func init() {
 // available throughout Kubernetes binaries.
 var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureSpec{
 	AppArmor:                                    {Default: true, PreRelease: utilfeature.Beta},
-	DynamicKubeletConfig:                        {Default: false, PreRelease: utilfeature.Alpha},
+	DynamicKubeletConfig:                        {Default: true, PreRelease: utilfeature.Beta},
 	ExperimentalHostUserNamespaceDefaultingGate: {Default: false, PreRelease: utilfeature.Beta},
 	ExperimentalCriticalPodAnnotation:           {Default: false, PreRelease: utilfeature.Alpha},
 	DevicePlugins:                               {Default: true, PreRelease: utilfeature.Beta},
@@ -307,7 +314,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	TaintNodesByCondition:                       {Default: false, PreRelease: utilfeature.Alpha},
 	MountPropagation:                            {Default: true, PreRelease: utilfeature.Beta},
 	QOSReserved:                                 {Default: false, PreRelease: utilfeature.Alpha},
-	ExpandPersistentVolumes:                     {Default: false, PreRelease: utilfeature.Alpha},
+	ExpandPersistentVolumes:                     {Default: true, PreRelease: utilfeature.Beta},
 	CPUManager:                                  {Default: true, PreRelease: utilfeature.Beta},
 	ServiceNodeExclusion:                        {Default: false, PreRelease: utilfeature.Alpha},
 	MountContainers:                             {Default: false, PreRelease: utilfeature.Alpha},
@@ -322,11 +329,12 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	HyperVContainer:                             {Default: false, PreRelease: utilfeature.Alpha},
 	ScheduleDaemonSetPods:                       {Default: false, PreRelease: utilfeature.Alpha},
 	TokenRequest:                                {Default: false, PreRelease: utilfeature.Alpha},
-	CRIContainerLogRotation:                     {Default: false, PreRelease: utilfeature.Alpha},
+	CRIContainerLogRotation:                     {Default: true, PreRelease: utilfeature.Beta},
 	GCERegionalPersistentDisk:                   {Default: true, PreRelease: utilfeature.Beta},
 	RunAsGroup:                                  {Default: false, PreRelease: utilfeature.Alpha},
 	VolumeSubpath:                               {Default: true, PreRelease: utilfeature.GA},
 	BalanceAttachedNodeVolumes:                  {Default: false, PreRelease: utilfeature.Alpha},
+	DynamicProvisioningScheduling:               {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

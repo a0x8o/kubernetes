@@ -19,21 +19,11 @@ limitations under the License.
 package util
 
 import (
-	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
-	"strings"
-
-	"k8s.io/api/core/v1"
-
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 
 	appsv1 "k8s.io/api/apps/v1"
 	appsv1beta1 "k8s.io/api/apps/v1beta1"
-	appsv1beta2 "k8s.io/api/apps/v1beta2"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	batchv2alpha1 "k8s.io/api/batch/v2alpha1"
@@ -50,9 +40,6 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
-	"k8s.io/kubernetes/pkg/apis/apps"
-	api "k8s.io/kubernetes/pkg/apis/core"
-	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/kubectl"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
@@ -127,212 +114,6 @@ func (f *ring0Factory) RESTClient() (*restclient.RESTClient, error) {
 	}
 	setKubernetesDefaults(clientConfig)
 	return restclient.RESTClientFor(clientConfig)
-}
-
-func (f *ring0Factory) UpdatePodSpecForObject(obj runtime.Object, fn func(*v1.PodSpec) error) (bool, error) {
-	// TODO: replace with a swagger schema based approach (identify pod template via schema introspection)
-	switch t := obj.(type) {
-	case *v1.Pod:
-		return true, fn(&t.Spec)
-	// ReplicationController
-	case *v1.ReplicationController:
-		if t.Spec.Template == nil {
-			t.Spec.Template = &v1.PodTemplateSpec{}
-		}
-		return true, fn(&t.Spec.Template.Spec)
-
-	// Deployment
-	case *extensionsv1beta1.Deployment:
-		return true, fn(&t.Spec.Template.Spec)
-	case *appsv1beta1.Deployment:
-		return true, fn(&t.Spec.Template.Spec)
-	case *appsv1beta2.Deployment:
-		return true, fn(&t.Spec.Template.Spec)
-	case *appsv1.Deployment:
-		return true, fn(&t.Spec.Template.Spec)
-
-	// DaemonSet
-	case *extensionsv1beta1.DaemonSet:
-		return true, fn(&t.Spec.Template.Spec)
-	case *appsv1beta2.DaemonSet:
-		return true, fn(&t.Spec.Template.Spec)
-	case *appsv1.DaemonSet:
-		return true, fn(&t.Spec.Template.Spec)
-
-	// ReplicaSet
-	case *extensionsv1beta1.ReplicaSet:
-		return true, fn(&t.Spec.Template.Spec)
-	case *appsv1beta2.ReplicaSet:
-		return true, fn(&t.Spec.Template.Spec)
-	case *appsv1.ReplicaSet:
-		return true, fn(&t.Spec.Template.Spec)
-
-	// StatefulSet
-	case *appsv1beta1.StatefulSet:
-		return true, fn(&t.Spec.Template.Spec)
-	case *appsv1beta2.StatefulSet:
-		return true, fn(&t.Spec.Template.Spec)
-	case *appsv1.StatefulSet:
-		return true, fn(&t.Spec.Template.Spec)
-
-	// Job
-	case *batchv1.Job:
-		return true, fn(&t.Spec.Template.Spec)
-
-	// CronJob
-	case *batchv1beta1.CronJob:
-		return true, fn(&t.Spec.JobTemplate.Spec.Template.Spec)
-	case *batchv2alpha1.CronJob:
-		return true, fn(&t.Spec.JobTemplate.Spec.Template.Spec)
-
-	default:
-		return false, fmt.Errorf("the object is not a pod or does not have a pod template: %T", t)
-	}
-}
-
-func (f *ring0Factory) MapBasedSelectorForObject(object runtime.Object) (string, error) {
-	// TODO: replace with a swagger schema based approach (identify pod selector via schema introspection)
-	switch t := object.(type) {
-	case *api.ReplicationController:
-		return kubectl.MakeLabels(t.Spec.Selector), nil
-	case *api.Pod:
-		if len(t.Labels) == 0 {
-			return "", fmt.Errorf("the pod has no labels and cannot be exposed")
-		}
-		return kubectl.MakeLabels(t.Labels), nil
-	case *api.Service:
-		if t.Spec.Selector == nil {
-			return "", fmt.Errorf("the service has no pod selector set")
-		}
-		return kubectl.MakeLabels(t.Spec.Selector), nil
-	case *extensions.Deployment:
-		// TODO(madhusudancs): Make this smarter by admitting MatchExpressions with Equals
-		// operator, DoubleEquals operator and In operator with only one element in the set.
-		if len(t.Spec.Selector.MatchExpressions) > 0 {
-			return "", fmt.Errorf("couldn't convert expressions - \"%+v\" to map-based selector format", t.Spec.Selector.MatchExpressions)
-		}
-		return kubectl.MakeLabels(t.Spec.Selector.MatchLabels), nil
-	case *extensions.ReplicaSet:
-		// TODO(madhusudancs): Make this smarter by admitting MatchExpressions with Equals
-		// operator, DoubleEquals operator and In operator with only one element in the set.
-		if len(t.Spec.Selector.MatchExpressions) > 0 {
-			return "", fmt.Errorf("couldn't convert expressions - \"%+v\" to map-based selector format", t.Spec.Selector.MatchExpressions)
-		}
-		return kubectl.MakeLabels(t.Spec.Selector.MatchLabels), nil
-	default:
-		return "", fmt.Errorf("cannot extract pod selector from %T", object)
-	}
-}
-
-func (f *ring0Factory) PortsForObject(object runtime.Object) ([]string, error) {
-	// TODO: replace with a swagger schema based approach (identify pod selector via schema introspection)
-	switch t := object.(type) {
-	case *api.ReplicationController:
-		return getPorts(t.Spec.Template.Spec), nil
-	case *api.Pod:
-		return getPorts(t.Spec), nil
-	case *api.Service:
-		return getServicePorts(t.Spec), nil
-	case *extensions.Deployment:
-		return getPorts(t.Spec.Template.Spec), nil
-	case *extensions.ReplicaSet:
-		return getPorts(t.Spec.Template.Spec), nil
-	default:
-		return nil, fmt.Errorf("cannot extract ports from %T", object)
-	}
-}
-
-func (f *ring0Factory) ProtocolsForObject(object runtime.Object) (map[string]string, error) {
-	// TODO: replace with a swagger schema based approach (identify pod selector via schema introspection)
-	switch t := object.(type) {
-	case *api.ReplicationController:
-		return getProtocols(t.Spec.Template.Spec), nil
-	case *api.Pod:
-		return getProtocols(t.Spec), nil
-	case *api.Service:
-		return getServiceProtocols(t.Spec), nil
-	case *extensions.Deployment:
-		return getProtocols(t.Spec.Template.Spec), nil
-	case *extensions.ReplicaSet:
-		return getProtocols(t.Spec.Template.Spec), nil
-	default:
-		return nil, fmt.Errorf("cannot extract protocols from %T", object)
-	}
-}
-
-func (f *ring0Factory) LabelsForObject(object runtime.Object) (map[string]string, error) {
-	return meta.NewAccessor().Labels(object)
-}
-
-// Set showSecrets false to filter out stuff like secrets.
-func (f *ring0Factory) Command(cmd *cobra.Command, showSecrets bool) string {
-	if len(os.Args) == 0 {
-		return ""
-	}
-
-	flags := ""
-	parseFunc := func(flag *pflag.Flag, value string) error {
-		flags = flags + " --" + flag.Name
-		if set, ok := flag.Annotations["classified"]; showSecrets || !ok || len(set) == 0 {
-			flags = flags + "=" + value
-		} else {
-			flags = flags + "=CLASSIFIED"
-		}
-		return nil
-	}
-	var err error
-	err = cmd.Flags().ParseAll(os.Args[1:], parseFunc)
-	if err != nil || !cmd.Flags().Parsed() {
-		return ""
-	}
-
-	args := ""
-	if arguments := cmd.Flags().Args(); len(arguments) > 0 {
-		args = " " + strings.Join(arguments, " ")
-	}
-
-	base := filepath.Base(os.Args[0])
-	return base + args + flags
-}
-
-func (f *ring0Factory) SuggestedPodTemplateResources() []schema.GroupResource {
-	return []schema.GroupResource{
-		{Resource: "replicationcontroller"},
-		{Resource: "deployment"},
-		{Resource: "daemonset"},
-		{Resource: "job"},
-		{Resource: "replicaset"},
-	}
-}
-
-func (f *ring0Factory) Pauser(info *resource.Info) ([]byte, error) {
-	switch obj := info.Object.(type) {
-	case *extensions.Deployment:
-		if obj.Spec.Paused {
-			return nil, errors.New("is already paused")
-		}
-		obj.Spec.Paused = true
-		return runtime.Encode(InternalVersionJSONEncoder(), info.Object)
-	default:
-		return nil, fmt.Errorf("pausing is not supported")
-	}
-}
-
-func (f *ring0Factory) ResolveImage(name string) (string, error) {
-	return name, nil
-}
-
-func (f *ring0Factory) Resumer(info *resource.Info) ([]byte, error) {
-	switch obj := info.Object.(type) {
-	case *extensions.Deployment:
-		if !obj.Spec.Paused {
-			return nil, errors.New("is not paused")
-		}
-		obj.Spec.Paused = false
-		return runtime.Encode(InternalVersionJSONEncoder(), info.Object)
-	default:
-		return nil, fmt.Errorf("resuming is not supported")
-	}
 }
 
 func (f *ring0Factory) DefaultNamespace() (string, bool, error) {
@@ -547,28 +328,6 @@ func Contains(resourcesList []*metav1.APIResourceList, resource schema.GroupVers
 
 func (f *ring0Factory) Generators(cmdName string) map[string]kubectl.Generator {
 	return DefaultGenerators(cmdName)
-}
-
-func (f *ring0Factory) CanBeExposed(kind schema.GroupKind) error {
-	switch kind {
-	case api.Kind("ReplicationController"), api.Kind("Service"), api.Kind("Pod"),
-		extensions.Kind("Deployment"), apps.Kind("Deployment"), extensions.Kind("ReplicaSet"), apps.Kind("ReplicaSet"):
-		// nothing to do here
-	default:
-		return fmt.Errorf("cannot expose a %s", kind)
-	}
-	return nil
-}
-
-func (f *ring0Factory) CanBeAutoscaled(kind schema.GroupKind) error {
-	switch kind {
-	case api.Kind("ReplicationController"), extensions.Kind("ReplicaSet"),
-		extensions.Kind("Deployment"), apps.Kind("Deployment"), apps.Kind("ReplicaSet"):
-		// nothing to do here
-	default:
-		return fmt.Errorf("cannot autoscale a %v", kind)
-	}
-	return nil
 }
 
 // this method exists to help us find the points still relying on internal types.

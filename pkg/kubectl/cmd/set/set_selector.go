@@ -19,10 +19,9 @@ package set
 import (
 	"fmt"
 
-	"k8s.io/kubernetes/pkg/printers"
-
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
+
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,6 +31,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions/printers"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions/resource"
 	"k8s.io/kubernetes/pkg/kubectl/scheme"
 	"k8s.io/kubernetes/pkg/kubectl/util/i18n"
@@ -42,7 +42,7 @@ import (
 type SetSelectorOptions struct {
 	fileOptions resource.FilenameOptions
 
-	PrintFlags  *printers.PrintFlags
+	PrintFlags  *genericclioptions.PrintFlags
 	RecordFlags *genericclioptions.RecordFlags
 
 	local  bool
@@ -79,7 +79,7 @@ var (
 
 func NewSelectorOptions(streams genericclioptions.IOStreams) *SetSelectorOptions {
 	return &SetSelectorOptions{
-		PrintFlags:  printers.NewPrintFlags("selector updated").WithTypeSetter(scheme.Scheme),
+		PrintFlags:  genericclioptions.NewPrintFlags("selector updated").WithTypeSetter(scheme.Scheme),
 		RecordFlags: genericclioptions.NewRecordFlags(),
 
 		Recorder: genericclioptions.NoopRecorder{},
@@ -123,7 +123,7 @@ func NewCmdSelector(f cmdutil.Factory, streams genericclioptions.IOStreams) *cob
 func (o *SetSelectorOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 	var err error
 
-	o.RecordFlags.Complete(f.Command(cmd, false))
+	o.RecordFlags.Complete(cmd)
 	o.Recorder, err = o.RecordFlags.ToRecorder()
 	if err != nil {
 		return err
@@ -201,7 +201,7 @@ func (o *SetSelectorOptions) RunSelector() error {
 
 	return r.Visit(func(info *resource.Info, err error) error {
 		patch := &Patch{Info: info}
-		CalculatePatch(patch, scheme.DefaultJSONEncoder(), func(info *resource.Info) ([]byte, error) {
+		CalculatePatch(patch, scheme.DefaultJSONEncoder(), func(obj runtime.Object) ([]byte, error) {
 			selectErr := updateSelectorForObject(info.Object, *o.selector)
 			if selectErr != nil {
 				return nil, selectErr

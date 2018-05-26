@@ -17,6 +17,8 @@ limitations under the License.
 package kubeadm
 
 import (
+	fuzz "github.com/google/gofuzz"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeletconfigv1beta1 "k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/v1beta1"
@@ -45,10 +47,6 @@ type MasterConfiguration struct {
 	// NodeName is the name of the node that will host the k8s control plane.
 	// Defaults to the hostname if not provided.
 	NodeName string
-	// AuthorizationModes is a set of authorization modes used inside the cluster.
-	// If not specified, defaults to Node and RBAC, meaning both the node
-	// authorizer and RBAC are enabled.
-	AuthorizationModes []string
 	// NoTaintMaster will, if set, suppress the tainting of the
 	// master node allowing workloads to be run on it (e.g. in
 	// single node configurations).
@@ -96,9 +94,6 @@ type MasterConfiguration struct {
 	APIServerCertSANs []string
 	// CertificatesDir specifies where to store or look for all required certificates.
 	CertificatesDir string
-
-	// ImagePullPolicy for control plane images. Can be Always, IfNotPresent or Never.
-	ImagePullPolicy v1.PullPolicy
 
 	// ImageRepository is the container registry to pull control plane images from.
 	ImageRepository string
@@ -167,6 +162,49 @@ type Networking struct {
 
 // Etcd contains elements describing Etcd configuration.
 type Etcd struct {
+
+	// Local provides configuration knobs for configuring the local etcd instance
+	// Local and External are mutually exclusive
+	Local *LocalEtcd
+
+	// External describes how to connect to an external etcd cluster
+	// Local and External are mutually exclusive
+	External *ExternalEtcd
+}
+
+// Fuzz is a dummy function here to get the roundtrip tests working in cmd/kubeadm/app/apis/kubeadm/fuzzer working.
+// As we split the monolith-etcd struct into two smaller pieces with pointers and they are mutually exclusive, roundtrip
+// tests that randomize all values in this struct isn't feasible. Instead, we override the fuzzing function for .Etcd with
+// this func by letting Etcd implement the fuzz.Interface interface. As this func does nothing, we rely on the values given
+// in fuzzer/fuzzer.go for the roundtrip tests, which is exactly what we want.
+// TODO: Remove this function when we remove the v1alpha1 API
+func (e Etcd) Fuzz(c fuzz.Continue) {}
+
+// LocalEtcd describes that kubeadm should run an etcd cluster locally
+type LocalEtcd struct {
+
+	// Image specifies which container image to use for running etcd.
+	// If empty, automatically populated by kubeadm using the image
+	// repository and default etcd version.
+	Image string
+
+	// DataDir is the directory etcd will place its data.
+	// Defaults to "/var/lib/etcd".
+	DataDir string
+
+	// ExtraArgs are extra arguments provided to the etcd binary
+	// when run inside a static pod.
+	ExtraArgs map[string]string
+
+	// ServerCertSANs sets extra Subject Alternative Names for the etcd server signing cert.
+	ServerCertSANs []string
+	// PeerCertSANs sets extra Subject Alternative Names for the etcd peer signing cert.
+	PeerCertSANs []string
+}
+
+// ExternalEtcd describes an external etcd cluster
+type ExternalEtcd struct {
+
 	// Endpoints of etcd members. Useful for using external etcd.
 	// If not provided, kubeadm will run etcd in a static pod.
 	Endpoints []string
@@ -176,22 +214,6 @@ type Etcd struct {
 	CertFile string
 	// KeyFile is an SSL key file used to secure etcd communication.
 	KeyFile string
-	// DataDir is the directory etcd will place its data.
-	// Defaults to "/var/lib/etcd".
-	DataDir string
-	// ExtraArgs are extra arguments provided to the etcd binary
-	// when run inside a static pod.
-	ExtraArgs map[string]string
-	// Image specifies which container image to use for running etcd.
-	// If empty, automatically populated by kubeadm using the image
-	// repository and default etcd version.
-	Image string
-	// ServerCertSANs sets extra Subject Alternative Names for the etcd server
-	// signing cert. This is currently used for the etcd static-pod.
-	ServerCertSANs []string
-	// PeerCertSANs sets extra Subject Alternative Names for the etcd peer
-	// signing cert. This is currently used for the etcd static-pod.
-	PeerCertSANs []string
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

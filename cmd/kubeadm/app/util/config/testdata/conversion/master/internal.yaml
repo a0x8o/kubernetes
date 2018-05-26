@@ -3,15 +3,13 @@ API:
   BindPort: 6443
   ControlPlaneEndpoint: ""
 APIServerCertSANs: null
-APIServerExtraArgs: null
+APIServerExtraArgs:
+  authorization-mode: Node,RBAC,Webhook
 APIServerExtraVolumes: null
 AuditPolicyConfiguration:
   LogDir: /var/log/kubernetes/audit
   LogMaxAge: 2
   Path: ""
-AuthorizationModes:
-- Node
-- RBAC
 CIImageRepository: ""
 CRISocket: /var/run/dockershim.sock
 CertificatesDir: /etc/kubernetes/pki
@@ -19,17 +17,14 @@ ClusterName: kubernetes
 ControllerManagerExtraArgs: null
 ControllerManagerExtraVolumes: null
 Etcd:
-  CAFile: ""
-  CertFile: ""
-  DataDir: /var/lib/etcd
-  Endpoints: null
-  ExtraArgs: null
-  Image: ""
-  KeyFile: ""
-  PeerCertSANs: null
-  ServerCertSANs: null
+  External: null
+  Local:
+    DataDir: /var/lib/etcd
+    ExtraArgs: null
+    Image: ""
+    PeerCertSANs: null
+    ServerCertSANs: null
 FeatureGates: null
-ImagePullPolicy: ""
 ImageRepository: k8s.gcr.io
 KubeProxy:
   Config:
@@ -133,6 +128,7 @@ KubeletConfiguration:
     registryBurst: 10
     registryPullQPS: 5
     resolvConf: /etc/resolv.conf
+    rotateCertificates: true
     runtimeRequestTimeout: 2m0s
     serializeImagePulls: true
     staticPodPath: /etc/kubernetes/manifests

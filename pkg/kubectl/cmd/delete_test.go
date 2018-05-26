@@ -23,19 +23,15 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest/fake"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	api "k8s.io/kubernetes/pkg/apis/core"
-	"k8s.io/kubernetes/pkg/kubectl"
 	cmdtesting "k8s.io/kubernetes/pkg/kubectl/cmd/testing"
-	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions/resource"
 	"k8s.io/kubernetes/pkg/kubectl/scheme"
@@ -104,17 +100,17 @@ func TestDeleteObjectByTuple(t *testing.T) {
 	}
 }
 
-func hasExpectedOrphanDependents(body io.ReadCloser, expectedOrphanDependents *bool) bool {
-	if body == nil || expectedOrphanDependents == nil {
-		return body == nil && expectedOrphanDependents == nil
+func hasExpectedPropagationPolicy(body io.ReadCloser, policy *metav1.DeletionPropagation) bool {
+	if body == nil || policy == nil {
+		return body == nil && policy == nil
 	}
 	var parsedBody metav1.DeleteOptions
 	rawBody, _ := ioutil.ReadAll(body)
 	json.Unmarshal(rawBody, &parsedBody)
-	if parsedBody.OrphanDependents == nil {
+	if parsedBody.PropagationPolicy == nil {
 		return false
 	}
-	return *expectedOrphanDependents == *parsedBody.OrphanDependents
+	return *policy == *parsedBody.PropagationPolicy
 }
 
 // Tests that DeleteOptions.OrphanDependents is appropriately set while deleting objects.
@@ -127,13 +123,13 @@ func TestOrphanDependentsInDeleteObject(t *testing.T) {
 
 	codec := legacyscheme.Codecs.LegacyCodec(scheme.Scheme.PrioritizedVersionsAllGroups()...)
 
-	var expectedOrphanDependents *bool
+	var policy *metav1.DeletionPropagation
 	tf.UnstructuredClient = &fake.RESTClient{
 		NegotiatedSerializer: unstructuredSerializer,
 		Client: fake.CreateHTTPClient(func(req *http.Request) (*http.Response, error) {
 			switch p, m, b := req.URL.Path, req.Method, req.Body; {
 
-			case p == "/namespaces/test/secrets/mysecret" && m == "DELETE" && hasExpectedOrphanDependents(b, expectedOrphanDependents):
+			case p == "/namespaces/test/secrets/mysecret" && m == "DELETE" && hasExpectedPropagationPolicy(b, policy):
 
 				return &http.Response{StatusCode: 200, Header: defaultHeader(), Body: objBody(codec, &rc.Items[0])}, nil
 			default:
@@ -143,9 +139,9 @@ func TestOrphanDependentsInDeleteObject(t *testing.T) {
 	}
 	tf.Namespace = "test"
 
-	// DeleteOptions.OrphanDependents should be false, when cascade is true (default).
-	falseVar := false
-	expectedOrphanDependents = &falseVar
+	// DeleteOptions.PropagationPolicy should be Foreground, when cascade is true (default).
+	foregroundPolicy := metav1.DeletePropagationForeground
+	policy = &foregroundPolicy
 	streams, _, buf, _ := genericclioptions.NewTestIOStreams()
 	cmd := NewCmdDelete(tf, streams)
 	cmd.Flags().Set("namespace", "test")
@@ -156,8 +152,8 @@ func TestOrphanDependentsInDeleteObject(t *testing.T) {
 	}
 
 	// Test that delete options should be set to orphan when cascade is false.
-	trueVar := true
-	expectedOrphanDependents = &trueVar
+	orphanPolicy := metav1.DeletePropagationOrphan
+	policy = &orphanPolicy
 	streams, _, buf, _ = genericclioptions.NewTestIOStreams()
 	cmd = NewCmdDelete(tf, streams)
 	cmd.Flags().Set("namespace", "test")
@@ -259,34 +255,10 @@ func TestDeleteObject(t *testing.T) {
 	}
 }
 
-type fakeReaper struct {
-	namespace, name string
-	timeout         time.Duration
-	deleteOptions   *metav1.DeleteOptions
-	err             error
-}
-
-func (r *fakeReaper) Stop(namespace, name string, timeout time.Duration, gracePeriod *metav1.DeleteOptions) error {
-	r.namespace, r.name = namespace, name
-	r.timeout = timeout
-	r.deleteOptions = gracePeriod
-	return r.err
-}
-
-type fakeReaperFactory struct {
-	cmdutil.Factory
-	reaper kubectl.Reaper
-}
-
-func (f *fakeReaperFactory) Reaper(mapping *meta.RESTMapping) (kubectl.Reaper, error) {
-	return f.reaper, nil
-}
-
 func TestDeleteObjectGraceZero(t *testing.T) {
 	initTestErrorHandler(t)
 	pods, _, _ := testData()
 
-	objectDeletionWaitInterval = time.Millisecond
 	count := 0
 	tf := cmdtesting.NewTestFactory()
 	defer tf.Cleanup()
@@ -318,10 +290,8 @@ func TestDeleteObjectGraceZero(t *testing.T) {
 	}
 	tf.Namespace = "test"
 
-	reaper := &fakeReaper{}
-	fake := &fakeReaperFactory{Factory: tf, reaper: reaper}
 	streams, _, buf, errBuf := genericclioptions.NewTestIOStreams()
-	cmd := NewCmdDelete(fake, streams)
+	cmd := NewCmdDelete(tf, streams)
 	cmd.Flags().Set("output", "name")
 	cmd.Flags().Set("grace-period", "0")
 	cmd.Run(cmd, []string{"pods/nginx"})
@@ -330,10 +300,7 @@ func TestDeleteObjectGraceZero(t *testing.T) {
 	if buf.String() != "pod/nginx\n" {
 		t.Errorf("unexpected output: %s\n---\n%s", buf.String(), errBuf.String())
 	}
-	if reaper.deleteOptions == nil || reaper.deleteOptions.GracePeriodSeconds == nil || *reaper.deleteOptions.GracePeriodSeconds != 1 {
-		t.Errorf("unexpected reaper options: %#v", reaper)
-	}
-	if count != 4 {
+	if count != 0 {
 		t.Errorf("unexpected calls to GET: %d", count)
 	}
 }

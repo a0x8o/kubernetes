@@ -46,26 +46,19 @@ const (
 	waitForPodsWithLabel = "wait-for-pods-with-label"
 
 	testConfiguration = `
+apiVersion: kubeadm.k8s.io/v1alpha2
+kind: MasterConfiguration
 api:
   advertiseAddress: 1.2.3.4
   bindPort: 6443
 apiServerCertSANs: null
 apiServerExtraArgs: null
-authorizationModes:
-- Node
-- RBAC
 certificatesDir: %s
 controllerManagerExtraArgs: null
 etcd:
-  caFile: ""
-  certFile: ""
-  dataDir: %s
-  endpoints: null
-  extraArgs: null
-  image: ""
-  keyFile: ""
-  serverCertSANs: null
-  peerCertSANs: null
+  local:
+    dataDir: %s
+    image: ""
 featureFlags: null
 imageRepository: k8s.gcr.io
 kubernetesVersion: %s
@@ -508,6 +501,7 @@ func getAPIServerHash(dir string) (string, error) {
 	return fmt.Sprintf("%x", sha256.Sum256(fileBytes)), nil
 }
 
+// TODO: Make this test function use the rest of the "official" API machinery helper funcs we have inside of kubeadm
 func getConfig(version, certsDir, etcdDataDir string) (*kubeadmapi.MasterConfiguration, error) {
 	externalcfg := &kubeadmapiv1alpha2.MasterConfiguration{}
 	internalcfg := &kubeadmapi.MasterConfiguration{}
