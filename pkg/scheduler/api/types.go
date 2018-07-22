@@ -36,14 +36,6 @@ const (
 	MaxPriority = 10
 	// MaxWeight defines the max weight value.
 	MaxWeight = MaxInt / MaxPriority
-	// HighestUserDefinablePriority is the highest priority for user defined priority classes. Priority values larger than 1 billion are reserved for Kubernetes system use.
-	HighestUserDefinablePriority = int32(1000000000)
-	// SystemCriticalPriority is the beginning of the range of priority values for critical system components.
-	SystemCriticalPriority = 2 * HighestUserDefinablePriority
-	// NOTE: In order to avoid conflict of names with user-defined priority classes, all the names must
-	// start with scheduling.SystemPriorityClassPrefix which is by default "system-".
-	SystemClusterCritical = "system-cluster-critical"
-	SystemNodeCritical    = "system-node-critical"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -117,6 +109,8 @@ type PriorityArgument struct {
 	// The priority function that checks whether a particular node has a certain label
 	// defined or not, regardless of value
 	LabelPreference *LabelPreference
+	// The RequestedToCapacityRatio priority function is parametrized with function shape.
+	RequestedToCapacityRatioArguments *RequestedToCapacityRatioArguments
 }
 
 // ServiceAffinity holds the parameters that are used to configure the corresponding predicate in scheduler policy configuration.
@@ -149,6 +143,20 @@ type LabelPreference struct {
 	// If true, higher priority is given to nodes that have the label
 	// If false, higher priority is given to nodes that do not have the label
 	Presence bool
+}
+
+// RequestedToCapacityRatioArguments holds arguments specific to RequestedToCapacityRatio priority function
+type RequestedToCapacityRatioArguments struct {
+	// Array of point defining priority function shape
+	UtilizationShape []UtilizationShapePoint
+}
+
+// UtilizationShapePoint represents single point of priority function shape
+type UtilizationShapePoint struct {
+	// Utilization (x axis). Valid values are 0 to 100. Fully utilized node maps to 100.
+	Utilization int
+	// Score assigned to given utilization (y axis). Valid values are 0 to 10.
+	Score int
 }
 
 // ExtenderManagedResource describes the arguments of extended resources
@@ -200,6 +208,9 @@ type ExtenderConfig struct {
 	//   will skip checking the resource in predicates.
 	// +optional
 	ManagedResources []ExtenderManagedResource
+	// Ignorable specifies if the extender is ignorable, i.e. scheduling should not
+	// fail when the extender returns an error or is not reachable.
+	Ignorable bool
 }
 
 // ExtenderPreemptionResult represents the result returned by preemption phase of extender.
@@ -297,12 +308,6 @@ type HostPriority struct {
 
 // HostPriorityList declares a []HostPriority type.
 type HostPriorityList []HostPriority
-
-// SystemPriorityClasses defines special priority classes which are used by system critical pods that should not be preempted by workload pods.
-var SystemPriorityClasses = map[string]int32{
-	SystemClusterCritical: SystemCriticalPriority,
-	SystemNodeCritical:    SystemCriticalPriority + 1000,
-}
 
 func (h HostPriorityList) Len() int {
 	return len(h)

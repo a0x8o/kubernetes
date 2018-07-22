@@ -27,6 +27,7 @@ import (
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2beta1"
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta/testrestmapper"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -44,7 +45,7 @@ import (
 	cmapi "k8s.io/metrics/pkg/apis/custom_metrics/v1beta1"
 	emapi "k8s.io/metrics/pkg/apis/external_metrics/v1beta1"
 	metricsapi "k8s.io/metrics/pkg/apis/metrics/v1beta1"
-	metricsfake "k8s.io/metrics/pkg/client/clientset_generated/clientset/fake"
+	metricsfake "k8s.io/metrics/pkg/client/clientset/versioned/fake"
 	cmfake "k8s.io/metrics/pkg/client/custom_metrics/fake"
 	emfake "k8s.io/metrics/pkg/client/external_metrics/fake"
 
@@ -124,6 +125,7 @@ type testCase struct {
 	testClient        *fake.Clientset
 	testMetricsClient *metricsfake.Clientset
 	testCMClient      *cmfake.FakeCustomMetricsClient
+	testEMClient      *emfake.FakeExternalMetricsClient
 	testScaleClient   *scalefake.FakeScaleClient
 }
 
@@ -510,7 +512,7 @@ func (tc *testCase) prepareTestClient(t *testing.T) (*fake.Clientset, *metricsfa
 		}
 
 		name := getForAction.GetName()
-		mapper := legacyscheme.Registry.RESTMapper()
+		mapper := testrestmapper.TestOnlyStaticRESTMapper(legacyscheme.Scheme)
 		metrics := &cmapi.MetricValueList{}
 		var matchedTarget *autoscalingv2.MetricSpec
 		for i, target := range tc.metricsTarget {
@@ -521,7 +523,7 @@ func (tc *testCase) prepareTestClient(t *testing.T) (*fake.Clientset, *metricsfa
 					t.Logf("unable to get mapping for %s: %v", gk.String(), err)
 					continue
 				}
-				groupResource := schema.GroupResource{Group: mapping.GroupVersionKind.Group, Resource: mapping.Resource}
+				groupResource := mapping.Resource.GroupResource()
 
 				if getForAction.GetResource().Resource == groupResource.String() {
 					matchedTarget = &tc.metricsTarget[i]
@@ -599,6 +601,9 @@ func (tc *testCase) setupController(t *testing.T) (*HorizontalController, inform
 	if tc.testCMClient != nil {
 		testCMClient = tc.testCMClient
 	}
+	if tc.testEMClient != nil {
+		testEMClient = tc.testEMClient
+	}
 	if tc.testScaleClient != nil {
 		testScaleClient = tc.testScaleClient
 	}
@@ -645,7 +650,7 @@ func (tc *testCase) setupController(t *testing.T) (*HorizontalController, inform
 		eventClient.Core(),
 		testScaleClient,
 		testClient.Autoscaling(),
-		legacyscheme.Registry.RESTMapper(),
+		testrestmapper.TestOnlyStaticRESTMapper(legacyscheme.Scheme),
 		replicaCalc,
 		informerFactory.Autoscaling().V1().HorizontalPodAutoscalers(),
 		controller.NoResyncPeriodFunc(),
@@ -1586,6 +1591,16 @@ func TestConditionFailedGetMetrics(t *testing.T) {
 				},
 			},
 		},
+		"FailedGetExternalMetric": {
+			{
+				Type: autoscalingv2.ExternalMetricSourceType,
+				External: &autoscalingv2.ExternalMetricSource{
+					MetricSelector: &metav1.LabelSelector{},
+					MetricName:     "qps",
+					TargetValue:    resource.NewMilliQuantity(300, resource.DecimalSI),
+				},
+			},
+		},
 	}
 
 	for reason, specs := range metricsTargets {
@@ -1599,15 +1614,19 @@ func TestConditionFailedGetMetrics(t *testing.T) {
 			reportedCPURequests: []resource.Quantity{resource.MustParse("0.1"), resource.MustParse("0.1"), resource.MustParse("0.1")},
 			useMetricsAPI:       true,
 		}
-		_, testMetricsClient, testCMClient, _, _ := tc.prepareTestClient(t)
+		_, testMetricsClient, testCMClient, testEMClient, _ := tc.prepareTestClient(t)
 		tc.testMetricsClient = testMetricsClient
 		tc.testCMClient = testCMClient
+		tc.testEMClient = testEMClient
 
 		testMetricsClient.PrependReactor("list", "pods", func(action core.Action) (handled bool, ret runtime.Object, err error) {
 			return true, &metricsapi.PodMetricsList{}, fmt.Errorf("something went wrong")
 		})
 		testCMClient.PrependReactor("get", "*", func(action core.Action) (handled bool, ret runtime.Object, err error) {
 			return true, &cmapi.MetricValueList{}, fmt.Errorf("something went wrong")
+		})
+		testEMClient.PrependReactor("list", "*", func(action core.Action) (handled bool, ret runtime.Object, err error) {
+			return true, &emapi.ExternalMetricValueList{}, fmt.Errorf("something went wrong")
 		})
 
 		tc.expectedConditions = []autoscalingv1.HorizontalPodAutoscalerCondition{

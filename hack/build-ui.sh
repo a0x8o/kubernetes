@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Copyright 2014 The Kubernetes Authors.
 #
@@ -30,7 +30,8 @@ if ! which go-bindata > /dev/null 2>&1 ; then
   exit 1
 fi
 
-readonly TMP_DATAFILE="/tmp/datafile.go"
+kube::util::ensure-temp-dir
+readonly TMP_DATAFILE="${KUBE_TEMP}/datafile.go"
 readonly SWAGGER_SRC="third_party/swagger-ui/..."
 readonly SWAGGER_PKG="swagger"
 

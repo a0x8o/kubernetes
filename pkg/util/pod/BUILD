@@ -1,30 +1,39 @@
-package(default_visibility = ["//visibility:public"])
-
-licenses(["notice"])
-
-load(
-    "@io_bazel_rules_go//go:def.bzl",
-    "go_binary",
-    "go_library",
-    "go_test",
-    "cgo_library",
-)
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = [
-        "doc.go",
-        "pod.go",
-    ],
-    tags = ["automanaged"],
+    srcs = ["pod.go"],
+    importpath = "k8s.io/kubernetes/pkg/util/pod",
+    visibility = ["//visibility:public"],
     deps = [
-        "//pkg/api:go_default_library",
-        "//pkg/api/errors:go_default_library",
-        "//pkg/api/v1:go_default_library",
-        "//pkg/client/clientset_generated/release_1_5/typed/core/v1:go_default_library",
-        "//pkg/util/errors:go_default_library",
-        "//pkg/util/hash:go_default_library",
-        "//pkg/util/wait:go_default_library",
-        "//vendor:github.com/golang/glog",
+        "//staging/src/k8s.io/api/core/v1:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/types:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/util/strategicpatch:go_default_library",
+        "//staging/src/k8s.io/client-go/kubernetes:go_default_library",
     ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["pod_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//staging/src/k8s.io/api/core/v1:go_default_library",
+        "//staging/src/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
+        "//staging/src/k8s.io/client-go/kubernetes/fake:go_default_library",
+    ],
+)
+
+filegroup(
+    name = "package-srcs",
+    srcs = glob(["**"]),
+    tags = ["automanaged"],
+    visibility = ["//visibility:private"],
+)
+
+filegroup(
+    name = "all-srcs",
+    srcs = [":package-srcs"],
+    tags = ["automanaged"],
+    visibility = ["//visibility:public"],
 )

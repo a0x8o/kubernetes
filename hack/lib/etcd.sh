@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Copyright 2014 The Kubernetes Authors.
 #
@@ -16,7 +16,7 @@
 
 # A set of helpers for starting/running etcd for tests
 
-ETCD_VERSION=${ETCD_VERSION:-3.1.12}
+ETCD_VERSION=${ETCD_VERSION:-3.2.18}
 ETCD_HOST=${ETCD_HOST:-127.0.0.1}
 ETCD_PORT=${ETCD_PORT:-2379}
 
@@ -102,11 +102,13 @@ kube::etcd::cleanup() {
 
 kube::etcd::install() {
   (
+    local os
     cd "${KUBE_ROOT}/third_party"
-    if [[ $(readlink etcd) == etcd-v${ETCD_VERSION}-* ]]; then
+    os=$(uname | tr "[:upper:]" "[:lower:]")
+    if [[ $(readlink etcd) == etcd-v${ETCD_VERSION}-${os}-* ]]; then
       return  # already installed
     fi
-    if [[ $(uname) == "Darwin" ]]; then
+    if [[ ${os} == "darwin" ]]; then
       download_file="etcd-v${ETCD_VERSION}-darwin-amd64.zip"
       url="https://github.com/coreos/etcd/releases/download/v${ETCD_VERSION}/${download_file}"
       kube::util::download_file "${url}" "${download_file}"
@@ -119,6 +121,7 @@ kube::etcd::install() {
       kube::util::download_file "${url}" "${download_file}"
       tar xzf "${download_file}"
       ln -fns "etcd-v${ETCD_VERSION}-linux-amd64" etcd
+      rm "${download_file}"
     fi
     kube::log::info "etcd v${ETCD_VERSION} installed. To use:"
     kube::log::info "export PATH=$(pwd)/etcd:\${PATH}"
