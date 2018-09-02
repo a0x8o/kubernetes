@@ -74,21 +74,25 @@ func (sched *Scheduler) StopEverything() {
 	close(sched.config.StopEverything)
 }
 
+// Cache returns the cache in scheduler for test to check the data in scheduler.
+func (sched *Scheduler) Cache() schedulercache.Cache {
+	return sched.config.SchedulerCache
+}
+
 // Configurator defines I/O, caching, and other functionality needed to
 // construct a new scheduler. An implementation of this can be seen in
 // factory.go.
 type Configurator interface {
-	GetPriorityFunctionConfigs(priorityKeys sets.String) ([]algorithm.PriorityConfig, error)
-	GetPriorityMetadataProducer() (algorithm.PriorityMetadataProducer, error)
-	GetPredicateMetadataProducer() (algorithm.PredicateMetadataProducer, error)
-	GetPredicates(predicateKeys sets.String) (map[string]algorithm.FitPredicate, error)
+	// Exposed for testing
 	GetHardPodAffinitySymmetricWeight() int32
-	GetSchedulerName() string
+	// Exposed for testing
 	MakeDefaultErrorFunc(backoff *util.PodBackoff, podQueue core.SchedulingQueue) func(pod *v1.Pod, err error)
 
 	// Needs to be exposed for things like integration tests where we want to make fake nodes.
 	GetNodeLister() corelisters.NodeLister
+	// Exposed for testing
 	GetClient() clientset.Interface
+	// Exposed for testing
 	GetScheduledPodLister() corelisters.PodLister
 
 	Create() (*Config, error)
@@ -232,7 +236,7 @@ func (sched *Scheduler) preempt(preemptor *v1.Pod, scheduleErr error) (string, e
 		nodeName = node.Name
 		err = sched.config.PodPreemptor.SetNominatedNodeName(preemptor, nodeName)
 		if err != nil {
-			glog.Errorf("Error in preemption process. Cannot update pod %v annotations: %v", preemptor.Name, err)
+			glog.Errorf("Error in preemption process. Cannot update pod %v/%v annotations: %v", preemptor.Namespace, preemptor.Name, err)
 			return "", err
 		}
 		for _, victim := range victims {

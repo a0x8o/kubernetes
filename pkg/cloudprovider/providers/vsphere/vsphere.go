@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -33,6 +34,9 @@ import (
 	"gopkg.in/gcfg.v1"
 
 	"github.com/golang/glog"
+	"github.com/vmware/govmomi/vapi/rest"
+	"github.com/vmware/govmomi/vapi/tags"
+	"github.com/vmware/govmomi/vim25/mo"
 	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
@@ -176,6 +180,12 @@ type VSphereConfig struct {
 		Folder           string `gcfg:"folder"`
 		DefaultDatastore string `gcfg:"default-datastore"`
 		ResourcePoolPath string `gcfg:"resourcepool-path"`
+	}
+
+	// Tag categories and tags which correspond to "built-in node labels: zones and region"
+	Labels struct {
+		Zone   string `gcfg:"zone"`
+		Region string `gcfg:"region"`
 	}
 }
 
@@ -596,7 +606,13 @@ func (vs *VSphere) getVMFromNodeName(ctx context.Context, nodeName k8stypes.Node
 func (vs *VSphere) NodeAddresses(ctx context.Context, nodeName k8stypes.NodeName) ([]v1.NodeAddress, error) {
 	// Get local IP addresses if node is local node
 	if vs.hostName == convertToString(nodeName) {
-		return getLocalIP()
+		addrs, err := getLocalIP()
+		if err != nil {
+			return nil, err
+		}
+		// add the hostname address
+		v1helper.AddToNodeAddresses(&addrs, v1.NodeAddress{Type: v1.NodeHostName, Address: vs.hostName})
+		return addrs, nil
 	}
 
 	if vs.cfg == nil {
@@ -677,22 +693,10 @@ func convertToK8sType(vmName string) k8stypes.NodeName {
 // InstanceExistsByProviderID returns true if the instance with the given provider id still exists and is running.
 // If false is returned with no error, the instance will be immediately deleted by the cloud controller manager.
 func (vs *VSphere) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
-	var nodeName string
-	nodes, err := vs.nodeManager.GetNodeDetails()
+	nodeName, err := vs.GetNodeNameFromProviderID(providerID)
 	if err != nil {
-		glog.Errorf("Error while obtaining Kubernetes node nodeVmDetail details. error : %+v", err)
+		glog.Errorf("Error while getting nodename for providerID %s", providerID)
 		return false, err
-	}
-	for _, node := range nodes {
-		// ProviderID is UUID for nodes v1.9.3+
-		if node.VMUUID == GetUUIDFromProviderID(providerID) || node.NodeName == providerID {
-			nodeName = node.NodeName
-			break
-		}
-	}
-	if nodeName == "" {
-		msg := fmt.Sprintf("Error while obtaining Kubernetes nodename for providerID %s.", providerID)
-		return false, errors.New(msg)
 	}
 	_, err = vs.InstanceID(ctx, convertToK8sType(nodeName))
 	if err == nil {
@@ -704,7 +708,31 @@ func (vs *VSphere) InstanceExistsByProviderID(ctx context.Context, providerID st
 
 // InstanceShutdownByProviderID returns true if the instance is in safe state to detach volumes
 func (vs *VSphere) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
-	return false, cloudprovider.NotImplemented
+	nodeName, err := vs.GetNodeNameFromProviderID(providerID)
+	if err != nil {
+		glog.Errorf("Error while getting nodename for providerID %s", providerID)
+		return false, err
+	}
+
+	vsi, err := vs.getVSphereInstance(convertToK8sType(nodeName))
+	if err != nil {
+		return false, err
+	}
+	// Ensure client is logged in and session is valid
+	if err := vs.nodeManager.vcConnect(ctx, vsi); err != nil {
+		return false, err
+	}
+	vm, err := vs.getVMFromNodeName(ctx, convertToK8sType(nodeName))
+	if err != nil {
+		glog.Errorf("Failed to get VM object for node: %q. err: +%v", nodeName, err)
+		return false, err
+	}
+	isActive, err := vm.IsActive(ctx)
+	if err != nil {
+		glog.Errorf("Failed to check whether node %q is active. err: %+v.", nodeName, err)
+		return false, err
+	}
+	return !isActive, nil
 }
 
 // InstanceID returns the cloud provider ID of the node with the specified Name.
@@ -796,8 +824,11 @@ func (vs *VSphere) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 
 // Zones returns an implementation of Zones for vSphere.
 func (vs *VSphere) Zones() (cloudprovider.Zones, bool) {
-	glog.V(1).Info("The vSphere cloud provider does not support zones")
-	return nil, false
+	if vs.cfg == nil {
+		glog.V(1).Info("The vSphere cloud provider does not support zones")
+		return nil, false
+	}
+	return vs, true
 }
 
 // Routes returns a false since the interface is not supported for vSphere.
@@ -1293,4 +1324,113 @@ func (vs *VSphere) NodeManager() (nodeManager *NodeManager) {
 		return nil
 	}
 	return vs.nodeManager
+}
+
+func withTagsClient(ctx context.Context, connection *vclib.VSphereConnection, f func(c *rest.Client) error) error {
+	c := rest.NewClient(connection.Client)
+	user := url.UserPassword(connection.Username, connection.Password)
+	if err := c.Login(ctx, user); err != nil {
+		return err
+	}
+	defer c.Logout(ctx)
+	return f(c)
+}
+
+// GetZone implements Zones.GetZone
+func (vs *VSphere) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
+	nodeName, err := vs.CurrentNodeName(ctx, vs.hostName)
+	if err != nil {
+		glog.Errorf("Cannot get node name.")
+		return cloudprovider.Zone{}, err
+	}
+	zone := cloudprovider.Zone{}
+	vsi, err := vs.getVSphereInstanceForServer(vs.cfg.Workspace.VCenterIP, ctx)
+	if err != nil {
+		glog.Errorf("Cannot connent to vsphere. Get zone for node %s error", nodeName)
+		return cloudprovider.Zone{}, err
+	}
+	dc, err := vclib.GetDatacenter(ctx, vsi.conn, vs.cfg.Workspace.Datacenter)
+	if err != nil {
+		glog.Errorf("Cannot connent to datacenter. Get zone for node %s error", nodeName)
+		return cloudprovider.Zone{}, err
+	}
+	vmHost, err := dc.GetHostByVMUUID(ctx, vs.vmUUID)
+	if err != nil {
+		glog.Errorf("Cannot find VM runtime host. Get zone for node %s error", nodeName)
+		return cloudprovider.Zone{}, err
+	}
+
+	pc := vsi.conn.Client.ServiceContent.PropertyCollector
+	err = withTagsClient(ctx, vsi.conn, func(c *rest.Client) error {
+		client := tags.NewManager(c)
+		// example result: ["Folder", "Datacenter", "Cluster", "Host"]
+		objects, err := mo.Ancestors(ctx, vsi.conn.Client, pc, *vmHost)
+		if err != nil {
+			return err
+		}
+
+		// search the hierarchy, example order: ["Host", "Cluster", "Datacenter", "Folder"]
+		for i := range objects {
+			obj := objects[len(objects)-1-i]
+			tags, err := client.ListAttachedTags(ctx, obj)
+			if err != nil {
+				glog.Errorf("Cannot list attached tags. Get zone for node %s: %s", nodeName, err)
+				return err
+			}
+			for _, value := range tags {
+				tag, err := client.GetTag(ctx, value)
+				if err != nil {
+					glog.Errorf("Get tag %s: %s", value, err)
+					return err
+				}
+				category, err := client.GetCategory(ctx, tag.CategoryID)
+				if err != nil {
+					glog.Errorf("Get category %s error", value)
+					return err
+				}
+
+				found := func() {
+					glog.Errorf("Found %q tag (%s) for %s attached to %s", category.Name, tag.Name, vs.vmUUID, obj.Reference())
+				}
+				switch {
+				case category.Name == vs.cfg.Labels.Zone:
+					zone.FailureDomain = tag.Name
+					found()
+				case category.Name == vs.cfg.Labels.Region:
+					zone.Region = tag.Name
+					found()
+				}
+
+				if zone.FailureDomain != "" && zone.Region != "" {
+					return nil
+				}
+			}
+		}
+
+		if zone.Region == "" {
+			if vs.cfg.Labels.Region != "" {
+				return fmt.Errorf("vSphere region category %q does not match any tags for node %s [%s]", vs.cfg.Labels.Region, nodeName, vs.vmUUID)
+			}
+		}
+		if zone.FailureDomain == "" {
+			if vs.cfg.Labels.Zone != "" {
+				return fmt.Errorf("vSphere zone category %q does not match any tags for node %s [%s]", vs.cfg.Labels.Zone, nodeName, vs.vmUUID)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		glog.Errorf("Get zone for node %s: %s", nodeName, err)
+		return cloudprovider.Zone{}, err
+	}
+	return zone, nil
+}
+
+func (vs *VSphere) GetZoneByNodeName(ctx context.Context, nodeName k8stypes.NodeName) (cloudprovider.Zone, error) {
+	return cloudprovider.Zone{}, cloudprovider.NotImplemented
+}
+
+func (vs *VSphere) GetZoneByProviderID(ctx context.Context, providerID string) (cloudprovider.Zone, error) {
+	return cloudprovider.Zone{}, cloudprovider.NotImplemented
 }

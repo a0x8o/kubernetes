@@ -28,8 +28,8 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	apiserveroptions "k8s.io/apiserver/pkg/server/options"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	apiserverflag "k8s.io/apiserver/pkg/util/flag"
 	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
 	clientset "k8s.io/client-go/kubernetes"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	restclient "k8s.io/client-go/rest"
@@ -46,7 +46,6 @@ import (
 	_ "k8s.io/kubernetes/pkg/features"
 
 	"github.com/golang/glog"
-	"github.com/spf13/pflag"
 )
 
 const (
@@ -62,9 +61,9 @@ type CloudControllerManagerOptions struct {
 	KubeCloudShared   *cmoptions.KubeCloudSharedOptions
 	ServiceController *cmoptions.ServiceControllerOptions
 
-	SecureServing *apiserveroptions.SecureServingOptions
+	SecureServing *apiserveroptions.SecureServingOptionsWithLoopback
 	// TODO: remove insecure serving mode
-	InsecureServing *cmoptions.InsecureServingOptions
+	InsecureServing *apiserveroptions.DeprecatedInsecureServingOptionsWithLoopback
 	Authentication  *apiserveroptions.DelegatingAuthenticationOptions
 	Authorization   *apiserveroptions.DelegatingAuthorizationOptions
 
@@ -90,23 +89,24 @@ func NewCloudControllerManagerOptions() (*CloudControllerManagerOptions, error) 
 		ServiceController: &cmoptions.ServiceControllerOptions{
 			ConcurrentServiceSyncs: componentConfig.ServiceController.ConcurrentServiceSyncs,
 		},
-		SecureServing: apiserveroptions.NewSecureServingOptions(),
-		InsecureServing: &cmoptions.InsecureServingOptions{
+		SecureServing: apiserveroptions.NewSecureServingOptions().WithLoopback(),
+		InsecureServing: (&apiserveroptions.DeprecatedInsecureServingOptions{
 			BindAddress: net.ParseIP(componentConfig.KubeCloudShared.Address),
 			BindPort:    int(componentConfig.KubeCloudShared.Port),
 			BindNetwork: "tcp",
-		},
-		Authentication:            nil, // TODO: enable with apiserveroptions.NewDelegatingAuthenticationOptions()
-		Authorization:             nil, // TODO: enable with apiserveroptions.NewDelegatingAuthorizationOptions()
+		}).WithLoopback(),
+		Authentication:            apiserveroptions.NewDelegatingAuthenticationOptions(),
+		Authorization:             apiserveroptions.NewDelegatingAuthorizationOptions(),
 		NodeStatusUpdateFrequency: componentConfig.NodeStatusUpdateFrequency,
 	}
 
+	s.Authentication.RemoteKubeConfigFileOptional = true
+	s.Authorization.RemoteKubeConfigFileOptional = true
+	s.Authorization.AlwaysAllowPaths = []string{"/healthz"}
+
 	s.SecureServing.ServerCert.CertDirectory = "/var/run/kubernetes"
 	s.SecureServing.ServerCert.PairName = "cloud-controller-manager"
-
-	// disable secure serving for now
-	// TODO: enable HTTPS by default
-	s.SecureServing.BindPort = 0
+	s.SecureServing.BindPort = ports.CloudControllerManagerPort
 
 	return &s, nil
 }
@@ -132,24 +132,27 @@ func NewDefaultComponentConfig(insecurePort int32) (componentconfig.CloudControl
 	return internal, nil
 }
 
-// AddFlags adds flags for a specific ExternalCMServer to the specified FlagSet
-func (o *CloudControllerManagerOptions) AddFlags(fs *pflag.FlagSet) {
-	o.CloudProvider.AddFlags(fs)
-	o.Debugging.AddFlags(fs)
-	o.GenericComponent.AddFlags(fs)
-	o.KubeCloudShared.AddFlags(fs)
-	o.ServiceController.AddFlags(fs)
+// Flags returns flags for a specific APIServer by section name
+func (o *CloudControllerManagerOptions) Flags() (fss apiserverflag.NamedFlagSets) {
+	o.CloudProvider.AddFlags(fss.FlagSet("cloud provider"))
+	o.Debugging.AddFlags(fss.FlagSet("debugging"))
+	o.GenericComponent.AddFlags(fss.FlagSet("generic"))
+	o.KubeCloudShared.AddFlags(fss.FlagSet("generic"))
+	o.ServiceController.AddFlags(fss.FlagSet("service controller"))
 
-	o.SecureServing.AddFlags(fs)
-	o.InsecureServing.AddFlags(fs)
-	o.Authentication.AddFlags(fs)
-	o.Authorization.AddFlags(fs)
+	o.SecureServing.AddFlags(fss.FlagSet("secure serving"))
+	o.InsecureServing.AddUnqualifiedFlags(fss.FlagSet("insecure serving"))
+	o.Authentication.AddFlags(fss.FlagSet("authentication"))
+	o.Authorization.AddFlags(fss.FlagSet("authorization"))
 
+	fs := fss.FlagSet("misc")
 	fs.StringVar(&o.Master, "master", o.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig).")
 	fs.StringVar(&o.Kubeconfig, "kubeconfig", o.Kubeconfig, "Path to kubeconfig file with authorization and master location information.")
 	fs.DurationVar(&o.NodeStatusUpdateFrequency.Duration, "node-status-update-frequency", o.NodeStatusUpdateFrequency.Duration, "Specifies how often the controller updates nodes' status.")
 
-	utilfeature.DefaultFeatureGate.AddFlag(fs)
+	utilfeature.DefaultFeatureGate.AddFlag(fss.FlagSet("generic"))
+
+	return fss
 }
 
 // ApplyTo fills up cloud controller manager config with options.
@@ -170,17 +173,19 @@ func (o *CloudControllerManagerOptions) ApplyTo(c *cloudcontrollerconfig.Config,
 	if err = o.ServiceController.ApplyTo(&c.ComponentConfig.ServiceController); err != nil {
 		return err
 	}
-	if err = o.SecureServing.ApplyTo(&c.SecureServing); err != nil {
+	if err = o.InsecureServing.ApplyTo(&c.InsecureServing, &c.LoopbackClientConfig); err != nil {
 		return err
 	}
-	if err = o.InsecureServing.ApplyTo(&c.InsecureServing); err != nil {
+	if err = o.SecureServing.ApplyTo(&c.SecureServing, &c.LoopbackClientConfig); err != nil {
 		return err
 	}
-	if err = o.Authentication.ApplyTo(&c.Authentication, c.SecureServing, nil); err != nil {
-		return err
-	}
-	if err = o.Authorization.ApplyTo(&c.Authorization); err != nil {
-		return err
+	if o.SecureServing.BindPort != 0 || o.SecureServing.Listener != nil {
+		if err = o.Authentication.ApplyTo(&c.Authentication, c.SecureServing, nil); err != nil {
+			return err
+		}
+		if err = o.Authorization.ApplyTo(&c.Authorization); err != nil {
+			return err
+		}
 	}
 
 	c.Kubeconfig, err = clientcmd.BuildConfigFromFlags(o.Master, o.Kubeconfig)
@@ -261,6 +266,10 @@ func (o *CloudControllerManagerOptions) Config() (*cloudcontrollerconfig.Config,
 		return nil, err
 	}
 
+	if err := o.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
+		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
+	}
+
 	c := &cloudcontrollerconfig.Config{}
 	if err := o.ApplyTo(c, CloudControllerManagerUserAgent); err != nil {
 		return nil, err
@@ -269,7 +278,7 @@ func (o *CloudControllerManagerOptions) Config() (*cloudcontrollerconfig.Config,
 	return c, nil
 }
 
-func createRecorder(kubeClient kubernetes.Interface, userAgent string) record.EventRecorder {
+func createRecorder(kubeClient clientset.Interface, userAgent string) record.EventRecorder {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(glog.Infof)
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})

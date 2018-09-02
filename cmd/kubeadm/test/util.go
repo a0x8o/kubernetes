@@ -55,12 +55,15 @@ func SetupInitConfigurationFile(t *testing.T, tmpdir string, cfg *kubeadmapi.Ini
 	cfgTemplate := template.Must(template.New("init").Parse(dedent.Dedent(`
 		apiVersion: kubeadm.k8s.io/v1alpha3
 		kind: InitConfiguration
-		certificatesDir: {{.CertificatesDir}}
-		api:
-		  advertiseAddress: {{.API.AdvertiseAddress}}
-		  bindPort: {{.API.BindPort}}
+		apiEndpoint:
+		  advertiseAddress: {{.APIEndpoint.AdvertiseAddress}}
+		  bindPort: {{.APIEndpoint.BindPort}}
 		nodeRegistration:
 		  name: {{.NodeRegistration.Name}}
+		---
+		apiVersion: kubeadm.k8s.io/v1alpha3
+		kind: ClusterConfiguration
+		certificatesDir: {{.CertificatesDir}}
 		kubernetesVersion: v1.10.0
 		`)))
 

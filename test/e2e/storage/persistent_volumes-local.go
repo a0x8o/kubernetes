@@ -1240,7 +1240,7 @@ func makeLocalPod(config *localTestConfig, volume *localTestVolume, cmd string) 
 	}
 	if volume.localVolumeType == BlockLocalVolumeType {
 		// Block e2e tests require utilities for writing to block devices (e.g. dd), and nginx has this utilites.
-		pod.Spec.Containers[0].Image = imageutils.GetE2EImage(imageutils.NginxSlim)
+		pod.Spec.Containers[0].Image = imageutils.GetE2EImage(imageutils.Nginx)
 	}
 	return pod
 }
@@ -1324,9 +1324,8 @@ func createAndMapBlockLocalVolume(config *localTestConfig, dir string, node *v1.
 	mkdirCmd := fmt.Sprintf("mkdir -p %s", dir)
 	// Create 10MB file that will serve as the backing for block device.
 	ddCmd := fmt.Sprintf("dd if=/dev/zero of=%s/file bs=512 count=20480", dir)
-	losetupLoopDevCmd := fmt.Sprintf("E2E_LOOP_DEV=$(sudo losetup -f) && echo ${E2E_LOOP_DEV}")
-	losetupCmd := fmt.Sprintf("sudo losetup ${E2E_LOOP_DEV} %s/file", dir)
-	err := issueNodeCommand(config, fmt.Sprintf("%s && %s && %s && %s", mkdirCmd, ddCmd, losetupLoopDevCmd, losetupCmd), node)
+	losetupCmd := fmt.Sprintf("sudo losetup -f  %s/file", dir)
+	err := issueNodeCommand(config, fmt.Sprintf("%s && %s && %s", mkdirCmd, ddCmd, losetupCmd), node)
 	Expect(err).NotTo(HaveOccurred())
 }
 
@@ -1395,7 +1394,7 @@ func createFileDoesntExistCmd(testFileDir string, testFile string) string {
 // Fail on error
 func podRWCmdExec(pod *v1.Pod, cmd string) string {
 	out, err := utils.PodExec(pod, cmd)
-	framework.Logf("podRWCmdExec out: %q err: %q", out, err)
+	framework.Logf("podRWCmdExec out: %q err: %v", out, err)
 	Expect(err).NotTo(HaveOccurred())
 	return out
 }
@@ -1864,7 +1863,7 @@ func createStatefulSet(config *localTestConfig, ssReplicas int32, volumeCount in
 					Containers: []v1.Container{
 						{
 							Name:         "nginx",
-							Image:        imageutils.GetE2EImage(imageutils.NginxSlim),
+							Image:        imageutils.GetE2EImage(imageutils.Nginx),
 							VolumeMounts: mounts,
 						},
 					},

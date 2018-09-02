@@ -17,16 +17,12 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"net"
-	"strconv"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
-	api "k8s.io/kubernetes/pkg/apis/core"
-	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
-	"k8s.io/kubernetes/pkg/master/ports"
-	utilpointer "k8s.io/kubernetes/pkg/util/pointer"
+	apiserverconfigv1alpha1 "k8s.io/apiserver/pkg/apis/config/v1alpha1"
+	utilpointer "k8s.io/utils/pointer"
 )
 
 func addDefaultingFuncs(scheme *kruntime.Scheme) error {
@@ -92,6 +88,12 @@ func SetDefaults_KubeControllerManagerConfiguration(obj *KubeControllerManagerCo
 	}
 	if obj.HPAController.HorizontalPodAutoscalerUpscaleForbiddenWindow == zero {
 		obj.HPAController.HorizontalPodAutoscalerUpscaleForbiddenWindow = metav1.Duration{Duration: 3 * time.Minute}
+	}
+	if obj.HPAController.HorizontalPodAutoscalerCPUInitializationPeriod == zero {
+		obj.HPAController.HorizontalPodAutoscalerCPUInitializationPeriod = metav1.Duration{Duration: 5 * time.Minute}
+	}
+	if obj.HPAController.HorizontalPodAutoscalerInitialReadinessDelay == zero {
+		obj.HPAController.HorizontalPodAutoscalerInitialReadinessDelay = metav1.Duration{Duration: 30 * time.Second}
 	}
 	if obj.HPAController.HorizontalPodAutoscalerDownscaleForbiddenWindow == zero {
 		obj.HPAController.HorizontalPodAutoscalerDownscaleForbiddenWindow = metav1.Duration{Duration: 5 * time.Minute}
@@ -163,6 +165,9 @@ func SetDefaults_GenericComponentConfiguration(obj *GenericComponentConfiguratio
 	if obj.ControllerStartInterval == zero {
 		obj.ControllerStartInterval = metav1.Duration{Duration: 0 * time.Second}
 	}
+
+	// Use the default LeaderElectionConfiguration options
+	apiserverconfigv1alpha1.RecommendedDefaultLeaderElectionConfiguration(&obj.LeaderElection)
 }
 
 func SetDefaults_KubeCloudSharedConfiguration(obj *KubeCloudSharedConfiguration) {
@@ -212,86 +217,5 @@ func SetDefaults_VolumeConfiguration(obj *VolumeConfiguration) {
 	}
 	if obj.FlexVolumePluginDir == "" {
 		obj.FlexVolumePluginDir = "/usr/libexec/kubernetes/kubelet-plugins/volume/exec/"
-	}
-}
-
-func SetDefaults_KubeSchedulerConfiguration(obj *KubeSchedulerConfiguration) {
-	if len(obj.SchedulerName) == 0 {
-		obj.SchedulerName = api.DefaultSchedulerName
-	}
-
-	if obj.HardPodAffinitySymmetricWeight == 0 {
-		obj.HardPodAffinitySymmetricWeight = api.DefaultHardPodAffinitySymmetricWeight
-	}
-
-	if obj.AlgorithmSource.Policy == nil &&
-		(obj.AlgorithmSource.Provider == nil || len(*obj.AlgorithmSource.Provider) == 0) {
-		val := SchedulerDefaultProviderName
-		obj.AlgorithmSource.Provider = &val
-	}
-
-	if policy := obj.AlgorithmSource.Policy; policy != nil {
-		if policy.ConfigMap != nil && len(policy.ConfigMap.Namespace) == 0 {
-			obj.AlgorithmSource.Policy.ConfigMap.Namespace = api.NamespaceSystem
-		}
-	}
-
-	if host, port, err := net.SplitHostPort(obj.HealthzBindAddress); err == nil {
-		if len(host) == 0 {
-			host = "0.0.0.0"
-		}
-		obj.HealthzBindAddress = net.JoinHostPort(host, port)
-	} else {
-		obj.HealthzBindAddress = net.JoinHostPort("0.0.0.0", strconv.Itoa(ports.SchedulerPort))
-	}
-
-	if host, port, err := net.SplitHostPort(obj.MetricsBindAddress); err == nil {
-		if len(host) == 0 {
-			host = "0.0.0.0"
-		}
-		obj.MetricsBindAddress = net.JoinHostPort(host, port)
-	} else {
-		obj.MetricsBindAddress = net.JoinHostPort("0.0.0.0", strconv.Itoa(ports.SchedulerPort))
-	}
-
-	if len(obj.ClientConnection.ContentType) == 0 {
-		obj.ClientConnection.ContentType = "application/vnd.kubernetes.protobuf"
-	}
-	if obj.ClientConnection.QPS == 0.0 {
-		obj.ClientConnection.QPS = 50.0
-	}
-	if obj.ClientConnection.Burst == 0 {
-		obj.ClientConnection.Burst = 100
-	}
-
-	if len(obj.LeaderElection.LockObjectNamespace) == 0 {
-		obj.LeaderElection.LockObjectNamespace = SchedulerDefaultLockObjectNamespace
-	}
-	if len(obj.LeaderElection.LockObjectName) == 0 {
-		obj.LeaderElection.LockObjectName = SchedulerDefaultLockObjectName
-	}
-
-	if len(obj.FailureDomains) == 0 {
-		obj.FailureDomains = kubeletapis.DefaultFailureDomains
-	}
-}
-
-func SetDefaults_LeaderElectionConfiguration(obj *LeaderElectionConfiguration) {
-	zero := metav1.Duration{}
-	if obj.LeaseDuration == zero {
-		obj.LeaseDuration = metav1.Duration{Duration: 15 * time.Second}
-	}
-	if obj.RenewDeadline == zero {
-		obj.RenewDeadline = metav1.Duration{Duration: 10 * time.Second}
-	}
-	if obj.RetryPeriod == zero {
-		obj.RetryPeriod = metav1.Duration{Duration: 2 * time.Second}
-	}
-	if obj.ResourceLock == "" {
-		// obj.ResourceLock = rl.EndpointsResourceLock
-		obj.ResourceLock = "endpoints"
-	}
-	if obj.LeaderElect == nil {
-		obj.LeaderElect = utilpointer.BoolPtr(true)
 	}
 }

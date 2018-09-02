@@ -24,16 +24,17 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apiserver/pkg/admission"
+	apiserveradmission "k8s.io/apiserver/pkg/admission/initializer"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/client-go/informers"
+	corev1lister "k8s.io/client-go/listers/core/v1"
 	podutil "k8s.io/kubernetes/pkg/api/pod"
 	authenticationapi "k8s.io/kubernetes/pkg/apis/authentication"
+	coordapi "k8s.io/kubernetes/pkg/apis/coordination"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/policy"
 	"k8s.io/kubernetes/pkg/auth/nodeidentifier"
-	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
-	internalversion "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 	"k8s.io/kubernetes/pkg/features"
-	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 )
 
 const (
@@ -61,18 +62,18 @@ func NewPlugin(nodeIdentifier nodeidentifier.NodeIdentifier) *nodePlugin {
 type nodePlugin struct {
 	*admission.Handler
 	nodeIdentifier nodeidentifier.NodeIdentifier
-	podsGetter     internalversion.PodLister
+	podsGetter     corev1lister.PodLister
 	// allows overriding for testing
 	features utilfeature.FeatureGate
 }
 
 var (
 	_ = admission.Interface(&nodePlugin{})
-	_ = kubeapiserveradmission.WantsInternalKubeInformerFactory(&nodePlugin{})
+	_ = apiserveradmission.WantsExternalKubeInformerFactory(&nodePlugin{})
 )
 
-func (p *nodePlugin) SetInternalKubeInformerFactory(f informers.SharedInformerFactory) {
-	p.podsGetter = f.Core().InternalVersion().Pods().Lister()
+func (p *nodePlugin) SetExternalKubeInformerFactory(f informers.SharedInformerFactory) {
+	p.podsGetter = f.Core().V1().Pods().Lister()
 }
 
 func (p *nodePlugin) ValidateInitialization() error {
@@ -90,6 +91,7 @@ var (
 	nodeResource    = api.Resource("nodes")
 	pvcResource     = api.Resource("persistentvolumeclaims")
 	svcacctResource = api.Resource("serviceaccounts")
+	leaseResource   = coordapi.Resource("leases")
 )
 
 func (c *nodePlugin) Admit(a admission.Attributes) error {
@@ -134,6 +136,12 @@ func (c *nodePlugin) Admit(a admission.Attributes) error {
 			return c.admitServiceAccount(nodeName, a)
 		}
 		return nil
+
+	case leaseResource:
+		if c.features.Enabled(features.NodeLease) {
+			return c.admitLease(nodeName, a)
+		}
+		return admission.NewForbidden(a, fmt.Errorf("disabled by feature gate %s", features.NodeLease))
 
 	default:
 		return nil
@@ -385,6 +393,31 @@ func (c *nodePlugin) admitServiceAccount(nodeName string, a admission.Attributes
 	}
 	if pod.Spec.NodeName != nodeName {
 		return admission.NewForbidden(a, fmt.Errorf("node requested token bound to a pod scheduled on a different node"))
+	}
+
+	return nil
+}
+
+func (r *nodePlugin) admitLease(nodeName string, a admission.Attributes) error {
+	// the request must be against the system namespace reserved for node leases
+	if a.GetNamespace() != api.NamespaceNodeLease {
+		return admission.NewForbidden(a, fmt.Errorf("can only access leases in the %q system namespace", api.NamespaceNodeLease))
+	}
+
+	// the request must come from a node with the same name as the lease
+	if a.GetOperation() == admission.Create {
+		// a.GetName() won't return the name on create, so we drill down to the proposed object
+		lease, ok := a.GetObject().(*coordapi.Lease)
+		if !ok {
+			return admission.NewForbidden(a, fmt.Errorf("unexpected type %T", a.GetObject()))
+		}
+		if lease.Name != nodeName {
+			return admission.NewForbidden(a, fmt.Errorf("can only access node lease with the same name as the requesting node"))
+		}
+	} else {
+		if a.GetName() != nodeName {
+			return admission.NewForbidden(a, fmt.Errorf("can only access node lease with the same name as the requesting node"))
+		}
 	}
 
 	return nil

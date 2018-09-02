@@ -26,6 +26,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
+	configv1alpha1 "k8s.io/apiserver/pkg/apis/config/v1alpha1"
 	componentconfig "k8s.io/kubernetes/pkg/apis/componentconfig"
 )
 
@@ -56,16 +57,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*ClientConnectionConfiguration)(nil), (*componentconfig.ClientConnectionConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_ClientConnectionConfiguration_To_componentconfig_ClientConnectionConfiguration(a.(*ClientConnectionConfiguration), b.(*componentconfig.ClientConnectionConfiguration), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*componentconfig.ClientConnectionConfiguration)(nil), (*ClientConnectionConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_componentconfig_ClientConnectionConfiguration_To_v1alpha1_ClientConnectionConfiguration(a.(*componentconfig.ClientConnectionConfiguration), b.(*ClientConnectionConfiguration), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddGeneratedConversionFunc((*CloudControllerManagerConfiguration)(nil), (*componentconfig.CloudControllerManagerConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha1_CloudControllerManagerConfiguration_To_componentconfig_CloudControllerManagerConfiguration(a.(*CloudControllerManagerConfiguration), b.(*componentconfig.CloudControllerManagerConfiguration), scope)
 	}); err != nil {
@@ -93,16 +84,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddGeneratedConversionFunc((*componentconfig.DaemonSetControllerConfiguration)(nil), (*DaemonSetControllerConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_componentconfig_DaemonSetControllerConfiguration_To_v1alpha1_DaemonSetControllerConfiguration(a.(*componentconfig.DaemonSetControllerConfiguration), b.(*DaemonSetControllerConfiguration), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*DebuggingConfiguration)(nil), (*componentconfig.DebuggingConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_DebuggingConfiguration_To_componentconfig_DebuggingConfiguration(a.(*DebuggingConfiguration), b.(*componentconfig.DebuggingConfiguration), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*componentconfig.DebuggingConfiguration)(nil), (*DebuggingConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_componentconfig_DebuggingConfiguration_To_v1alpha1_DebuggingConfiguration(a.(*componentconfig.DebuggingConfiguration), b.(*DebuggingConfiguration), scope)
 	}); err != nil {
 		return err
 	}
@@ -206,36 +187,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*KubeSchedulerConfiguration)(nil), (*componentconfig.KubeSchedulerConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_KubeSchedulerConfiguration_To_componentconfig_KubeSchedulerConfiguration(a.(*KubeSchedulerConfiguration), b.(*componentconfig.KubeSchedulerConfiguration), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*componentconfig.KubeSchedulerConfiguration)(nil), (*KubeSchedulerConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_componentconfig_KubeSchedulerConfiguration_To_v1alpha1_KubeSchedulerConfiguration(a.(*componentconfig.KubeSchedulerConfiguration), b.(*KubeSchedulerConfiguration), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*KubeSchedulerLeaderElectionConfiguration)(nil), (*componentconfig.KubeSchedulerLeaderElectionConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_KubeSchedulerLeaderElectionConfiguration_To_componentconfig_KubeSchedulerLeaderElectionConfiguration(a.(*KubeSchedulerLeaderElectionConfiguration), b.(*componentconfig.KubeSchedulerLeaderElectionConfiguration), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*componentconfig.KubeSchedulerLeaderElectionConfiguration)(nil), (*KubeSchedulerLeaderElectionConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_componentconfig_KubeSchedulerLeaderElectionConfiguration_To_v1alpha1_KubeSchedulerLeaderElectionConfiguration(a.(*componentconfig.KubeSchedulerLeaderElectionConfiguration), b.(*KubeSchedulerLeaderElectionConfiguration), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*LeaderElectionConfiguration)(nil), (*componentconfig.LeaderElectionConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_LeaderElectionConfiguration_To_componentconfig_LeaderElectionConfiguration(a.(*LeaderElectionConfiguration), b.(*componentconfig.LeaderElectionConfiguration), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*componentconfig.LeaderElectionConfiguration)(nil), (*LeaderElectionConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_componentconfig_LeaderElectionConfiguration_To_v1alpha1_LeaderElectionConfiguration(a.(*componentconfig.LeaderElectionConfiguration), b.(*LeaderElectionConfiguration), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddGeneratedConversionFunc((*NamespaceControllerConfiguration)(nil), (*componentconfig.NamespaceControllerConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha1_NamespaceControllerConfiguration_To_componentconfig_NamespaceControllerConfiguration(a.(*NamespaceControllerConfiguration), b.(*componentconfig.NamespaceControllerConfiguration), scope)
 	}); err != nil {
@@ -336,46 +287,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*SchedulerAlgorithmSource)(nil), (*componentconfig.SchedulerAlgorithmSource)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_SchedulerAlgorithmSource_To_componentconfig_SchedulerAlgorithmSource(a.(*SchedulerAlgorithmSource), b.(*componentconfig.SchedulerAlgorithmSource), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*componentconfig.SchedulerAlgorithmSource)(nil), (*SchedulerAlgorithmSource)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_componentconfig_SchedulerAlgorithmSource_To_v1alpha1_SchedulerAlgorithmSource(a.(*componentconfig.SchedulerAlgorithmSource), b.(*SchedulerAlgorithmSource), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*SchedulerPolicyConfigMapSource)(nil), (*componentconfig.SchedulerPolicyConfigMapSource)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_SchedulerPolicyConfigMapSource_To_componentconfig_SchedulerPolicyConfigMapSource(a.(*SchedulerPolicyConfigMapSource), b.(*componentconfig.SchedulerPolicyConfigMapSource), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*componentconfig.SchedulerPolicyConfigMapSource)(nil), (*SchedulerPolicyConfigMapSource)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_componentconfig_SchedulerPolicyConfigMapSource_To_v1alpha1_SchedulerPolicyConfigMapSource(a.(*componentconfig.SchedulerPolicyConfigMapSource), b.(*SchedulerPolicyConfigMapSource), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*SchedulerPolicyFileSource)(nil), (*componentconfig.SchedulerPolicyFileSource)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_SchedulerPolicyFileSource_To_componentconfig_SchedulerPolicyFileSource(a.(*SchedulerPolicyFileSource), b.(*componentconfig.SchedulerPolicyFileSource), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*componentconfig.SchedulerPolicyFileSource)(nil), (*SchedulerPolicyFileSource)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_componentconfig_SchedulerPolicyFileSource_To_v1alpha1_SchedulerPolicyFileSource(a.(*componentconfig.SchedulerPolicyFileSource), b.(*SchedulerPolicyFileSource), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*SchedulerPolicySource)(nil), (*componentconfig.SchedulerPolicySource)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_SchedulerPolicySource_To_componentconfig_SchedulerPolicySource(a.(*SchedulerPolicySource), b.(*componentconfig.SchedulerPolicySource), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*componentconfig.SchedulerPolicySource)(nil), (*SchedulerPolicySource)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_componentconfig_SchedulerPolicySource_To_v1alpha1_SchedulerPolicySource(a.(*componentconfig.SchedulerPolicySource), b.(*SchedulerPolicySource), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddGeneratedConversionFunc((*ServiceControllerConfiguration)(nil), (*componentconfig.ServiceControllerConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha1_ServiceControllerConfiguration_To_componentconfig_ServiceControllerConfiguration(a.(*ServiceControllerConfiguration), b.(*componentconfig.ServiceControllerConfiguration), scope)
 	}); err != nil {
@@ -445,39 +356,11 @@ func Convert_componentconfig_CSRSigningControllerConfiguration_To_v1alpha1_CSRSi
 	return autoConvert_componentconfig_CSRSigningControllerConfiguration_To_v1alpha1_CSRSigningControllerConfiguration(in, out, s)
 }
 
-func autoConvert_v1alpha1_ClientConnectionConfiguration_To_componentconfig_ClientConnectionConfiguration(in *ClientConnectionConfiguration, out *componentconfig.ClientConnectionConfiguration, s conversion.Scope) error {
-	out.KubeConfigFile = in.KubeConfigFile
-	out.AcceptContentTypes = in.AcceptContentTypes
-	out.ContentType = in.ContentType
-	out.QPS = in.QPS
-	out.Burst = in.Burst
-	return nil
-}
-
-// Convert_v1alpha1_ClientConnectionConfiguration_To_componentconfig_ClientConnectionConfiguration is an autogenerated conversion function.
-func Convert_v1alpha1_ClientConnectionConfiguration_To_componentconfig_ClientConnectionConfiguration(in *ClientConnectionConfiguration, out *componentconfig.ClientConnectionConfiguration, s conversion.Scope) error {
-	return autoConvert_v1alpha1_ClientConnectionConfiguration_To_componentconfig_ClientConnectionConfiguration(in, out, s)
-}
-
-func autoConvert_componentconfig_ClientConnectionConfiguration_To_v1alpha1_ClientConnectionConfiguration(in *componentconfig.ClientConnectionConfiguration, out *ClientConnectionConfiguration, s conversion.Scope) error {
-	out.KubeConfigFile = in.KubeConfigFile
-	out.AcceptContentTypes = in.AcceptContentTypes
-	out.ContentType = in.ContentType
-	out.QPS = in.QPS
-	out.Burst = in.Burst
-	return nil
-}
-
-// Convert_componentconfig_ClientConnectionConfiguration_To_v1alpha1_ClientConnectionConfiguration is an autogenerated conversion function.
-func Convert_componentconfig_ClientConnectionConfiguration_To_v1alpha1_ClientConnectionConfiguration(in *componentconfig.ClientConnectionConfiguration, out *ClientConnectionConfiguration, s conversion.Scope) error {
-	return autoConvert_componentconfig_ClientConnectionConfiguration_To_v1alpha1_ClientConnectionConfiguration(in, out, s)
-}
-
 func autoConvert_v1alpha1_CloudControllerManagerConfiguration_To_componentconfig_CloudControllerManagerConfiguration(in *CloudControllerManagerConfiguration, out *componentconfig.CloudControllerManagerConfiguration, s conversion.Scope) error {
 	if err := Convert_v1alpha1_CloudProviderConfiguration_To_componentconfig_CloudProviderConfiguration(&in.CloudProvider, &out.CloudProvider, s); err != nil {
 		return err
 	}
-	if err := Convert_v1alpha1_DebuggingConfiguration_To_componentconfig_DebuggingConfiguration(&in.Debugging, &out.Debugging, s); err != nil {
+	if err := configv1alpha1.Convert_v1alpha1_DebuggingConfiguration_To_config_DebuggingConfiguration(&in.Debugging, &out.Debugging, s); err != nil {
 		return err
 	}
 	if err := Convert_v1alpha1_GenericComponentConfiguration_To_componentconfig_GenericComponentConfiguration(&in.GenericComponent, &out.GenericComponent, s); err != nil {
@@ -502,7 +385,7 @@ func autoConvert_componentconfig_CloudControllerManagerConfiguration_To_v1alpha1
 	if err := Convert_componentconfig_CloudProviderConfiguration_To_v1alpha1_CloudProviderConfiguration(&in.CloudProvider, &out.CloudProvider, s); err != nil {
 		return err
 	}
-	if err := Convert_componentconfig_DebuggingConfiguration_To_v1alpha1_DebuggingConfiguration(&in.Debugging, &out.Debugging, s); err != nil {
+	if err := configv1alpha1.Convert_config_DebuggingConfiguration_To_v1alpha1_DebuggingConfiguration(&in.Debugging, &out.Debugging, s); err != nil {
 		return err
 	}
 	if err := Convert_componentconfig_GenericComponentConfiguration_To_v1alpha1_GenericComponentConfiguration(&in.GenericComponent, &out.GenericComponent, s); err != nil {
@@ -563,28 +446,6 @@ func autoConvert_componentconfig_DaemonSetControllerConfiguration_To_v1alpha1_Da
 // Convert_componentconfig_DaemonSetControllerConfiguration_To_v1alpha1_DaemonSetControllerConfiguration is an autogenerated conversion function.
 func Convert_componentconfig_DaemonSetControllerConfiguration_To_v1alpha1_DaemonSetControllerConfiguration(in *componentconfig.DaemonSetControllerConfiguration, out *DaemonSetControllerConfiguration, s conversion.Scope) error {
 	return autoConvert_componentconfig_DaemonSetControllerConfiguration_To_v1alpha1_DaemonSetControllerConfiguration(in, out, s)
-}
-
-func autoConvert_v1alpha1_DebuggingConfiguration_To_componentconfig_DebuggingConfiguration(in *DebuggingConfiguration, out *componentconfig.DebuggingConfiguration, s conversion.Scope) error {
-	out.EnableProfiling = in.EnableProfiling
-	out.EnableContentionProfiling = in.EnableContentionProfiling
-	return nil
-}
-
-// Convert_v1alpha1_DebuggingConfiguration_To_componentconfig_DebuggingConfiguration is an autogenerated conversion function.
-func Convert_v1alpha1_DebuggingConfiguration_To_componentconfig_DebuggingConfiguration(in *DebuggingConfiguration, out *componentconfig.DebuggingConfiguration, s conversion.Scope) error {
-	return autoConvert_v1alpha1_DebuggingConfiguration_To_componentconfig_DebuggingConfiguration(in, out, s)
-}
-
-func autoConvert_componentconfig_DebuggingConfiguration_To_v1alpha1_DebuggingConfiguration(in *componentconfig.DebuggingConfiguration, out *DebuggingConfiguration, s conversion.Scope) error {
-	out.EnableProfiling = in.EnableProfiling
-	out.EnableContentionProfiling = in.EnableContentionProfiling
-	return nil
-}
-
-// Convert_componentconfig_DebuggingConfiguration_To_v1alpha1_DebuggingConfiguration is an autogenerated conversion function.
-func Convert_componentconfig_DebuggingConfiguration_To_v1alpha1_DebuggingConfiguration(in *componentconfig.DebuggingConfiguration, out *DebuggingConfiguration, s conversion.Scope) error {
-	return autoConvert_componentconfig_DebuggingConfiguration_To_v1alpha1_DebuggingConfiguration(in, out, s)
 }
 
 func autoConvert_v1alpha1_DeploymentControllerConfiguration_To_componentconfig_DeploymentControllerConfiguration(in *DeploymentControllerConfiguration, out *componentconfig.DeploymentControllerConfiguration, s conversion.Scope) error {
@@ -687,7 +548,7 @@ func autoConvert_v1alpha1_GenericComponentConfiguration_To_componentconfig_Gener
 	out.KubeAPIQPS = in.KubeAPIQPS
 	out.KubeAPIBurst = in.KubeAPIBurst
 	out.ControllerStartInterval = in.ControllerStartInterval
-	if err := Convert_v1alpha1_LeaderElectionConfiguration_To_componentconfig_LeaderElectionConfiguration(&in.LeaderElection, &out.LeaderElection, s); err != nil {
+	if err := configv1alpha1.Convert_v1alpha1_LeaderElectionConfiguration_To_config_LeaderElectionConfiguration(&in.LeaderElection, &out.LeaderElection, s); err != nil {
 		return err
 	}
 	return nil
@@ -704,7 +565,7 @@ func autoConvert_componentconfig_GenericComponentConfiguration_To_v1alpha1_Gener
 	out.KubeAPIQPS = in.KubeAPIQPS
 	out.KubeAPIBurst = in.KubeAPIBurst
 	out.ControllerStartInterval = in.ControllerStartInterval
-	if err := Convert_componentconfig_LeaderElectionConfiguration_To_v1alpha1_LeaderElectionConfiguration(&in.LeaderElection, &out.LeaderElection, s); err != nil {
+	if err := configv1alpha1.Convert_config_LeaderElectionConfiguration_To_v1alpha1_LeaderElectionConfiguration(&in.LeaderElection, &out.LeaderElection, s); err != nil {
 		return err
 	}
 	return nil
@@ -745,6 +606,8 @@ func autoConvert_v1alpha1_HPAControllerConfiguration_To_componentconfig_HPAContr
 	if err := v1.Convert_Pointer_bool_To_bool(&in.HorizontalPodAutoscalerUseRESTClients, &out.HorizontalPodAutoscalerUseRESTClients, s); err != nil {
 		return err
 	}
+	out.HorizontalPodAutoscalerCPUInitializationPeriod = in.HorizontalPodAutoscalerCPUInitializationPeriod
+	out.HorizontalPodAutoscalerInitialReadinessDelay = in.HorizontalPodAutoscalerInitialReadinessDelay
 	return nil
 }
 
@@ -761,6 +624,8 @@ func autoConvert_componentconfig_HPAControllerConfiguration_To_v1alpha1_HPAContr
 	if err := v1.Convert_bool_To_Pointer_bool(&in.HorizontalPodAutoscalerUseRESTClients, &out.HorizontalPodAutoscalerUseRESTClients, s); err != nil {
 		return err
 	}
+	out.HorizontalPodAutoscalerCPUInitializationPeriod = in.HorizontalPodAutoscalerCPUInitializationPeriod
+	out.HorizontalPodAutoscalerInitialReadinessDelay = in.HorizontalPodAutoscalerInitialReadinessDelay
 	return nil
 }
 
@@ -839,7 +704,7 @@ func autoConvert_v1alpha1_KubeControllerManagerConfiguration_To_componentconfig_
 	if err := Convert_v1alpha1_CloudProviderConfiguration_To_componentconfig_CloudProviderConfiguration(&in.CloudProvider, &out.CloudProvider, s); err != nil {
 		return err
 	}
-	if err := Convert_v1alpha1_DebuggingConfiguration_To_componentconfig_DebuggingConfiguration(&in.Debugging, &out.Debugging, s); err != nil {
+	if err := configv1alpha1.Convert_v1alpha1_DebuggingConfiguration_To_config_DebuggingConfiguration(&in.Debugging, &out.Debugging, s); err != nil {
 		return err
 	}
 	if err := Convert_v1alpha1_GenericComponentConfiguration_To_componentconfig_GenericComponentConfiguration(&in.GenericComponent, &out.GenericComponent, s); err != nil {
@@ -919,7 +784,7 @@ func autoConvert_componentconfig_KubeControllerManagerConfiguration_To_v1alpha1_
 	if err := Convert_componentconfig_CloudProviderConfiguration_To_v1alpha1_CloudProviderConfiguration(&in.CloudProvider, &out.CloudProvider, s); err != nil {
 		return err
 	}
-	if err := Convert_componentconfig_DebuggingConfiguration_To_v1alpha1_DebuggingConfiguration(&in.Debugging, &out.Debugging, s); err != nil {
+	if err := configv1alpha1.Convert_config_DebuggingConfiguration_To_v1alpha1_DebuggingConfiguration(&in.Debugging, &out.Debugging, s); err != nil {
 		return err
 	}
 	if err := Convert_componentconfig_GenericComponentConfiguration_To_v1alpha1_GenericComponentConfiguration(&in.GenericComponent, &out.GenericComponent, s); err != nil {
@@ -993,118 +858,6 @@ func autoConvert_componentconfig_KubeControllerManagerConfiguration_To_v1alpha1_
 // Convert_componentconfig_KubeControllerManagerConfiguration_To_v1alpha1_KubeControllerManagerConfiguration is an autogenerated conversion function.
 func Convert_componentconfig_KubeControllerManagerConfiguration_To_v1alpha1_KubeControllerManagerConfiguration(in *componentconfig.KubeControllerManagerConfiguration, out *KubeControllerManagerConfiguration, s conversion.Scope) error {
 	return autoConvert_componentconfig_KubeControllerManagerConfiguration_To_v1alpha1_KubeControllerManagerConfiguration(in, out, s)
-}
-
-func autoConvert_v1alpha1_KubeSchedulerConfiguration_To_componentconfig_KubeSchedulerConfiguration(in *KubeSchedulerConfiguration, out *componentconfig.KubeSchedulerConfiguration, s conversion.Scope) error {
-	out.SchedulerName = in.SchedulerName
-	if err := Convert_v1alpha1_SchedulerAlgorithmSource_To_componentconfig_SchedulerAlgorithmSource(&in.AlgorithmSource, &out.AlgorithmSource, s); err != nil {
-		return err
-	}
-	out.HardPodAffinitySymmetricWeight = in.HardPodAffinitySymmetricWeight
-	if err := Convert_v1alpha1_KubeSchedulerLeaderElectionConfiguration_To_componentconfig_KubeSchedulerLeaderElectionConfiguration(&in.LeaderElection, &out.LeaderElection, s); err != nil {
-		return err
-	}
-	if err := Convert_v1alpha1_ClientConnectionConfiguration_To_componentconfig_ClientConnectionConfiguration(&in.ClientConnection, &out.ClientConnection, s); err != nil {
-		return err
-	}
-	out.HealthzBindAddress = in.HealthzBindAddress
-	out.MetricsBindAddress = in.MetricsBindAddress
-	out.EnableProfiling = in.EnableProfiling
-	out.EnableContentionProfiling = in.EnableContentionProfiling
-	out.FailureDomains = in.FailureDomains
-	out.DisablePreemption = in.DisablePreemption
-	return nil
-}
-
-// Convert_v1alpha1_KubeSchedulerConfiguration_To_componentconfig_KubeSchedulerConfiguration is an autogenerated conversion function.
-func Convert_v1alpha1_KubeSchedulerConfiguration_To_componentconfig_KubeSchedulerConfiguration(in *KubeSchedulerConfiguration, out *componentconfig.KubeSchedulerConfiguration, s conversion.Scope) error {
-	return autoConvert_v1alpha1_KubeSchedulerConfiguration_To_componentconfig_KubeSchedulerConfiguration(in, out, s)
-}
-
-func autoConvert_componentconfig_KubeSchedulerConfiguration_To_v1alpha1_KubeSchedulerConfiguration(in *componentconfig.KubeSchedulerConfiguration, out *KubeSchedulerConfiguration, s conversion.Scope) error {
-	out.SchedulerName = in.SchedulerName
-	if err := Convert_componentconfig_SchedulerAlgorithmSource_To_v1alpha1_SchedulerAlgorithmSource(&in.AlgorithmSource, &out.AlgorithmSource, s); err != nil {
-		return err
-	}
-	out.HardPodAffinitySymmetricWeight = in.HardPodAffinitySymmetricWeight
-	if err := Convert_componentconfig_KubeSchedulerLeaderElectionConfiguration_To_v1alpha1_KubeSchedulerLeaderElectionConfiguration(&in.LeaderElection, &out.LeaderElection, s); err != nil {
-		return err
-	}
-	if err := Convert_componentconfig_ClientConnectionConfiguration_To_v1alpha1_ClientConnectionConfiguration(&in.ClientConnection, &out.ClientConnection, s); err != nil {
-		return err
-	}
-	out.HealthzBindAddress = in.HealthzBindAddress
-	out.MetricsBindAddress = in.MetricsBindAddress
-	out.EnableProfiling = in.EnableProfiling
-	out.EnableContentionProfiling = in.EnableContentionProfiling
-	out.FailureDomains = in.FailureDomains
-	out.DisablePreemption = in.DisablePreemption
-	return nil
-}
-
-// Convert_componentconfig_KubeSchedulerConfiguration_To_v1alpha1_KubeSchedulerConfiguration is an autogenerated conversion function.
-func Convert_componentconfig_KubeSchedulerConfiguration_To_v1alpha1_KubeSchedulerConfiguration(in *componentconfig.KubeSchedulerConfiguration, out *KubeSchedulerConfiguration, s conversion.Scope) error {
-	return autoConvert_componentconfig_KubeSchedulerConfiguration_To_v1alpha1_KubeSchedulerConfiguration(in, out, s)
-}
-
-func autoConvert_v1alpha1_KubeSchedulerLeaderElectionConfiguration_To_componentconfig_KubeSchedulerLeaderElectionConfiguration(in *KubeSchedulerLeaderElectionConfiguration, out *componentconfig.KubeSchedulerLeaderElectionConfiguration, s conversion.Scope) error {
-	if err := Convert_v1alpha1_LeaderElectionConfiguration_To_componentconfig_LeaderElectionConfiguration(&in.LeaderElectionConfiguration, &out.LeaderElectionConfiguration, s); err != nil {
-		return err
-	}
-	out.LockObjectNamespace = in.LockObjectNamespace
-	out.LockObjectName = in.LockObjectName
-	return nil
-}
-
-// Convert_v1alpha1_KubeSchedulerLeaderElectionConfiguration_To_componentconfig_KubeSchedulerLeaderElectionConfiguration is an autogenerated conversion function.
-func Convert_v1alpha1_KubeSchedulerLeaderElectionConfiguration_To_componentconfig_KubeSchedulerLeaderElectionConfiguration(in *KubeSchedulerLeaderElectionConfiguration, out *componentconfig.KubeSchedulerLeaderElectionConfiguration, s conversion.Scope) error {
-	return autoConvert_v1alpha1_KubeSchedulerLeaderElectionConfiguration_To_componentconfig_KubeSchedulerLeaderElectionConfiguration(in, out, s)
-}
-
-func autoConvert_componentconfig_KubeSchedulerLeaderElectionConfiguration_To_v1alpha1_KubeSchedulerLeaderElectionConfiguration(in *componentconfig.KubeSchedulerLeaderElectionConfiguration, out *KubeSchedulerLeaderElectionConfiguration, s conversion.Scope) error {
-	if err := Convert_componentconfig_LeaderElectionConfiguration_To_v1alpha1_LeaderElectionConfiguration(&in.LeaderElectionConfiguration, &out.LeaderElectionConfiguration, s); err != nil {
-		return err
-	}
-	out.LockObjectNamespace = in.LockObjectNamespace
-	out.LockObjectName = in.LockObjectName
-	return nil
-}
-
-// Convert_componentconfig_KubeSchedulerLeaderElectionConfiguration_To_v1alpha1_KubeSchedulerLeaderElectionConfiguration is an autogenerated conversion function.
-func Convert_componentconfig_KubeSchedulerLeaderElectionConfiguration_To_v1alpha1_KubeSchedulerLeaderElectionConfiguration(in *componentconfig.KubeSchedulerLeaderElectionConfiguration, out *KubeSchedulerLeaderElectionConfiguration, s conversion.Scope) error {
-	return autoConvert_componentconfig_KubeSchedulerLeaderElectionConfiguration_To_v1alpha1_KubeSchedulerLeaderElectionConfiguration(in, out, s)
-}
-
-func autoConvert_v1alpha1_LeaderElectionConfiguration_To_componentconfig_LeaderElectionConfiguration(in *LeaderElectionConfiguration, out *componentconfig.LeaderElectionConfiguration, s conversion.Scope) error {
-	if err := v1.Convert_Pointer_bool_To_bool(&in.LeaderElect, &out.LeaderElect, s); err != nil {
-		return err
-	}
-	out.LeaseDuration = in.LeaseDuration
-	out.RenewDeadline = in.RenewDeadline
-	out.RetryPeriod = in.RetryPeriod
-	out.ResourceLock = in.ResourceLock
-	return nil
-}
-
-// Convert_v1alpha1_LeaderElectionConfiguration_To_componentconfig_LeaderElectionConfiguration is an autogenerated conversion function.
-func Convert_v1alpha1_LeaderElectionConfiguration_To_componentconfig_LeaderElectionConfiguration(in *LeaderElectionConfiguration, out *componentconfig.LeaderElectionConfiguration, s conversion.Scope) error {
-	return autoConvert_v1alpha1_LeaderElectionConfiguration_To_componentconfig_LeaderElectionConfiguration(in, out, s)
-}
-
-func autoConvert_componentconfig_LeaderElectionConfiguration_To_v1alpha1_LeaderElectionConfiguration(in *componentconfig.LeaderElectionConfiguration, out *LeaderElectionConfiguration, s conversion.Scope) error {
-	if err := v1.Convert_bool_To_Pointer_bool(&in.LeaderElect, &out.LeaderElect, s); err != nil {
-		return err
-	}
-	out.LeaseDuration = in.LeaseDuration
-	out.RenewDeadline = in.RenewDeadline
-	out.RetryPeriod = in.RetryPeriod
-	out.ResourceLock = in.ResourceLock
-	return nil
-}
-
-// Convert_componentconfig_LeaderElectionConfiguration_To_v1alpha1_LeaderElectionConfiguration is an autogenerated conversion function.
-func Convert_componentconfig_LeaderElectionConfiguration_To_v1alpha1_LeaderElectionConfiguration(in *componentconfig.LeaderElectionConfiguration, out *LeaderElectionConfiguration, s conversion.Scope) error {
-	return autoConvert_componentconfig_LeaderElectionConfiguration_To_v1alpha1_LeaderElectionConfiguration(in, out, s)
 }
 
 func autoConvert_v1alpha1_NamespaceControllerConfiguration_To_componentconfig_NamespaceControllerConfiguration(in *NamespaceControllerConfiguration, out *componentconfig.NamespaceControllerConfiguration, s conversion.Scope) error {
@@ -1351,92 +1104,6 @@ func autoConvert_componentconfig_SAControllerConfiguration_To_v1alpha1_SAControl
 // Convert_componentconfig_SAControllerConfiguration_To_v1alpha1_SAControllerConfiguration is an autogenerated conversion function.
 func Convert_componentconfig_SAControllerConfiguration_To_v1alpha1_SAControllerConfiguration(in *componentconfig.SAControllerConfiguration, out *SAControllerConfiguration, s conversion.Scope) error {
 	return autoConvert_componentconfig_SAControllerConfiguration_To_v1alpha1_SAControllerConfiguration(in, out, s)
-}
-
-func autoConvert_v1alpha1_SchedulerAlgorithmSource_To_componentconfig_SchedulerAlgorithmSource(in *SchedulerAlgorithmSource, out *componentconfig.SchedulerAlgorithmSource, s conversion.Scope) error {
-	out.Policy = (*componentconfig.SchedulerPolicySource)(unsafe.Pointer(in.Policy))
-	out.Provider = (*string)(unsafe.Pointer(in.Provider))
-	return nil
-}
-
-// Convert_v1alpha1_SchedulerAlgorithmSource_To_componentconfig_SchedulerAlgorithmSource is an autogenerated conversion function.
-func Convert_v1alpha1_SchedulerAlgorithmSource_To_componentconfig_SchedulerAlgorithmSource(in *SchedulerAlgorithmSource, out *componentconfig.SchedulerAlgorithmSource, s conversion.Scope) error {
-	return autoConvert_v1alpha1_SchedulerAlgorithmSource_To_componentconfig_SchedulerAlgorithmSource(in, out, s)
-}
-
-func autoConvert_componentconfig_SchedulerAlgorithmSource_To_v1alpha1_SchedulerAlgorithmSource(in *componentconfig.SchedulerAlgorithmSource, out *SchedulerAlgorithmSource, s conversion.Scope) error {
-	out.Policy = (*SchedulerPolicySource)(unsafe.Pointer(in.Policy))
-	out.Provider = (*string)(unsafe.Pointer(in.Provider))
-	return nil
-}
-
-// Convert_componentconfig_SchedulerAlgorithmSource_To_v1alpha1_SchedulerAlgorithmSource is an autogenerated conversion function.
-func Convert_componentconfig_SchedulerAlgorithmSource_To_v1alpha1_SchedulerAlgorithmSource(in *componentconfig.SchedulerAlgorithmSource, out *SchedulerAlgorithmSource, s conversion.Scope) error {
-	return autoConvert_componentconfig_SchedulerAlgorithmSource_To_v1alpha1_SchedulerAlgorithmSource(in, out, s)
-}
-
-func autoConvert_v1alpha1_SchedulerPolicyConfigMapSource_To_componentconfig_SchedulerPolicyConfigMapSource(in *SchedulerPolicyConfigMapSource, out *componentconfig.SchedulerPolicyConfigMapSource, s conversion.Scope) error {
-	out.Namespace = in.Namespace
-	out.Name = in.Name
-	return nil
-}
-
-// Convert_v1alpha1_SchedulerPolicyConfigMapSource_To_componentconfig_SchedulerPolicyConfigMapSource is an autogenerated conversion function.
-func Convert_v1alpha1_SchedulerPolicyConfigMapSource_To_componentconfig_SchedulerPolicyConfigMapSource(in *SchedulerPolicyConfigMapSource, out *componentconfig.SchedulerPolicyConfigMapSource, s conversion.Scope) error {
-	return autoConvert_v1alpha1_SchedulerPolicyConfigMapSource_To_componentconfig_SchedulerPolicyConfigMapSource(in, out, s)
-}
-
-func autoConvert_componentconfig_SchedulerPolicyConfigMapSource_To_v1alpha1_SchedulerPolicyConfigMapSource(in *componentconfig.SchedulerPolicyConfigMapSource, out *SchedulerPolicyConfigMapSource, s conversion.Scope) error {
-	out.Namespace = in.Namespace
-	out.Name = in.Name
-	return nil
-}
-
-// Convert_componentconfig_SchedulerPolicyConfigMapSource_To_v1alpha1_SchedulerPolicyConfigMapSource is an autogenerated conversion function.
-func Convert_componentconfig_SchedulerPolicyConfigMapSource_To_v1alpha1_SchedulerPolicyConfigMapSource(in *componentconfig.SchedulerPolicyConfigMapSource, out *SchedulerPolicyConfigMapSource, s conversion.Scope) error {
-	return autoConvert_componentconfig_SchedulerPolicyConfigMapSource_To_v1alpha1_SchedulerPolicyConfigMapSource(in, out, s)
-}
-
-func autoConvert_v1alpha1_SchedulerPolicyFileSource_To_componentconfig_SchedulerPolicyFileSource(in *SchedulerPolicyFileSource, out *componentconfig.SchedulerPolicyFileSource, s conversion.Scope) error {
-	out.Path = in.Path
-	return nil
-}
-
-// Convert_v1alpha1_SchedulerPolicyFileSource_To_componentconfig_SchedulerPolicyFileSource is an autogenerated conversion function.
-func Convert_v1alpha1_SchedulerPolicyFileSource_To_componentconfig_SchedulerPolicyFileSource(in *SchedulerPolicyFileSource, out *componentconfig.SchedulerPolicyFileSource, s conversion.Scope) error {
-	return autoConvert_v1alpha1_SchedulerPolicyFileSource_To_componentconfig_SchedulerPolicyFileSource(in, out, s)
-}
-
-func autoConvert_componentconfig_SchedulerPolicyFileSource_To_v1alpha1_SchedulerPolicyFileSource(in *componentconfig.SchedulerPolicyFileSource, out *SchedulerPolicyFileSource, s conversion.Scope) error {
-	out.Path = in.Path
-	return nil
-}
-
-// Convert_componentconfig_SchedulerPolicyFileSource_To_v1alpha1_SchedulerPolicyFileSource is an autogenerated conversion function.
-func Convert_componentconfig_SchedulerPolicyFileSource_To_v1alpha1_SchedulerPolicyFileSource(in *componentconfig.SchedulerPolicyFileSource, out *SchedulerPolicyFileSource, s conversion.Scope) error {
-	return autoConvert_componentconfig_SchedulerPolicyFileSource_To_v1alpha1_SchedulerPolicyFileSource(in, out, s)
-}
-
-func autoConvert_v1alpha1_SchedulerPolicySource_To_componentconfig_SchedulerPolicySource(in *SchedulerPolicySource, out *componentconfig.SchedulerPolicySource, s conversion.Scope) error {
-	out.File = (*componentconfig.SchedulerPolicyFileSource)(unsafe.Pointer(in.File))
-	out.ConfigMap = (*componentconfig.SchedulerPolicyConfigMapSource)(unsafe.Pointer(in.ConfigMap))
-	return nil
-}
-
-// Convert_v1alpha1_SchedulerPolicySource_To_componentconfig_SchedulerPolicySource is an autogenerated conversion function.
-func Convert_v1alpha1_SchedulerPolicySource_To_componentconfig_SchedulerPolicySource(in *SchedulerPolicySource, out *componentconfig.SchedulerPolicySource, s conversion.Scope) error {
-	return autoConvert_v1alpha1_SchedulerPolicySource_To_componentconfig_SchedulerPolicySource(in, out, s)
-}
-
-func autoConvert_componentconfig_SchedulerPolicySource_To_v1alpha1_SchedulerPolicySource(in *componentconfig.SchedulerPolicySource, out *SchedulerPolicySource, s conversion.Scope) error {
-	out.File = (*SchedulerPolicyFileSource)(unsafe.Pointer(in.File))
-	out.ConfigMap = (*SchedulerPolicyConfigMapSource)(unsafe.Pointer(in.ConfigMap))
-	return nil
-}
-
-// Convert_componentconfig_SchedulerPolicySource_To_v1alpha1_SchedulerPolicySource is an autogenerated conversion function.
-func Convert_componentconfig_SchedulerPolicySource_To_v1alpha1_SchedulerPolicySource(in *componentconfig.SchedulerPolicySource, out *SchedulerPolicySource, s conversion.Scope) error {
-	return autoConvert_componentconfig_SchedulerPolicySource_To_v1alpha1_SchedulerPolicySource(in, out, s)
 }
 
 func autoConvert_v1alpha1_ServiceControllerConfiguration_To_componentconfig_ServiceControllerConfiguration(in *ServiceControllerConfiguration, out *componentconfig.ServiceControllerConfiguration, s conversion.Scope) error {

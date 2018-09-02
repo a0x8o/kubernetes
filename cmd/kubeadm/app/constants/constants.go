@@ -187,9 +187,12 @@ const (
 	AnnotationKubeadmCRISocket = "kubeadm.alpha.kubernetes.io/cri-socket"
 
 	// InitConfigurationConfigMap specifies in what ConfigMap in the kube-system namespace the `kubeadm init` configuration should be stored
+	// TODO: Rename this to ClusterConfigurationConfigMap
 	InitConfigurationConfigMap = "kubeadm-config"
 
 	// InitConfigurationConfigMapKey specifies in what ConfigMap key the master configuration should be stored
+	// TODO: Rename this to ClusterConfigurationConfigMapKey, and migrate the value to ClusterConfiguration,
+	// but still support the old MasterConfiguration naming in earlier versions
 	InitConfigurationConfigMapKey = "InitConfiguration"
 
 	// KubeletBaseConfigurationConfigMapPrefix specifies in what ConfigMap in the kube-system namespace the initial remote configuration of kubelet should be stored
@@ -202,7 +205,6 @@ const (
 	KubeletBaseConfigMapRolePrefix = "kubeadm:kubelet-config-"
 
 	// KubeletRunDirectory specifies the directory where the kubelet runtime information is stored.
-	// TODO: Make hard-coded "/var/lib/kubelet" strings reference this constant.
 	KubeletRunDirectory = "/var/lib/kubelet"
 
 	// KubeletConfigurationFileName specifies the file name on the node which stores initial remote configuration of kubelet
@@ -221,6 +223,9 @@ const (
 
 	// KubeletEnvFileVariableName specifies the shell script variable name "kubeadm init" should write a value to in KubeletEnvFile
 	KubeletEnvFileVariableName = "KUBELET_KUBEADM_ARGS"
+
+	// KubeletHealthzPort is the port of the kubelet healthz endpoint
+	KubeletHealthzPort = 10248
 
 	// MinExternalEtcdVersion indicates minimum external etcd version which kubeadm supports
 	MinExternalEtcdVersion = "3.2.17"
@@ -284,7 +289,10 @@ const (
 	KubeDNSVersion = "1.14.10"
 
 	// CoreDNSVersion is the version of CoreDNS to be deployed if it is used
-	CoreDNSVersion = "1.1.3"
+	CoreDNSVersion = "1.2.2"
+
+	// ClusterConfigurationKind is the string kind value for the ClusterConfiguration struct
+	ClusterConfigurationKind = "ClusterConfiguration"
 
 	// InitConfigurationKind is the string kind value for the InitConfiguration struct
 	InitConfigurationKind = "InitConfiguration"

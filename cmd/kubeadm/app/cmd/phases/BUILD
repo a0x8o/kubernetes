@@ -39,6 +39,7 @@ go_library(
         "//cmd/kubeadm/app/phases/kubelet:go_default_library",
         "//cmd/kubeadm/app/phases/markmaster:go_default_library",
         "//cmd/kubeadm/app/phases/selfhosting:go_default_library",
+        "//cmd/kubeadm/app/phases/upgrade:go_default_library",
         "//cmd/kubeadm/app/phases/uploadconfig:go_default_library",
         "//cmd/kubeadm/app/preflight:go_default_library",
         "//cmd/kubeadm/app/util:go_default_library",
@@ -92,7 +93,10 @@ filegroup(
 
 filegroup(
     name = "all-srcs",
-    srcs = [":package-srcs"],
+    srcs = [
+        ":package-srcs",
+        "//cmd/kubeadm/app/cmd/phases/certs:all-srcs",
+    ],
     tags = ["automanaged"],
     visibility = ["//visibility:public"],
 )
