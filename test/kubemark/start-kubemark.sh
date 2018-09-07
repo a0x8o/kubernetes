@@ -64,7 +64,7 @@ SERVICE_CLUSTER_IP_RANGE="${SERVICE_CLUSTER_IP_RANGE:-}"
 EVENT_PD="${EVENT_PD:-}"
 
 # Etcd related variables.
-ETCD_IMAGE="${ETCD_IMAGE:-3.2.18-0}"
+ETCD_IMAGE="${ETCD_IMAGE:-3.2.24-0}"
 ETCD_VERSION="${ETCD_VERSION:-}"
 
 # Controller-manager related variables.
@@ -220,6 +220,14 @@ function create-and-upload-hollow-node-image {
     cd $CURR_DIR
   fi
   echo "Created and uploaded the kubemark hollow-node image to docker registry."
+  # Cleanup the kubemark image after the script exits.
+  if [[ "${CLEANUP_KUBEMARK_IMAGE:-}" == "true" ]]; then
+    trap delete-kubemark-image EXIT
+  fi
+}
+
+function delete-kubemark-image {
+  delete-image "${KUBEMARK_IMAGE_REGISTRY}/kubemark:${KUBEMARK_IMAGE_TAG}"
 }
 
 # Generate secret and configMap for the hollow-node pods to work, prepare

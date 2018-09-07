@@ -52,6 +52,7 @@ import (
 	servicecontroller "k8s.io/kubernetes/pkg/controller/service"
 	serviceaccountcontroller "k8s.io/kubernetes/pkg/controller/serviceaccount"
 	ttlcontroller "k8s.io/kubernetes/pkg/controller/ttl"
+	"k8s.io/kubernetes/pkg/controller/ttlafterfinished"
 	"k8s.io/kubernetes/pkg/controller/volume/attachdetach"
 	"k8s.io/kubernetes/pkg/controller/volume/expand"
 	persistentvolumecontroller "k8s.io/kubernetes/pkg/controller/volume/persistentvolume"
@@ -96,10 +97,10 @@ func startNodeIpamController(ctx ControllerContext) (http.Handler, bool, error) 
 		}
 	}
 
-	if len(strings.TrimSpace(ctx.ComponentConfig.NodeIpamController.ServiceCIDR)) != 0 {
-		_, serviceCIDR, err = net.ParseCIDR(ctx.ComponentConfig.NodeIpamController.ServiceCIDR)
+	if len(strings.TrimSpace(ctx.ComponentConfig.NodeIPAMController.ServiceCIDR)) != 0 {
+		_, serviceCIDR, err = net.ParseCIDR(ctx.ComponentConfig.NodeIPAMController.ServiceCIDR)
 		if err != nil {
-			glog.Warningf("Unsuccessful parsing of service CIDR %v: %v", ctx.ComponentConfig.NodeIpamController.ServiceCIDR, err)
+			glog.Warningf("Unsuccessful parsing of service CIDR %v: %v", ctx.ComponentConfig.NodeIPAMController.ServiceCIDR, err)
 		}
 	}
 
@@ -109,7 +110,7 @@ func startNodeIpamController(ctx ControllerContext) (http.Handler, bool, error) 
 		ctx.ClientBuilder.ClientOrDie("node-controller"),
 		clusterCIDR,
 		serviceCIDR,
-		int(ctx.ComponentConfig.NodeIpamController.NodeCIDRMaskSize),
+		int(ctx.ComponentConfig.NodeIPAMController.NodeCIDRMaskSize),
 		ipam.CIDRAllocatorType(ctx.ComponentConfig.KubeCloudShared.CIDRAllocatorType),
 	)
 	if err != nil {
@@ -247,7 +248,7 @@ func startEndpointController(ctx ControllerContext) (http.Handler, bool, error) 
 		ctx.InformerFactory.Core().V1().Services(),
 		ctx.InformerFactory.Core().V1().Endpoints(),
 		ctx.ClientBuilder.ClientOrDie("endpoint-controller"),
-	).Run(int(ctx.ComponentConfig.EndPointController.ConcurrentEndpointSyncs), ctx.Stop)
+	).Run(int(ctx.ComponentConfig.EndpointController.ConcurrentEndpointSyncs), ctx.Stop)
 	return nil, true, nil
 }
 
@@ -415,5 +416,16 @@ func startPVProtectionController(ctx ControllerContext) (http.Handler, bool, err
 		ctx.ClientBuilder.ClientOrDie("pv-protection-controller"),
 		utilfeature.DefaultFeatureGate.Enabled(features.StorageObjectInUseProtection),
 	).Run(1, ctx.Stop)
+	return nil, true, nil
+}
+
+func startTTLAfterFinishedController(ctx ControllerContext) (http.Handler, bool, error) {
+	if !utilfeature.DefaultFeatureGate.Enabled(features.TTLAfterFinished) {
+		return nil, false, nil
+	}
+	go ttlafterfinished.New(
+		ctx.InformerFactory.Batch().V1().Jobs(),
+		ctx.ClientBuilder.ClientOrDie("ttl-after-finished-controller"),
+	).Run(int(ctx.ComponentConfig.TTLAfterFinishedController.ConcurrentTTLSyncs), ctx.Stop)
 	return nil, true, nil
 }

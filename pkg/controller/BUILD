@@ -104,6 +104,7 @@ filegroup(
     name = "all-srcs",
     srcs = [
         ":package-srcs",
+        "//pkg/controller/apis/config:all-srcs",
         "//pkg/controller/bootstrap:all-srcs",
         "//pkg/controller/certificates:all-srcs",
         "//pkg/controller/cloud:all-srcs",
@@ -130,6 +131,7 @@ filegroup(
         "//pkg/controller/statefulset:all-srcs",
         "//pkg/controller/testutil:all-srcs",
         "//pkg/controller/ttl:all-srcs",
+        "//pkg/controller/ttlafterfinished:all-srcs",
         "//pkg/controller/util/node:all-srcs",
         "//pkg/controller/volume/attachdetach:all-srcs",
         "//pkg/controller/volume/events:all-srcs",

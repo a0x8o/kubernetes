@@ -85,6 +85,8 @@ const (
 	MaxGCEPDVolumeCountPred = "MaxGCEPDVolumeCount"
 	// MaxAzureDiskVolumeCountPred defines the name of predicate MaxAzureDiskVolumeCount.
 	MaxAzureDiskVolumeCountPred = "MaxAzureDiskVolumeCount"
+	// MaxCSIVolumeCountPred defines the predicate that decides how many CSI volumes should be attached
+	MaxCSIVolumeCountPred = "MaxCSIVolumeCountPred"
 	// NoVolumeZoneConflictPred defines the name of predicate NoVolumeZoneConflict.
 	NoVolumeZoneConflictPred = "NoVolumeZoneConflict"
 	// CheckNodeMemoryPressurePred defines the name of predicate CheckNodeMemoryPressure.
@@ -94,12 +96,6 @@ const (
 	// CheckNodePIDPressurePred defines the name of predicate CheckNodePIDPressure.
 	CheckNodePIDPressurePred = "CheckNodePIDPressure"
 
-	// DefaultMaxEBSVolumes is the limit for volumes attached to an instance.
-	// Amazon recommends no more than 40; the system root volume uses at least one.
-	// See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/volume_limits.html#linux-specific-volume-limits
-	DefaultMaxEBSVolumes = 39
-	// DefaultMaxEBSM5VolumeLimit is default EBS volume limit on m5 and c5 instances
-	DefaultMaxEBSM5VolumeLimit = 25
 	// DefaultMaxGCEPDVolumes defines the maximum number of PD Volumes for GCE
 	// GCE instances can have up to 16 PD volumes attached.
 	DefaultMaxGCEPDVolumes = 16
@@ -137,7 +133,7 @@ var (
 		GeneralPred, HostNamePred, PodFitsHostPortsPred,
 		MatchNodeSelectorPred, PodFitsResourcesPred, NoDiskConflictPred,
 		PodToleratesNodeTaintsPred, PodToleratesNodeNoExecuteTaintsPred, CheckNodeLabelPresencePred,
-		CheckServiceAffinityPred, MaxEBSVolumeCountPred, MaxGCEPDVolumeCountPred,
+		CheckServiceAffinityPred, MaxEBSVolumeCountPred, MaxGCEPDVolumeCountPred, MaxCSIVolumeCountPred,
 		MaxAzureDiskVolumeCountPred, CheckVolumeBindingPred, NoVolumeZoneConflictPred,
 		CheckNodeMemoryPressurePred, CheckNodePIDPressurePred, CheckNodeDiskPressurePred, MatchInterPodAffinityPred}
 )
@@ -378,10 +374,10 @@ func getMaxVolumeFunc(filterName string) func(node *v1.Node) int {
 }
 
 func getMaxEBSVolume(nodeInstanceType string) int {
-	if ok, _ := regexp.MatchString("^[cm]5.*", nodeInstanceType); ok {
-		return DefaultMaxEBSM5VolumeLimit
+	if ok, _ := regexp.MatchString(volumeutil.EBSNitroLimitRegex, nodeInstanceType); ok {
+		return volumeutil.DefaultMaxEBSNitroVolumeLimit
 	}
-	return DefaultMaxEBSVolumes
+	return volumeutil.DefaultMaxEBSVolumes
 }
 
 // getMaxVolLimitFromEnv checks the max PD volumes environment variable, otherwise returning a default value
@@ -1393,30 +1389,21 @@ func (c *PodAffinityChecker) satisfiesExistingPodsAntiAffinity(pod *v1.Pod, meta
 	return nil, nil
 }
 
-// anyPodsMatchingTopologyTerms checks whether any of the nodes given via
-// "targetPods" matches topology of all the "terms" for the give "pod" and "nodeInfo".
-func (c *PodAffinityChecker) anyPodsMatchingTopologyTerms(pod *v1.Pod, targetPods map[string][]*v1.Pod, nodeInfo *schedulercache.NodeInfo, terms []v1.PodAffinityTerm) (bool, error) {
-	for nodeName, targetPods := range targetPods {
-		targetPodNodeInfo, err := c.info.GetNodeInfo(nodeName)
-		if err != nil {
-			return false, err
-		}
-		if len(targetPods) > 0 {
-			allTermsMatched := true
-			for _, term := range terms {
-				if !priorityutil.NodesHaveSameTopologyKey(nodeInfo.Node(), targetPodNodeInfo, term.TopologyKey) {
-					allTermsMatched = false
-					break
-				}
+//  nodeMatchesTopologyTerms checks whether "nodeInfo" matches
+//  topology of all the "terms" for the given "pod".
+func (c *PodAffinityChecker) nodeMatchesTopologyTerms(pod *v1.Pod, topologyPairs *topologyPairsMaps, nodeInfo *schedulercache.NodeInfo, terms []v1.PodAffinityTerm) bool {
+	node := nodeInfo.Node()
+	for _, term := range terms {
+		if topologyValue, ok := node.Labels[term.TopologyKey]; ok {
+			pair := topologyPair{key: term.TopologyKey, value: topologyValue}
+			if _, ok := topologyPairs.topologyPairToPods[pair]; !ok {
+				return false
 			}
-			if allTermsMatched {
-				// We have 1 or more pods on the target node that have already matched namespace and selector
-				// and all of the terms topologies matched the target node. So, there is at least 1 matching pod on the node.
-				return true, nil
-			}
+		} else {
+			return false
 		}
 	}
-	return false, nil
+	return true
 }
 
 // Checks if scheduling the pod onto this node would break any rules of this pod.
@@ -1429,20 +1416,15 @@ func (c *PodAffinityChecker) satisfiesPodsAffinityAntiAffinity(pod *v1.Pod,
 	}
 	if predicateMeta, ok := meta.(*predicateMetadata); ok {
 		// Check all affinity terms.
-		matchingPods := predicateMeta.nodeNameToMatchingAffinityPods
+		topologyPairsPotentialAffinityPods := predicateMeta.topologyPairsPotentialAffinityPods
 		if affinityTerms := GetPodAffinityTerms(affinity.PodAffinity); len(affinityTerms) > 0 {
-			matchExists, err := c.anyPodsMatchingTopologyTerms(pod, matchingPods, nodeInfo, affinityTerms)
-			if err != nil {
-				errMessage := fmt.Sprintf("Cannot schedule pod %+v onto node %v, because of PodAffinity, err: %v", podName(pod), node.Name, err)
-				glog.Errorf(errMessage)
-				return ErrPodAffinityRulesNotMatch, errors.New(errMessage)
-			}
+			matchExists := c.nodeMatchesTopologyTerms(pod, topologyPairsPotentialAffinityPods, nodeInfo, affinityTerms)
 			if !matchExists {
 				// This pod may the first pod in a series that have affinity to themselves. In order
 				// to not leave such pods in pending state forever, we check that if no other pod
 				// in the cluster matches the namespace and selector of this pod and the pod matches
 				// its own terms, then we allow the pod to pass the affinity check.
-				if !(len(matchingPods) == 0 && targetPodMatchesAffinityOfPod(pod, pod)) {
+				if !(len(topologyPairsPotentialAffinityPods.topologyPairToPods) == 0 && targetPodMatchesAffinityOfPod(pod, pod)) {
 					glog.V(10).Infof("Cannot schedule pod %+v onto node %v, because of PodAffinity",
 						podName(pod), node.Name)
 					return ErrPodAffinityRulesNotMatch, nil
@@ -1451,12 +1433,12 @@ func (c *PodAffinityChecker) satisfiesPodsAffinityAntiAffinity(pod *v1.Pod,
 		}
 
 		// Check all anti-affinity terms.
-		matchingPods = predicateMeta.nodeNameToMatchingAntiAffinityPods
+		topologyPairsPotentialAntiAffinityPods := predicateMeta.topologyPairsPotentialAntiAffinityPods
 		if antiAffinityTerms := GetPodAntiAffinityTerms(affinity.PodAntiAffinity); len(antiAffinityTerms) > 0 {
-			matchExists, err := c.anyPodsMatchingTopologyTerms(pod, matchingPods, nodeInfo, antiAffinityTerms)
-			if err != nil || matchExists {
-				glog.V(10).Infof("Cannot schedule pod %+v onto node %v, because of PodAntiAffinity, err: %v",
-					podName(pod), node.Name, err)
+			matchExists := c.nodeMatchesTopologyTerms(pod, topologyPairsPotentialAntiAffinityPods, nodeInfo, antiAffinityTerms)
+			if matchExists {
+				glog.V(10).Infof("Cannot schedule pod %+v onto node %v, because of PodAntiAffinity",
+					podName(pod), node.Name)
 				return ErrPodAntiAffinityRulesNotMatch, nil
 			}
 		}

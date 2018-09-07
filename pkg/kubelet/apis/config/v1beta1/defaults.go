@@ -21,7 +21,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/kubernetes/pkg/features"
+	kubeletconfigv1beta1 "k8s.io/kubelet/config/v1beta1"
+	// TODO: Cut references to k8s.io/kubernetes, eventually there should be none from this package
 	"k8s.io/kubernetes/pkg/kubelet/qos"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/master/ports"
@@ -29,12 +30,14 @@ import (
 )
 
 const (
+	// TODO: Move these constants to k8s.io/kubelet/config/v1beta1 instead?
 	DefaultIPTablesMasqueradeBit = 14
 	DefaultIPTablesDropBit       = 15
 )
 
 var (
 	zeroDuration = metav1.Duration{}
+	// TODO: Move these constants to k8s.io/kubelet/config/v1beta1 instead?
 	// Refer to [Node Allocatable](https://git.k8s.io/community/contributors/design-proposals/node/node-allocatable.md) doc for more information.
 	DefaultNodeAllocatableEnforcement = []string{"pods"}
 )
@@ -43,7 +46,7 @@ func addDefaultingFuncs(scheme *kruntime.Scheme) error {
 	return RegisterDefaults(scheme)
 }
 
-func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
+func SetDefaults_KubeletConfiguration(obj *kubeletconfigv1beta1.KubeletConfiguration) {
 	if obj.SyncFrequency == zeroDuration {
 		obj.SyncFrequency = metav1.Duration{Duration: 1 * time.Minute}
 	}
@@ -69,7 +72,7 @@ func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
 		obj.Authentication.Webhook.CacheTTL = metav1.Duration{Duration: 2 * time.Minute}
 	}
 	if obj.Authorization.Mode == "" {
-		obj.Authorization.Mode = KubeletAuthorizationModeWebhook
+		obj.Authorization.Mode = kubeletconfigv1beta1.KubeletAuthorizationModeWebhook
 	}
 	if obj.Authorization.Webhook.CacheAuthorizedTTL == zeroDuration {
 		obj.Authorization.Webhook.CacheAuthorizedTTL = metav1.Duration{Duration: 5 * time.Minute}
@@ -140,7 +143,7 @@ func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
 		obj.RuntimeRequestTimeout = metav1.Duration{Duration: 2 * time.Minute}
 	}
 	if obj.HairpinMode == "" {
-		obj.HairpinMode = PromiscuousBridge
+		obj.HairpinMode = kubeletconfigv1beta1.PromiscuousBridge
 	}
 	if obj.MaxPods == 0 {
 		obj.MaxPods = 110
@@ -155,7 +158,7 @@ func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
 	if obj.CPUCFSQuota == nil {
 		obj.CPUCFSQuota = utilpointer.BoolPtr(true)
 	}
-	if obj.CPUCFSQuotaPeriod == nil && obj.FeatureGates[string(features.CPUCFSQuotaPeriod)] {
+	if obj.CPUCFSQuotaPeriod == nil {
 		obj.CPUCFSQuotaPeriod = &metav1.Duration{Duration: 100 * time.Millisecond}
 	}
 	if obj.MaxOpenFiles == 0 {
@@ -174,12 +177,7 @@ func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
 		obj.SerializeImagePulls = utilpointer.BoolPtr(true)
 	}
 	if obj.EvictionHard == nil {
-		obj.EvictionHard = map[string]string{
-			"memory.available":  "100Mi",
-			"nodefs.available":  "10%",
-			"nodefs.inodesFree": "5%",
-			"imagefs.available": "15%",
-		}
+		obj.EvictionHard = DefaultEvictionHard
 	}
 	if obj.EvictionPressureTransitionPeriod == zeroDuration {
 		obj.EvictionPressureTransitionPeriod = metav1.Duration{Duration: 5 * time.Minute}
@@ -206,7 +204,7 @@ func SetDefaults_KubeletConfiguration(obj *KubeletConfiguration) {
 		obj.ContainerLogMaxFiles = utilpointer.Int32Ptr(5)
 	}
 	if obj.ConfigMapAndSecretChangeDetectionStrategy == "" {
-		obj.ConfigMapAndSecretChangeDetectionStrategy = WatchChangeDetectionStrategy
+		obj.ConfigMapAndSecretChangeDetectionStrategy = kubeletconfigv1beta1.WatchChangeDetectionStrategy
 	}
 	if obj.EnforceNodeAllocatable == nil {
 		obj.EnforceNodeAllocatable = DefaultNodeAllocatableEnforcement

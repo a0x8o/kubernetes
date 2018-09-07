@@ -79306,6 +79306,11 @@
      "template": {
       "description": "Describes the pod that will be created when executing a job. More info: https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/",
       "$ref": "#/definitions/io.k8s.api.core.v1.PodTemplateSpec"
+     },
+     "ttlSecondsAfterFinished": {
+      "description": "ttlSecondsAfterFinished limits the lifetime of a Job that has finished execution (either Complete or Failed). If this field is set, ttlSecondsAfterFinished after the Job finishes, it is eligible to be automatically deleted. When the Job is being deleted, its lifecycle guarantees (e.g. finalizers) will be honored. If this field is unset, the Job won't be automatically deleted. If this field is set to zero, the Job becomes eligible to be deleted immediately after it finishes. This field is alpha-level and is only honored by servers that enable the TTLAfterFinished feature.",
+      "type": "integer",
+      "format": "int32"
      }
     }
    },
@@ -81795,8 +81800,12 @@
      "path"
     ],
     "properties": {
+     "fsType": {
+      "description": "Filesystem type to mount. It applies only when the Path is a block device. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". The default value is to auto-select a fileystem if unspecified.",
+      "type": "string"
+     },
      "path": {
-      "description": "The full path to the volume on the node. It can be either a directory or block device (disk, partition, ...). Directories can be represented only by PersistentVolume with VolumeMode=Filesystem. Block devices can be represented only by VolumeMode=Block, which also requires the BlockVolume alpha feature gate to be enabled.",
+      "description": "The full path to the volume on the node. It can be either a directory or block device (disk, partition, ...).",
       "type": "string"
      }
     }
