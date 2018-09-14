@@ -266,7 +266,7 @@ fi
 
 # Optional: Install cluster DNS.
 # Set CLUSTER_DNS_CORE_DNS to 'true' to install CoreDNS instead of kube-dns.
-CLUSTER_DNS_CORE_DNS="${CLUSTER_DNS_CORE_DNS:-true}"
+CLUSTER_DNS_CORE_DNS="${CLUSTER_DNS_CORE_DNS:-false}"
 ENABLE_CLUSTER_DNS="${KUBE_ENABLE_CLUSTER_DNS:-true}"
 DNS_SERVER_IP="10.0.0.10"
 DNS_DOMAIN="cluster.local"
@@ -385,10 +385,6 @@ HAIRPIN_MODE="${HAIRPIN_MODE:-hairpin-veth}" # promiscuous-bridge, hairpin-veth,
 
 # Optional: if set to true, kube-up will configure the cluster to run e2e tests.
 E2E_STORAGE_TEST_ENVIRONMENT=${KUBE_E2E_STORAGE_TEST_ENVIRONMENT:-false}
-
-# Optional: if set to true, a image puller is deployed. Only for use in e2e clusters.
-# TODO: Pipe this through GKE e2e clusters once we know it helps.
-PREPULL_E2E_IMAGES="${PREPULL_E2E_IMAGES:-true}"
 
 # Evict pods whenever compute resource availability on the nodes gets below a threshold.
 EVICTION_HARD="${EVICTION_HARD:-memory.available<250Mi,nodefs.available<10%,nodefs.inodesFree<5%}"

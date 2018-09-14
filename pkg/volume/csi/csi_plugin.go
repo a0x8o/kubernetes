@@ -41,7 +41,7 @@ import (
 	csilister "k8s.io/csi-api/pkg/client/listers/csi/v1alpha1"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/volume"
-	"k8s.io/kubernetes/pkg/volume/csi/nodeupdater"
+	"k8s.io/kubernetes/pkg/volume/csi/nodeinfomanager"
 )
 
 const (
@@ -99,7 +99,7 @@ type RegistrationHandler struct {
 // corresponding sockets
 var csiDrivers csiDriversStore
 
-var nodeUpdater nodeupdater.Interface
+var nim nodeinfomanager.Interface
 
 // PluginHandler is the plugin registration handler interface passed to the
 // pluginwatcher module in kubelet
@@ -118,12 +118,17 @@ func (h *RegistrationHandler) ValidatePlugin(pluginName string, endpoint string,
 func (h *RegistrationHandler) RegisterPlugin(pluginName string, endpoint string) error {
 	glog.Infof(log("Register new plugin with name: %s at endpoint: %s", pluginName, endpoint))
 
-	// Storing endpoint of newly registered CSI driver into the map, where CSI driver name will be the key
-	// all other CSI components will be able to get the actual socket of CSI drivers by its name.
-	csiDrivers.Lock()
-	defer csiDrivers.Unlock()
+	func() {
+		// Storing endpoint of newly registered CSI driver into the map, where CSI driver name will be the key
+		// all other CSI components will be able to get the actual socket of CSI drivers by its name.
 
-	csiDrivers.driversMap[pluginName] = csiDriver{driverName: pluginName, driverEndpoint: endpoint}
+		// It's not necessary to lock the entire RegistrationCallback() function because only the CSI
+		// client depends on this driver map, and the CSI client does not depend on node information
+		// updated in the rest of the function.
+		csiDrivers.Lock()
+		defer csiDrivers.Unlock()
+		csiDrivers.driversMap[pluginName] = csiDriver{driverName: pluginName, driverEndpoint: endpoint}
+	}()
 
 	// Get node info from the driver.
 	csi := newCsiDriverClient(pluginName)
@@ -131,17 +136,16 @@ func (h *RegistrationHandler) RegisterPlugin(pluginName string, endpoint string)
 	ctx, cancel := context.WithTimeout(context.Background(), csiTimeout)
 	defer cancel()
 
-	driverNodeID, maxVolumePerNode, _, err := csi.NodeGetInfo(ctx)
+	driverNodeID, maxVolumePerNode, accessibleTopology, err := csi.NodeGetInfo(ctx)
 	if err != nil {
+		unregisterDriver(pluginName)
 		return fmt.Errorf("error during CSI NodeGetInfo() call: %v", err)
 	}
 
-	// Calling nodeLabelManager to update annotations and labels for newly registered CSI driver
-	err = nodeUpdater.AddLabelsAndLimits(pluginName, driverNodeID, maxVolumePerNode)
+	err = nim.AddNodeInfo(pluginName, driverNodeID, maxVolumePerNode, accessibleTopology)
 	if err != nil {
-		// Unregister the driver and return error
-		delete(csiDrivers.driversMap, pluginName)
-		return fmt.Errorf("error while adding CSI labels: %v", err)
+		unregisterDriver(pluginName)
+		return fmt.Errorf("error updating CSI node info in the cluster: %v", err)
 	}
 
 	return nil
@@ -154,21 +158,24 @@ func (h *RegistrationHandler) DeRegisterPlugin(pluginName string) {
 }
 
 func (p *csiPlugin) Init(host volume.VolumeHost) error {
-	glog.Info(log("plugin initializing..."))
 	p.host = host
+
+	if utilfeature.DefaultFeatureGate.Enabled(features.CSIDriverRegistry) {
+		csiClient := host.GetCSIClient()
+		if csiClient == nil {
+			glog.Warning("The client for CSI Custom Resources is not available, skipping informer initialization")
+		} else {
+			// Start informer for CSIDrivers.
+			factory := csiapiinformer.NewSharedInformerFactory(csiClient, csiResyncPeriod)
+			p.csiDriverInformer = factory.Csi().V1alpha1().CSIDrivers()
+			p.csiDriverLister = p.csiDriverInformer.Lister()
+			go factory.Start(wait.NeverStop)
+		}
+	}
 
 	// Initializing csiDrivers map and label management channels
 	csiDrivers = csiDriversStore{driversMap: map[string]csiDriver{}}
-	nodeUpdater = nodeupdater.NewNodeUpdater(host.GetNodeName(), host.GetKubeClient())
-
-	csiClient := host.GetCSIClient()
-	if csiClient != nil {
-		// Start informer for CSIDrivers.
-		factory := csiapiinformer.NewSharedInformerFactory(csiClient, csiResyncPeriod)
-		p.csiDriverInformer = factory.Csi().V1alpha1().CSIDrivers()
-		p.csiDriverLister = p.csiDriverInformer.Lister()
-		go factory.Start(wait.NeverStop)
-	}
+	nim = nodeinfomanager.NewNodeInfoManager(host.GetNodeName(), host)
 
 	return nil
 }
@@ -511,7 +518,7 @@ func (p *csiPlugin) ConstructBlockVolumeSpec(podUID types.UID, specVolName, mapP
 }
 
 func (p *csiPlugin) skipAttach(driver string) (bool, error) {
-	if !utilfeature.DefaultFeatureGate.Enabled(features.CSISkipAttach) {
+	if !utilfeature.DefaultFeatureGate.Enabled(features.CSIDriverRegistry) {
 		return false, nil
 	}
 	if p.csiDriverLister == nil {
@@ -553,4 +560,16 @@ func (p *csiPlugin) getPublishVolumeInfo(client clientset.Interface, handle, dri
 		return nil, err
 	}
 	return attachment.Status.AttachmentMetadata, nil
+}
+
+func unregisterDriver(driverName string) {
+	func() {
+		csiDrivers.Lock()
+		defer csiDrivers.Unlock()
+		delete(csiDrivers.driversMap, driverName)
+	}()
+
+	if err := nim.RemoveNodeInfo(driverName); err != nil {
+		glog.Errorf("Error unregistering CSI driver: %v", err)
+	}
 }
