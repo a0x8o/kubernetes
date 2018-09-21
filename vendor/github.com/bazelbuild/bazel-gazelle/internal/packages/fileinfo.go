@@ -49,6 +49,13 @@ type fileInfo struct {
 	// ends with "_test.go". This is never true for non-Go files.
 	isTest bool
 
+<<<<<<< HEAD
+=======
+	// isXTest is true for test Go files whose declared package name ends
+	// with "_test".
+	isXTest bool
+
+>>>>>>> axbaretto
 	// imports is a list of packages imported by a file. It does not include
 	// "C" or anything from the standard library.
 	imports []string

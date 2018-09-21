@@ -18,19 +18,29 @@ package genericclioptions
 
 import (
 	"fmt"
+<<<<<<< HEAD
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+=======
+
+	"github.com/spf13/cobra"
+>>>>>>> axbaretto
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions/printers"
 )
 
 type NoCompatiblePrinterError struct {
+<<<<<<< HEAD
 	OutputFormat   *string
 	AllowedFormats []string
 	Options        interface{}
+=======
+	OutputFormat *string
+	Options      interface{}
+>>>>>>> axbaretto
 }
 
 func (e NoCompatiblePrinterError) Error() string {
@@ -39,8 +49,12 @@ func (e NoCompatiblePrinterError) Error() string {
 		output = *e.OutputFormat
 	}
 
+<<<<<<< HEAD
 	sort.Strings(e.AllowedFormats)
 	return fmt.Sprintf("unable to match a printer suitable for the output format %q, allowed formats are: %s", output, strings.Join(e.AllowedFormats, ","))
+=======
+	return fmt.Sprintf("unable to match a printer suitable for the output format %q and the options specified: %#v", output, e.Options)
+>>>>>>> axbaretto
 }
 
 func IsNoCompatiblePrinterError(err error) bool {
@@ -56,23 +70,32 @@ func IsNoCompatiblePrinterError(err error) bool {
 // used across all commands, and provides a method
 // of retrieving a known printer based on flag values provided.
 type PrintFlags struct {
+<<<<<<< HEAD
 	JSONYamlPrintFlags   *JSONYamlPrintFlags
 	NamePrintFlags       *NamePrintFlags
 	TemplatePrinterFlags *KubeTemplatePrintFlags
+=======
+	JSONYamlPrintFlags *JSONYamlPrintFlags
+	NamePrintFlags     *NamePrintFlags
+>>>>>>> axbaretto
 
 	TypeSetterPrinter *printers.TypeSetterPrinter
 
 	OutputFormat *string
+<<<<<<< HEAD
 
 	// OutputFlagSpecified indicates whether the user specifically requested a certain kind of output.
 	// Using this function allows a sophisticated caller to change the flag binding logic if they so desire.
 	OutputFlagSpecified func() bool
+=======
+>>>>>>> axbaretto
 }
 
 func (f *PrintFlags) Complete(successTemplate string) error {
 	return f.NamePrintFlags.Complete(successTemplate)
 }
 
+<<<<<<< HEAD
 func (f *PrintFlags) AllowedFormats() []string {
 	ret := []string{}
 	ret = append(ret, f.JSONYamlPrintFlags.AllowedFormats()...)
@@ -81,11 +104,14 @@ func (f *PrintFlags) AllowedFormats() []string {
 	return ret
 }
 
+=======
+>>>>>>> axbaretto
 func (f *PrintFlags) ToPrinter() (printers.ResourcePrinter, error) {
 	outputFormat := ""
 	if f.OutputFormat != nil {
 		outputFormat = *f.OutputFormat
 	}
+<<<<<<< HEAD
 	// For backwards compatibility we want to support a --template argument given, even when no --output format is provided.
 	// If no explicit output format has been provided via the --output flag, fallback
 	// to honoring the --template argument.
@@ -96,6 +122,8 @@ func (f *PrintFlags) ToPrinter() (printers.ResourcePrinter, error) {
 	if templateFlagSpecified && !outputFlagSpecified {
 		outputFormat = "go-template"
 	}
+=======
+>>>>>>> axbaretto
 
 	if f.JSONYamlPrintFlags != nil {
 		if p, err := f.JSONYamlPrintFlags.ToPrinter(outputFormat); !IsNoCompatiblePrinterError(err) {
@@ -109,6 +137,7 @@ func (f *PrintFlags) ToPrinter() (printers.ResourcePrinter, error) {
 		}
 	}
 
+<<<<<<< HEAD
 	if f.TemplatePrinterFlags != nil {
 		if p, err := f.TemplatePrinterFlags.ToPrinter(outputFormat); !IsNoCompatiblePrinterError(err) {
 			return f.TypeSetterPrinter.WrapToPrinter(p, err)
@@ -116,11 +145,15 @@ func (f *PrintFlags) ToPrinter() (printers.ResourcePrinter, error) {
 	}
 
 	return nil, NoCompatiblePrinterError{OutputFormat: f.OutputFormat, AllowedFormats: f.AllowedFormats()}
+=======
+	return nil, NoCompatiblePrinterError{Options: f, OutputFormat: f.OutputFormat}
+>>>>>>> axbaretto
 }
 
 func (f *PrintFlags) AddFlags(cmd *cobra.Command) {
 	f.JSONYamlPrintFlags.AddFlags(cmd)
 	f.NamePrintFlags.AddFlags(cmd)
+<<<<<<< HEAD
 	f.TemplatePrinterFlags.AddFlags(cmd)
 
 	if f.OutputFormat != nil {
@@ -130,6 +163,11 @@ func (f *PrintFlags) AddFlags(cmd *cobra.Command) {
 				return cmd.Flag("output").Changed
 			}
 		}
+=======
+
+	if f.OutputFormat != nil {
+		cmd.Flags().StringVarP(f.OutputFormat, "output", "o", *f.OutputFormat, "Output format. One of: json|yaml|wide|name|custom-columns=...|custom-columns-file=...|go-template=...|go-template-file=...|jsonpath=...|jsonpath-file=... See custom columns [http://kubernetes.io/docs/user-guide/kubectl-overview/#custom-columns], golang template [http://golang.org/pkg/text/template/#pkg-overview] and jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
+>>>>>>> axbaretto
 	}
 }
 
@@ -151,8 +189,13 @@ func NewPrintFlags(operation string) *PrintFlags {
 	return &PrintFlags{
 		OutputFormat: &outputFormat,
 
+<<<<<<< HEAD
 		JSONYamlPrintFlags:   NewJSONYamlPrintFlags(),
 		NamePrintFlags:       NewNamePrintFlags(operation),
 		TemplatePrinterFlags: NewKubeTemplatePrintFlags(),
+=======
+		JSONYamlPrintFlags: NewJSONYamlPrintFlags(),
+		NamePrintFlags:     NewNamePrintFlags(operation),
+>>>>>>> axbaretto
 	}
 }

@@ -21,7 +21,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
+<<<<<<< HEAD
 	"k8s.io/client-go/restmapper"
+=======
+>>>>>>> axbaretto
 )
 
 type RESTClientGetter interface {
@@ -31,8 +34,11 @@ type RESTClientGetter interface {
 }
 
 type ClientConfigFunc func() (*rest.Config, error)
+<<<<<<< HEAD
 type RESTMapperFunc func() (meta.RESTMapper, error)
 type CategoryExpanderFunc func() (restmapper.CategoryExpander, error)
+=======
+>>>>>>> axbaretto
 
 // RESTClient is a client helper for dealing with RESTful resources
 // in a generic way.
@@ -50,9 +56,12 @@ type RequestTransform func(*rest.Request)
 // NewClientWithOptions wraps the provided RESTClient and invokes each transform on each
 // newly created request.
 func NewClientWithOptions(c RESTClient, transforms ...RequestTransform) RESTClient {
+<<<<<<< HEAD
 	if len(transforms) == 0 {
 		return c
 	}
+=======
+>>>>>>> axbaretto
 	return &clientOptions{c: c, transforms: transforms}
 }
 

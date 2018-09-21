@@ -35,6 +35,7 @@ func init() {
 
 // RegisterConversions adds conversion functions to the given scheme.
 // Public to allow building arbitrary schemes.
+<<<<<<< HEAD
 func RegisterConversions(s *runtime.Scheme) error {
 	if err := s.AddGeneratedConversionFunc((*KubeletAnonymousAuthentication)(nil), (*kubeletconfig.KubeletAnonymousAuthentication)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1beta1_KubeletAnonymousAuthentication_To_kubeletconfig_KubeletAnonymousAuthentication(a.(*KubeletAnonymousAuthentication), b.(*kubeletconfig.KubeletAnonymousAuthentication), scope)
@@ -117,6 +118,27 @@ func RegisterConversions(s *runtime.Scheme) error {
 		return err
 	}
 	return nil
+=======
+func RegisterConversions(scheme *runtime.Scheme) error {
+	return scheme.AddGeneratedConversionFuncs(
+		Convert_v1beta1_KubeletAnonymousAuthentication_To_kubeletconfig_KubeletAnonymousAuthentication,
+		Convert_kubeletconfig_KubeletAnonymousAuthentication_To_v1beta1_KubeletAnonymousAuthentication,
+		Convert_v1beta1_KubeletAuthentication_To_kubeletconfig_KubeletAuthentication,
+		Convert_kubeletconfig_KubeletAuthentication_To_v1beta1_KubeletAuthentication,
+		Convert_v1beta1_KubeletAuthorization_To_kubeletconfig_KubeletAuthorization,
+		Convert_kubeletconfig_KubeletAuthorization_To_v1beta1_KubeletAuthorization,
+		Convert_v1beta1_KubeletConfiguration_To_kubeletconfig_KubeletConfiguration,
+		Convert_kubeletconfig_KubeletConfiguration_To_v1beta1_KubeletConfiguration,
+		Convert_v1beta1_KubeletWebhookAuthentication_To_kubeletconfig_KubeletWebhookAuthentication,
+		Convert_kubeletconfig_KubeletWebhookAuthentication_To_v1beta1_KubeletWebhookAuthentication,
+		Convert_v1beta1_KubeletWebhookAuthorization_To_kubeletconfig_KubeletWebhookAuthorization,
+		Convert_kubeletconfig_KubeletWebhookAuthorization_To_v1beta1_KubeletWebhookAuthorization,
+		Convert_v1beta1_KubeletX509Authentication_To_kubeletconfig_KubeletX509Authentication,
+		Convert_kubeletconfig_KubeletX509Authentication_To_v1beta1_KubeletX509Authentication,
+		Convert_v1beta1_SerializedNodeConfigSource_To_kubeletconfig_SerializedNodeConfigSource,
+		Convert_kubeletconfig_SerializedNodeConfigSource_To_v1beta1_SerializedNodeConfigSource,
+	)
+>>>>>>> axbaretto
 }
 
 func autoConvert_v1beta1_KubeletAnonymousAuthentication_To_kubeletconfig_KubeletAnonymousAuthentication(in *KubeletAnonymousAuthentication, out *kubeletconfig.KubeletAnonymousAuthentication, s conversion.Scope) error {

@@ -24,7 +24,10 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
+<<<<<<< HEAD
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+=======
+>>>>>>> axbaretto
 )
 
 type TestConfigFlags struct {
@@ -75,6 +78,7 @@ func (f *TestConfigFlags) WithDiscoveryClient(c discovery.CachedDiscoveryInterfa
 	return f
 }
 
+<<<<<<< HEAD
 func (f *TestConfigFlags) WithNamespace(ns string) *TestConfigFlags {
 	if f.clientConfig == nil {
 		panic("attempt to obtain a test RawKubeConfigLoader with no clientConfig specified")
@@ -108,3 +112,8 @@ func (c *namespacedClientConfig) ClientConfig() (*rest.Config, error) {
 func (c *namespacedClientConfig) ConfigAccess() clientcmd.ConfigAccess {
 	return c.delegate.ConfigAccess()
 }
+=======
+func NewTestConfigFlags() *TestConfigFlags {
+	return &TestConfigFlags{}
+}
+>>>>>>> axbaretto

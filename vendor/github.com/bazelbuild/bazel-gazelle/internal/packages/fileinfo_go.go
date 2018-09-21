@@ -49,6 +49,10 @@ func goFileInfo(c *config.Config, dir, rel, name string) fileInfo {
 
 	info.packageName = pf.Name.Name
 	if info.isTest && strings.HasSuffix(info.packageName, "_test") {
+<<<<<<< HEAD
+=======
+		info.isXTest = true
+>>>>>>> axbaretto
 		info.packageName = info.packageName[:len(info.packageName)-len("_test")]
 	}
 

@@ -38,6 +38,7 @@ type Directive struct {
 // Top-level directives apply to the whole package or build file. They must
 // appear before the first statement.
 var knownTopLevelDirectives = map[string]bool{
+<<<<<<< HEAD
 	"build_file_name":  true,
 	"build_tags":       true,
 	"exclude":          true,
@@ -46,6 +47,14 @@ var knownTopLevelDirectives = map[string]bool{
 	"repo":             true,
 	"prefix":           true,
 	"proto":            true,
+=======
+	"build_file_name": true,
+	"build_tags":      true,
+	"exclude":         true,
+	"prefix":          true,
+	"ignore":          true,
+	"proto":           true,
+>>>>>>> axbaretto
 }
 
 // TODO(jayconrod): annotation directives will apply to an individual rule.
@@ -91,9 +100,12 @@ func ApplyDirectives(c *Config, directives []Directive, rel string) *Config {
 	didModify := false
 	for _, d := range directives {
 		switch d.Key {
+<<<<<<< HEAD
 		case "build_file_name":
 			modified.ValidBuildFileNames = strings.Split(d.Value, ",")
 			didModify = true
+=======
+>>>>>>> axbaretto
 		case "build_tags":
 			if err := modified.SetBuildTags(d.Value); err != nil {
 				log.Print(err)
@@ -102,6 +114,7 @@ func ApplyDirectives(c *Config, directives []Directive, rel string) *Config {
 				modified.PreprocessTags()
 				didModify = true
 			}
+<<<<<<< HEAD
 		case "importmap_prefix":
 			if err := CheckPrefix(d.Value); err != nil {
 				log.Print(err)
@@ -109,6 +122,10 @@ func ApplyDirectives(c *Config, directives []Directive, rel string) *Config {
 			}
 			modified.GoImportMapPrefix = d.Value
 			modified.GoImportMapPrefixRel = rel
+=======
+		case "build_file_name":
+			modified.ValidBuildFileNames = strings.Split(d.Value, ",")
+>>>>>>> axbaretto
 			didModify = true
 		case "prefix":
 			if err := CheckPrefix(d.Value); err != nil {

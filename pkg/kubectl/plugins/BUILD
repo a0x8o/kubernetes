@@ -17,7 +17,10 @@ go_library(
     importpath = "k8s.io/kubernetes/pkg/kubectl/plugins",
     deps = [
         "//pkg/kubectl/genericclioptions:go_default_library",
+<<<<<<< HEAD
         "//staging/src/k8s.io/client-go/tools/clientcmd:go_default_library",
+=======
+>>>>>>> axbaretto
         "//vendor/github.com/ghodss/yaml:go_default_library",
         "//vendor/github.com/golang/glog:go_default_library",
         "//vendor/github.com/spf13/pflag:go_default_library",

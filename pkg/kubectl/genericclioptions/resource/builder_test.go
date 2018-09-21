@@ -46,7 +46,10 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
 	restclientwatch "k8s.io/client-go/rest/watch"
+<<<<<<< HEAD
 	"k8s.io/client-go/restmapper"
+=======
+>>>>>>> axbaretto
 	utiltesting "k8s.io/client-go/util/testing"
 
 	// TODO we need to remove this linkage and create our own scheme
@@ -271,6 +274,7 @@ func newDefaultBuilder() *Builder {
 }
 
 func newDefaultBuilderWith(fakeClientFn FakeClientFunc) *Builder {
+<<<<<<< HEAD
 	return NewFakeBuilder(
 		fakeClientFn,
 		func() (meta.RESTMapper, error) {
@@ -279,6 +283,9 @@ func newDefaultBuilderWith(fakeClientFn FakeClientFunc) *Builder {
 		func() (restmapper.CategoryExpander, error) {
 			return FakeCategoryExpander, nil
 		}).
+=======
+	return NewFakeBuilder(fakeClientFn, testrestmapper.TestOnlyStaticRESTMapper(scheme.Scheme), FakeCategoryExpander).
+>>>>>>> axbaretto
 		WithScheme(scheme.Scheme, scheme.Scheme.PrioritizedVersionsAllGroups()...)
 }
 
@@ -386,6 +393,7 @@ func TestPathBuilderWithMultiple(t *testing.T) {
 		{"hardlink", &v1.Pod{}, true, fmt.Sprintf("%s/inode/hardlink/busybox-link.json", tmpDir), []string{"busybox0"}},
 	}
 
+<<<<<<< HEAD
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newDefaultBuilder().
@@ -415,6 +423,35 @@ func TestPathBuilderWithMultiple(t *testing.T) {
 				}
 			}
 		})
+=======
+	for _, test := range tests {
+		b := newDefaultBuilder().
+			FilenameParam(false, &FilenameOptions{Recursive: test.recursive, Filenames: []string{test.directory}}).
+			NamespaceParam("test").DefaultNamespace()
+
+		testVisitor := &testVisitor{}
+		singleItemImplied := false
+
+		err := b.Do().IntoSingleItemImplied(&singleItemImplied).Visit(testVisitor.Handle)
+		if err != nil {
+			t.Fatalf("unexpected response: %v %t %#v %s", err, singleItemImplied, testVisitor.Infos, test.name)
+		}
+
+		info := testVisitor.Infos
+
+		for i, v := range info {
+			switch test.object.(type) {
+			case *v1.Pod:
+				if _, ok := v.Object.(*v1.Pod); !ok || v.Name != test.expectedNames[i] || v.Namespace != "test" {
+					t.Errorf("unexpected info: %v", spew.Sdump(v.Object))
+				}
+			case *v1.ReplicationController:
+				if _, ok := v.Object.(*v1.ReplicationController); !ok || v.Name != test.expectedNames[i] || v.Namespace != "test" {
+					t.Errorf("unexpected info: %v", spew.Sdump(v.Object))
+				}
+			}
+		}
+>>>>>>> axbaretto
 	}
 }
 
@@ -447,6 +484,7 @@ func TestPathBuilderWithMultipleInvalid(t *testing.T) {
 		{"loop", true, fmt.Sprintf("%s/inode/symlink/loop", tmpDir)},
 	}
 
+<<<<<<< HEAD
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newDefaultBuilder().
@@ -461,6 +499,20 @@ func TestPathBuilderWithMultipleInvalid(t *testing.T) {
 				t.Fatalf("unexpected response: %v %t %#v %s", err, singleItemImplied, testVisitor.Infos, tt.name)
 			}
 		})
+=======
+	for _, test := range tests {
+		b := newDefaultBuilder().
+			FilenameParam(false, &FilenameOptions{Recursive: test.recursive, Filenames: []string{test.directory}}).
+			NamespaceParam("test").DefaultNamespace()
+
+		testVisitor := &testVisitor{}
+		singleItemImplied := false
+
+		err := b.Do().IntoSingleItemImplied(&singleItemImplied).Visit(testVisitor.Handle)
+		if err == nil {
+			t.Fatalf("unexpected response: %v %t %#v %s", err, singleItemImplied, testVisitor.Infos, test.name)
+		}
+>>>>>>> axbaretto
 	}
 }
 
@@ -667,6 +719,7 @@ func TestMultipleResourceByTheSameName(t *testing.T) {
 }
 
 func TestRequestModifier(t *testing.T) {
+<<<<<<< HEAD
 	for _, tc := range []struct {
 		name string
 		f    func(t *testing.T, got **rest.Request) *Builder
@@ -711,6 +764,24 @@ func TestRequestModifier(t *testing.T) {
 				t.Fatalf("request was not received by modifier: %#v", req)
 			}
 		})
+=======
+	var got *rest.Request
+	b := newDefaultBuilderWith(fakeClientWith("test", t, nil)).
+		NamespaceParam("foo").
+		TransformRequests(func(req *rest.Request) {
+			got = req
+		}).
+		ResourceNames("", "services/baz").
+		RequireObject(false)
+
+	i, err := b.Do().Infos()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := i[0].Client.Get()
+	if got != req {
+		t.Fatalf("request was not received by modifier: %#v", req)
+>>>>>>> axbaretto
 	}
 }
 
@@ -968,6 +1039,7 @@ func TestResourceTuple(t *testing.T) {
 			errFn: expectErr,
 		},
 	}
+<<<<<<< HEAD
 	for k, tt := range testCases {
 		t.Run("using default namespace", func(t *testing.T) {
 			for _, requireObject := range []bool{true, false} {
@@ -1007,6 +1079,45 @@ func TestResourceTuple(t *testing.T) {
 				}
 			}
 		})
+=======
+	for k, testCase := range testCases {
+		for _, requireObject := range []bool{true, false} {
+			expectedRequests := map[string]string{}
+			if requireObject {
+				pods, _ := testData()
+				expectedRequests = map[string]string{
+					"/namespaces/test/pods/foo": runtime.EncodeOrDie(corev1Codec, &pods.Items[0]),
+					"/namespaces/test/pods/bar": runtime.EncodeOrDie(corev1Codec, &pods.Items[0]),
+					"/nodes/foo":                runtime.EncodeOrDie(corev1Codec, &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}),
+				}
+			}
+			b := newDefaultBuilderWith(fakeClientWith(k, t, expectedRequests)).
+				NamespaceParam("test").DefaultNamespace().
+				ResourceTypeOrNameArgs(true, testCase.args...).RequireObject(requireObject)
+
+			r := b.Do()
+
+			if !testCase.errFn(r.Err()) {
+				t.Errorf("%s: unexpected error: %v", k, r.Err())
+			}
+			if r.Err() != nil {
+				continue
+			}
+			switch {
+			case (r.singleItemImplied && len(testCase.args) != 1),
+				(!r.singleItemImplied && len(testCase.args) == 1):
+				t.Errorf("%s: result had unexpected singleItemImplied value", k)
+			}
+			info, err := r.Infos()
+			if err != nil {
+				// test error
+				continue
+			}
+			if len(info) != len(testCase.args) {
+				t.Errorf("%s: unexpected number of infos returned: %#v", k, info)
+			}
+		}
+>>>>>>> axbaretto
 	}
 }
 
@@ -1338,60 +1449,88 @@ func TestReceiveMultipleErrors(t *testing.T) {
 func TestHasNames(t *testing.T) {
 	basename := filepath.Base(os.Args[0])
 	tests := []struct {
+<<<<<<< HEAD
 		name            string
+=======
+>>>>>>> axbaretto
 		args            []string
 		expectedHasName bool
 		expectedError   error
 	}{
 		{
+<<<<<<< HEAD
 			name:            "test1",
+=======
+>>>>>>> axbaretto
 			args:            []string{""},
 			expectedHasName: false,
 			expectedError:   nil,
 		},
 		{
+<<<<<<< HEAD
 			name:            "test2",
+=======
+>>>>>>> axbaretto
 			args:            []string{"rc"},
 			expectedHasName: false,
 			expectedError:   nil,
 		},
 		{
+<<<<<<< HEAD
 			name:            "test3",
+=======
+>>>>>>> axbaretto
 			args:            []string{"rc,pod,svc"},
 			expectedHasName: false,
 			expectedError:   nil,
 		},
 		{
+<<<<<<< HEAD
 			name:            "test4",
+=======
+>>>>>>> axbaretto
 			args:            []string{"rc/foo"},
 			expectedHasName: true,
 			expectedError:   nil,
 		},
 		{
+<<<<<<< HEAD
 			name:            "test5",
+=======
+>>>>>>> axbaretto
 			args:            []string{"rc", "foo"},
 			expectedHasName: true,
 			expectedError:   nil,
 		},
 		{
+<<<<<<< HEAD
 			name:            "test6",
+=======
+>>>>>>> axbaretto
 			args:            []string{"rc,pod,svc", "foo"},
 			expectedHasName: true,
 			expectedError:   nil,
 		},
 		{
+<<<<<<< HEAD
 			name:            "test7",
+=======
+>>>>>>> axbaretto
 			args:            []string{"rc/foo", "rc/bar", "rc/zee"},
 			expectedHasName: true,
 			expectedError:   nil,
 		},
 		{
+<<<<<<< HEAD
 			name:            "test8",
+=======
+>>>>>>> axbaretto
 			args:            []string{"rc/foo", "bar"},
 			expectedHasName: false,
 			expectedError:   fmt.Errorf("there is no need to specify a resource type as a separate argument when passing arguments in resource/name form (e.g. '" + basename + " get resource/<resource_name>' instead of '" + basename + " get resource resource/<resource_name>'"),
 		},
 	}
+<<<<<<< HEAD
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hasNames, err := HasNames(tt.args)
@@ -1402,5 +1541,77 @@ func TestHasNames(t *testing.T) {
 				t.Errorf("expected HasName to return %v for %s", tt.expectedHasName, tt.args)
 			}
 		})
+=======
+	for _, test := range tests {
+		hasNames, err := HasNames(test.args)
+		if !reflect.DeepEqual(test.expectedError, err) {
+			t.Errorf("expected HasName to error:\n%s\tgot:\n%s", test.expectedError, err)
+		}
+		if hasNames != test.expectedHasName {
+			t.Errorf("expected HasName to return %v for %s", test.expectedHasName, test.args)
+		}
+	}
+}
+
+func TestMultipleTypesRequested(t *testing.T) {
+	tests := []struct {
+		args                  []string
+		expectedMultipleTypes bool
+	}{
+		{
+			args: []string{""},
+			expectedMultipleTypes: false,
+		},
+		{
+			args: []string{"all"},
+			expectedMultipleTypes: true,
+		},
+		{
+			args: []string{"rc"},
+			expectedMultipleTypes: false,
+		},
+		{
+			args: []string{"pod,all"},
+			expectedMultipleTypes: true,
+		},
+		{
+			args: []string{"all,rc,pod"},
+			expectedMultipleTypes: true,
+		},
+		{
+			args: []string{"rc,pod,svc"},
+			expectedMultipleTypes: true,
+		},
+		{
+			args: []string{"rc/foo"},
+			expectedMultipleTypes: false,
+		},
+		{
+			args: []string{"rc/foo", "rc/bar"},
+			expectedMultipleTypes: false,
+		},
+		{
+			args: []string{"rc", "foo"},
+			expectedMultipleTypes: false,
+		},
+		{
+			args: []string{"rc,pod,svc", "foo"},
+			expectedMultipleTypes: true,
+		},
+		{
+			args: []string{"rc,secrets"},
+			expectedMultipleTypes: true,
+		},
+		{
+			args: []string{"rc/foo", "rc/bar", "svc/svc"},
+			expectedMultipleTypes: true,
+		},
+	}
+	for _, test := range tests {
+		hasMultipleTypes := MultipleTypesRequested(test.args)
+		if hasMultipleTypes != test.expectedMultipleTypes {
+			t.Errorf("expected MultipleTypesRequested to return %v for %s", test.expectedMultipleTypes, test.args)
+		}
+>>>>>>> axbaretto
 	}
 }

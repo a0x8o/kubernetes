@@ -19,35 +19,47 @@ package printers
 import (
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
 // NamePrinter is an implementation of ResourcePrinter which outputs "resource/name" pair of an object.
 type NamePrinter struct {
-	Decoders []runtime.Decoder
-	Typer    runtime.ObjectTyper
-}
-
-func (p *NamePrinter) AfterPrint(w io.Writer, res string) error {
-	return nil
+	// ShortOutput indicates whether an operation should be
+	// printed along side the "resource/name" pair for an object.
+	ShortOutput bool
+	// Operation describes the name of the action that
+	// took place on an object, to be included in the
+	// finalized "successful" message.
+	Operation string
 }
 
 // PrintObj is an implementation of ResourcePrinter.PrintObj which decodes the object
 // and print "resource/name" pair. If the object is a List, print all items in it.
 func (p *NamePrinter) PrintObj(obj runtime.Object, w io.Writer) error {
+	// we use reflect.Indirect here in order to obtain the actual value from a pointer.
+	// using reflect.Indirect indiscriminately is valid here, as all runtime.Objects are supposed to be pointers.
+	// we need an actual value in order to retrieve the package path for an object.
+	if internalObjectPreventer.IsForbidden(reflect.Indirect(reflect.ValueOf(obj)).Type().PkgPath()) {
+		return fmt.Errorf(internalObjectPrinterErr)
+	}
+
 	if meta.IsListType(obj) {
+		// we allow unstructured lists for now because they always contain the GVK information.  We should chase down
+		// callers and stop them from passing unflattened lists
+		// TODO chase the caller that is setting this and remove it.
+		if _, ok := obj.(*unstructured.UnstructuredList); !ok {
+			return fmt.Errorf("list types are not supported by name printing: %T", obj)
+		}
+
 		items, err := meta.ExtractList(obj)
 		if err != nil {
 			return err
-		}
-		if errs := runtime.DecodeList(items, p.Decoders...); len(errs) > 0 {
-			return utilerrors.NewAggregate(errs)
 		}
 		for _, obj := range items {
 			if err := p.PrintObj(obj, w); err != nil {
@@ -57,6 +69,10 @@ func (p *NamePrinter) PrintObj(obj runtime.Object, w io.Writer) error {
 		return nil
 	}
 
+	if obj.GetObjectKind().GroupVersionKind().Empty() {
+		return fmt.Errorf("missing apiVersion or kind; try GetObjectKind().SetGroupVersionKind() if you know the type")
+	}
+
 	name := "<unknown>"
 	if acc, err := meta.Accessor(obj); err == nil {
 		if n := acc.GetName(); len(n) > 0 {
@@ -64,25 +80,16 @@ func (p *NamePrinter) PrintObj(obj runtime.Object, w io.Writer) error {
 		}
 	}
 
-	return printObj(w, name, GetObjectGroupKind(obj, p.Typer))
+	return printObj(w, name, p.Operation, p.ShortOutput, GetObjectGroupKind(obj))
 }
 
-func GetObjectGroupKind(obj runtime.Object, typer runtime.ObjectTyper) schema.GroupKind {
+func GetObjectGroupKind(obj runtime.Object) schema.GroupKind {
 	if obj == nil {
 		return schema.GroupKind{Kind: "<unknown>"}
 	}
 	groupVersionKind := obj.GetObjectKind().GroupVersionKind()
 	if len(groupVersionKind.Kind) > 0 {
 		return groupVersionKind.GroupKind()
-	}
-
-	if gvks, _, err := typer.ObjectKinds(obj); err == nil {
-		for _, gvk := range gvks {
-			if len(gvk.Kind) == 0 {
-				continue
-			}
-			return gvk.GroupKind()
-		}
 	}
 
 	if uns, ok := obj.(*unstructured.Unstructured); ok {
@@ -94,25 +101,24 @@ func GetObjectGroupKind(obj runtime.Object, typer runtime.ObjectTyper) schema.Gr
 	return schema.GroupKind{Kind: "<unknown>"}
 }
 
-func printObj(w io.Writer, name string, groupKind schema.GroupKind) error {
+func printObj(w io.Writer, name string, operation string, shortOutput bool, groupKind schema.GroupKind) error {
 	if len(groupKind.Kind) == 0 {
 		return fmt.Errorf("missing kind for resource with name %v", name)
 	}
 
+	if len(operation) > 0 {
+		operation = " " + operation
+	}
+
+	if shortOutput {
+		operation = ""
+	}
+
 	if len(groupKind.Group) == 0 {
-		fmt.Fprintf(w, "%s/%s\n", strings.ToLower(groupKind.Kind), name)
+		fmt.Fprintf(w, "%s/%s%s\n", strings.ToLower(groupKind.Kind), name, operation)
 		return nil
 	}
 
-	fmt.Fprintf(w, "%s.%s/%s\n", strings.ToLower(groupKind.Kind), groupKind.Group, name)
+	fmt.Fprintf(w, "%s.%s/%s%s\n", strings.ToLower(groupKind.Kind), groupKind.Group, name, operation)
 	return nil
-}
-
-// TODO: implement HandledResources()
-func (p *NamePrinter) HandledResources() []string {
-	return []string{}
-}
-
-func (p *NamePrinter) IsGeneric() bool {
-	return true
 }

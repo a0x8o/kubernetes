@@ -23,7 +23,10 @@ import (
 	"net/url"
 	"os"
 	"strings"
+<<<<<<< HEAD
 	"sync"
+=======
+>>>>>>> axbaretto
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -47,15 +50,28 @@ const defaultHttpGetAttempts int = 3
 // from the command line and converting them to a list of resources to iterate
 // over using the Visitor interface.
 type Builder struct {
+<<<<<<< HEAD
 	categoryExpanderFn CategoryExpanderFunc
 
 	// mapper is set explicitly by resource builders
 	mapper *mapper
+=======
+	categoryExpander restmapper.CategoryExpander
+
+	// mapper is set explicitly by resource builders
+	mapper       *mapper
+	internal     *mapper
+	unstructured *mapper
+>>>>>>> axbaretto
 
 	// clientConfigFn is a function to produce a client, *if* you need one
 	clientConfigFn ClientConfigFunc
 
+<<<<<<< HEAD
 	restMapperFn RESTMapperFunc
+=======
+	restMapper meta.RESTMapper
+>>>>>>> axbaretto
 
 	// objectTyper is statically determinant per-command invocation based on your internal or unstructured choice
 	// it does not ever need to rely upon discovery.
@@ -141,7 +157,11 @@ type resourceTuple struct {
 
 type FakeClientFunc func(version schema.GroupVersion) (RESTClient, error)
 
+<<<<<<< HEAD
 func NewFakeBuilder(fakeClientFn FakeClientFunc, restMapper RESTMapperFunc, categoryExpander CategoryExpanderFunc) *Builder {
+=======
+func NewFakeBuilder(fakeClientFn FakeClientFunc, restMapper meta.RESTMapper, categoryExpander restmapper.CategoryExpander) *Builder {
+>>>>>>> axbaretto
 	ret := newBuilder(nil, restMapper, categoryExpander)
 	ret.fakeClientFn = fakeClientFn
 	return ret
@@ -151,29 +171,52 @@ func NewFakeBuilder(fakeClientFn FakeClientFunc, restMapper RESTMapperFunc, cate
 // internal or unstructured must be specified.
 // TODO: Add versioned client (although versioned is still lossy)
 // TODO remove internal and unstructured mapper and instead have them set the negotiated serializer for use in the client
+<<<<<<< HEAD
 func newBuilder(clientConfigFn ClientConfigFunc, restMapper RESTMapperFunc, categoryExpander CategoryExpanderFunc) *Builder {
 	return &Builder{
 		clientConfigFn:     clientConfigFn,
 		restMapperFn:       restMapper,
 		categoryExpanderFn: categoryExpander,
 		requireObject:      true,
+=======
+func newBuilder(clientConfigFn ClientConfigFunc, restMapper meta.RESTMapper, categoryExpander restmapper.CategoryExpander) *Builder {
+	return &Builder{
+		clientConfigFn:   clientConfigFn,
+		restMapper:       restMapper,
+		categoryExpander: categoryExpander,
+		requireObject:    true,
+>>>>>>> axbaretto
 	}
 }
 
 func NewBuilder(restClientGetter RESTClientGetter) *Builder {
+<<<<<<< HEAD
 	categoryExpanderFn := func() (restmapper.CategoryExpander, error) {
 		discoveryClient, err := restClientGetter.ToDiscoveryClient()
 		if err != nil {
 			return nil, err
 		}
 		return restmapper.NewDiscoveryCategoryExpander(discoveryClient), err
+=======
+	restMapper, mapperErr := restClientGetter.ToRESTMapper()
+	discoveryClient, discoveryErr := restClientGetter.ToDiscoveryClient()
+	var categoryExpander restmapper.CategoryExpander
+	if discoveryErr == nil {
+		categoryExpander = restmapper.NewDiscoveryCategoryExpander(discoveryClient)
+>>>>>>> axbaretto
 	}
 
 	return newBuilder(
 		restClientGetter.ToRESTConfig,
+<<<<<<< HEAD
 		(&cachingRESTMapperFunc{delegate: restClientGetter.ToRESTMapper}).ToRESTMapper,
 		(&cachingCategoryExpanderFunc{delegate: categoryExpanderFn}).ToCategoryExpander,
 	)
+=======
+		restMapper,
+		categoryExpander,
+	).AddError(mapperErr).AddError(discoveryErr)
+>>>>>>> axbaretto
 }
 
 func (b *Builder) Schema(schema ContentValidator) *Builder {
@@ -236,10 +279,17 @@ func (b *Builder) Unstructured() *Builder {
 	}
 	b.objectTyper = unstructuredscheme.NewUnstructuredObjectTyper()
 	b.mapper = &mapper{
+<<<<<<< HEAD
 		localFn:      b.isLocal,
 		restMapperFn: b.restMapperFn,
 		clientFn:     b.getClient,
 		decoder:      unstructured.UnstructuredJSONScheme,
+=======
+		localFn:    b.isLocal,
+		restMapper: b.restMapper,
+		clientFn:   b.getClient,
+		decoder:    unstructured.UnstructuredJSONScheme,
+>>>>>>> axbaretto
 	}
 
 	return b
@@ -263,10 +313,17 @@ func (b *Builder) WithScheme(scheme *runtime.Scheme, decodingVersions ...schema.
 	b.negotiatedSerializer = negotiatedSerializer
 
 	b.mapper = &mapper{
+<<<<<<< HEAD
 		localFn:      b.isLocal,
 		restMapperFn: b.restMapperFn,
 		clientFn:     b.getClient,
 		decoder:      codecFactory.UniversalDecoder(decodingVersions...),
+=======
+		localFn:    b.isLocal,
+		restMapper: b.restMapper,
+		clientFn:   b.getClient,
+		decoder:    codecFactory.UniversalDecoder(decodingVersions...),
+>>>>>>> axbaretto
 	}
 
 	return b
@@ -557,6 +614,7 @@ func (b *Builder) ResourceTypeOrNameArgs(allowEmptySelector bool, args ...string
 func (b *Builder) ReplaceAliases(input string) string {
 	replaced := []string{}
 	for _, arg := range strings.Split(input, ",") {
+<<<<<<< HEAD
 		if b.categoryExpanderFn == nil {
 			continue
 		}
@@ -567,6 +625,12 @@ func (b *Builder) ReplaceAliases(input string) string {
 		}
 
 		if resources, ok := categoryExpander.Expand(arg); ok {
+=======
+		if b.categoryExpander == nil {
+			continue
+		}
+		if resources, ok := b.categoryExpander.Expand(arg); ok {
+>>>>>>> axbaretto
 			asStrings := []string{}
 			for _, resource := range resources {
 				if len(resource.Group) == 0 {
@@ -683,6 +747,7 @@ func (b *Builder) SingleResourceType() *Builder {
 func (b *Builder) mappingFor(resourceOrKindArg string) (*meta.RESTMapping, error) {
 	fullySpecifiedGVR, groupResource := schema.ParseResourceArg(resourceOrKindArg)
 	gvk := schema.GroupVersionKind{}
+<<<<<<< HEAD
 	restMapper, err := b.restMapperFn()
 	if err != nil {
 		return nil, err
@@ -696,6 +761,16 @@ func (b *Builder) mappingFor(resourceOrKindArg string) (*meta.RESTMapping, error
 	}
 	if !gvk.Empty() {
 		return restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+=======
+	if fullySpecifiedGVR != nil {
+		gvk, _ = b.mapper.restMapper.KindFor(*fullySpecifiedGVR)
+	}
+	if gvk.Empty() {
+		gvk, _ = b.mapper.restMapper.KindFor(groupResource.WithVersion(""))
+	}
+	if !gvk.Empty() {
+		return b.mapper.restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+>>>>>>> axbaretto
 	}
 
 	fullySpecifiedGVK, groupKind := schema.ParseKindArg(resourceOrKindArg)
@@ -705,12 +780,20 @@ func (b *Builder) mappingFor(resourceOrKindArg string) (*meta.RESTMapping, error
 	}
 
 	if !fullySpecifiedGVK.Empty() {
+<<<<<<< HEAD
 		if mapping, err := restMapper.RESTMapping(fullySpecifiedGVK.GroupKind(), fullySpecifiedGVK.Version); err == nil {
+=======
+		if mapping, err := b.mapper.restMapper.RESTMapping(fullySpecifiedGVK.GroupKind(), fullySpecifiedGVK.Version); err == nil {
+>>>>>>> axbaretto
 			return mapping, nil
 		}
 	}
 
+<<<<<<< HEAD
 	mapping, err := restMapper.RESTMapping(groupKind, gvk.Version)
+=======
+	mapping, err := b.mapper.restMapper.RESTMapping(groupKind, gvk.Version)
+>>>>>>> axbaretto
 	if err != nil {
 		// if we error out here, it is because we could not match a resource or a kind
 		// for the given argument. To maintain consistency with previous behavior,
@@ -840,6 +923,10 @@ func (b *Builder) visitBySelector() *Result {
 			result.err = err
 			return result
 		}
+<<<<<<< HEAD
+=======
+		client = NewClientWithOptions(client, b.requestTransforms...)
+>>>>>>> axbaretto
 		selectorNamespace := b.namespace
 		if mapping.Scope.Name() != meta.RESTScopeNameNamespace {
 			selectorNamespace = ""
@@ -856,6 +943,7 @@ func (b *Builder) visitBySelector() *Result {
 }
 
 func (b *Builder) getClient(gv schema.GroupVersion) (RESTClient, error) {
+<<<<<<< HEAD
 	var (
 		client RESTClient
 		err    error
@@ -875,6 +963,17 @@ func (b *Builder) getClient(gv schema.GroupVersion) (RESTClient, error) {
 	}
 
 	return NewClientWithOptions(client, b.requestTransforms...), nil
+=======
+	if b.fakeClientFn != nil {
+		return b.fakeClientFn(gv)
+	}
+
+	if b.negotiatedSerializer != nil {
+		return b.clientConfigFn.clientForGroupVersion(gv, b.negotiatedSerializer)
+	}
+
+	return b.clientConfigFn.unstructuredClientForGroupVersion(gv)
+>>>>>>> axbaretto
 }
 
 func (b *Builder) visitByResource() *Result {
@@ -911,6 +1010,10 @@ func (b *Builder) visitByResource() *Result {
 			result.err = err
 			return result
 		}
+<<<<<<< HEAD
+=======
+		client = NewClientWithOptions(client, b.requestTransforms...)
+>>>>>>> axbaretto
 		clients[s] = client
 	}
 
@@ -1121,6 +1224,7 @@ func HasNames(args []string) (bool, error) {
 	return hasCombinedTypes || len(args) > 1, nil
 }
 
+<<<<<<< HEAD
 type cachingRESTMapperFunc struct {
 	delegate RESTMapperFunc
 
@@ -1163,4 +1267,38 @@ func (c *cachingCategoryExpanderFunc) ToCategoryExpander() (restmapper.CategoryE
 	}
 	c.cached = ret
 	return c.cached, nil
+=======
+// MultipleTypesRequested returns true if the provided args contain multiple resource kinds
+func MultipleTypesRequested(args []string) bool {
+	if len(args) == 1 && args[0] == "all" {
+		return true
+	}
+
+	args = normalizeMultipleResourcesArgs(args)
+	rKinds := sets.NewString()
+	for _, arg := range args {
+		rTuple, found, err := splitResourceTypeName(arg)
+		if err != nil {
+			continue
+		}
+
+		// if tuple not found, assume arg is of the form "type1,type2,...".
+		// Since SplitResourceArgument returns a unique list of kinds,
+		// return true here if len(uniqueList) > 1
+		if !found {
+			if strings.Contains(arg, ",") {
+				splitArgs := SplitResourceArgument(arg)
+				if len(splitArgs) > 1 {
+					return true
+				}
+			}
+			continue
+		}
+		if rKinds.Has(rTuple.Resource) {
+			continue
+		}
+		rKinds.Insert(rTuple.Resource)
+	}
+	return rKinds.Len() > 1
+>>>>>>> axbaretto
 }

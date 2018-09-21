@@ -34,19 +34,39 @@ func RegisterDefaults(scheme *runtime.Scheme) error {
 	scheme.AddTypeDefaultingFunc(&KubeControllerManagerConfiguration{}, func(obj interface{}) {
 		SetObjectDefaults_KubeControllerManagerConfiguration(obj.(*KubeControllerManagerConfiguration))
 	})
+<<<<<<< HEAD
+=======
+	scheme.AddTypeDefaultingFunc(&KubeSchedulerConfiguration{}, func(obj interface{}) { SetObjectDefaults_KubeSchedulerConfiguration(obj.(*KubeSchedulerConfiguration)) })
+>>>>>>> axbaretto
 	return nil
 }
 
 func SetObjectDefaults_CloudControllerManagerConfiguration(in *CloudControllerManagerConfiguration) {
 	SetDefaults_CloudControllerManagerConfiguration(in)
 	SetDefaults_GenericComponentConfiguration(&in.GenericComponent)
+<<<<<<< HEAD
+=======
+	SetDefaults_LeaderElectionConfiguration(&in.GenericComponent.LeaderElection)
+>>>>>>> axbaretto
 	SetDefaults_KubeCloudSharedConfiguration(&in.KubeCloudShared)
 }
 
 func SetObjectDefaults_KubeControllerManagerConfiguration(in *KubeControllerManagerConfiguration) {
 	SetDefaults_KubeControllerManagerConfiguration(in)
 	SetDefaults_GenericComponentConfiguration(&in.GenericComponent)
+<<<<<<< HEAD
 	SetDefaults_KubeCloudSharedConfiguration(&in.KubeCloudShared)
 	SetDefaults_VolumeConfiguration(&in.PersistentVolumeBinderController.VolumeConfiguration)
 	SetDefaults_PersistentVolumeRecyclerConfiguration(&in.PersistentVolumeBinderController.VolumeConfiguration.PersistentVolumeRecyclerConfiguration)
+=======
+	SetDefaults_LeaderElectionConfiguration(&in.GenericComponent.LeaderElection)
+	SetDefaults_KubeCloudSharedConfiguration(&in.KubeCloudShared)
+	SetDefaults_VolumeConfiguration(&in.PersistentVolumeBinderController.VolumeConfiguration)
+	SetDefaults_PersistentVolumeRecyclerConfiguration(&in.PersistentVolumeBinderController.VolumeConfiguration.PersistentVolumeRecyclerConfiguration)
+}
+
+func SetObjectDefaults_KubeSchedulerConfiguration(in *KubeSchedulerConfiguration) {
+	SetDefaults_KubeSchedulerConfiguration(in)
+	SetDefaults_LeaderElectionConfiguration(&in.LeaderElection.LeaderElectionConfiguration)
+>>>>>>> axbaretto
 }

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -12,6 +13,20 @@ metadata:
   labels:
     istio-injection: disabled
 ---
+=======
+# GENERATED FILE. Use with Kubernetes 1.7+
+# TO UPDATE, modify files in install/kubernetes/templates and run install/updateVersion.sh
+#
+# Required for Istio as k8s addon.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: default
+  labels:
+    istio-injection: enabled
+    addonmanager.kubernetes.io/mode: Reconcile
+--
+>>>>>>> axbaretto
 ################################
 # Istio system namespace
 ################################
@@ -1247,10 +1262,79 @@ metadata:
   labels:
     k8s-app: istio
     addonmanager.kubernetes.io/mode: Reconcile
+<<<<<<< HEAD
     app: istio-sidecar-injector
     chart: sidecarInjectorWebhook-0.8.0
     heritage: Tiller
     release: istio
+=======
+spec:
+  template:
+    metadata:
+      labels:
+        istio: mixer
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: istio-mixer-service-account
+      containers:
+      - name: statsd-to-prometheus
+        image: gcr.io/istio-release/statsd-exporter:v0.5.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9102
+        - containerPort: 9125
+          protocol: UDP
+        args:
+        - '-statsd.mapping-config=/etc/statsd/mapping.conf'
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/statsd
+      - name: mixer
+        image: gcr.io/istio-release/mixer:0.6.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9091
+        - containerPort: 9093
+        - containerPort: 9094
+        - containerPort: 42422
+        args:
+          - --configStoreURL=k8s://
+          - --configDefaultNamespace=istio-system
+          - --zipkinURL=http://zipkin:9411/api/v1/spans
+          - --logtostderr
+          - -v
+          - "2"
+      - name: istio-proxy
+        image: gcr.io/istio-release/proxy:0.6.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 15004
+        args:
+        - proxy
+        - mixer
+        - -v
+        - "2"
+        - --controlPlaneAuthPolicy
+        - MUTUAL_TLS
+        - --customConfigFile
+        - /etc/istio/proxy/envoy_mixer_auth.json
+        volumeMounts:
+        - name: istio-certs
+          mountPath: /etc/certs
+          readOnly: true
+      volumes:
+      - name: istio-certs
+        secret:
+          secretName: istio.istio-mixer-service-account
+          optional: true
+      - name: config-volume
+        configMap:
+          name: istio-mixer
+---
+# Mixer CRD definitions are generated using
+# mixs crd all
+>>>>>>> axbaretto
 
 ---
 # Source: istio/charts/mixer/templates/crds.yaml
@@ -1522,7 +1606,10 @@ metadata:
   labels:
     k8s-app: istio
     addonmanager.kubernetes.io/mode: Reconcile
+<<<<<<< HEAD
     app: mixer
+=======
+>>>>>>> axbaretto
     package: solarwinds
     istio: mixer-adapter
 spec:
@@ -2385,6 +2472,7 @@ metadata:
   labels:
     k8s-app: istio
     addonmanager.kubernetes.io/mode: Reconcile
+<<<<<<< HEAD
     app: istio-sidecar-injector
     chart: sidecarInjectorWebhook-0.8.0
     heritage: Tiller
@@ -2397,6 +2485,29 @@ subjects:
   - kind: ServiceAccount
     name: istio-sidecar-injector-service-account
     namespace: istio-system
+=======
+spec:
+  # Pass the required attribute data to the adapter
+  source_uid: source.uid | ""
+  source_ip: source.ip | ip("0.0.0.0") # default to unspecified ip addr
+  destination_uid: destination.uid | ""
+  destination_ip: destination.ip | ip("0.0.0.0") # default to unspecified ip addr
+  origin_uid: '""'
+  origin_ip: ip("0.0.0.0") # default to unspecified ip addr
+  attribute_bindings:
+    # Fill the new attributes from the adapter produced output.
+    # $out refers to an instance of OutputTemplate message
+    source.ip: $out.source_pod_ip | ip("0.0.0.0")
+    source.labels: $out.source_labels | emptyStringMap()
+    source.namespace: $out.source_namespace | "default"
+    source.service: $out.source_service | "unknown"
+    source.serviceAccount: $out.source_service_account_name | "unknown"
+    destination.ip: $out.destination_pod_ip | ip("0.0.0.0")
+    destination.labels: $out.destination_labels | emptyStringMap()
+    destination.namespace: $out.destination_namespace | "default"
+    destination.service: $out.destination_service | "unknown"
+    destination.serviceAccount: $out.destination_service_account_name | "unknown"
+>>>>>>> axbaretto
 ---
 # Source: istio/charts/egressgateway/templates/service.yaml
 apiVersion: v1
@@ -2424,6 +2535,69 @@ spec:
       name: https
       port: 443
 
+<<<<<<< HEAD
+=======
+    # Set the following variable to true to disable policy checks by the Mixer.
+    # Note that metrics will still be reported to the Mixer.
+    disablePolicyChecks: false
+    # Set enableTracing to false to disable request tracing.
+    enableTracing: true
+    #
+    # To disable the mixer completely (including metrics), comment out
+    # the following lines
+    mixerCheckServer: istio-mixer.istio-system:15004
+    mixerReportServer: istio-mixer.istio-system:15004
+    # This is the ingress service name, update if you used a different name
+    ingressService: istio-ingress
+    #
+    # Along with discoveryRefreshDelay, this setting determines how
+    # frequently should Envoy fetch and update its internal configuration
+    # from Istio Pilot. Lower refresh delay results in higher CPU
+    # utilization and potential performance loss in exchange for faster
+    # convergence. Tweak this value according to your setup.
+    rdsRefreshDelay: 1s
+    #
+    defaultConfig:
+      # NOTE: If you change any values in this section, make sure to make
+      # the same changes in start up args in istio-ingress pods.
+      # See rdsRefreshDelay for explanation about this setting.
+      discoveryRefreshDelay: 1s
+      #
+      # TCP connection timeout between Envoy & the application, and between Envoys.
+      connectTimeout: 10s
+      #
+      ### ADVANCED SETTINGS #############
+      # Where should envoy's configuration be stored in the istio-proxy container
+      configPath: "/etc/istio/proxy"
+      binaryPath: "/usr/local/bin/envoy"
+      # The pseudo service name used for Envoy.
+      serviceCluster: istio-proxy
+      # These settings that determine how long an old Envoy
+      # process should be kept alive after an occasional reload.
+      drainDuration: 45s
+      parentShutdownDuration: 1m0s
+      #
+      # Port where Envoy listens (on local host) for admin commands
+      # You can exec into the istio-proxy container in a pod and
+      # curl the admin port (curl http://localhost:15000/) to obtain
+      # diagnostic information from Envoy. See
+      # https://lyft.github.io/envoy/docs/operations/admin.html
+      # for more details
+      proxyAdminPort: 15000
+      #
+      # Address where Istio Pilot service is running
+      discoveryAddress: istio-pilot.istio-system:15003
+      #
+      # Zipkin trace collector
+      zipkinAddress: zipkin.istio-system:9411
+      #
+      # Statsd metrics collector. Istio mixer exposes a UDP endpoint
+      # to collect and convert statsd metrics into Prometheus metrics.
+      statsdUdpAddress: istio-mixer.istio-system:9125
+      # Uncomment the following line to enable mutual TLS authentication between
+      # sidecars and istio control plane.
+      controlPlaneAuthPolicy: MUTUAL_TLS
+>>>>>>> axbaretto
 ---
 # Source: istio/charts/ingress/templates/service.yaml
 apiVersion: v1
@@ -2513,6 +2687,61 @@ spec:
     istio: mixer
     istio-mixer-type: policy
 ---
+<<<<<<< HEAD
+=======
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: v1alpha2routerules.config.istio.io
+  labels:
+    k8s-app: istio
+    addonmanager.kubernetes.io/mode: Reconcile
+spec:
+  group: config.istio.io
+  names:
+    kind: V1alpha2RouteRule
+    listKind: V1alpha2RouteRuleList
+    plural: v1alpha2routerules
+    singular: v1alpha2routerule
+  scope: Namespaced
+  version: v1alpha2
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: destinationrules.config.istio.io
+  labels:
+    k8s-app: istio
+    addonmanager.kubernetes.io/mode: Reconcile
+spec:
+  group: config.istio.io
+  names:
+    kind: DestinationRule
+    listKind: DestinationRuleList
+    plural: destinationrules
+    singular: destinationrule
+  scope: Namespaced
+  version: v1alpha2
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: externalservices.config.istio.io
+  labels:
+    k8s-app: istio
+    addonmanager.kubernetes.io/mode: Reconcile
+spec:
+  group: config.istio.io
+  names:
+    kind: ExternalService
+    listKind: ExternalServiceList
+    plural: externalservices
+    singular: externalservice
+  scope: Namespaced
+  version: v1alpha2
+---
+# Pilot service for discovery
+>>>>>>> axbaretto
 apiVersion: v1
 kind: Service
 metadata:
@@ -2594,8 +2823,36 @@ spec:
         configMap:
           name: istio-statsd-prom-bridge
       containers:
+<<<<<<< HEAD
       - name: statsd-prom-bridge
         image: "gcr.io/istio-release/prom/statsd-exporter:v0.6.0"
+=======
+      - name: discovery
+        image: gcr.io/istio-release/pilot:0.6.0
+        imagePullPolicy: IfNotPresent
+        args: ["discovery", "-v", "2", "--admission-service", "istio-pilot"]
+        ports:
+        - containerPort: 8080
+        - containerPort: 443
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: PILOT_THROTTLE
+          value: "200"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/istio/config
+      - name: istio-proxy
+        image: gcr.io/istio-release/proxy:0.6.0
+>>>>>>> axbaretto
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9102
@@ -2735,6 +2992,7 @@ spec:
     spec:
       serviceAccountName: istio-egressgateway-service-account
       containers:
+<<<<<<< HEAD
         - name: egressgateway
           image: "gcr.io/istio-release/proxyv2:0.8.0"
           imagePullPolicy: IfNotPresent
@@ -2914,6 +3172,57 @@ spec:
           - name: ingress-certs
             mountPath: /etc/istio/ingress-certs
             readOnly: true
+=======
+      - name: istio-ingress
+        image: gcr.io/istio-release/proxy:0.6.0
+        args:
+        - proxy
+        - ingress
+        - -v
+        - "2"
+        - --discoveryAddress
+        - istio-pilot:15003
+        - --discoveryRefreshDelay
+        - '1s' #discoveryRefreshDelay
+        - --drainDuration
+        - '45s' #drainDuration
+        - --parentShutdownDuration
+        - '1m0s' #parentShutdownDuration
+        - --connectTimeout
+        - '10s' #connectTimeout
+        - --serviceCluster
+        - istio-ingress
+        - --zipkinAddress
+        - zipkin:9411
+        - --statsdUdpAddress
+        - istio-mixer:9125
+        - --proxyAdminPort
+        - "15000"
+        - --controlPlaneAuthPolicy
+        - MUTUAL_TLS
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80
+        - containerPort: 443
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        volumeMounts:
+        - name: istio-certs
+          mountPath: /etc/certs
+          readOnly: true
+        - name: ingress-certs
+          mountPath: /etc/istio/ingress-certs
+          readOnly: true
+>>>>>>> axbaretto
       volumes:
       - name: istio-certs
         secret:
@@ -2983,6 +3292,7 @@ spec:
     spec:
       serviceAccountName: istio-ingressgateway-service-account
       containers:
+<<<<<<< HEAD
         - name: ingressgateway
           image: "gcr.io/istio-release/proxyv2:0.8.0"
           imagePullPolicy: IfNotPresent
@@ -3088,6 +3398,37 @@ spec:
                 values:
                 - s390x
 
+=======
+      - name: istio-ca
+        image: gcr.io/istio-release/istio-ca:0.6.0
+        imagePullPolicy: IfNotPresent
+        command: ["/usr/local/bin/istio_ca"]
+        args:
+          - --istio-ca-storage-namespace=istio-system
+          - --grpc-port=8060
+          - --grpc-hostname=istio-ca
+          - --self-signed-ca=true
+          - --logtostderr
+          - --stderrthreshold
+          - INFO
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: istio-system
+  labels:
+    k8s-app: istio
+    addonmanager.kubernetes.io/mode: Reconcile
+    kubernetes.io/cluster-service: "true"
+spec:
+  ports:
+  - port: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: grafana
+>>>>>>> axbaretto
 ---
 # Source: istio/charts/mixer/templates/deployment.yaml
 
@@ -3112,6 +3453,7 @@ spec:
         sidecar.istio.io/inject: "false"
         seccomp.security.alpha.kubernetes.io/pod: 'docker/default'
     spec:
+<<<<<<< HEAD
       serviceAccountName: istio-mixer-service-account
       volumes:
       - name: istio-certs
@@ -3154,6 +3496,12 @@ spec:
       containers:
       - name: mixer
         image: "gcr.io/istio-release/mixer:0.8.0"
+=======
+      serviceAccountName: grafana
+      containers:
+      - name: grafana
+        image: gcr.io/istio-release/grafana:0.6.0
+>>>>>>> axbaretto
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9092
@@ -3183,6 +3531,7 @@ spec:
         - --controlPlaneAuthPolicy
         - MUTUAL_TLS
         env:
+<<<<<<< HEAD
         - name: POD_NAME
           valueFrom:
             fieldRef:
@@ -3207,6 +3556,188 @@ spec:
         - name: istio-certs
           mountPath: /etc/certs
           readOnly: true
+=======
+          # Only put environment related config here. Generic Istio config
+          # should go in addons/grafana/grafana.ini.
+        - name: GF_PATHS_DATA
+          value: /data/grafana
+        volumeMounts:
+        - mountPath: /data/grafana
+          name: grafana-data
+      volumes:
+      - name: grafana-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana
+  namespace: istio-system
+  labels:
+    k8s-app: istio
+    addonmanager.kubernetes.io/mode: Reconcile
+---
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus
+  namespace: istio-system
+  labels:
+    k8s-app: istio
+    addonmanager.kubernetes.io/mode: Reconcile
+data:
+  prometheus.yml: |-
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+
+    - job_name: 'istio-mesh'
+      # Override the global default and scrape targets from this job every 5 seconds.
+      scrape_interval: 5s
+
+      kubernetes_sd_configs:
+      - role: endpoints
+
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: istio-system;istio-mixer;prometheus
+
+    - job_name: 'envoy'
+      # Override the global default and scrape targets from this job every 5 seconds.
+      scrape_interval: 5s
+      # metrics_path defaults to '/metrics'
+      # scheme defaults to 'http'.
+
+      kubernetes_sd_configs:
+      - role: endpoints
+
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: istio-system;istio-mixer;statsd-prom
+
+    - job_name: 'mixer'
+      # Override the global default and scrape targets from this job every 5 seconds.
+      scrape_interval: 5s
+      # metrics_path defaults to '/metrics'
+      # scheme defaults to 'http'.
+
+      kubernetes_sd_configs:
+      - role: endpoints
+
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: istio-system;istio-mixer;http-monitoring
+
+    - job_name: 'pilot'
+      # Override the global default and scrape targets from this job every 5 seconds.
+      scrape_interval: 5s
+      # metrics_path defaults to '/metrics'
+      # scheme defaults to 'http'.
+
+      kubernetes_sd_configs:
+      - role: endpoints
+
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: istio-system;istio-pilot;http-monitoring
+
+    # scrape config for API servers
+    - job_name: 'kubernetes-apiservers'
+      kubernetes_sd_configs:
+      - role: endpoints
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: default;kubernetes;https
+
+    # scrape config for nodes (kubelet)
+    - job_name: 'kubernetes-nodes'
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      kubernetes_sd_configs:
+      - role: node
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/${1}/proxy/metrics
+
+    # Scrape config for Kubelet cAdvisor.
+    #
+    # This is required for Kubernetes 1.7.3 and later, where cAdvisor metrics
+    # (those whose names begin with 'container_') have been removed from the
+    # Kubelet metrics endpoint.  This job scrapes the cAdvisor endpoint to
+    # retrieve those metrics.
+    #
+    # In Kubernetes 1.7.0-1.7.2, these metrics are only exposed on the cAdvisor
+    # HTTP endpoint; use "replacement: /api/v1/nodes/${1}:4194/proxy/metrics"
+    # in that case (and ensure cAdvisor's HTTP server hasn't been disabled with
+    # the --cadvisor-port=0 Kubelet flag).
+    #
+    # This job is not necessary and should be removed in Kubernetes 1.6 and
+    # earlier versions, or it will cause the metrics to be scraped twice.
+    - job_name: 'kubernetes-cadvisor'
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      kubernetes_sd_configs:
+      - role: node
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+
+    # scrape config for service endpoints.
+    - job_name: 'kubernetes-service-endpoints'
+      kubernetes_sd_configs:
+      - role: endpoints
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scheme]
+        action: replace
+        target_label: __scheme__
+        regex: (https?)
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+        action: replace
+        target_label: __address__
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+      - action: labelmap
+        regex: __meta_kubernetes_service_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_service_name]
+        action: replace
+        target_label: kubernetes_name
+>>>>>>> axbaretto
 
 ---
 apiVersion: extensions/v1beta1
@@ -3476,6 +4007,7 @@ spec:
       serviceAccountName: prometheus
 
       containers:
+<<<<<<< HEAD
         - name: prometheus
           image: "gcr.io/istio-release/prom/prometheus:v2.3.1"
           imagePullPolicy: IfNotPresent
@@ -3499,6 +4031,20 @@ spec:
           volumeMounts:
           - name: config-volume
             mountPath: /etc/prometheus
+=======
+      - name: prometheus
+        image: gcr.io/istio-release/prom/prometheus:v2.0.0
+        imagePullPolicy: IfNotPresent
+        args:
+          - '--storage.tsdb.retention=6h'
+          - '--config.file=/etc/prometheus/prometheus.yml'
+        ports:
+        - name: web
+          containerPort: 9090
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/prometheus
+>>>>>>> axbaretto
       volumes:
       - name: config-volume
         configMap:
@@ -3611,9 +4157,37 @@ spec:
                 - s390x
 
 ---
+<<<<<<< HEAD
 # Source: istio/charts/sidecarInjectorWebhook/templates/deployment.yaml
 apiVersion: extensions/v1beta1
 kind: Deployment
+=======
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: prometheus
+  labels:
+    k8s-app: istio
+    addonmanager.kubernetes.io/mode: Reconcile
+rules:
+- apiGroups: [""]
+  resources:
+  - nodes
+  - services
+  - endpoints
+  - pods
+  - nodes/proxy
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources:
+  - configmaps
+  verbs: ["get"]
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+>>>>>>> axbaretto
 metadata:
   name: istio-sidecar-injector
   namespace: istio-system
@@ -3749,6 +4323,7 @@ spec:
     spec:
       serviceAccountName: istio-cleanup-old-ca-service-account
       containers:
+<<<<<<< HEAD
         - name: hyperkube
           image: "gcr.io/istio-release/coreos/hyperkube:v1.7.6_coreos.0"
           command:
@@ -3878,6 +4453,15 @@ webhooks:
 
 ---
 # Source: istio/charts/prometheus/templates/ingress.yaml
+=======
+      - name: servicegraph
+        image: gcr.io/istio-release/servicegraph:0.6.0
+        imagePullPolicy: IfNotPresent
+        ports:
+          - containerPort: 8088
+        args:
+        - --prometheusAddr=http://prometheus:9090
+>>>>>>> axbaretto
 ---
 apiVersion: v1
 kind: Service
@@ -3917,8 +4501,13 @@ spec:
     spec:
       serviceAccountName: grafana
       containers:
+<<<<<<< HEAD
       - name: grafana
         image: gcr.io/istio-release/grafana:0.8.0
+=======
+      - name: zipkin
+        image: gcr.io/istio-release/zipkin:2.5.3
+>>>>>>> axbaretto
         imagePullPolicy: IfNotPresent
         ports:
           - containerPort: 3000

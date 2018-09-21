@@ -376,6 +376,7 @@ func (v FlattenListVisitor) Visit(fn VisitorFunc) error {
 		if info.Object == nil {
 			return fn(info, nil)
 		}
+<<<<<<< HEAD
 		if !meta.IsListType(info.Object) {
 			return fn(info, nil)
 		}
@@ -398,6 +399,14 @@ func (v FlattenListVisitor) Visit(fn VisitorFunc) error {
 				return utilerrors.NewAggregate(errs)
 			}
 			itemsToProcess = append(itemsToProcess, currItems...)
+=======
+		items, err := meta.ExtractList(info.Object)
+		if err != nil {
+			return fn(info, nil)
+		}
+		if errs := runtime.DecodeList(items, v.mapper.decoder); len(errs) > 0 {
+			return utilerrors.NewAggregate(errs)
+>>>>>>> axbaretto
 		}
 
 		// If we have a GroupVersionKind on the list, prioritize that when asking for info on the objects contained in the list

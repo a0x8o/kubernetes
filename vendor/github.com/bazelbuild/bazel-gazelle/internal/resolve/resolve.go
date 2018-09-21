@@ -76,16 +76,25 @@ func (r *Resolver) ResolveRule(e bf.Expr, pkgRel string) bf.Expr {
 	from := label.New("", pkgRel, rule.Name())
 
 	var resolve func(imp string, from label.Label) (label.Label, error)
+<<<<<<< HEAD
 	var embeds []label.Label
 	switch rule.Kind() {
 	case "go_library", "go_binary", "go_test":
 		resolve = r.resolveGo
 		embeds = getEmbedsGo(call, from)
+=======
+	switch rule.Kind() {
+	case "go_library", "go_binary", "go_test":
+		resolve = r.resolveGo
+>>>>>>> axbaretto
 	case "proto_library":
 		resolve = r.resolveProto
 	case "go_proto_library", "go_grpc_library":
 		resolve = r.resolveGoProto
+<<<<<<< HEAD
 		embeds = getEmbedsGo(call, from)
+=======
+>>>>>>> axbaretto
 	default:
 		return e
 	}
@@ -108,11 +117,14 @@ func (r *Resolver) ResolveRule(e bf.Expr, pkgRel string) bf.Expr {
 				return ""
 			}
 		}
+<<<<<<< HEAD
 		for _, e := range embeds {
 			if label.Equal(e) {
 				return ""
 			}
 		}
+=======
+>>>>>>> axbaretto
 		label.Relative = label.Repo == "" && label.Pkg == pkgRel
 		return label.String()
 	})
@@ -234,10 +246,13 @@ func (r *Resolver) resolveGo(imp string, from label.Label) (label.Label, error) 
 		return label.NoLabel, standardImportError{imp}
 	}
 
+<<<<<<< HEAD
 	if l := resolveWellKnownGo(imp); !l.Equal(label.NoLabel) {
 		return l, nil
 	}
 
+=======
+>>>>>>> axbaretto
 	if l, err := r.ix.findLabelByImport(importSpec{config.GoLang, imp}, config.GoLang, from); err != nil {
 		if _, ok := err.(ruleNotFoundError); !ok {
 			return label.NoLabel, err
@@ -253,13 +268,26 @@ func (r *Resolver) resolveGo(imp string, from label.Label) (label.Label, error) 
 	return r.external.resolve(imp)
 }
 
+<<<<<<< HEAD
+=======
+const (
+	wellKnownPrefix     = "google/protobuf/"
+	wellKnownGoProtoPkg = "ptypes"
+	descriptorPkg       = "protoc-gen-go/descriptor"
+)
+
+>>>>>>> axbaretto
 // resolveProto resolves an import statement in a .proto file to a label
 // for a proto_library rule.
 func (r *Resolver) resolveProto(imp string, from label.Label) (label.Label, error) {
 	if !strings.HasSuffix(imp, ".proto") {
 		return label.NoLabel, fmt.Errorf("can't import non-proto: %q", imp)
 	}
+<<<<<<< HEAD
 	if isWellKnownProto(imp) {
+=======
+	if isWellKnown(imp) {
+>>>>>>> axbaretto
 		name := path.Base(imp[:len(imp)-len(".proto")]) + "_proto"
 		return label.New(config.WellKnownTypesProtoRepo, "", name), nil
 	}
@@ -288,8 +316,45 @@ func (r *Resolver) resolveGoProto(imp string, from label.Label) (label.Label, er
 	}
 	stem := imp[:len(imp)-len(".proto")]
 
+<<<<<<< HEAD
 	if isWellKnownProto(stem) {
 		return label.NoLabel, standardImportError{imp}
+=======
+	if isWellKnown(stem) {
+		// Well Known Type
+		base := path.Base(stem)
+		if base == "descriptor" {
+			switch r.c.DepMode {
+			case config.ExternalMode:
+				label := r.l.LibraryLabel(descriptorPkg)
+				if r.c.GoPrefix != config.WellKnownTypesGoPrefix {
+					label.Repo = config.WellKnownTypesGoProtoRepo
+				}
+				return label, nil
+			case config.VendorMode:
+				pkg := path.Join("vendor", config.WellKnownTypesGoPrefix, descriptorPkg)
+				label := r.l.LibraryLabel(pkg)
+				return label, nil
+			default:
+				log.Panicf("unknown external mode: %v", r.c.DepMode)
+			}
+		}
+
+		switch r.c.DepMode {
+		case config.ExternalMode:
+			pkg := path.Join(wellKnownGoProtoPkg, base)
+			label := r.l.LibraryLabel(pkg)
+			if r.c.GoPrefix != config.WellKnownTypesGoPrefix {
+				label.Repo = config.WellKnownTypesGoProtoRepo
+			}
+			return label, nil
+		case config.VendorMode:
+			pkg := path.Join("vendor", config.WellKnownTypesGoPrefix, wellKnownGoProtoPkg, base)
+			return r.l.LibraryLabel(pkg), nil
+		default:
+			log.Panicf("unknown external mode: %v", r.c.DepMode)
+		}
+>>>>>>> axbaretto
 	}
 
 	if l, err := r.ix.findLabelByImport(importSpec{config.ProtoLang, imp}, config.GoLang, from); err != nil {
@@ -314,6 +379,7 @@ func (r *Resolver) resolveGoProto(imp string, from label.Label) (label.Label, er
 	return r.l.LibraryLabel(rel), nil
 }
 
+<<<<<<< HEAD
 func getEmbedsGo(call *bf.CallExpr, from label.Label) []label.Label {
 	rule := bf.Rule{Call: call}
 	embedStrings := rule.AttrStrings("embed")
@@ -329,11 +395,14 @@ func getEmbedsGo(call *bf.CallExpr, from label.Label) []label.Label {
 	return embedLabels
 }
 
+=======
+>>>>>>> axbaretto
 // IsStandard returns whether a package is in the standard library.
 func IsStandard(imp string) bool {
 	return stdPackages[imp]
 }
 
+<<<<<<< HEAD
 func isWellKnownProto(imp string) bool {
 	return pathtools.HasPrefix(imp, config.WellKnownTypesProtoPrefix) && pathtools.TrimPrefix(imp, config.WellKnownTypesProtoPrefix) == path.Base(imp)
 }
@@ -377,4 +446,8 @@ func resolveWellKnownGo(imp string) label.Label {
 func isWellKnownGo(imp string) bool {
 	prefix := config.WellKnownTypesGoPrefix + "/ptypes/"
 	return strings.HasPrefix(imp, prefix) && strings.TrimPrefix(imp, prefix) == path.Base(imp)
+=======
+func isWellKnown(imp string) bool {
+	return strings.HasPrefix(imp, wellKnownPrefix) && strings.TrimPrefix(imp, wellKnownPrefix) == path.Base(imp)
+>>>>>>> axbaretto
 }

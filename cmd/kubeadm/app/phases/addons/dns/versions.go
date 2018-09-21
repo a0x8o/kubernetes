@@ -22,13 +22,22 @@ import (
 )
 
 const (
+<<<<<<< HEAD
 	kubeDNSv190AndAboveVersion = "1.14.8"
 	coreDNSVersion             = "1.0.6"
+=======
+	kubeDNSVersion = "1.14.10"
+	coreDNSVersion = "1.0.6"
+>>>>>>> axbaretto
 )
 
 // GetDNSVersion returns the right kube-dns version for a specific k8s version
 func GetDNSVersion(kubeVersion *version.Version, dns string) string {
+<<<<<<< HEAD
 	// v1.9.0+ uses kube-dns 1.14.8
+=======
+	// v1.9.0+ uses kube-dns 1.14.10
+>>>>>>> axbaretto
 	// v1.9.0+ uses CoreDNS  1.0.6 if feature gate "CoreDNS" is enabled.
 
 	// In the future when the version is bumped at HEAD; add conditional logic to return the right versions
@@ -38,7 +47,7 @@ func GetDNSVersion(kubeVersion *version.Version, dns string) string {
 		// return the CoreDNS version
 		return coreDNSVersion
 	default:
-		return kubeDNSv190AndAboveVersion
+		return kubeDNSVersion
 	}
 }
 
@@ -46,7 +55,7 @@ func GetDNSVersion(kubeVersion *version.Version, dns string) string {
 func GetKubeDNSManifest(kubeVersion *version.Version) string {
 	// v1.8.0+ has only one known YAML manifest spec, just return that here
 	// In the future when the kube-dns version is bumped at HEAD; add conditional logic to return the right manifest
-	return v180AndAboveKubeDNSDeployment
+	return KubeDNSDeployment
 }
 
 // GetCoreDNSManifest returns the right CoreDNS YAML manifest for a specific k8s version

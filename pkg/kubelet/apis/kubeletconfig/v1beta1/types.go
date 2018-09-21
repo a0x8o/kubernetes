@@ -161,9 +161,12 @@ type KubeletConfiguration struct {
 	// new certificate from the certificates.k8s.io API. This requires an approver to approve the
 	// certificate signing requests. The RotateKubeletClientCertificate feature
 	// must be enabled.
+<<<<<<< HEAD
 	// Dynamic Kubelet Config (beta): If dynamically updating this field, consider that
 	// disabling it may disrupt the Kubelet's ability to authenticate with the API server
 	// after the current certificate expires.
+=======
+>>>>>>> axbaretto
 	// Default: false
 	// +optional
 	RotateCertificates bool `json:"rotateCertificates,omitempty"`
@@ -172,10 +175,13 @@ type KubeletConfiguration struct {
 	// the certificates.k8s.io API. This requires an approver to approve the
 	// certificate signing requests. The RotateKubeletServerCertificate feature
 	// must be enabled.
+<<<<<<< HEAD
 	// Dynamic Kubelet Config (beta): If dynamically updating this field, consider that
 	// disabling it will stop the renewal of Kubelet server certificates, which can
 	// disrupt components that interact with the Kubelet server in the long term,
 	// due to certificate expiration.
+=======
+>>>>>>> axbaretto
 	// Default: false
 	// +optional
 	ServerTLSBootstrap bool `json:"serverTLSBootstrap,omitempty"`
@@ -384,6 +390,7 @@ type KubeletConfiguration struct {
 	// Default: "10s"
 	// +optional
 	CPUManagerReconcilePeriod metav1.Duration `json:"cpuManagerReconcilePeriod,omitempty"`
+<<<<<<< HEAD
 	// qosReserved is a set of resource name to percentage pairs that specify
 	// the minimum percentage of a resource reserved for exclusive use by the
 	// guaranteed QoS tier.
@@ -391,6 +398,10 @@ type KubeletConfiguration struct {
 	// Requires the QOSReserved feature gate to be enabled.
 	// Dynamic Kubelet Config (beta): This field should not be updated without a full node
 	// reboot. It is safest to keep this value the same as the local config.
+=======
+	// Map of QoS resource reservation percentages (memory only for now).
+	// Requires the QOSReserved feature gate to be enabled.
+>>>>>>> axbaretto
 	// Default: nil
 	// +optional
 	QOSReserved map[string]string `json:"qosReserved,omitempty"`

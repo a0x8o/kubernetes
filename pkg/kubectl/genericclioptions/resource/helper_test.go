@@ -69,19 +69,28 @@ func V1DeepEqualSafePodSpec() corev1.PodSpec {
 
 func TestHelperDelete(t *testing.T) {
 	tests := []struct {
+<<<<<<< HEAD
 		name    string
+=======
+>>>>>>> axbaretto
 		Err     bool
 		Req     func(*http.Request) bool
 		Resp    *http.Response
 		HttpErr error
 	}{
 		{
+<<<<<<< HEAD
 			name:    "test1",
+=======
+>>>>>>> axbaretto
 			HttpErr: errors.New("failure"),
 			Err:     true,
 		},
 		{
+<<<<<<< HEAD
 			name: "test2",
+=======
+>>>>>>> axbaretto
 			Resp: &http.Response{
 				StatusCode: http.StatusNotFound,
 				Header:     header(),
@@ -90,7 +99,10 @@ func TestHelperDelete(t *testing.T) {
 			Err: true,
 		},
 		{
+<<<<<<< HEAD
 			name: "test3pkg/kubectl/genericclioptions/resource/helper_test.go",
+=======
+>>>>>>> axbaretto
 			Resp: &http.Response{
 				StatusCode: http.StatusOK,
 				Header:     header(),
@@ -118,6 +130,7 @@ func TestHelperDelete(t *testing.T) {
 			},
 		},
 	}
+<<<<<<< HEAD
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &fake.RESTClient{
@@ -140,6 +153,28 @@ func TestHelperDelete(t *testing.T) {
 				t.Errorf("unexpected request: %#v", client.Req)
 			}
 		})
+=======
+	for _, test := range tests {
+		client := &fake.RESTClient{
+			NegotiatedSerializer: scheme.Codecs,
+			Resp:                 test.Resp,
+			Err:                  test.HttpErr,
+		}
+		modifier := &Helper{
+			RESTClient:      client,
+			NamespaceScoped: true,
+		}
+		err := modifier.Delete("bar", "foo")
+		if (err != nil) != test.Err {
+			t.Errorf("unexpected error: %t %v", test.Err, err)
+		}
+		if err != nil {
+			continue
+		}
+		if test.Req != nil && !test.Req(client.Req) {
+			t.Errorf("unexpected request: %#v", client.Req)
+		}
+>>>>>>> axbaretto
 	}
 }
 
@@ -158,7 +193,10 @@ func TestHelperCreate(t *testing.T) {
 	}
 
 	tests := []struct {
+<<<<<<< HEAD
 		name    string
+=======
+>>>>>>> axbaretto
 		Resp    *http.Response
 		HttpErr error
 		Modify  bool
@@ -169,12 +207,18 @@ func TestHelperCreate(t *testing.T) {
 		Req          func(*http.Request) bool
 	}{
 		{
+<<<<<<< HEAD
 			name:    "test1",
+=======
+>>>>>>> axbaretto
 			HttpErr: errors.New("failure"),
 			Err:     true,
 		},
 		{
+<<<<<<< HEAD
 			name: "test1",
+=======
+>>>>>>> axbaretto
 			Resp: &http.Response{
 				StatusCode: http.StatusNotFound,
 				Header:     header(),
@@ -183,7 +227,10 @@ func TestHelperCreate(t *testing.T) {
 			Err: true,
 		},
 		{
+<<<<<<< HEAD
 			name: "test1",
+=======
+>>>>>>> axbaretto
 			Resp: &http.Response{
 				StatusCode: http.StatusOK,
 				Header:     header(),
@@ -194,7 +241,10 @@ func TestHelperCreate(t *testing.T) {
 			Req:          expectPost,
 		},
 		{
+<<<<<<< HEAD
 			name:         "test1",
+=======
+>>>>>>> axbaretto
 			Modify:       false,
 			Object:       &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo", ResourceVersion: "10"}},
 			ExpectObject: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo", ResourceVersion: "10"}},
@@ -202,7 +252,10 @@ func TestHelperCreate(t *testing.T) {
 			Req:          expectPost,
 		},
 		{
+<<<<<<< HEAD
 			name:   "test1",
+=======
+>>>>>>> axbaretto
 			Modify: true,
 			Object: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{Name: "foo", ResourceVersion: "10"},
@@ -216,6 +269,7 @@ func TestHelperCreate(t *testing.T) {
 			Req:  expectPost,
 		},
 	}
+<<<<<<< HEAD
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &fake.RESTClient{
@@ -251,24 +305,69 @@ func TestHelperCreate(t *testing.T) {
 				t.Errorf("%d: unexpected body: %s (expected %s)", i, string(body), string(expect))
 			}
 		})
+=======
+	for i, test := range tests {
+		client := &fake.RESTClient{
+			GroupVersion:         corev1GV,
+			NegotiatedSerializer: scheme.Codecs,
+			Resp:                 test.Resp,
+			Err:                  test.HttpErr,
+		}
+		modifier := &Helper{
+			RESTClient:      client,
+			NamespaceScoped: true,
+		}
+		_, err := modifier.Create("bar", test.Modify, test.Object)
+		if (err != nil) != test.Err {
+			t.Errorf("%d: unexpected error: %t %v", i, test.Err, err)
+		}
+		if err != nil {
+			continue
+		}
+		if test.Req != nil && !test.Req(client.Req) {
+			t.Errorf("%d: unexpected request: %#v", i, client.Req)
+		}
+		body, err := ioutil.ReadAll(client.Req.Body)
+		if err != nil {
+			t.Fatalf("%d: unexpected error: %#v", i, err)
+		}
+		t.Logf("got body: %s", string(body))
+		expect := []byte{}
+		if test.ExpectObject != nil {
+			expect = []byte(runtime.EncodeOrDie(corev1Codec, test.ExpectObject))
+		}
+		if !reflect.DeepEqual(expect, body) {
+			t.Errorf("%d: unexpected body: %s (expected %s)", i, string(body), string(expect))
+		}
+
+>>>>>>> axbaretto
 	}
 }
 
 func TestHelperGet(t *testing.T) {
 	tests := []struct {
+<<<<<<< HEAD
 		name    string
+=======
+>>>>>>> axbaretto
 		Err     bool
 		Req     func(*http.Request) bool
 		Resp    *http.Response
 		HttpErr error
 	}{
 		{
+<<<<<<< HEAD
 			name:    "test1",
+=======
+>>>>>>> axbaretto
 			HttpErr: errors.New("failure"),
 			Err:     true,
 		},
 		{
+<<<<<<< HEAD
 			name: "test1",
+=======
+>>>>>>> axbaretto
 			Resp: &http.Response{
 				StatusCode: http.StatusNotFound,
 				Header:     header(),
@@ -277,7 +376,10 @@ func TestHelperGet(t *testing.T) {
 			Err: true,
 		},
 		{
+<<<<<<< HEAD
 			name: "test1",
+=======
+>>>>>>> axbaretto
 			Resp: &http.Response{
 				StatusCode: http.StatusOK,
 				Header:     header(),
@@ -301,6 +403,7 @@ func TestHelperGet(t *testing.T) {
 			},
 		},
 	}
+<<<<<<< HEAD
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &fake.RESTClient{
@@ -328,24 +431,60 @@ func TestHelperGet(t *testing.T) {
 				t.Errorf("unexpected request: %#v", client.Req)
 			}
 		})
+=======
+	for i, test := range tests {
+		client := &fake.RESTClient{
+			GroupVersion:         corev1GV,
+			NegotiatedSerializer: serializer.DirectCodecFactory{CodecFactory: scheme.Codecs},
+			Resp:                 test.Resp,
+			Err:                  test.HttpErr,
+		}
+		modifier := &Helper{
+			RESTClient:      client,
+			NamespaceScoped: true,
+		}
+		obj, err := modifier.Get("bar", "foo", false)
+
+		if (err != nil) != test.Err {
+			t.Errorf("unexpected error: %d %t %v", i, test.Err, err)
+		}
+		if err != nil {
+			continue
+		}
+		if obj.(*corev1.Pod).Name != "foo" {
+			t.Errorf("unexpected object: %#v", obj)
+		}
+		if test.Req != nil && !test.Req(client.Req) {
+			t.Errorf("unexpected request: %#v", client.Req)
+		}
+>>>>>>> axbaretto
 	}
 }
 
 func TestHelperList(t *testing.T) {
 	tests := []struct {
+<<<<<<< HEAD
 		name    string
+=======
+>>>>>>> axbaretto
 		Err     bool
 		Req     func(*http.Request) bool
 		Resp    *http.Response
 		HttpErr error
 	}{
 		{
+<<<<<<< HEAD
 			name:    "test1",
+=======
+>>>>>>> axbaretto
 			HttpErr: errors.New("failure"),
 			Err:     true,
 		},
 		{
+<<<<<<< HEAD
 			name: "test2",
+=======
+>>>>>>> axbaretto
 			Resp: &http.Response{
 				StatusCode: http.StatusNotFound,
 				Header:     header(),
@@ -354,7 +493,10 @@ func TestHelperList(t *testing.T) {
 			Err: true,
 		},
 		{
+<<<<<<< HEAD
 			name: "test3",
+=======
+>>>>>>> axbaretto
 			Resp: &http.Response{
 				StatusCode: http.StatusOK,
 				Header:     header(),
@@ -382,6 +524,7 @@ func TestHelperList(t *testing.T) {
 			},
 		},
 	}
+<<<<<<< HEAD
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &fake.RESTClient{
@@ -408,6 +551,32 @@ func TestHelperList(t *testing.T) {
 				t.Errorf("unexpected request: %#v", client.Req)
 			}
 		})
+=======
+	for _, test := range tests {
+		client := &fake.RESTClient{
+			GroupVersion:         corev1GV,
+			NegotiatedSerializer: serializer.DirectCodecFactory{CodecFactory: scheme.Codecs},
+			Resp:                 test.Resp,
+			Err:                  test.HttpErr,
+		}
+		modifier := &Helper{
+			RESTClient:      client,
+			NamespaceScoped: true,
+		}
+		obj, err := modifier.List("bar", corev1GV.String(), false, &metav1.ListOptions{LabelSelector: "foo=baz"})
+		if (err != nil) != test.Err {
+			t.Errorf("unexpected error: %t %v", test.Err, err)
+		}
+		if err != nil {
+			continue
+		}
+		if obj.(*corev1.PodList).Items[0].Name != "foo" {
+			t.Errorf("unexpected object: %#v", obj)
+		}
+		if test.Req != nil && !test.Req(client.Req) {
+			t.Errorf("unexpected request: %#v", client.Req)
+		}
+>>>>>>> axbaretto
 	}
 }
 
@@ -461,6 +630,7 @@ func TestHelperListSelectorCombination(t *testing.T) {
 		NamespaceScoped: true,
 	}
 
+<<<<<<< HEAD
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			_, err := modifier.List("bar",
@@ -476,6 +646,21 @@ func TestHelperListSelectorCombination(t *testing.T) {
 				}
 			}
 		})
+=======
+	for _, test := range tests {
+		_, err := modifier.List("bar",
+			corev1GV.String(),
+			false,
+			&metav1.ListOptions{LabelSelector: test.LabelSelector, FieldSelector: test.FieldSelector})
+		if test.Err {
+			if err == nil {
+				t.Errorf("%q expected error: %q", test.Name, test.ErrMsg)
+			}
+			if err != nil && err.Error() != test.ErrMsg {
+				t.Errorf("%q expected error: %q", test.Name, test.ErrMsg)
+			}
+		}
+>>>>>>> axbaretto
 	}
 }
 
@@ -493,7 +678,10 @@ func TestHelperReplace(t *testing.T) {
 	}
 
 	tests := []struct {
+<<<<<<< HEAD
 		Name            string
+=======
+>>>>>>> axbaretto
 		Resp            *http.Response
 		HTTPClient      *http.Client
 		HttpErr         error
@@ -508,14 +696,20 @@ func TestHelperReplace(t *testing.T) {
 		Req          func(string, *http.Request) bool
 	}{
 		{
+<<<<<<< HEAD
 			Name:            "test1",
+=======
+>>>>>>> axbaretto
 			Namespace:       "bar",
 			NamespaceScoped: true,
 			HttpErr:         errors.New("failure"),
 			Err:             true,
 		},
 		{
+<<<<<<< HEAD
 			Name:            "test2",
+=======
+>>>>>>> axbaretto
 			Namespace:       "bar",
 			NamespaceScoped: true,
 			Object:          &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}},
@@ -527,7 +721,10 @@ func TestHelperReplace(t *testing.T) {
 			Err: true,
 		},
 		{
+<<<<<<< HEAD
 			Name:            "test3",
+=======
+>>>>>>> axbaretto
 			Namespace:       "bar",
 			NamespaceScoped: true,
 			Object:          &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}},
@@ -542,7 +739,10 @@ func TestHelperReplace(t *testing.T) {
 		},
 		// namespace scoped resource
 		{
+<<<<<<< HEAD
 			Name:            "test4",
+=======
+>>>>>>> axbaretto
 			Namespace:       "bar",
 			NamespaceScoped: true,
 			Object: &corev1.Pod{
@@ -565,7 +765,10 @@ func TestHelperReplace(t *testing.T) {
 		},
 		// cluster scoped resource
 		{
+<<<<<<< HEAD
 			Name: "test5",
+=======
+>>>>>>> axbaretto
 			Object: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
 			},
@@ -583,7 +786,10 @@ func TestHelperReplace(t *testing.T) {
 			Req: expectPut,
 		},
 		{
+<<<<<<< HEAD
 			Name:            "test6",
+=======
+>>>>>>> axbaretto
 			Namespace:       "bar",
 			NamespaceScoped: true,
 			Object:          &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo", ResourceVersion: "10"}},
@@ -593,6 +799,7 @@ func TestHelperReplace(t *testing.T) {
 			Req:             expectPut,
 		},
 	}
+<<<<<<< HEAD
 	for i, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			client := &fake.RESTClient{
@@ -628,5 +835,40 @@ func TestHelperReplace(t *testing.T) {
 				t.Errorf("%d: unexpected body: %s", i, string(body))
 			}
 		})
+=======
+	for i, test := range tests {
+		client := &fake.RESTClient{
+			GroupVersion:         corev1GV,
+			NegotiatedSerializer: serializer.DirectCodecFactory{CodecFactory: scheme.Codecs},
+			Client:               test.HTTPClient,
+			Resp:                 test.Resp,
+			Err:                  test.HttpErr,
+		}
+		modifier := &Helper{
+			RESTClient:      client,
+			NamespaceScoped: test.NamespaceScoped,
+		}
+		_, err := modifier.Replace(test.Namespace, "foo", test.Overwrite, test.Object)
+		if (err != nil) != test.Err {
+			t.Errorf("%d: unexpected error: %t %v", i, test.Err, err)
+		}
+		if err != nil {
+			continue
+		}
+		if test.Req != nil && !test.Req(test.ExpectPath, client.Req) {
+			t.Errorf("%d: unexpected request: %#v", i, client.Req)
+		}
+		body, err := ioutil.ReadAll(client.Req.Body)
+		if err != nil {
+			t.Fatalf("%d: unexpected error: %#v", i, err)
+		}
+		expect := []byte{}
+		if test.ExpectObject != nil {
+			expect = []byte(runtime.EncodeOrDie(corev1Codec, test.ExpectObject))
+		}
+		if !reflect.DeepEqual(expect, body) {
+			t.Errorf("%d: unexpected body: %s", i, string(body))
+		}
+>>>>>>> axbaretto
 	}
 }

@@ -10,7 +10,10 @@ go_library(
         "package.go",
         "walk.go",
     ],
+<<<<<<< HEAD
     importmap = "k8s.io/kubernetes/vendor/github.com/bazelbuild/bazel-gazelle/internal/packages",
+=======
+>>>>>>> axbaretto
     importpath = "github.com/bazelbuild/bazel-gazelle/internal/packages",
     visibility = ["//vendor/github.com/bazelbuild/bazel-gazelle:__subpackages__"],
     deps = [

@@ -50,9 +50,14 @@ func TestExecRunner(t *testing.T) {
 	os.Setenv("KUBECTL_PLUGINS_TEST", "ok")
 	defer os.Unsetenv("KUBECTL_PLUGINS_TEST")
 
+<<<<<<< HEAD
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			streams, _, outBuf, _ := genericclioptions.NewTestIOStreams()
+=======
+	for _, test := range tests {
+		streams, _, outBuf, _ := genericclioptions.NewTestIOStreams()
+>>>>>>> axbaretto
 
 			plugin := &Plugin{
 				Description: Description{
@@ -62,11 +67,19 @@ func TestExecRunner(t *testing.T) {
 				},
 			}
 
+<<<<<<< HEAD
 			ctx := RunningContext{
 				IOStreams:   streams,
 				WorkingDir:  ".",
 				EnvProvider: &EmptyEnvProvider{},
 			}
+=======
+		ctx := RunningContext{
+			IOStreams:   streams,
+			WorkingDir:  ".",
+			EnvProvider: &EmptyEnvProvider{},
+		}
+>>>>>>> axbaretto
 
 			runner := &ExecPluginRunner{}
 			err := runner.Run(plugin, ctx)
