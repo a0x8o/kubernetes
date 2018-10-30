@@ -81,35 +81,7 @@ constraints, affinity and anti-affinity specifications, data locality, inter-wor
 interference, deadlines, and so on. Workload-specific requirements will be exposed
 through the API as necessary.`,
 		Run: func(cmd *cobra.Command, args []string) {
-			verflag.PrintAndExitIfRequested()
-			utilflag.PrintFlags(cmd.Flags())
-
-			if len(args) != 0 {
-				fmt.Fprint(os.Stderr, "arguments are not supported\n")
-			}
-
-			if errs := opts.Validate(); len(errs) > 0 {
-				fmt.Fprintf(os.Stderr, "%v\n", utilerrors.NewAggregate(errs))
-				os.Exit(1)
-			}
-
-			if len(opts.WriteConfigTo) > 0 {
-				if err := options.WriteConfigFile(opts.WriteConfigTo, &opts.ComponentConfig); err != nil {
-					fmt.Fprintf(os.Stderr, "%v\n", err)
-					os.Exit(1)
-				}
-				glog.Infof("Wrote configuration to: %s\n", opts.WriteConfigTo)
-				return
-			}
-
-			c, err := opts.Config()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
-				os.Exit(1)
-			}
-
-			stopCh := make(chan struct{})
-			if err := Run(c.Complete(), stopCh); err != nil {
+			if err := run(cmd, args, opts); err != nil {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
 				os.Exit(1)
 			}
@@ -122,8 +94,39 @@ through the API as necessary.`,
 	return cmd
 }
 
-// Run runs the Scheduler.
-func Run(c schedulerserverconfig.CompletedConfig, stopCh <-chan struct{}) error {
+// run runs the scheduler.
+func run(cmd *cobra.Command, args []string, opts *options.Options) error {
+	verflag.PrintAndExitIfRequested()
+	utilflag.PrintFlags(cmd.Flags())
+
+	if len(args) != 0 {
+		fmt.Fprint(os.Stderr, "arguments are not supported\n")
+	}
+
+	if errs := opts.Validate(); len(errs) > 0 {
+		fmt.Fprintf(os.Stderr, "%v\n", utilerrors.NewAggregate(errs))
+		os.Exit(1)
+	}
+
+	if len(opts.WriteConfigTo) > 0 {
+		if err := options.WriteConfigFile(opts.WriteConfigTo, &opts.ComponentConfig); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+		glog.Infof("Wrote configuration to: %s\n", opts.WriteConfigTo)
+	}
+
+	c, err := opts.Config()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	stopCh := make(chan struct{})
+
+	// Get the completed config
+	cc := c.Complete()
+
 	// To help debugging, immediately log version
 	glog.Infof("Version: %+v", version.Get())
 
@@ -138,49 +141,69 @@ func Run(c schedulerserverconfig.CompletedConfig, stopCh <-chan struct{}) error 
 		return fmt.Errorf("unable to register configz: %s", err)
 	}
 
-	// Build a scheduler config from the provided algorithm source.
-	schedulerConfig, err := NewSchedulerConfig(c)
+	var storageClassInformer storageinformers.StorageClassInformer
+	if utilfeature.DefaultFeatureGate.Enabled(features.VolumeScheduling) {
+		storageClassInformer = c.InformerFactory.Storage().V1().StorageClasses()
+	}
+
+	// Create the scheduler.
+	sched, err := scheduler.New(c.Client,
+		c.InformerFactory.Core().V1().Nodes(),
+		c.PodInformer,
+		c.InformerFactory.Core().V1().PersistentVolumes(),
+		c.InformerFactory.Core().V1().PersistentVolumeClaims(),
+		c.InformerFactory.Core().V1().ReplicationControllers(),
+		c.InformerFactory.Apps().V1().ReplicaSets(),
+		c.InformerFactory.Apps().V1().StatefulSets(),
+		c.InformerFactory.Core().V1().Services(),
+		c.InformerFactory.Policy().V1beta1().PodDisruptionBudgets(),
+		storageClassInformer,
+		c.Recorder,
+		c.ComponentConfig.AlgorithmSource,
+		scheduler.WithName(c.ComponentConfig.SchedulerName),
+		scheduler.WithHardPodAffinitySymmetricWeight(c.ComponentConfig.HardPodAffinitySymmetricWeight),
+		scheduler.WithEquivalenceClassCacheEnabled(c.ComponentConfig.EnableContentionProfiling),
+		scheduler.WithPreemptionDisabled(c.ComponentConfig.DisablePreemption),
+		scheduler.WithPercentageOfNodesToScore(c.ComponentConfig.PercentageOfNodesToScore),
+		scheduler.WithBindTimeoutSeconds(*c.ComponentConfig.BindTimeoutSeconds))
 	if err != nil {
 		return err
 	}
 
-	// Create the scheduler.
-	sched := scheduler.NewFromConfig(schedulerConfig)
-
 	// Prepare the event broadcaster.
-	if c.Broadcaster != nil && c.EventClient != nil {
-		c.Broadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: c.EventClient.Events("")})
+	if cc.Broadcaster != nil && cc.EventClient != nil {
+		cc.Broadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: cc.EventClient.Events("")})
 	}
 
 	// Start up the healthz server.
-	if c.InsecureServing != nil {
-		separateMetrics := c.InsecureMetricsServing != nil
-		handler := buildHandlerChain(newHealthzHandler(&c.ComponentConfig, separateMetrics), nil, nil)
-		if err := c.InsecureServing.Serve(handler, 0, stopCh); err != nil {
+	if cc.InsecureServing != nil {
+		separateMetrics := cc.InsecureMetricsServing != nil
+		handler := buildHandlerChain(newHealthzHandler(&cc.ComponentConfig, separateMetrics), nil, nil)
+		if err := cc.InsecureServing.Serve(handler, 0, stopCh); err != nil {
 			return fmt.Errorf("failed to start healthz server: %v", err)
 		}
 	}
-	if c.InsecureMetricsServing != nil {
-		handler := buildHandlerChain(newMetricsHandler(&c.ComponentConfig), nil, nil)
-		if err := c.InsecureMetricsServing.Serve(handler, 0, stopCh); err != nil {
+	if cc.InsecureMetricsServing != nil {
+		handler := buildHandlerChain(newMetricsHandler(&cc.ComponentConfig), nil, nil)
+		if err := cc.InsecureMetricsServing.Serve(handler, 0, stopCh); err != nil {
 			return fmt.Errorf("failed to start metrics server: %v", err)
 		}
 	}
-	if c.SecureServing != nil {
-		handler := buildHandlerChain(newHealthzHandler(&c.ComponentConfig, false), c.Authentication.Authenticator, c.Authorization.Authorizer)
-		if err := c.SecureServing.Serve(handler, 0, stopCh); err != nil {
+	if cc.SecureServing != nil {
+		handler := buildHandlerChain(newHealthzHandler(&cc.ComponentConfig, false), cc.Authentication.Authenticator, cc.Authorization.Authorizer)
+		if err := cc.SecureServing.Serve(handler, 0, stopCh); err != nil {
 			// fail early for secure handlers, removing the old error loop from above
 			return fmt.Errorf("failed to start healthz server: %v", err)
 		}
 	}
 
 	// Start all informers.
-	go c.PodInformer.Informer().Run(stopCh)
-	c.InformerFactory.Start(stopCh)
+	go cc.PodInformer.Informer().Run(stopCh)
+	cc.InformerFactory.Start(stopCh)
 
 	// Wait for all caches to sync before scheduling.
-	c.InformerFactory.WaitForCacheSync(stopCh)
-	controller.WaitForCacheSync("scheduler", stopCh, c.PodInformer.Informer().HasSynced)
+	cc.InformerFactory.WaitForCacheSync(stopCh)
+	controller.WaitForCacheSync("scheduler", stopCh, cc.PodInformer.Informer().HasSynced)
 
 	// Prepare a reusable run function.
 	run := func(ctx context.Context) {
@@ -200,14 +223,14 @@ func Run(c schedulerserverconfig.CompletedConfig, stopCh <-chan struct{}) error 
 	}()
 
 	// If leader election is enabled, run via LeaderElector until done and exit.
-	if c.LeaderElection != nil {
-		c.LeaderElection.Callbacks = leaderelection.LeaderCallbacks{
+	if cc.LeaderElection != nil {
+		cc.LeaderElection.Callbacks = leaderelection.LeaderCallbacks{
 			OnStartedLeading: run,
 			OnStoppedLeading: func() {
 				utilruntime.HandleError(fmt.Errorf("lost master"))
 			},
 		}
-		leaderElector, err := leaderelection.NewLeaderElector(*c.LeaderElection)
+		leaderElector, err := leaderelection.NewLeaderElector(*cc.LeaderElection)
 		if err != nil {
 			return fmt.Errorf("couldn't create leader elector: %v", err)
 		}
@@ -229,7 +252,7 @@ func buildHandlerChain(handler http.Handler, authn authenticator.Request, authz 
 
 	handler = genericapifilters.WithRequestInfo(handler, requestInfoResolver)
 	handler = genericapifilters.WithAuthorization(handler, authz, legacyscheme.Codecs)
-	handler = genericapifilters.WithAuthentication(handler, authn, failedHandler)
+	handler = genericapifilters.WithAuthentication(handler, authn, failedHandler, nil)
 	handler = genericapifilters.WithRequestInfo(handler, requestInfoResolver)
 	handler = genericfilters.WithPanicRecovery(handler)
 
@@ -281,7 +304,7 @@ func newHealthzHandler(config *kubeschedulerconfig.KubeSchedulerConfiguration, s
 }
 
 // NewSchedulerConfig creates the scheduler configuration. This is exposed for use by tests.
-func NewSchedulerConfig(s schedulerserverconfig.CompletedConfig) (*scheduler.Config, error) {
+func NewSchedulerConfig(s schedulerserverconfig.CompletedConfig) (*factory.Config, error) {
 	var storageClassInformer storageinformers.StorageClassInformer
 	if utilfeature.DefaultFeatureGate.Enabled(features.VolumeScheduling) {
 		storageClassInformer = s.InformerFactory.Storage().V1().StorageClasses()
@@ -309,7 +332,7 @@ func NewSchedulerConfig(s schedulerserverconfig.CompletedConfig) (*scheduler.Con
 	})
 
 	source := s.ComponentConfig.AlgorithmSource
-	var config *scheduler.Config
+	var config *factory.Config
 	switch {
 	case source.Provider != nil:
 		// Create the config from a named algorithm provider.

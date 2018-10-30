@@ -30,11 +30,11 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericclioptions/printers"
 	"k8s.io/cli-runtime/pkg/genericclioptions/resource"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/polymorphichelpers"
 	"k8s.io/kubernetes/pkg/kubectl/scheme"
 	"k8s.io/kubernetes/pkg/kubectl/util/i18n"
+	"k8s.io/kubernetes/pkg/kubectl/util/templates"
 )
 
 var (
@@ -93,7 +93,7 @@ func NewCmdServiceAccount(f cmdutil.Factory, streams genericclioptions.IOStreams
 	o := NewSetServiceAccountOptions(streams)
 
 	cmd := &cobra.Command{
-		Use: "serviceaccount (-f FILENAME | TYPE NAME) SERVICE_ACCOUNT",
+		Use:                   "serviceaccount (-f FILENAME | TYPE NAME) SERVICE_ACCOUNT",
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"sa"},
 		Short:                 i18n.T("Update ServiceAccount of a resource"),

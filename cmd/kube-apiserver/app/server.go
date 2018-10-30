@@ -42,7 +42,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/admission"
-	webhookinit "k8s.io/apiserver/pkg/admission/plugin/webhook/initializer"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
@@ -54,21 +53,16 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	apiserverflag "k8s.io/apiserver/pkg/util/flag"
 	"k8s.io/apiserver/pkg/util/webhook"
-	cacheddiscovery "k8s.io/client-go/discovery/cached"
 	clientgoinformers "k8s.io/client-go/informers"
 	clientgoclientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/restmapper"
 	certutil "k8s.io/client-go/util/cert"
+	cloudprovider "k8s.io/cloud-provider"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
 	aggregatorscheme "k8s.io/kube-aggregator/pkg/apiserver/scheme"
 	openapi "k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app/options"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/capabilities"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
-	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
-	"k8s.io/kubernetes/pkg/cloudprovider"
 	serviceaccountcontroller "k8s.io/kubernetes/pkg/controller/serviceaccount"
 	"k8s.io/kubernetes/pkg/features"
 	generatedopenapi "k8s.io/kubernetes/pkg/generated/openapi"
@@ -81,7 +75,6 @@ import (
 	"k8s.io/kubernetes/pkg/master"
 	"k8s.io/kubernetes/pkg/master/reconcilers"
 	"k8s.io/kubernetes/pkg/master/tunneler"
-	quotainstall "k8s.io/kubernetes/pkg/quota/install"
 	"k8s.io/kubernetes/pkg/registry/cachesize"
 	rbacrest "k8s.io/kubernetes/pkg/registry/rbac/rest"
 	"k8s.io/kubernetes/pkg/serviceaccount"
@@ -286,9 +279,8 @@ func CreateKubeAPIServerConfig(
 ) {
 	var genericConfig *genericapiserver.Config
 	var storageFactory *serverstorage.DefaultStorageFactory
-	var sharedInformers informers.SharedInformerFactory
 	var versionedInformers clientgoinformers.SharedInformerFactory
-	genericConfig, sharedInformers, versionedInformers, insecureServingInfo, serviceResolver, pluginInitializers, admissionPostStartHook, storageFactory, lastErr = buildGenericConfig(s.ServerRunOptions, proxyTransport)
+	genericConfig, versionedInformers, insecureServingInfo, serviceResolver, pluginInitializers, admissionPostStartHook, storageFactory, lastErr = buildGenericConfig(s.ServerRunOptions, proxyTransport)
 	if lastErr != nil {
 		return
 	}
@@ -333,14 +325,14 @@ func CreateKubeAPIServerConfig(
 
 	if s.ServiceAccountSigningKeyFile != "" ||
 		s.Authentication.ServiceAccounts.Issuer != "" ||
-		len(s.Authentication.ServiceAccounts.APIAudiences) > 0 {
+		len(s.Authentication.APIAudiences) > 0 {
 		if !utilfeature.DefaultFeatureGate.Enabled(features.TokenRequest) {
 			lastErr = fmt.Errorf("the TokenRequest feature is not enabled but --service-account-signing-key-file, --service-account-issuer and/or --service-account-api-audiences flags were passed")
 			return
 		}
 		if s.ServiceAccountSigningKeyFile == "" ||
 			s.Authentication.ServiceAccounts.Issuer == "" ||
-			len(s.Authentication.ServiceAccounts.APIAudiences) == 0 ||
+			len(s.Authentication.APIAudiences) == 0 ||
 			len(s.Authentication.ServiceAccounts.KeyFiles) == 0 {
 			lastErr = fmt.Errorf("service-account-signing-key-file, service-account-issuer, service-account-api-audiences and service-account-key-file should be specified together")
 			return
@@ -365,7 +357,7 @@ func CreateKubeAPIServerConfig(
 			lastErr = fmt.Errorf("failed to build token generator: %v", err)
 			return
 		}
-		apiAudiences = s.Authentication.ServiceAccounts.APIAudiences
+		apiAudiences = s.Authentication.APIAudiences
 		maxExpiration = s.Authentication.ServiceAccounts.MaxExpiration
 	}
 
@@ -401,10 +393,9 @@ func CreateKubeAPIServerConfig(
 			MasterCount:            s.MasterCount,
 
 			ServiceAccountIssuer:        issuer,
-			ServiceAccountAPIAudiences:  apiAudiences,
+			APIAudiences:                apiAudiences,
 			ServiceAccountMaxExpiration: maxExpiration,
 
-			InternalInformers:  sharedInformers,
 			VersionedInformers: versionedInformers,
 		},
 	}
@@ -423,7 +414,6 @@ func buildGenericConfig(
 	proxyTransport *http.Transport,
 ) (
 	genericConfig *genericapiserver.Config,
-	sharedInformers informers.SharedInformerFactory,
 	versionedInformers clientgoinformers.SharedInformerFactory,
 	insecureServingInfo *genericapiserver.DeprecatedInsecureServingInfo,
 	serviceResolver aggregatorapiserver.ServiceResolver,
@@ -491,14 +481,7 @@ func buildGenericConfig(
 	// set it in kube-apiserver.
 	genericConfig.LoopbackClientConfig.ContentConfig.ContentType = "application/vnd.kubernetes.protobuf"
 
-	client, err := internalclientset.NewForConfig(genericConfig.LoopbackClientConfig)
-	if err != nil {
-		lastErr = fmt.Errorf("failed to create clientset: %v", err)
-		return
-	}
-
 	kubeClientConfig := genericConfig.LoopbackClientConfig
-	sharedInformers = informers.NewSharedInformerFactory(client, 10*time.Minute)
 	clientgoExternalClient, err := clientgoclientset.NewForConfig(kubeClientConfig)
 	if err != nil {
 		lastErr = fmt.Errorf("failed to create real external clientset: %v", err)
@@ -506,25 +489,7 @@ func buildGenericConfig(
 	}
 	versionedInformers = clientgoinformers.NewSharedInformerFactory(clientgoExternalClient, 10*time.Minute)
 
-	if s.EnableAggregatorRouting {
-		serviceResolver = aggregatorapiserver.NewEndpointServiceResolver(
-			versionedInformers.Core().V1().Services().Lister(),
-			versionedInformers.Core().V1().Endpoints().Lister(),
-		)
-	} else {
-		serviceResolver = aggregatorapiserver.NewClusterIPServiceResolver(
-			versionedInformers.Core().V1().Services().Lister(),
-		)
-	}
-	// resolve kubernetes.default.svc locally
-	localHost, err := url.Parse(genericConfig.LoopbackClientConfig.Host)
-	if err != nil {
-		lastErr = err
-		return
-	}
-	serviceResolver = aggregatorapiserver.NewLoopbackServiceResolver(serviceResolver, localHost)
-
-	genericConfig.Authentication.Authenticator, genericConfig.OpenAPIConfig.SecurityDefinitions, err = BuildAuthenticator(s, clientgoExternalClient, sharedInformers)
+	genericConfig.Authentication.Authenticator, genericConfig.OpenAPIConfig.SecurityDefinitions, err = BuildAuthenticator(s, clientgoExternalClient, versionedInformers)
 	if err != nil {
 		lastErr = fmt.Errorf("invalid authentication config: %v", err)
 		return
@@ -539,36 +504,14 @@ func buildGenericConfig(
 		genericConfig.DisabledPostStartHooks.Insert(rbacrest.PostStartHookName)
 	}
 
-	webhookAuthResolverWrapper := func(delegate webhook.AuthenticationInfoResolver) webhook.AuthenticationInfoResolver {
-		return &webhook.AuthenticationInfoResolverDelegator{
-			ClientConfigForFunc: func(server string) (*rest.Config, error) {
-				if server == "kubernetes.default.svc" {
-					return genericConfig.LoopbackClientConfig, nil
-				}
-				return delegate.ClientConfigFor(server)
-			},
-			ClientConfigForServiceFunc: func(serviceName, serviceNamespace string) (*rest.Config, error) {
-				if serviceName == "kubernetes" && serviceNamespace == "default" {
-					return genericConfig.LoopbackClientConfig, nil
-				}
-				ret, err := delegate.ClientConfigForService(serviceName, serviceNamespace)
-				if err != nil {
-					return nil, err
-				}
-				if proxyTransport != nil && proxyTransport.DialContext != nil {
-					ret.Dial = proxyTransport.DialContext
-				}
-				return ret, err
-			},
-		}
+	admissionConfig := &kubeapiserveradmission.AdmissionConfig{
+		ExternalInformers:    versionedInformers,
+		LoopbackClientConfig: genericConfig.LoopbackClientConfig,
+		CloudConfigFile:      s.CloudProvider.CloudConfigFile,
 	}
-	pluginInitializers, admissionPostStartHook, err = BuildAdmissionPluginInitializers(
-		s,
-		client,
-		sharedInformers,
-		serviceResolver,
-		webhookAuthResolverWrapper,
-	)
+	serviceResolver = buildServiceResolver(s.EnableAggregatorRouting, genericConfig.LoopbackClientConfig.Host, versionedInformers)
+
+	pluginInitializers, admissionPostStartHook, err = admissionConfig.New(proxyTransport, serviceResolver)
 	if err != nil {
 		lastErr = fmt.Errorf("failed to create admission plugin initializer: %v", err)
 		return
@@ -587,51 +530,14 @@ func buildGenericConfig(
 	return
 }
 
-// BuildAdmissionPluginInitializers constructs the admission plugin initializer
-func BuildAdmissionPluginInitializers(
-	s *options.ServerRunOptions,
-	client internalclientset.Interface,
-	sharedInformers informers.SharedInformerFactory,
-	serviceResolver aggregatorapiserver.ServiceResolver,
-	webhookAuthWrapper webhook.AuthenticationInfoResolverWrapper,
-) ([]admission.PluginInitializer, genericapiserver.PostStartHookFunc, error) {
-	var cloudConfig []byte
-
-	if s.CloudProvider.CloudConfigFile != "" {
-		var err error
-		cloudConfig, err = ioutil.ReadFile(s.CloudProvider.CloudConfigFile)
-		if err != nil {
-			glog.Fatalf("Error reading from cloud configuration file %s: %#v", s.CloudProvider.CloudConfigFile, err)
-		}
-	}
-
-	// We have a functional client so we can use that to build our discovery backed REST mapper
-	// Use a discovery client capable of being refreshed.
-	discoveryClient := cacheddiscovery.NewMemCacheClient(client.Discovery())
-	discoveryRESTMapper := restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient)
-
-	admissionPostStartHook := func(context genericapiserver.PostStartHookContext) error {
-		discoveryRESTMapper.Reset()
-		go utilwait.Until(discoveryRESTMapper.Reset, 30*time.Second, context.StopCh)
-		return nil
-	}
-
-	quotaConfiguration := quotainstall.NewQuotaConfigurationForAdmission()
-
-	kubePluginInitializer := kubeapiserveradmission.NewPluginInitializer(client, sharedInformers, cloudConfig, discoveryRESTMapper, quotaConfiguration)
-	webhookPluginInitializer := webhookinit.NewPluginInitializer(webhookAuthWrapper, serviceResolver)
-
-	return []admission.PluginInitializer{webhookPluginInitializer, kubePluginInitializer}, admissionPostStartHook, nil
-}
-
 // BuildAuthenticator constructs the authenticator
-func BuildAuthenticator(s *options.ServerRunOptions, extclient clientgoclientset.Interface, sharedInformers informers.SharedInformerFactory) (authenticator.Request, *spec.SecurityDefinitions, error) {
+func BuildAuthenticator(s *options.ServerRunOptions, extclient clientgoclientset.Interface, versionedInformer clientgoinformers.SharedInformerFactory) (authenticator.Request, *spec.SecurityDefinitions, error) {
 	authenticatorConfig := s.Authentication.ToAuthenticationConfig()
 	if s.Authentication.ServiceAccounts.Lookup {
 		authenticatorConfig.ServiceAccountTokenGetter = serviceaccountcontroller.NewGetterFromClient(extclient)
 	}
 	authenticatorConfig.BootstrapTokenAuthenticator = bootstrap.NewTokenAuthenticator(
-		sharedInformers.Core().InternalVersion().Secrets().Lister().Secrets(v1.NamespaceSystem),
+		versionedInformer.Core().V1().Secrets().Lister().Secrets(v1.NamespaceSystem),
 	)
 
 	return authenticatorConfig.New()
@@ -699,27 +605,6 @@ func Complete(s *options.ServerRunOptions) (completedServerRunOptions, error) {
 		}
 	}
 
-	if s.Etcd.StorageConfig.DeserializationCacheSize == 0 {
-		// When size of cache is not explicitly set, estimate its size based on
-		// target memory usage.
-		glog.V(2).Infof("Initializing deserialization cache size based on %dMB limit", s.GenericServerRunOptions.TargetRAMMB)
-
-		// This is the heuristics that from memory capacity is trying to infer
-		// the maximum number of nodes in the cluster and set cache sizes based
-		// on that value.
-		// From our documentation, we officially recommend 120GB machines for
-		// 2000 nodes, and we scale from that point. Thus we assume ~60MB of
-		// capacity per node.
-		// TODO: We may consider deciding that some percentage of memory will
-		// be used for the deserialization cache and divide it by the max object
-		// size to compute its size. We may even go further and measure
-		// collective sizes of the objects in the cache.
-		clusterSize := s.GenericServerRunOptions.TargetRAMMB / 60
-		s.Etcd.StorageConfig.DeserializationCacheSize = 25 * clusterSize
-		if s.Etcd.StorageConfig.DeserializationCacheSize < 1000 {
-			s.Etcd.StorageConfig.DeserializationCacheSize = 1000
-		}
-	}
 	if s.Etcd.EnableWatchCache {
 		glog.V(2).Infof("Initializing cache sizes based on %dMB limit", s.GenericServerRunOptions.TargetRAMMB)
 		sizes := cachesize.NewHeuristicWatchCacheSizes(s.GenericServerRunOptions.TargetRAMMB)
@@ -749,6 +634,25 @@ func Complete(s *options.ServerRunOptions) (completedServerRunOptions, error) {
 	}
 	options.ServerRunOptions = s
 	return options, nil
+}
+
+func buildServiceResolver(enabledAggregatorRouting bool, hostname string, informer clientgoinformers.SharedInformerFactory) webhook.ServiceResolver {
+	var serviceResolver webhook.ServiceResolver
+	if enabledAggregatorRouting {
+		serviceResolver = aggregatorapiserver.NewEndpointServiceResolver(
+			informer.Core().V1().Services().Lister(),
+			informer.Core().V1().Endpoints().Lister(),
+		)
+	} else {
+		serviceResolver = aggregatorapiserver.NewClusterIPServiceResolver(
+			informer.Core().V1().Services().Lister(),
+		)
+	}
+	// resolve kubernetes.default.svc locally
+	if localHost, err := url.Parse(hostname); err == nil {
+		serviceResolver = aggregatorapiserver.NewLoopbackServiceResolver(serviceResolver, localHost)
+	}
+	return serviceResolver
 }
 
 func readCAorNil(file string) ([]byte, error) {

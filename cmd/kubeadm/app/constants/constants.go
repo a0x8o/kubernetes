@@ -26,9 +26,9 @@ import (
 	"time"
 
 	"k8s.io/api/core/v1"
-	bootstrapapi "k8s.io/client-go/tools/bootstrap/token/api"
+	"k8s.io/apimachinery/pkg/util/version"
+	bootstrapapi "k8s.io/cluster-bootstrap/token/api"
 	"k8s.io/kubernetes/pkg/registry/core/service/ipallocator"
-	"k8s.io/kubernetes/pkg/util/version"
 )
 
 // KubernetesDir is the directory kubernetes owns for storing various configuration files
@@ -81,12 +81,18 @@ const (
 	// EtcdServerKeyName defines etcd's server key name
 	EtcdServerKeyName = "etcd/server.key"
 
+	// EtcdListenClientPort defines the port etcd listen on for client traffic
+	EtcdListenClientPort = 2379
+
 	// EtcdPeerCertAndKeyBaseName defines etcd's peer certificate and key base name
 	EtcdPeerCertAndKeyBaseName = "etcd/peer"
 	// EtcdPeerCertName defines etcd's peer certificate name
 	EtcdPeerCertName = "etcd/peer.crt"
 	// EtcdPeerKeyName defines etcd's peer key name
 	EtcdPeerKeyName = "etcd/peer.key"
+
+	// EtcdListenPeerPort defines the port etcd listen on for peer traffic
+	EtcdListenPeerPort = 2380
 
 	// EtcdHealthcheckClientCertAndKeyBaseName defines etcd's healthcheck client certificate and key base name
 	EtcdHealthcheckClientCertAndKeyBaseName = "etcd/healthcheck-client"
@@ -188,13 +194,8 @@ const (
 	// init/join time for use later. kubeadm annotates the node object with this information
 	AnnotationKubeadmCRISocket = "kubeadm.alpha.kubernetes.io/cri-socket"
 
-	// InitConfigurationConfigMap specifies in what ConfigMap in the kube-system namespace the `kubeadm init` configuration should be stored
-	// TODO: Rename this to KubeadmConfigConfigMap
-	InitConfigurationConfigMap = "kubeadm-config"
-
-	// InitConfigurationConfigMapKey specifies in what ConfigMap key the master configuration should be stored
-	// TODO: This was used in v1.11 with vi1alpha2 config and older. Remove in v1.13
-	InitConfigurationConfigMapKey = "MasterConfiguration"
+	// KubeadmConfigConfigMap specifies in what ConfigMap in the kube-system namespace the `kubeadm init` configuration should be stored
+	KubeadmConfigConfigMap = "kubeadm-config"
 
 	// ClusterConfigurationConfigMapKey specifies in what ConfigMap key the cluster configuration should be stored
 	ClusterConfigurationConfigMapKey = "ClusterConfiguration"
@@ -245,6 +246,9 @@ const (
 
 	// DefaultEtcdVersion indicates the default etcd version that kubeadm uses
 	DefaultEtcdVersion = "3.2.24"
+
+	// PauseVersion indicates the default pause image version for kubeadm
+	PauseVersion = "3.1"
 
 	// Etcd defines variable used internally when referring to etcd component
 	Etcd = "etcd"
@@ -302,7 +306,7 @@ const (
 	KubeDNSVersion = "1.14.13"
 
 	// CoreDNSVersion is the version of CoreDNS to be deployed if it is used
-	CoreDNSVersion = "1.2.2"
+	CoreDNSVersion = "1.2.4"
 
 	// ClusterConfigurationKind is the string kind value for the ClusterConfiguration struct
 	ClusterConfigurationKind = "ClusterConfiguration"
@@ -310,16 +314,8 @@ const (
 	// InitConfigurationKind is the string kind value for the InitConfiguration struct
 	InitConfigurationKind = "InitConfiguration"
 
-	// MasterConfigurationKind is the string kind value for the v1alpha2-named MasterConfiguration struct
-	// In v1alpha3 and higher, this struct is now named InitConfiguration
-	MasterConfigurationKind = "MasterConfiguration"
-
 	// JoinConfigurationKind is the string kind value for the JoinConfiguration struct
 	JoinConfigurationKind = "JoinConfiguration"
-
-	// NodeConfigurationKind is the string kind value for the v1alpha2-named NodeConfiguration struct
-	// In v1alpha3 and higher, this struct is now named JoinConfiguration
-	NodeConfigurationKind = "NodeConfiguration"
 
 	// YAMLDocumentSeparator is the separator for YAML documents
 	// TODO: Find a better place for this constant
@@ -327,6 +323,9 @@ const (
 
 	// DefaultAPIServerBindAddress is the default bind address for the API Server
 	DefaultAPIServerBindAddress = "0.0.0.0"
+
+	// MasterNumCPU is the number of CPUs required on master
+	MasterNumCPU = 2
 )
 
 var (

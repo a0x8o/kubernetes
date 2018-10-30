@@ -17,22 +17,22 @@ limitations under the License.
 package upgrade
 
 import (
-	"fmt"
 	"io"
 	"io/ioutil"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
-	kubeadmapiv1alpha3 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha3"
+	"k8s.io/apimachinery/pkg/util/version"
+	kubeadmapiv1beta1 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta1"
 	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/options"
 	cmdutil "k8s.io/kubernetes/cmd/kubeadm/app/cmd/util"
 	"k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/cmd/kubeadm/app/phases/controlplane"
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
 	configutil "k8s.io/kubernetes/cmd/kubeadm/app/util/config"
-	"k8s.io/kubernetes/pkg/util/version"
 )
 
 type diffFlags struct {
@@ -79,7 +79,7 @@ func runDiff(flags *diffFlags, args []string) error {
 
 	// If the version is specified in config file, pick up that value.
 	glog.V(1).Infof("fetching configuration from file %s", flags.cfgPath)
-	cfg, err := configutil.ConfigFileAndDefaultsToInternalConfig(flags.cfgPath, &kubeadmapiv1alpha3.InitConfiguration{})
+	cfg, err := configutil.ConfigFileAndDefaultsToInternalConfig(flags.cfgPath, &kubeadmapiv1beta1.InitConfiguration{})
 	if err != nil {
 		return err
 	}
@@ -125,7 +125,7 @@ func runDiff(flags *diffFlags, args []string) error {
 			return err
 		}
 		if path == "" {
-			return fmt.Errorf("empty manifest path")
+			return errors.New("empty manifest path")
 		}
 		existingManifest, err := ioutil.ReadFile(path)
 		if err != nil {

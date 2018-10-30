@@ -26,12 +26,12 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/version"
 	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/cmd/kubeadm/app/features"
 	"k8s.io/kubernetes/cmd/kubeadm/app/phases/certs"
 	authzmodes "k8s.io/kubernetes/pkg/kubeapiserver/authorizer/modes"
-	"k8s.io/kubernetes/pkg/util/version"
 
 	testutil "k8s.io/kubernetes/cmd/kubeadm/test"
 	utilpointer "k8s.io/utils/pointer"
@@ -181,7 +181,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 				"--requestheader-allowed-names=front-proxy-client",
 				"--authorization-mode=Node,RBAC",
 				"--advertise-address=1.2.3.4",
-				"--etcd-servers=https://127.0.0.1:2379",
+				fmt.Sprintf("--etcd-servers=https://127.0.0.1:%d", kubeadmconstants.EtcdListenClientPort),
 				"--etcd-cafile=" + testCertsDir + "/etcd/ca.crt",
 				"--etcd-certfile=" + testCertsDir + "/apiserver-etcd-client.crt",
 				"--etcd-keyfile=" + testCertsDir + "/apiserver-etcd-client.key",
@@ -225,7 +225,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 				"--requestheader-allowed-names=front-proxy-client",
 				"--authorization-mode=Node,RBAC",
 				"--advertise-address=4.3.2.1",
-				"--etcd-servers=https://127.0.0.1:2379",
+				fmt.Sprintf("--etcd-servers=https://127.0.0.1:%d", kubeadmconstants.EtcdListenClientPort),
 				"--etcd-cafile=" + testCertsDir + "/etcd/ca.crt",
 				"--etcd-certfile=" + testCertsDir + "/apiserver-etcd-client.crt",
 				"--etcd-keyfile=" + testCertsDir + "/apiserver-etcd-client.key",
@@ -264,7 +264,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 				"--requestheader-allowed-names=front-proxy-client",
 				"--authorization-mode=Node,RBAC",
 				"--advertise-address=2001:db8::1",
-				"--etcd-servers=https://127.0.0.1:2379",
+				fmt.Sprintf("--etcd-servers=https://127.0.0.1:%d", kubeadmconstants.EtcdListenClientPort),
 				"--etcd-cafile=" + testCertsDir + "/etcd/ca.crt",
 				"--etcd-certfile=" + testCertsDir + "/apiserver-etcd-client.crt",
 				"--etcd-keyfile=" + testCertsDir + "/apiserver-etcd-client.key",
@@ -397,7 +397,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 				"--requestheader-allowed-names=front-proxy-client",
 				"--authorization-mode=Node,RBAC",
 				"--advertise-address=2001:db8::1",
-				"--etcd-servers=https://127.0.0.1:2379",
+				fmt.Sprintf("--etcd-servers=https://127.0.0.1:%d", kubeadmconstants.EtcdListenClientPort),
 				"--etcd-cafile=" + testCertsDir + "/etcd/ca.crt",
 				"--etcd-certfile=" + testCertsDir + "/apiserver-etcd-client.crt",
 				"--etcd-keyfile=" + testCertsDir + "/apiserver-etcd-client.key",
@@ -441,7 +441,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 				"--requestheader-allowed-names=front-proxy-client",
 				"--authorization-mode=Node,RBAC",
 				"--advertise-address=1.2.3.4",
-				"--etcd-servers=https://127.0.0.1:2379",
+				fmt.Sprintf("--etcd-servers=https://127.0.0.1:%d", kubeadmconstants.EtcdListenClientPort),
 				"--etcd-cafile=" + testCertsDir + "/etcd/ca.crt",
 				"--etcd-certfile=" + testCertsDir + "/apiserver-etcd-client.crt",
 				"--etcd-keyfile=" + testCertsDir + "/apiserver-etcd-client.key",
@@ -488,7 +488,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 				"--requestheader-allowed-names=front-proxy-client",
 				"--authorization-mode=Node,RBAC",
 				"--advertise-address=9.9.9.9",
-				"--etcd-servers=https://127.0.0.1:2379",
+				fmt.Sprintf("--etcd-servers=https://127.0.0.1:%d", kubeadmconstants.EtcdListenClientPort),
 				"--etcd-cafile=" + testCertsDir + "/etcd/ca.crt",
 				"--etcd-certfile=" + testCertsDir + "/apiserver-etcd-client.crt",
 				"--etcd-keyfile=" + testCertsDir + "/apiserver-etcd-client.key",
@@ -534,7 +534,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 				"--requestheader-allowed-names=front-proxy-client",
 				"--authorization-mode=Node,RBAC,ABAC",
 				"--advertise-address=1.2.3.4",
-				"--etcd-servers=https://127.0.0.1:2379",
+				fmt.Sprintf("--etcd-servers=https://127.0.0.1:%d", kubeadmconstants.EtcdListenClientPort),
 				"--etcd-cafile=" + testCertsDir + "/etcd/ca.crt",
 				"--etcd-certfile=" + testCertsDir + "/apiserver-etcd-client.crt",
 				"--etcd-keyfile=" + testCertsDir + "/apiserver-etcd-client.key",
@@ -576,7 +576,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 				"--requestheader-allowed-names=front-proxy-client",
 				"--authorization-mode=Node,RBAC",
 				"--advertise-address=1.2.3.4",
-				"--etcd-servers=https://127.0.0.1:2379",
+				fmt.Sprintf("--etcd-servers=https://127.0.0.1:%d", kubeadmconstants.EtcdListenClientPort),
 				"--etcd-cafile=" + testCertsDir + "/etcd/ca.crt",
 				"--etcd-certfile=" + testCertsDir + "/apiserver-etcd-client.crt",
 				"--etcd-keyfile=" + testCertsDir + "/apiserver-etcd-client.key",
@@ -618,7 +618,7 @@ func TestGetAPIServerCommand(t *testing.T) {
 				"--requestheader-allowed-names=front-proxy-client",
 				"--authorization-mode=Node,RBAC,Webhook",
 				"--advertise-address=1.2.3.4",
-				"--etcd-servers=https://127.0.0.1:2379",
+				fmt.Sprintf("--etcd-servers=https://127.0.0.1:%d", kubeadmconstants.EtcdListenClientPort),
 				"--etcd-cafile=" + testCertsDir + "/etcd/ca.crt",
 				"--etcd-certfile=" + testCertsDir + "/apiserver-etcd-client.crt",
 				"--etcd-keyfile=" + testCertsDir + "/apiserver-etcd-client.key",

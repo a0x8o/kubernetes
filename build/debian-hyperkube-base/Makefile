@@ -19,12 +19,12 @@
 
 REGISTRY?=staging-k8s.gcr.io
 IMAGE?=$(REGISTRY)/debian-hyperkube-base
-TAG=0.10.2
+TAG=0.12.0
 ARCH?=amd64
 ALL_ARCH = amd64 arm arm64 ppc64le s390x
 CACHEBUST?=1
 
-BASEIMAGE=k8s.gcr.io/debian-base-$(ARCH):0.3.2
+BASEIMAGE=k8s.gcr.io/debian-base-$(ARCH):0.4.0
 CNI_VERSION=v0.6.0
 
 TEMP_DIR:=$(shell mktemp -d)
@@ -52,7 +52,7 @@ all-push: all-push-images push-manifest
 push-manifest:
 	docker manifest create --amend $(IMAGE):$(TAG) $(shell echo $(ALL_ARCH) | sed -e "s~[^ ]*~$(IMAGE)\-&:$(TAG)~g")
 	@for arch in $(ALL_ARCH); do docker manifest annotate --arch $${arch} ${IMAGE}:${TAG} ${IMAGE}-$${arch}:${TAG}; done
-	docker manifest push ${IMAGE}:${TAG}
+	docker manifest push --purge ${IMAGE}:${TAG}
 
 cni-tars/$(CNI_TARBALL):
 	mkdir -p cni-tars/

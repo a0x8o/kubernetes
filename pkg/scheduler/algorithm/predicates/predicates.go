@@ -42,6 +42,7 @@ import (
 	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm"
 	priorityutil "k8s.io/kubernetes/pkg/scheduler/algorithm/priorities/util"
+	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 	schedulercache "k8s.io/kubernetes/pkg/scheduler/cache"
 	schedutil "k8s.io/kubernetes/pkg/scheduler/util"
 	"k8s.io/kubernetes/pkg/scheduler/volumebinder"
@@ -1470,7 +1471,14 @@ func CheckNodeUnschedulablePredicate(pod *v1.Pod, meta algorithm.PredicateMetada
 		return false, []algorithm.PredicateFailureReason{ErrNodeUnknownCondition}, nil
 	}
 
-	if nodeInfo.Node().Spec.Unschedulable {
+	// If pod tolerate unschedulable taint, it's also tolerate `node.Spec.Unschedulable`.
+	podToleratesUnschedulable := v1helper.TolerationsTolerateTaint(pod.Spec.Tolerations, &v1.Taint{
+		Key:    schedulerapi.TaintNodeUnschedulable,
+		Effect: v1.TaintEffectNoSchedule,
+	})
+
+	// TODO (k82cn): deprecates `node.Spec.Unschedulable` in 1.13.
+	if nodeInfo.Node().Spec.Unschedulable && !podToleratesUnschedulable {
 		return false, []algorithm.PredicateFailureReason{ErrNodeUnschedulable}, nil
 	}
 

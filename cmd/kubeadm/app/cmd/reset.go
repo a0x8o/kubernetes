@@ -30,13 +30,17 @@ import (
 	"github.com/spf13/cobra"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	kubeadmapiv1alpha3 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha3"
+	clientset "k8s.io/client-go/kubernetes"
+	kubeadmapiv1beta1 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta1"
 	"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/validation"
 	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/options"
+	cmdutil "k8s.io/kubernetes/cmd/kubeadm/app/cmd/util"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/cmd/kubeadm/app/preflight"
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
+	configutil "k8s.io/kubernetes/cmd/kubeadm/app/util/config"
 	utilruntime "k8s.io/kubernetes/cmd/kubeadm/app/util/runtime"
+	utilstaticpod "k8s.io/kubernetes/cmd/kubeadm/app/util/staticpod"
 	"k8s.io/kubernetes/pkg/util/initsystem"
 	utilsexec "k8s.io/utils/exec"
 )
@@ -47,6 +51,7 @@ func NewCmdReset(in io.Reader, out io.Writer) *cobra.Command {
 	var criSocketPath string
 	var ignorePreflightErrors []string
 	var forceReset bool
+	kubeConfigFile := kubeadmconstants.GetAdminKubeConfigPath()
 
 	cmd := &cobra.Command{
 		Use:   "reset",
@@ -55,21 +60,26 @@ func NewCmdReset(in io.Reader, out io.Writer) *cobra.Command {
 			ignorePreflightErrorsSet, err := validation.ValidateIgnorePreflightErrors(ignorePreflightErrors)
 			kubeadmutil.CheckErr(err)
 
+			kubeConfigFile = cmdutil.FindExistingKubeConfig(kubeConfigFile)
+			client, err := getClientset(kubeConfigFile, false)
+			kubeadmutil.CheckErr(err)
+
 			r, err := NewReset(in, ignorePreflightErrorsSet, forceReset, certsDir, criSocketPath)
 			kubeadmutil.CheckErr(err)
-			kubeadmutil.CheckErr(r.Run(out))
+			kubeadmutil.CheckErr(r.Run(out, client))
 		},
 	}
 
 	options.AddIgnorePreflightErrorsFlag(cmd.PersistentFlags(), &ignorePreflightErrors)
+	options.AddKubeConfigFlag(cmd.PersistentFlags(), &kubeConfigFile)
 
 	cmd.PersistentFlags().StringVar(
-		&certsDir, "cert-dir", kubeadmapiv1alpha3.DefaultCertificatesDir,
+		&certsDir, "cert-dir", kubeadmapiv1beta1.DefaultCertificatesDir,
 		"The path to the directory where the certificates are stored. If specified, clean this directory.",
 	)
 
 	cmd.PersistentFlags().StringVar(
-		&criSocketPath, "cri-socket", kubeadmapiv1alpha3.DefaultCRISocket,
+		&criSocketPath, "cri-socket", kubeadmapiv1beta1.DefaultCRISocket,
 		"The path to the CRI socket to use with crictl when cleaning up containers.",
 	)
 
@@ -114,7 +124,19 @@ func NewReset(in io.Reader, ignorePreflightErrors sets.String, forceReset bool, 
 }
 
 // Run reverts any changes made to this host by "kubeadm init" or "kubeadm join".
-func (r *Reset) Run(out io.Writer) error {
+func (r *Reset) Run(out io.Writer, client clientset.Interface) error {
+	var dirsToClean []string
+	// Only clear etcd data when using local etcd.
+	etcdManifestPath := filepath.Join(kubeadmconstants.KubernetesDir, kubeadmconstants.ManifestsSubDirName, "etcd.yaml")
+
+	glog.V(1).Infof("[reset] checking for etcd config")
+	etcdDataDir, err := getEtcdDataDir(etcdManifestPath, client)
+	if err == nil {
+		dirsToClean = append(dirsToClean, etcdDataDir)
+	} else {
+		fmt.Println("[reset] no etcd config found. Assuming external etcd")
+		fmt.Println("[reset] please manually reset etcd to prevent further issues")
+	}
 
 	// Try to stop the kubelet service
 	glog.V(1).Infof("[reset] getting init system")
@@ -144,19 +166,7 @@ func (r *Reset) Run(out io.Writer) error {
 	if err := removeContainers(utilsexec.New(), r.criSocketPath); err != nil {
 		glog.Errorf("[reset] failed to remove containers: %+v", err)
 	}
-	dirsToClean := []string{kubeadmconstants.KubeletRunDirectory, "/etc/cni/net.d", "/var/lib/dockershim", "/var/run/kubernetes"}
-
-	// Only clear etcd data when the etcd manifest is found. In case it is not found, we must assume that the user
-	// provided external etcd endpoints. In that case, it is their own responsibility to reset etcd
-	etcdManifestPath := filepath.Join(kubeadmconstants.KubernetesDir, kubeadmconstants.ManifestsSubDirName, "etcd.yaml")
-	glog.V(1).Infof("[reset] checking for etcd manifest")
-	if _, err := os.Stat(etcdManifestPath); err == nil {
-		glog.V(1).Infof("Found one at %s", etcdManifestPath)
-		dirsToClean = append(dirsToClean, "/var/lib/etcd")
-	} else {
-		fmt.Printf("[reset] no etcd manifest found in %q. Assuming external etcd\n", etcdManifestPath)
-		fmt.Println("[reset] please manually reset etcd to prevent further issues")
-	}
+	dirsToClean = append(dirsToClean, []string{kubeadmconstants.KubeletRunDirectory, "/etc/cni/net.d", "/var/lib/dockershim", "/var/run/kubernetes"}...)
 
 	// Then clean contents from the stateful kubelet, etcd and cni directories
 	fmt.Printf("[reset] deleting contents of stateful directories: %v\n", dirsToClean)
@@ -167,12 +177,39 @@ func (r *Reset) Run(out io.Writer) error {
 
 	// Remove contents from the config and pki directories
 	glog.V(1).Infoln("[reset] removing contents from the config and pki directories")
-	if r.certsDir != kubeadmapiv1alpha3.DefaultCertificatesDir {
+	if r.certsDir != kubeadmapiv1beta1.DefaultCertificatesDir {
 		glog.Warningf("[reset] WARNING: cleaning a non-default certificates directory: %q\n", r.certsDir)
 	}
 	resetConfigDir(kubeadmconstants.KubernetesDir, r.certsDir)
 
 	return nil
+}
+
+func getEtcdDataDir(manifestPath string, client clientset.Interface) (string, error) {
+	const etcdVolumeName = "etcd-data"
+	var dataDir string
+
+	cfg, err := configutil.FetchConfigFromFileOrCluster(client, os.Stdout, "reset", "", false)
+	if err == nil {
+		return cfg.Etcd.Local.DataDir, nil
+	}
+	glog.Warningf("[reset] Unable to fetch the kubeadm-config ConfigMap, using etcd pod spec as fallback: %v", err)
+
+	etcdPod, err := utilstaticpod.ReadStaticPodFromDisk(manifestPath)
+	if err != nil {
+		return "", err
+	}
+
+	for _, volumeMount := range etcdPod.Spec.Volumes {
+		if volumeMount.Name == etcdVolumeName {
+			dataDir = volumeMount.HostPath.Path
+			break
+		}
+	}
+	if dataDir == "" {
+		return dataDir, fmt.Errorf("invalid etcd pod manifest")
+	}
+	return dataDir, nil
 }
 
 func removeContainers(execer utilsexec.Interface, criSocketPath string) error {

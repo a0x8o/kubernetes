@@ -30,7 +30,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
-	kubeadmapiv1alpha3 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha3"
+	kubeadmapiv1beta1 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta1"
 	utilruntime "k8s.io/kubernetes/cmd/kubeadm/app/util/runtime"
 	"k8s.io/utils/exec"
 	fakeexec "k8s.io/utils/exec/testing"
@@ -254,13 +254,21 @@ func TestRunJoinNodeChecks(t *testing.T) {
 		},
 		{
 			cfg: &kubeadmapi.JoinConfiguration{
-				DiscoveryTokenAPIServers: []string{"192.168.1.15"},
+				Discovery: kubeadmapi.Discovery{
+					BootstrapToken: &kubeadmapi.BootstrapTokenDiscovery{
+						APIServerEndpoints: []string{"192.168.1.15"},
+					},
+				},
 			},
 			expected: false,
 		},
 		{
 			cfg: &kubeadmapi.JoinConfiguration{
-				DiscoveryTokenAPIServers: []string{"2001:1234::1:15"},
+				Discovery: kubeadmapi.Discovery{
+					BootstrapToken: &kubeadmapi.BootstrapTokenDiscovery{
+						APIServerEndpoints: []string{"2001:1234::1:15"},
+					},
+				},
 			},
 			expected: false,
 		},
@@ -744,7 +752,7 @@ func TestImagePullCheck(t *testing.T) {
 		LookPathFunc: func(cmd string) (string, error) { return "/usr/bin/docker", nil },
 	}
 
-	containerRuntime, err := utilruntime.NewContainerRuntime(&fexec, kubeadmapiv1alpha3.DefaultCRISocket)
+	containerRuntime, err := utilruntime.NewContainerRuntime(&fexec, kubeadmapiv1beta1.DefaultCRISocket)
 	if err != nil {
 		t.Errorf("unexpected NewContainerRuntime error: %v", err)
 	}
@@ -767,5 +775,26 @@ func TestImagePullCheck(t *testing.T) {
 	}
 	if len(errors) != 2 {
 		t.Fatalf("expected 2 errors but got %d: %q", len(errors), errors)
+	}
+}
+
+func TestNumCPUCheck(t *testing.T) {
+	var tests = []struct {
+		numCPU      int
+		numErrors   int
+		numWarnings int
+	}{
+		{0, 0, 0},
+		{999999999, 1, 0},
+	}
+
+	for _, rt := range tests {
+		warnings, errors := NumCPUCheck{NumCPU: rt.numCPU}.Check()
+		if len(warnings) != rt.numWarnings {
+			t.Errorf("expected %d warning(s) but got %d: %q", rt.numWarnings, len(warnings), warnings)
+		}
+		if len(errors) != rt.numErrors {
+			t.Errorf("expected %d warning(s) but got %d: %q", rt.numErrors, len(errors), errors)
+		}
 	}
 }

@@ -49,6 +49,7 @@ const (
 	// owner: @vishh
 	// alpha: v1.5
 	//
+	// DEPRECATED - This feature is deprecated by Pod Priority and Preemption as of Kubernetes 1.13.
 	// Ensures guaranteed scheduling of pods marked with a special pod annotation `scheduler.alpha.kubernetes.io/critical-pod`
 	// and also prevents them from being evicted from a node.
 	// Note: This feature is not supported for `BestEffort` pods.
@@ -60,8 +61,8 @@ const (
 	// Enables support for Device Plugins
 	DevicePlugins utilfeature.Feature = "DevicePlugins"
 
-	// owner: @gmarek
-	// alpha: v1.6
+	// owner: @Huang-Wei
+	// beta: v1.13
 	//
 	// Changes the logic behind evicting Pods from not ready Nodes
 	// to take advantage of NoExecute Taints and Tolerations.
@@ -387,12 +388,12 @@ func init() {
 // To add a new feature, define a key for it above and add it here. The features will be
 // available throughout Kubernetes binaries.
 var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureSpec{
-	AppArmor:                                    {Default: true, PreRelease: utilfeature.Beta},
-	DynamicKubeletConfig:                        {Default: true, PreRelease: utilfeature.Beta},
+	AppArmor:             {Default: true, PreRelease: utilfeature.Beta},
+	DynamicKubeletConfig: {Default: true, PreRelease: utilfeature.Beta},
 	ExperimentalHostUserNamespaceDefaultingGate: {Default: false, PreRelease: utilfeature.Beta},
 	ExperimentalCriticalPodAnnotation:           {Default: false, PreRelease: utilfeature.Alpha},
 	DevicePlugins:                               {Default: true, PreRelease: utilfeature.Beta},
-	TaintBasedEvictions:                         {Default: false, PreRelease: utilfeature.Alpha},
+	TaintBasedEvictions:                         {Default: true, PreRelease: utilfeature.Beta},
 	RotateKubeletServerCertificate:              {Default: true, PreRelease: utilfeature.Beta},
 	RotateKubeletClientCertificate:              {Default: true, PreRelease: utilfeature.Beta},
 	PersistentLocalVolumes:                      {Default: true, PreRelease: utilfeature.Beta},
@@ -408,7 +409,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	QOSReserved:                                 {Default: false, PreRelease: utilfeature.Alpha},
 	ExpandPersistentVolumes:                     {Default: true, PreRelease: utilfeature.Beta},
 	ExpandInUsePersistentVolumes:                {Default: false, PreRelease: utilfeature.Alpha},
-	AttachVolumeLimit:                           {Default: false, PreRelease: utilfeature.Beta},
+	AttachVolumeLimit:                           {Default: true, PreRelease: utilfeature.Beta},
 	CPUManager:                                  {Default: true, PreRelease: utilfeature.Beta},
 	CPUCFSQuotaPeriod:                           {Default: false, PreRelease: utilfeature.Alpha},
 	ServiceNodeExclusion:                        {Default: false, PreRelease: utilfeature.Alpha},
@@ -420,7 +421,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	CustomPodDNS:                                {Default: true, PreRelease: utilfeature.Beta},
 	BlockVolume:                                 {Default: false, PreRelease: utilfeature.Alpha},
 	StorageObjectInUseProtection:                {Default: true, PreRelease: utilfeature.GA},
-	ResourceLimitsPriorityFunction:              {Default: false, PreRelease: utilfeature.Alpha},
+	ResourceLimitsPriorityFunction:              {Default: true, PreRelease: utilfeature.Beta},
 	SupportIPVSProxyMode:                        {Default: true, PreRelease: utilfeature.GA},
 	SupportPodPidsLimit:                         {Default: false, PreRelease: utilfeature.Alpha},
 	HyperVContainer:                             {Default: false, PreRelease: utilfeature.Alpha},
@@ -451,7 +452,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	genericfeatures.APIResponseCompression:  {Default: false, PreRelease: utilfeature.Alpha},
 	genericfeatures.Initializers:            {Default: false, PreRelease: utilfeature.Alpha},
 	genericfeatures.APIListChunking:         {Default: true, PreRelease: utilfeature.Beta},
-	genericfeatures.DryRun:                  {Default: false, PreRelease: utilfeature.Alpha},
+	genericfeatures.DryRun:                  {Default: true, PreRelease: utilfeature.Beta},
 
 	// inherited features from apiextensions-apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

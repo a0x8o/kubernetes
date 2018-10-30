@@ -290,6 +290,7 @@ func (b *glusterfsMounter) setUpAtInternal(dir string) error {
 	var errs error
 	options := []string{}
 	hasLogFile := false
+	hasLogLevel := false
 	log := ""
 
 	if b.readOnly {
@@ -297,13 +298,19 @@ func (b *glusterfsMounter) setUpAtInternal(dir string) error {
 
 	}
 
-	// Check logfile has been provided by user, if provided, use that as the log file.
+	// Check for log-file,log-level options existence in user supplied mount options, if provided, use those.
 	for _, userOpt := range b.mountOptions {
-		if dstrings.HasPrefix(userOpt, "log-file") {
+
+		switch {
+		case dstrings.HasPrefix(userOpt, "log-file"):
 			glog.V(4).Infof("log-file mount option has provided")
 			hasLogFile = true
-			break
+
+		case dstrings.HasPrefix(userOpt, "log-level"):
+			glog.V(4).Infof("log-level mount option has provided")
+			hasLogLevel = true
 		}
+
 	}
 
 	// If logfile has not been provided, create driver specific log file.
@@ -319,11 +326,14 @@ func (b *glusterfsMounter) setUpAtInternal(dir string) error {
 		// its own log based on PV + Pod
 		log = path.Join(p, b.pod.Name+"-glusterfs.log")
 
+		// Use derived log file in gluster fuse mount
+		options = append(options, "log-file="+log)
+
 	}
 
-	// Use derived/provided log file in gluster fuse mount
-	options = append(options, "log-file="+log)
-	options = append(options, "log-level=ERROR")
+	if !hasLogLevel {
+		options = append(options, "log-level=ERROR")
+	}
 
 	var addrlist []string
 	if b.hosts == nil {
@@ -812,11 +822,7 @@ func (p *glusterfsVolumeProvisioner) CreateVolume(gid int) (r *v1.GlusterfsVolum
 		return nil, 0, "", fmt.Errorf("failed to get cluster nodes for volume %s: %v", volume, err)
 	}
 
-	// The 'endpointname' is created in form of 'glusterfs-dynamic-<claimname>'.
-	// createEndpointService() checks for this 'endpoint' existence in PVC's namespace and
-	// If not found, it create an endpoint and service using the IPs we dynamically picked at time
-	// of volume creation.
-	epServiceName := dynamicEpSvcPrefix + p.options.PVC.Name
+	epServiceName := dynamicEpSvcPrefix + string(p.options.PVC.UID)
 	epNamespace := p.options.PVC.Namespace
 	endpoint, service, err := p.createEndpointService(epNamespace, epServiceName, dynamicHostIps, p.options.PVC.Name)
 	if err != nil {
@@ -835,6 +841,10 @@ func (p *glusterfsVolumeProvisioner) CreateVolume(gid int) (r *v1.GlusterfsVolum
 	}, sz, volID, nil
 }
 
+// createEndpointService() makes sure an endpoint and service
+// exist for the given namespace, PVC name, endpoint name, and
+// set of IPs. I.e. the endpoint or service is only created
+// if it does not exist yet.
 func (p *glusterfsVolumeProvisioner) createEndpointService(namespace string, epServiceName string, hostips []string, pvcname string) (endpoint *v1.Endpoints, service *v1.Service, err error) {
 
 	addrlist := make([]v1.EndpointAddress, len(hostips))

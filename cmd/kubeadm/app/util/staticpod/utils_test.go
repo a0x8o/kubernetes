@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"testing"
 
 	"k8s.io/api/core/v1"
@@ -380,6 +381,7 @@ func TestComponentPod(t *testing.T) {
 					},
 					PriorityClassName: "system-cluster-critical",
 					HostNetwork:       true,
+					DNSPolicy:         v1.DNSClusterFirstWithHostNet,
 					Volumes:           []v1.Volume{},
 				},
 			},
@@ -480,13 +482,19 @@ func TestVolumeMapToSlice(t *testing.T) {
 		"foo": {
 			Name: "foo",
 		},
+		"bar": {
+			Name: "bar",
+		},
 	}
 	volumeSlice := VolumeMapToSlice(testVolumes)
-	if len(volumeSlice) != 1 {
+	if len(volumeSlice) != 2 {
 		t.Errorf("Expected slice length of 1, got %d", len(volumeSlice))
 	}
-	if volumeSlice[0].Name != "foo" {
-		t.Errorf("Expected volume name \"foo\", got %s", volumeSlice[0].Name)
+	if volumeSlice[0].Name != "bar" {
+		t.Errorf("Expected first volume name \"bar\", got %s", volumeSlice[0].Name)
+	}
+	if volumeSlice[1].Name != "foo" {
+		t.Errorf("Expected second volume name \"foo\", got %s", volumeSlice[1].Name)
 	}
 }
 
@@ -495,13 +503,19 @@ func TestVolumeMountMapToSlice(t *testing.T) {
 		"foo": {
 			Name: "foo",
 		},
+		"bar": {
+			Name: "bar",
+		},
 	}
 	volumeMountSlice := VolumeMountMapToSlice(testVolumeMounts)
-	if len(volumeMountSlice) != 1 {
+	if len(volumeMountSlice) != 2 {
 		t.Errorf("Expected slice length of 1, got %d", len(volumeMountSlice))
 	}
-	if volumeMountSlice[0].Name != "foo" {
-		t.Errorf("Expected volume mount name \"foo\", got %s", volumeMountSlice[0].Name)
+	if volumeMountSlice[0].Name != "bar" {
+		t.Errorf("Expected first volume mount name \"bar\", got %s", volumeMountSlice[0].Name)
+	}
+	if volumeMountSlice[1].Name != "foo" {
+		t.Errorf("Expected second volume name \"foo\", got %s", volumeMountSlice[1].Name)
 	}
 }
 
@@ -613,6 +627,76 @@ func TestReadStaticPodFromDisk(t *testing.T) {
 		if (actualErr != nil) != rt.expectErr {
 			t.Errorf(
 				"ReadStaticPodFromDisk failed\n%s\n\texpected error: %t\n\tgot: %t\n\tactual error: %v",
+				rt.description,
+				rt.expectErr,
+				(actualErr != nil),
+				actualErr,
+			)
+		}
+	}
+}
+
+func TestManifestFilesAreEqual(t *testing.T) {
+	var tests = []struct {
+		description    string
+		podYamls       []string
+		expectedResult bool
+		expectErr      bool
+	}{
+		{
+			description:    "manifests are equal",
+			podYamls:       []string{validPod, validPod},
+			expectedResult: true,
+			expectErr:      false,
+		},
+		{
+			description:    "manifests are not equal",
+			podYamls:       []string{validPod, validPod + "\n"},
+			expectedResult: false,
+			expectErr:      false,
+		},
+		{
+			description:    "first manifest doesn't exist",
+			podYamls:       []string{validPod, ""},
+			expectedResult: false,
+			expectErr:      true,
+		},
+		{
+			description:    "second manifest doesn't exist",
+			podYamls:       []string{"", validPod},
+			expectedResult: false,
+			expectErr:      true,
+		},
+	}
+
+	for _, rt := range tests {
+		tmpdir := testutil.SetupTempDir(t)
+		defer os.RemoveAll(tmpdir)
+
+		// write 2 manifests
+		for i := 0; i < 2; i++ {
+			if rt.podYamls[i] != "" {
+				manifestPath := filepath.Join(tmpdir, strconv.Itoa(i)+".yaml")
+				err := ioutil.WriteFile(manifestPath, []byte(rt.podYamls[i]), 0644)
+				if err != nil {
+					t.Fatalf("Failed to write manifest file\n%s\n\tfatal error: %v", rt.description, err)
+				}
+			}
+		}
+
+		// compare them
+		result, actualErr := ManifestFilesAreEqual(filepath.Join(tmpdir, "0.yaml"), filepath.Join(tmpdir, "1.yaml"))
+		if result != rt.expectedResult {
+			t.Errorf(
+				"ManifestFilesAreEqual failed\n%s\nexpected result: %t\nactual result: %t",
+				rt.description,
+				rt.expectedResult,
+				result,
+			)
+		}
+		if (actualErr != nil) != rt.expectErr {
+			t.Errorf(
+				"ManifestFilesAreEqual failed\n%s\n\texpected error: %t\n\tgot: %t\n\tactual error: %v",
 				rt.description,
 				rt.expectErr,
 				(actualErr != nil),

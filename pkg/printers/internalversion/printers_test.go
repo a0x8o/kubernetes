@@ -52,14 +52,10 @@ import (
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/apis/policy"
+	"k8s.io/kubernetes/pkg/apis/scheduling"
 	"k8s.io/kubernetes/pkg/apis/storage"
 	"k8s.io/kubernetes/pkg/printers"
 )
-
-func init() {
-	legacyscheme.Scheme.AddKnownTypes(schema.GroupVersion{Group: "", Version: runtime.APIVersionInternal}, &TestPrintType{})
-	legacyscheme.Scheme.AddKnownTypes(schema.GroupVersion{Group: "", Version: "v1"}, &TestPrintType{})
-}
 
 var testData = TestStruct{
 	TypeMeta:   metav1.TypeMeta{APIVersion: "foo/bar", Kind: "TestStruct"},
@@ -257,8 +253,12 @@ func testPrinter(t *testing.T, printer printers.ResourcePrinter, unmarshalFunc f
 	}
 }
 
+func yamlUnmarshal(data []byte, v interface{}) error {
+	return yaml.Unmarshal(data, v)
+}
+
 func TestYAMLPrinter(t *testing.T) {
-	testPrinter(t, genericprinters.NewTypeSetter(legacyscheme.Scheme).ToPrinter(&genericprinters.YAMLPrinter{}), yaml.Unmarshal)
+	testPrinter(t, genericprinters.NewTypeSetter(legacyscheme.Scheme).ToPrinter(&genericprinters.YAMLPrinter{}), yamlUnmarshal)
 }
 
 func TestJSONPrinter(t *testing.T) {
@@ -1293,7 +1293,7 @@ func TestPrintHumanReadableWithNamespace(t *testing.T) {
 						Spec: api.PodSpec{
 							Containers: []api.Container{
 								{
-									Image: "foo/bar",
+									Image:                  "foo/bar",
 									TerminationMessagePath: api.TerminationMessagePathDefault,
 									ImagePullPolicy:        api.PullIfNotPresent,
 								},
@@ -1971,17 +1971,17 @@ func TestTranslateTimestampUntil(t *testing.T) {
 
 func TestPrintDeployment(t *testing.T) {
 	tests := []struct {
-		deployment extensions.Deployment
+		deployment apps.Deployment
 		expect     string
 		wideExpect string
 	}{
 		{
-			extensions.Deployment{
+			apps.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "test1",
 					CreationTimestamp: metav1.Time{Time: time.Now().Add(1.9e9)},
 				},
-				Spec: extensions.DeploymentSpec{
+				Spec: apps.DeploymentSpec{
 					Replicas: 5,
 					Template: api.PodTemplateSpec{
 						Spec: api.PodSpec{
@@ -1999,7 +1999,7 @@ func TestPrintDeployment(t *testing.T) {
 					},
 					Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}},
 				},
-				Status: extensions.DeploymentStatus{
+				Status: apps.DeploymentStatus{
 					Replicas:            10,
 					UpdatedReplicas:     2,
 					AvailableReplicas:   1,
@@ -2040,21 +2040,21 @@ func TestPrintDeployment(t *testing.T) {
 
 func TestPrintDaemonSet(t *testing.T) {
 	tests := []struct {
-		ds         extensions.DaemonSet
+		ds         apps.DaemonSet
 		startsWith string
 	}{
 		{
-			extensions.DaemonSet{
+			apps.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "test1",
 					CreationTimestamp: metav1.Time{Time: time.Now().Add(1.9e9)},
 				},
-				Spec: extensions.DaemonSetSpec{
+				Spec: apps.DaemonSetSpec{
 					Template: api.PodTemplateSpec{
 						Spec: api.PodSpec{Containers: make([]api.Container, 2)},
 					},
 				},
-				Status: extensions.DaemonSetStatus{
+				Status: apps.DaemonSetStatus{
 					CurrentNumberScheduled: 2,
 					DesiredNumberScheduled: 3,
 					NumberReady:            1,
@@ -3154,17 +3154,17 @@ func boolP(b bool) *bool {
 
 func TestPrintReplicaSet(t *testing.T) {
 	tests := []struct {
-		replicaSet extensions.ReplicaSet
+		replicaSet apps.ReplicaSet
 		expect     string
 		wideExpect string
 	}{
 		{
-			extensions.ReplicaSet{
+			apps.ReplicaSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "test1",
 					CreationTimestamp: metav1.Time{Time: time.Now().Add(1.9e9)},
 				},
-				Spec: extensions.ReplicaSetSpec{
+				Spec: apps.ReplicaSetSpec{
 					Replicas: 5,
 					Template: api.PodTemplateSpec{
 						Spec: api.PodSpec{
@@ -3182,7 +3182,7 @@ func TestPrintReplicaSet(t *testing.T) {
 					},
 					Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}},
 				},
-				Status: extensions.ReplicaSetStatus{
+				Status: apps.ReplicaSetStatus{
 					Replicas:      5,
 					ReadyReplicas: 2,
 				},
@@ -3477,6 +3477,51 @@ func TestPrintLease(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if err := printers.PrintTable(table, buf, printers.PrintOptions{NoHeaders: true}); err != nil {
+			t.Fatal(err)
+		}
+		if buf.String() != test.expect {
+			t.Fatalf("Expected: %s, got: %s", test.expect, buf.String())
+		}
+		buf.Reset()
+	}
+}
+
+func TestPrintPriorityClass(t *testing.T) {
+	tests := []struct {
+		pc     scheduling.PriorityClass
+		expect string
+	}{
+		{
+			scheduling.PriorityClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "pc1",
+					CreationTimestamp: metav1.Time{Time: time.Now().Add(1.9e9)},
+				},
+				Value: 1,
+			},
+			"pc1\t1\tfalse\t0s\n",
+		},
+		{
+			scheduling.PriorityClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "pc2",
+					CreationTimestamp: metav1.Time{Time: time.Now().Add(-3e11)},
+				},
+				Value:         1000000000,
+				GlobalDefault: true,
+			},
+			"pc2\t1000000000\ttrue\t5m\n",
+		},
+	}
+
+	buf := bytes.NewBuffer([]byte{})
+	for _, test := range tests {
+		table, err := printers.NewTablePrinter().With(AddHandlers).PrintTable(&test.pc, printers.PrintOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		verifyTable(t, table)
 		if err := printers.PrintTable(table, buf, printers.PrintOptions{NoHeaders: true}); err != nil {
 			t.Fatal(err)
 		}

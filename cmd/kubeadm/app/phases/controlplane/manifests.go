@@ -25,10 +25,12 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/version"
 	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
-	kubeadmapiv1alpha3 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha3"
+	kubeadmapiv1beta1 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta1"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/cmd/kubeadm/app/features"
 	"k8s.io/kubernetes/cmd/kubeadm/app/images"
@@ -36,7 +38,6 @@ import (
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
 	staticpodutil "k8s.io/kubernetes/cmd/kubeadm/app/util/staticpod"
 	authzmodes "k8s.io/kubernetes/pkg/kubeapiserver/authorizer/modes"
-	"k8s.io/kubernetes/pkg/util/version"
 )
 
 // CreateInitStaticPodManifestFiles will write all static pod manifest files needed to bring up the control plane.
@@ -122,12 +123,12 @@ func createStaticPodFiles(manifestDir string, cfg *kubeadmapi.InitConfiguration,
 		// retrives the StaticPodSpec for given component
 		spec, exists := specs[componentName]
 		if !exists {
-			return fmt.Errorf("couldn't retrive StaticPodSpec for %s", componentName)
+			return errors.Errorf("couldn't retrive StaticPodSpec for %s", componentName)
 		}
 
 		// writes the StaticPodSpec to disk
 		if err := staticpodutil.WriteStaticPodToDisk(componentName, manifestDir, spec); err != nil {
-			return fmt.Errorf("failed to create static pod manifest file for %q: %v", componentName, err)
+			return errors.Wrapf(err, "failed to create static pod manifest file for %q", componentName)
 		}
 
 		fmt.Printf("[controlplane] wrote Static Pod manifest for component %s to %q\n", componentName, kubeadmconstants.GetStaticPodFilepath(componentName, manifestDir))
@@ -180,7 +181,7 @@ func getAPIServerCommand(cfg *kubeadmapi.InitConfiguration) []string {
 		}
 	} else {
 		// Default to etcd static pod on localhost
-		defaultArguments["etcd-servers"] = "https://127.0.0.1:2379"
+		defaultArguments["etcd-servers"] = fmt.Sprintf("https://127.0.0.1:%d", kubeadmconstants.EtcdListenClientPort)
 		defaultArguments["etcd-cafile"] = filepath.Join(cfg.CertificatesDir, kubeadmconstants.EtcdCACertName)
 		defaultArguments["etcd-certfile"] = filepath.Join(cfg.CertificatesDir, kubeadmconstants.APIServerEtcdClientCertName)
 		defaultArguments["etcd-keyfile"] = filepath.Join(cfg.CertificatesDir, kubeadmconstants.APIServerEtcdClientKeyName)
@@ -205,7 +206,7 @@ func getAPIServerCommand(cfg *kubeadmapi.InitConfiguration) []string {
 		defaultArguments["audit-policy-file"] = kubeadmconstants.GetStaticPodAuditPolicyFile()
 		defaultArguments["audit-log-path"] = filepath.Join(kubeadmconstants.StaticPodAuditPolicyLogDir, kubeadmconstants.AuditPolicyLogFile)
 		if cfg.AuditPolicyConfiguration.LogMaxAge == nil {
-			defaultArguments["audit-log-maxage"] = fmt.Sprintf("%d", kubeadmapiv1alpha3.DefaultAuditPolicyLogMaxAge)
+			defaultArguments["audit-log-maxage"] = fmt.Sprintf("%d", kubeadmapiv1beta1.DefaultAuditPolicyLogMaxAge)
 		} else {
 			defaultArguments["audit-log-maxage"] = fmt.Sprintf("%d", *cfg.AuditPolicyConfiguration.LogMaxAge)
 		}

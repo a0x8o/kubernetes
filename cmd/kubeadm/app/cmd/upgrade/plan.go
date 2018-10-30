@@ -25,16 +25,16 @@ import (
 	"text/tabwriter"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-
-	kubeadmapiv1alpha3 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha3"
+	"k8s.io/apimachinery/pkg/util/version"
+	kubeadmapiv1beta1 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta1"
 	"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/validation"
 	"k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/cmd/kubeadm/app/phases/upgrade"
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
 	configutil "k8s.io/kubernetes/cmd/kubeadm/app/util/config"
 	etcdutil "k8s.io/kubernetes/cmd/kubeadm/app/util/etcd"
-	"k8s.io/kubernetes/pkg/util/version"
 )
 
 type planFlags struct {
@@ -63,7 +63,7 @@ func NewCmdPlan(apf *applyPlanFlags) *cobra.Command {
 			// If the version is specified in config file, pick up that value.
 			if flags.cfgPath != "" {
 				glog.V(1).Infof("fetching configuration from file %s", flags.cfgPath)
-				cfg, err := configutil.ConfigFileAndDefaultsToInternalConfig(flags.cfgPath, &kubeadmapiv1alpha3.InitConfiguration{})
+				cfg, err := configutil.ConfigFileAndDefaultsToInternalConfig(flags.cfgPath, &kubeadmapiv1beta1.InitConfiguration{})
 				kubeadmutil.CheckErr(err)
 
 				if cfg.KubernetesVersion != "" {
@@ -111,11 +111,8 @@ func RunPlan(flags *planFlags) error {
 		}
 		etcdClient = client
 	} else {
-		client, err := etcdutil.NewFromStaticPod(
-			[]string{"localhost:2379"},
-			constants.GetStaticPodDirectory(),
-			upgradeVars.cfg.CertificatesDir,
-		)
+		// Connects to local/stacked etcd existing in the cluster
+		client, err := etcdutil.NewFromCluster(upgradeVars.client, upgradeVars.cfg.CertificatesDir)
 		if err != nil {
 			return err
 		}
@@ -126,7 +123,7 @@ func RunPlan(flags *planFlags) error {
 	glog.V(1).Infof("[upgrade/plan] computing upgrade possibilities")
 	availUpgrades, err := upgrade.GetAvailableUpgrades(upgradeVars.versionGetter, flags.allowExperimentalUpgrades, flags.allowRCUpgrades, etcdClient, upgradeVars.cfg.FeatureGates, upgradeVars.client)
 	if err != nil {
-		return fmt.Errorf("[upgrade/versions] FATAL: %v", err)
+		return errors.Wrap(err, "[upgrade/versions] FATAL")
 	}
 
 	// Tell the user which upgrades are available

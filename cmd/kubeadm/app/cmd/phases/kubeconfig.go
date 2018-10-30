@@ -21,11 +21,12 @@ import (
 	"io"
 	"path/filepath"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
 	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 	kubeadmscheme "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/scheme"
-	kubeadmapiv1alpha3 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha3"
+	kubeadmapiv1beta1 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta1"
 	cmdutil "k8s.io/kubernetes/cmd/kubeadm/app/cmd/util"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	kubeconfigphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/kubeconfig"
@@ -90,7 +91,7 @@ func NewCmdKubeConfig(out io.Writer) *cobra.Command {
 // getKubeConfigSubCommands returns sub commands for kubeconfig phase
 func getKubeConfigSubCommands(out io.Writer, outDir, defaultKubernetesVersion string) []*cobra.Command {
 
-	cfg := &kubeadmapiv1alpha3.InitConfiguration{}
+	cfg := &kubeadmapiv1beta1.InitConfiguration{}
 
 	// Default values for the cobra help text
 	kubeadmscheme.Scheme.Default(cfg)
@@ -144,7 +145,7 @@ func getKubeConfigSubCommands(out io.Writer, outDir, defaultKubernetesVersion st
 			examples: userKubeconfigExample,
 			cmdFunc: func(outDir string, cfg *kubeadmapi.InitConfiguration) error {
 				if clientName == "" {
-					return fmt.Errorf("missing required argument --client-name")
+					return errors.New("missing required argument --client-name")
 				}
 
 				// if the kubeconfig file for an additional user has to use a token, use it

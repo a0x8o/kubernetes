@@ -36,8 +36,8 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	utiltesting "k8s.io/client-go/util/testing"
+	cloudprovider "k8s.io/cloud-provider"
 	csiclientset "k8s.io/csi-api/pkg/client/clientset/versioned"
-	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/util/mount"
 	utilstrings "k8s.io/kubernetes/pkg/util/strings"
 	. "k8s.io/kubernetes/pkg/volume"
@@ -45,6 +45,10 @@ import (
 	"k8s.io/kubernetes/pkg/volume/util/recyclerclient"
 	"k8s.io/kubernetes/pkg/volume/util/volumepathhandler"
 )
+
+// A hook specified in storage class to indicate it's provisioning
+// is expected to fail.
+const ExpectProvisionFailureKey = "expect-provision-failure"
 
 // fakeVolumeHost is useful for testing volume plugins.
 type fakeVolumeHost struct {
@@ -787,6 +791,12 @@ type FakeProvisioner struct {
 }
 
 func (fc *FakeProvisioner) Provision(selectedNode *v1.Node, allowedTopologies []v1.TopologySelectorTerm) (*v1.PersistentVolume, error) {
+	// Add provision failure hook
+	if fc.Options.Parameters != nil {
+		if _, ok := fc.Options.Parameters[ExpectProvisionFailureKey]; ok {
+			return nil, fmt.Errorf("expected error")
+		}
+	}
 	fullpath := fmt.Sprintf("/tmp/hostpath_pv/%s", uuid.NewUUID())
 
 	pv := &v1.PersistentVolume{

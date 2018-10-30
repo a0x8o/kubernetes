@@ -173,7 +173,7 @@ ENABLE_METADATA_AGENT="${KUBE_ENABLE_METADATA_AGENT:-none}"
 # Useful for scheduling heapster in large clusters with nodes of small size.
 HEAPSTER_MACHINE_TYPE="${HEAPSTER_MACHINE_TYPE:-}"
 
-# Set etcd image (e.g. k8s.gcr.io/etcd) and version (e.g. 3.2.24-0) if you need
+# Set etcd image (e.g. k8s.gcr.io/etcd) and version (e.g. 3.2.24-1) if you need
 # non-default version.
 ETCD_IMAGE="${TEST_ETCD_IMAGE:-}"
 ETCD_DOCKER_REPOSITORY="${TEST_ETCD_DOCKER_REPOSITORY:-}"
@@ -227,7 +227,7 @@ CUSTOM_TYPHA_DEPLOYMENT_YAML="${KUBE_CUSTOM_TYPHA_DEPLOYMENT_YAML:-}"
 # To avoid running netd on a node that is not configured appropriately,
 # label each Node so that the DaemonSet can run the Pods only on ready Nodes.
 if [[ ${ENABLE_NETD:-} == "true" ]]; then
-	NON_MASTER_NODE_LABELS="${NON_MASTER_NODE_LABELS:+${NON_MASTER_NODE_LABELS},}beta.kubernetes.io/kube-netd-ready=true"
+	NON_MASTER_NODE_LABELS="${NON_MASTER_NODE_LABELS:+${NON_MASTER_NODE_LABELS},}cloud.google.com/gke-netd-ready=true"
 fi
 
 # To avoid running Calico on a node that is not configured appropriately,
@@ -268,8 +268,8 @@ if [[ ! -z "${NODE_ACCELERATORS}" ]]; then
 fi
 
 # Optional: Install cluster DNS.
-# Set CLUSTER_DNS_CORE_DNS to 'true' to install CoreDNS instead of kube-dns.
-CLUSTER_DNS_CORE_DNS="${CLUSTER_DNS_CORE_DNS:-false}"
+# Set CLUSTER_DNS_CORE_DNS to 'false' to install kube-dns instead of CoreDNS.
+CLUSTER_DNS_CORE_DNS="${CLUSTER_DNS_CORE_DNS:-true}"
 ENABLE_CLUSTER_DNS="${KUBE_ENABLE_CLUSTER_DNS:-true}"
 DNS_SERVER_IP="10.0.0.10"
 DNS_DOMAIN="cluster.local"
@@ -419,7 +419,7 @@ fi
 # Fluentd requirements
 # YAML exists to trigger a configuration refresh when changes are made.
 FLUENTD_GCP_YAML_VERSION="v3.1.0"
-FLUENTD_GCP_VERSION="${FLUENTD_GCP_VERSION:-0.2-1.5.30-1-k8s}"
+FLUENTD_GCP_VERSION="${FLUENTD_GCP_VERSION:-0.5-1.5.36-1-k8s}"
 FLUENTD_GCP_MEMORY_LIMIT="${FLUENTD_GCP_MEMORY_LIMIT:-}"
 FLUENTD_GCP_CPU_REQUEST="${FLUENTD_GCP_CPU_REQUEST:-}"
 FLUENTD_GCP_MEMORY_REQUEST="${FLUENTD_GCP_MEMORY_REQUEST:-}"

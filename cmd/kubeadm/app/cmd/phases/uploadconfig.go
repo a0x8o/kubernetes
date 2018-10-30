@@ -19,10 +19,11 @@ package phases
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kubeadmapiv1alpha3 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha3"
+	kubeadmapiv1beta1 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta1"
 	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/options"
 	cmdutil "k8s.io/kubernetes/cmd/kubeadm/app/cmd/util"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
@@ -39,7 +40,7 @@ var (
 		This enables correct configuration of system components and a seamless user experience when upgrading.
 
 		Alternatively, you can use kubeadm config.
-		`+cmdutil.AlphaDisclaimer), kubeadmconstants.InitConfigurationConfigMap, metav1.NamespaceSystem)
+		`+cmdutil.AlphaDisclaimer), kubeadmconstants.KubeadmConfigConfigMap, metav1.NamespaceSystem)
 
 	uploadConfigExample = normalizer.Examples(`
 		# uploads the configuration of your cluster
@@ -49,7 +50,7 @@ var (
 
 // NewCmdUploadConfig returns the Cobra command for running the uploadconfig phase
 func NewCmdUploadConfig() *cobra.Command {
-	cfg := &kubeadmapiv1alpha3.InitConfiguration{}
+	cfg := &kubeadmapiv1beta1.InitConfiguration{}
 	kubeConfigFile := kubeadmconstants.GetAdminKubeConfigPath()
 	var cfgPath string
 
@@ -61,7 +62,7 @@ func NewCmdUploadConfig() *cobra.Command {
 		Aliases: []string{"uploadconfig"},
 		Run: func(_ *cobra.Command, args []string) {
 			if len(cfgPath) == 0 {
-				kubeadmutil.CheckErr(fmt.Errorf("the --config flag is mandatory"))
+				kubeadmutil.CheckErr(errors.New("the --config flag is mandatory"))
 			}
 
 			kubeConfigFile = cmdutil.FindExistingKubeConfig(kubeConfigFile)
@@ -70,8 +71,7 @@ func NewCmdUploadConfig() *cobra.Command {
 
 			// KubernetesVersion is not used, but we set it explicitly to avoid the lookup
 			// of the version from the internet when executing ConfigFileAndDefaultsToInternalConfig
-			err = SetKubernetesVersion(client, cfg)
-			kubeadmutil.CheckErr(err)
+			SetKubernetesVersion(cfg)
 
 			internalcfg, err := configutil.ConfigFileAndDefaultsToInternalConfig(cfgPath, cfg)
 			kubeadmutil.CheckErr(err)

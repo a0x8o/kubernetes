@@ -28,6 +28,7 @@ import (
 	"github.com/pborman/uuid"
 
 	apps "k8s.io/api/apps/v1beta1"
+	auditreg "k8s.io/api/auditregistration/v1alpha1"
 	autoscaling "k8s.io/api/autoscaling/v1"
 	certificates "k8s.io/api/certificates/v1beta1"
 	"k8s.io/api/core/v1"
@@ -82,9 +83,11 @@ func (alwaysAllow) Authorize(requestAttributes authorizer.Attributes) (authorize
 }
 
 // alwaysEmpty simulates "no authentication" for old tests
-func alwaysEmpty(req *http.Request) (user.Info, bool, error) {
-	return &user.DefaultInfo{
-		Name: "",
+func alwaysEmpty(req *http.Request) (*authauthenticator.Response, bool, error) {
+	return &authauthenticator.Response{
+		User: &user.DefaultInfo{
+			Name: "",
+		},
 	}, true, nil
 }
 
@@ -288,6 +291,10 @@ func NewMasterConfig() *master.Config {
 		ns)
 	storageFactory.SetSerializer(
 		schema.GroupResource{Group: storage.GroupName, Resource: serverstorage.AllResources},
+		"",
+		ns)
+	storageFactory.SetSerializer(
+		schema.GroupResource{Group: auditreg.GroupName, Resource: serverstorage.AllResources},
 		"",
 		ns)
 

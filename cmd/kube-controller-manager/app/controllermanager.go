@@ -47,10 +47,10 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	certutil "k8s.io/client-go/util/cert"
+	cloudprovider "k8s.io/cloud-provider"
 	genericcontrollermanager "k8s.io/kubernetes/cmd/controller-manager/app"
 	"k8s.io/kubernetes/cmd/kube-controller-manager/app/config"
 	"k8s.io/kubernetes/cmd/kube-controller-manager/app/options"
-	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
 	kubectrlmgrconfig "k8s.io/kubernetes/pkg/controller/apis/config"
 	serviceaccountcontroller "k8s.io/kubernetes/pkg/controller/serviceaccount"
@@ -468,7 +468,7 @@ func StartControllers(ctx ControllerContext, startSATokenController InitFunc, co
 	// Initialize the cloud provider with a reference to the clientBuilder only after token controller
 	// has started in case the cloud provider uses the client builder.
 	if ctx.Cloud != nil {
-		ctx.Cloud.Initialize(ctx.ClientBuilder)
+		ctx.Cloud.Initialize(ctx.ClientBuilder, ctx.Stop)
 	}
 
 	for controllerName, initFn := range controllers {

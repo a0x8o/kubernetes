@@ -58,8 +58,8 @@ import (
 	"k8s.io/kubernetes/pkg/controller/volume/pvcprotection"
 	"k8s.io/kubernetes/pkg/controller/volume/pvprotection"
 	"k8s.io/kubernetes/pkg/features"
-	"k8s.io/kubernetes/pkg/quota/generic"
-	quotainstall "k8s.io/kubernetes/pkg/quota/install"
+	"k8s.io/kubernetes/pkg/quota/v1/generic"
+	quotainstall "k8s.io/kubernetes/pkg/quota/v1/install"
 	"k8s.io/kubernetes/pkg/util/metrics"
 )
 
@@ -121,6 +121,7 @@ func startNodeIpamController(ctx ControllerContext) (http.Handler, bool, error) 
 
 func startNodeLifecycleController(ctx ControllerContext) (http.Handler, bool, error) {
 	lifecycleController, err := lifecyclecontroller.NewNodeLifecycleController(
+		ctx.InformerFactory.Coordination().V1beta1().Leases(),
 		ctx.InformerFactory.Core().V1().Pods(),
 		ctx.InformerFactory.Core().V1().Nodes(),
 		ctx.InformerFactory.Extensions().V1beta1().DaemonSets(),

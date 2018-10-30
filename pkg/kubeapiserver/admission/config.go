@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,165 +17,90 @@ limitations under the License.
 package admission
 
 import (
-	"fmt"
-	"io"
 	"io/ioutil"
-	"os"
-	"path"
-	"path/filepath"
+	"net/http"
+	"time"
 
-	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
 
-	"bytes"
-
-	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/api/core/v1"
+	utilwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/admission"
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/apis/componentconfig"
-	componentconfigv1alpha1 "k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1"
-
-	runtime "k8s.io/apimachinery/pkg/runtime"
+	webhookinit "k8s.io/apiserver/pkg/admission/plugin/webhook/initializer"
+	"k8s.io/apiserver/pkg/server"
+	genericapiserver "k8s.io/apiserver/pkg/server"
+	"k8s.io/apiserver/pkg/util/webhook"
+	cacheddiscovery "k8s.io/client-go/discovery/cached"
+	externalinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
+	quotainstall "k8s.io/kubernetes/pkg/quota/v1/install"
 )
 
-func makeAbs(path, base string) (string, error) {
-	if filepath.IsAbs(path) {
-		return path, nil
-	}
-	if len(base) == 0 || base == "." {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return "", err
-		}
-		base = cwd
-	}
-	return filepath.Join(base, path), nil
+type AdmissionConfig struct {
+	CloudConfigFile      string
+	LoopbackClientConfig *rest.Config
+	ExternalInformers    externalinformers.SharedInformerFactory
 }
 
-// ReadAdmissionConfiguration reads the admission configuration at the specified path.
-// It returns the loaded admission configuration if the input file aligns with the required syntax.
-// If it does not align with the provided syntax, it returns a default configuration for the enumerated
-// set of pluginNames whose config location references the specified configFilePath.
-// It does this to preserve backward compatibility when admission control files were opaque.
-// It returns an error if the file did not exist.
-func ReadAdmissionConfiguration(pluginNames []string, configFilePath string) (admission.ConfigProvider, error) {
-	if configFilePath == "" {
-		return configProvider{config: &componentconfig.AdmissionConfiguration{}}, nil
+func (c *AdmissionConfig) buildAuthnInfoResolver(proxyTransport *http.Transport) webhook.AuthenticationInfoResolverWrapper {
+	webhookAuthResolverWrapper := func(delegate webhook.AuthenticationInfoResolver) webhook.AuthenticationInfoResolver {
+		return &webhook.AuthenticationInfoResolverDelegator{
+			ClientConfigForFunc: func(server string) (*rest.Config, error) {
+				if server == "kubernetes.default.svc" {
+					return c.LoopbackClientConfig, nil
+				}
+				return delegate.ClientConfigFor(server)
+			},
+			ClientConfigForServiceFunc: func(serviceName, serviceNamespace string) (*rest.Config, error) {
+				if serviceName == "kubernetes" && serviceNamespace == v1.NamespaceDefault {
+					return c.LoopbackClientConfig, nil
+				}
+				ret, err := delegate.ClientConfigForService(serviceName, serviceNamespace)
+				if err != nil {
+					return nil, err
+				}
+				if proxyTransport != nil && proxyTransport.DialContext != nil {
+					ret.Dial = proxyTransport.DialContext
+				}
+				return ret, err
+			},
+		}
 	}
-	// a file was provided, so we just read it.
-	data, err := ioutil.ReadFile(configFilePath)
+	return webhookAuthResolverWrapper
+}
+
+func (c *AdmissionConfig) New(proxyTransport *http.Transport, serviceResolver webhook.ServiceResolver) ([]admission.PluginInitializer, server.PostStartHookFunc, error) {
+	webhookAuthResolverWrapper := c.buildAuthnInfoResolver(proxyTransport)
+	webhookPluginInitializer := webhookinit.NewPluginInitializer(webhookAuthResolverWrapper, serviceResolver)
+
+	var cloudConfig []byte
+	if c.CloudConfigFile != "" {
+		var err error
+		cloudConfig, err = ioutil.ReadFile(c.CloudConfigFile)
+		if err != nil {
+			glog.Fatalf("Error reading from cloud configuration file %s: %#v", c.CloudConfigFile, err)
+		}
+	}
+	internalClient, err := internalclientset.NewForConfig(c.LoopbackClientConfig)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read admission control configuration from %q [%v]", configFilePath, err)
-	}
-	decoder := api.Codecs.UniversalDecoder()
-	decodedObj, err := runtime.Decode(decoder, data)
-	// we were able to decode the file successfully
-	if err == nil {
-		decodedConfig, ok := decodedObj.(*componentconfig.AdmissionConfiguration)
-		if !ok {
-			return nil, fmt.Errorf("unexpected type: %T", decodedObj)
-		}
-		baseDir := path.Dir(configFilePath)
-		for i := range decodedConfig.Plugins {
-			if decodedConfig.Plugins[i].Path == "" {
-				continue
-			}
-			// we update relative file paths to absolute paths
-			absPath, err := makeAbs(decodedConfig.Plugins[i].Path, baseDir)
-			if err != nil {
-				return nil, err
-			}
-			decodedConfig.Plugins[i].Path = absPath
-		}
-		return configProvider{config: decodedConfig}, nil
-	}
-	// we got an error where the decode wasn't related to a missing type
-	if !(runtime.IsMissingVersion(err) || runtime.IsMissingKind(err) || runtime.IsNotRegisteredError(err)) {
-		return nil, err
-	}
-	// convert the legacy format to the new admission control format
-	// in order to preserve backwards compatibility, we set plugins that
-	// previously read input from a non-versioned file configuration to the
-	// current input file.
-	legacyPluginsWithUnversionedConfig := sets.NewString("ImagePolicyWebhook", "PodNodeSelector")
-	externalConfig := &componentconfigv1alpha1.AdmissionConfiguration{}
-	for _, pluginName := range pluginNames {
-		if legacyPluginsWithUnversionedConfig.Has(pluginName) {
-			externalConfig.Plugins = append(externalConfig.Plugins,
-				componentconfigv1alpha1.AdmissionPluginConfiguration{
-					Name: pluginName,
-					Path: configFilePath})
-		}
-	}
-	api.Scheme.Default(externalConfig)
-	internalConfig := &componentconfig.AdmissionConfiguration{}
-	if err := api.Scheme.Convert(externalConfig, internalConfig, nil); err != nil {
-		return nil, err
-	}
-	return configProvider{config: internalConfig}, nil
-}
-
-type configProvider struct {
-	config *componentconfig.AdmissionConfiguration
-}
-
-// GetAdmissionPluginConfigurationFor returns a reader that holds the admission plugin configuration.
-func GetAdmissionPluginConfigurationFor(pluginCfg componentconfig.AdmissionPluginConfiguration) (io.Reader, error) {
-	// if there is nothing nested in the object, we return the named location
-	obj := pluginCfg.Configuration
-	if obj != nil {
-		// serialize the configuration and build a reader for it
-		content, err := writeYAML(obj)
-		if err != nil {
-			return nil, err
-		}
-		return bytes.NewBuffer(content), nil
-	}
-	// there is nothing nested, so we delegate to path
-	if pluginCfg.Path != "" {
-		content, err := ioutil.ReadFile(pluginCfg.Path)
-		if err != nil {
-			glog.Fatalf("Couldn't open admission plugin configuration %s: %#v", pluginCfg.Path, err)
-			return nil, err
-		}
-		return bytes.NewBuffer(content), nil
-	}
-	// there is no special config at all
-	return nil, nil
-}
-
-// GetAdmissionPluginConfiguration takes the admission configuration and returns a reader
-// for the specified plugin.  If no specific configuration is present, we return a nil reader.
-func (p configProvider) ConfigFor(pluginName string) (io.Reader, error) {
-	// there is no config, so there is no potential config
-	if p.config == nil {
-		return nil, nil
-	}
-	// look for matching plugin and get configuration
-	for _, pluginCfg := range p.config.Plugins {
-		if pluginName != pluginCfg.Name {
-			continue
-		}
-		pluginConfig, err := GetAdmissionPluginConfigurationFor(pluginCfg)
-		if err != nil {
-			return nil, err
-		}
-		return pluginConfig, nil
-	}
-	// there is no registered config that matches on plugin name.
-	return nil, nil
-}
-
-// writeYAML writes the specified object to a byte array as yaml.
-func writeYAML(obj runtime.Object) ([]byte, error) {
-	json, err := runtime.Encode(api.Codecs.LegacyCodec(), obj)
-	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	content, err := yaml.JSONToYAML(json)
-	if err != nil {
-		return nil, err
+	discoveryClient := cacheddiscovery.NewMemCacheClient(internalClient.Discovery())
+	discoveryRESTMapper := restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient)
+	kubePluginInitializer := NewPluginInitializer(
+		cloudConfig,
+		discoveryRESTMapper,
+		quotainstall.NewQuotaConfigurationForAdmission(),
+	)
+
+	admissionPostStartHook := func(context genericapiserver.PostStartHookContext) error {
+		discoveryRESTMapper.Reset()
+		go utilwait.Until(discoveryRESTMapper.Reset, 30*time.Second, context.StopCh)
+		return nil
 	}
-	return content, err
+
+	return []admission.PluginInitializer{webhookPluginInitializer, kubePluginInitializer}, admissionPostStartHook, nil
 }

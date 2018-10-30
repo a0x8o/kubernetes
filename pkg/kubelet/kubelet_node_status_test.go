@@ -54,7 +54,7 @@ import (
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/nodestatus"
 	"k8s.io/kubernetes/pkg/kubelet/util/sliceutils"
-	"k8s.io/kubernetes/pkg/scheduler/algorithm"
+	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 	taintutil "k8s.io/kubernetes/pkg/util/taints"
 	"k8s.io/kubernetes/pkg/version"
 	"k8s.io/kubernetes/pkg/volume/util"
@@ -234,14 +234,6 @@ func TestUpdateNewNodeStatus(t *testing.T) {
 				Status: v1.NodeStatus{
 					Conditions: []v1.NodeCondition{
 						{
-							Type:               v1.NodeOutOfDisk,
-							Status:             v1.ConditionFalse,
-							Reason:             "KubeletHasSufficientDisk",
-							Message:            fmt.Sprintf("kubelet has sufficient disk space available"),
-							LastHeartbeatTime:  metav1.Time{},
-							LastTransitionTime: metav1.Time{},
-						},
-						{
 							Type:               v1.NodeMemoryPressure,
 							Status:             v1.ConditionFalse,
 							Reason:             "KubeletHasSufficientMemory",
@@ -360,14 +352,6 @@ func TestUpdateExistingNodeStatus(t *testing.T) {
 		Status: v1.NodeStatus{
 			Conditions: []v1.NodeCondition{
 				{
-					Type:               v1.NodeOutOfDisk,
-					Status:             v1.ConditionFalse,
-					Reason:             "KubeletHasSufficientDisk",
-					Message:            fmt.Sprintf("kubelet has sufficient disk space available"),
-					LastHeartbeatTime:  metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
-					LastTransitionTime: metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
-				},
-				{
 					Type:               v1.NodeMemoryPressure,
 					Status:             v1.ConditionFalse,
 					Reason:             "KubeletHasSufficientMemory",
@@ -427,14 +411,6 @@ func TestUpdateExistingNodeStatus(t *testing.T) {
 		Spec:       v1.NodeSpec{},
 		Status: v1.NodeStatus{
 			Conditions: []v1.NodeCondition{
-				{
-					Type:               v1.NodeOutOfDisk,
-					Status:             v1.ConditionFalse,
-					Reason:             "KubeletHasSufficientDisk",
-					Message:            fmt.Sprintf("kubelet has sufficient disk space available"),
-					LastHeartbeatTime:  metav1.Time{},
-					LastTransitionTime: metav1.Time{},
-				},
 				{
 					Type:               v1.NodeMemoryPressure,
 					Status:             v1.ConditionFalse,
@@ -640,14 +616,6 @@ func TestUpdateNodeStatusWithRuntimeStateError(t *testing.T) {
 		Spec:       v1.NodeSpec{},
 		Status: v1.NodeStatus{
 			Conditions: []v1.NodeCondition{
-				{
-					Type:               v1.NodeOutOfDisk,
-					Status:             v1.ConditionFalse,
-					Reason:             "KubeletHasSufficientDisk",
-					Message:            fmt.Sprintf("kubelet has sufficient disk space available"),
-					LastHeartbeatTime:  metav1.Time{},
-					LastTransitionTime: metav1.Time{},
-				},
 				{
 					Type:               v1.NodeMemoryPressure,
 					Status:             v1.ConditionFalse,
@@ -1549,7 +1517,7 @@ func TestRegisterWithApiServerWithTaint(t *testing.T) {
 		// Check the unschedulable taint.
 		got := gotNode.(*v1.Node)
 		unschedulableTaint := &v1.Taint{
-			Key:    algorithm.TaintNodeUnschedulable,
+			Key:    schedulerapi.TaintNodeUnschedulable,
 			Effect: v1.TaintEffectNoSchedule,
 		}
 

@@ -113,23 +113,22 @@ var iptablesChains = []struct {
 var ipsetInfo = []struct {
 	name    string
 	setType utilipset.Type
-	isIPv6  bool
 	comment string
 }{
-	{kubeLoopBackIPSet, utilipset.HashIPPortIP, true, kubeLoopBackIPSetComment},
-	{kubeClusterIPSet, utilipset.HashIPPort, true, kubeClusterIPSetComment},
-	{kubeExternalIPSet, utilipset.HashIPPort, true, kubeExternalIPSetComment},
-	{kubeLoadBalancerSet, utilipset.HashIPPort, true, kubeLoadBalancerSetComment},
-	{kubeLoadbalancerFWSet, utilipset.HashIPPort, true, kubeLoadbalancerFWSetComment},
-	{kubeLoadBalancerLocalSet, utilipset.HashIPPort, true, kubeLoadBalancerLocalSetComment},
-	{kubeLoadBalancerSourceIPSet, utilipset.HashIPPortIP, true, kubeLoadBalancerSourceIPSetComment},
-	{kubeLoadBalancerSourceCIDRSet, utilipset.HashIPPortNet, true, kubeLoadBalancerSourceCIDRSetComment},
-	{kubeNodePortSetTCP, utilipset.BitmapPort, false, kubeNodePortSetTCPComment},
-	{kubeNodePortLocalSetTCP, utilipset.BitmapPort, false, kubeNodePortLocalSetTCPComment},
-	{kubeNodePortSetUDP, utilipset.BitmapPort, false, kubeNodePortSetUDPComment},
-	{kubeNodePortLocalSetUDP, utilipset.BitmapPort, false, kubeNodePortLocalSetUDPComment},
-	{kubeNodePortSetSCTP, utilipset.BitmapPort, false, kubeNodePortSetSCTPComment},
-	{kubeNodePortLocalSetSCTP, utilipset.BitmapPort, false, kubeNodePortLocalSetSCTPComment},
+	{kubeLoopBackIPSet, utilipset.HashIPPortIP, kubeLoopBackIPSetComment},
+	{kubeClusterIPSet, utilipset.HashIPPort, kubeClusterIPSetComment},
+	{kubeExternalIPSet, utilipset.HashIPPort, kubeExternalIPSetComment},
+	{kubeLoadBalancerSet, utilipset.HashIPPort, kubeLoadBalancerSetComment},
+	{kubeLoadbalancerFWSet, utilipset.HashIPPort, kubeLoadbalancerFWSetComment},
+	{kubeLoadBalancerLocalSet, utilipset.HashIPPort, kubeLoadBalancerLocalSetComment},
+	{kubeLoadBalancerSourceIPSet, utilipset.HashIPPortIP, kubeLoadBalancerSourceIPSetComment},
+	{kubeLoadBalancerSourceCIDRSet, utilipset.HashIPPortNet, kubeLoadBalancerSourceCIDRSetComment},
+	{kubeNodePortSetTCP, utilipset.BitmapPort, kubeNodePortSetTCPComment},
+	{kubeNodePortLocalSetTCP, utilipset.BitmapPort, kubeNodePortLocalSetTCPComment},
+	{kubeNodePortSetUDP, utilipset.BitmapPort, kubeNodePortSetUDPComment},
+	{kubeNodePortLocalSetUDP, utilipset.BitmapPort, kubeNodePortLocalSetUDPComment},
+	{kubeNodePortSetSCTP, utilipset.BitmapPort, kubeNodePortSetSCTPComment},
+	{kubeNodePortLocalSetSCTP, utilipset.BitmapPort, kubeNodePortLocalSetSCTPComment},
 }
 
 // ipsetWithIptablesChain is the ipsets list with iptables source chain and the chain jump to
@@ -164,6 +163,7 @@ var ipvsModules = []string{
 	"ip_vs_wrr",
 	"ip_vs_sh",
 	"nf_conntrack_ipv4",
+	"nf_conntrack",
 }
 
 // In IPVS proxy mode, the following flags need to be set
@@ -231,7 +231,8 @@ type Proxier struct {
 	nodePortAddresses []string
 	// networkInterfacer defines an interface for several net library functions.
 	// Inject for test purpose.
-	networkInterfacer utilproxy.NetworkInterfacer
+	networkInterfacer     utilproxy.NetworkInterfacer
+	gracefuldeleteManager *GracefulTerminationManager
 }
 
 // IPGetter helps get node network interface IP
@@ -299,8 +300,10 @@ func NewProxier(ipt utiliptables.Interface,
 	nodePortAddresses []string,
 ) (*Proxier, error) {
 	// Set the route_localnet sysctl we need for
-	if err := sysctl.SetSysctl(sysctlRouteLocalnet, 1); err != nil {
-		return nil, fmt.Errorf("can't set sysctl %s: %v", sysctlRouteLocalnet, err)
+	if val, _ := sysctl.GetSysctl(sysctlRouteLocalnet); val != 1 {
+		if err := sysctl.SetSysctl(sysctlRouteLocalnet, 1); err != nil {
+			return nil, fmt.Errorf("can't set sysctl %s: %v", sysctlRouteLocalnet, err)
+		}
 	}
 
 	// Proxy needs br_netfilter and bridge-nf-call-iptables=1 when containers
@@ -311,13 +314,17 @@ func NewProxier(ipt utiliptables.Interface,
 	}
 
 	// Set the conntrack sysctl we need for
-	if err := sysctl.SetSysctl(sysctlVSConnTrack, 1); err != nil {
-		return nil, fmt.Errorf("can't set sysctl %s: %v", sysctlVSConnTrack, err)
+	if val, _ := sysctl.GetSysctl(sysctlVSConnTrack); val != 1 {
+		if err := sysctl.SetSysctl(sysctlVSConnTrack, 1); err != nil {
+			return nil, fmt.Errorf("can't set sysctl %s: %v", sysctlVSConnTrack, err)
+		}
 	}
 
 	// Set the ip_forward sysctl we need for
-	if err := sysctl.SetSysctl(sysctlForward, 1); err != nil {
-		return nil, fmt.Errorf("can't set sysctl %s: %v", sysctlForward, err)
+	if val, _ := sysctl.GetSysctl(sysctlForward); val != 1 {
+		if err := sysctl.SetSysctl(sysctlForward, 1); err != nil {
+			return nil, fmt.Errorf("can't set sysctl %s: %v", sysctlForward, err)
+		}
 	}
 
 	// Generate the masquerade mark to use for SNAT rules.
@@ -347,50 +354,49 @@ func NewProxier(ipt utiliptables.Interface,
 	healthChecker := healthcheck.NewServer(hostname, recorder, nil, nil) // use default implementations of deps
 
 	proxier := &Proxier{
-		portsMap:          make(map[utilproxy.LocalPort]utilproxy.Closeable),
-		serviceMap:        make(proxy.ServiceMap),
-		serviceChanges:    proxy.NewServiceChangeTracker(newServiceInfo, &isIPv6, recorder),
-		endpointsMap:      make(proxy.EndpointsMap),
-		endpointsChanges:  proxy.NewEndpointChangeTracker(hostname, nil, &isIPv6, recorder),
-		syncPeriod:        syncPeriod,
-		minSyncPeriod:     minSyncPeriod,
-		excludeCIDRs:      excludeCIDRs,
-		iptables:          ipt,
-		masqueradeAll:     masqueradeAll,
-		masqueradeMark:    masqueradeMark,
-		exec:              exec,
-		clusterCIDR:       clusterCIDR,
-		hostname:          hostname,
-		nodeIP:            nodeIP,
-		portMapper:        &listenPortOpener{},
-		recorder:          recorder,
-		healthChecker:     healthChecker,
-		healthzServer:     healthzServer,
-		ipvs:              ipvs,
-		ipvsScheduler:     scheduler,
-		ipGetter:          &realIPGetter{nl: NewNetLinkHandle()},
-		iptablesData:      bytes.NewBuffer(nil),
-		filterChainsData:  bytes.NewBuffer(nil),
-		natChains:         bytes.NewBuffer(nil),
-		natRules:          bytes.NewBuffer(nil),
-		filterChains:      bytes.NewBuffer(nil),
-		filterRules:       bytes.NewBuffer(nil),
-		netlinkHandle:     NewNetLinkHandle(),
-		ipset:             ipset,
-		nodePortAddresses: nodePortAddresses,
-		networkInterfacer: utilproxy.RealNetwork{},
+		portsMap:              make(map[utilproxy.LocalPort]utilproxy.Closeable),
+		serviceMap:            make(proxy.ServiceMap),
+		serviceChanges:        proxy.NewServiceChangeTracker(newServiceInfo, &isIPv6, recorder),
+		endpointsMap:          make(proxy.EndpointsMap),
+		endpointsChanges:      proxy.NewEndpointChangeTracker(hostname, nil, &isIPv6, recorder),
+		syncPeriod:            syncPeriod,
+		minSyncPeriod:         minSyncPeriod,
+		excludeCIDRs:          excludeCIDRs,
+		iptables:              ipt,
+		masqueradeAll:         masqueradeAll,
+		masqueradeMark:        masqueradeMark,
+		exec:                  exec,
+		clusterCIDR:           clusterCIDR,
+		hostname:              hostname,
+		nodeIP:                nodeIP,
+		portMapper:            &listenPortOpener{},
+		recorder:              recorder,
+		healthChecker:         healthChecker,
+		healthzServer:         healthzServer,
+		ipvs:                  ipvs,
+		ipvsScheduler:         scheduler,
+		ipGetter:              &realIPGetter{nl: NewNetLinkHandle()},
+		iptablesData:          bytes.NewBuffer(nil),
+		filterChainsData:      bytes.NewBuffer(nil),
+		natChains:             bytes.NewBuffer(nil),
+		natRules:              bytes.NewBuffer(nil),
+		filterChains:          bytes.NewBuffer(nil),
+		filterRules:           bytes.NewBuffer(nil),
+		netlinkHandle:         NewNetLinkHandle(),
+		ipset:                 ipset,
+		nodePortAddresses:     nodePortAddresses,
+		networkInterfacer:     utilproxy.RealNetwork{},
+		gracefuldeleteManager: NewGracefulTerminationManager(ipvs),
 	}
 	// initialize ipsetList with all sets we needed
 	proxier.ipsetList = make(map[string]*IPSet)
 	for _, is := range ipsetInfo {
-		if is.isIPv6 {
-			proxier.ipsetList[is.name] = NewIPSet(ipset, is.name, is.setType, isIPv6, is.comment)
-		}
-		proxier.ipsetList[is.name] = NewIPSet(ipset, is.name, is.setType, false, is.comment)
+		proxier.ipsetList[is.name] = NewIPSet(ipset, is.name, is.setType, isIPv6, is.comment)
 	}
 	burstSyncs := 2
 	glog.V(3).Infof("minSyncPeriod: %v, syncPeriod: %v, burstSyncs: %d", minSyncPeriod, syncPeriod, burstSyncs)
 	proxier.syncRunner = async.NewBoundedFrequencyRunner("sync-runner", proxier.syncProxyRules, minSyncPeriod, syncPeriod, burstSyncs)
+	proxier.gracefuldeleteManager.Run()
 	return proxier, nil
 }
 
@@ -442,7 +448,7 @@ func (handle *LinuxKernelHandler) GetModules() ([]string, error) {
 	builtinModsFilePath := fmt.Sprintf("/lib/modules/%s/modules.builtin", kernelVersion)
 	b, err = ioutil.ReadFile(builtinModsFilePath)
 	if err != nil {
-		glog.Errorf("Failed to read file %s with error %v", builtinModsFilePath, err)
+		glog.Warningf("Failed to read file %s with error %v. You can ignore this message when kube-proxy is running inside container without mounting /lib/modules", builtinModsFilePath, err)
 	}
 	var bmods []string
 	for _, module := range ipvsModules {
@@ -484,8 +490,21 @@ func CanUseIPVSProxier(handle KernelHandler, ipsetver IPSetVersioner) (bool, err
 	wantModules.Insert(ipvsModules...)
 	loadModules.Insert(mods...)
 	modules := wantModules.Difference(loadModules).UnsortedList()
-	if len(modules) != 0 {
-		return false, fmt.Errorf("IPVS proxier will not be used because the following required kernel modules are not loaded: %v", modules)
+	var missingMods []string
+	ConntrackiMissingCounter := 0
+	for _, mod := range modules {
+		if strings.Contains(mod, "nf_conntrack") {
+			ConntrackiMissingCounter++
+		} else {
+			missingMods = append(missingMods, mod)
+		}
+	}
+	if ConntrackiMissingCounter == 2 {
+		missingMods = append(missingMods, "nf_conntrack_ipv4(or nf_conntrack for Linux kernel 4.19 and later)")
+	}
+
+	if len(missingMods) != 0 {
+		return false, fmt.Errorf("IPVS proxier will not be used because the following required kernel modules are not loaded: %v", missingMods)
 	}
 
 	// Check ipset version
@@ -991,7 +1010,7 @@ func (proxier *Proxier) syncProxyRules() {
 				continue
 			}
 
-			lps := make([]utilproxy.LocalPort, 0)
+			var lps []utilproxy.LocalPort
 			for address := range addresses {
 				lp := utilproxy.LocalPort{
 					Description: "nodePort for " + svcNameString,
@@ -1082,7 +1101,7 @@ func (proxier *Proxier) syncProxyRules() {
 			}
 
 			// Build ipvs kernel routes for each node ip address
-			nodeIPs := make([]net.IP, 0)
+			var nodeIPs []net.IP
 			for address := range addresses {
 				if !utilproxy.IsZeroCIDR(address) {
 					nodeIPs = append(nodeIPs, net.ParseIP(address))
@@ -1504,53 +1523,72 @@ func (proxier *Proxier) syncEndpoint(svcPortName proxy.ServicePortName, onlyNode
 		newEndpoints.Insert(epInfo.String())
 	}
 
-	if !curEndpoints.Equal(newEndpoints) {
-		// Create new endpoints
-		for _, ep := range newEndpoints.Difference(curEndpoints).UnsortedList() {
-			ip, port, err := net.SplitHostPort(ep)
-			if err != nil {
-				glog.Errorf("Failed to parse endpoint: %v, error: %v", ep, err)
-				continue
-			}
-			portNum, err := strconv.Atoi(port)
-			if err != nil {
-				glog.Errorf("Failed to parse endpoint port %s, error: %v", port, err)
-				continue
-			}
+	// Create new endpoints
+	for _, ep := range newEndpoints.List() {
+		ip, port, err := net.SplitHostPort(ep)
+		if err != nil {
+			glog.Errorf("Failed to parse endpoint: %v, error: %v", ep, err)
+			continue
+		}
+		portNum, err := strconv.Atoi(port)
+		if err != nil {
+			glog.Errorf("Failed to parse endpoint port %s, error: %v", port, err)
+			continue
+		}
 
-			newDest := &utilipvs.RealServer{
-				Address: net.ParseIP(ip),
-				Port:    uint16(portNum),
-				Weight:  1,
+		newDest := &utilipvs.RealServer{
+			Address: net.ParseIP(ip),
+			Port:    uint16(portNum),
+			Weight:  1,
+		}
+
+		if curEndpoints.Has(ep) {
+			// check if newEndpoint is in gracefulDelete list, if true, delete this ep immediately
+			uniqueRS := GetUniqueRSName(vs, newDest)
+			if !proxier.gracefuldeleteManager.InTerminationList(uniqueRS) {
+				continue
 			}
-			err = proxier.ipvs.AddRealServer(appliedVirtualServer, newDest)
+			glog.V(5).Infof("new ep %q is in graceful delete list", uniqueRS)
+			err := proxier.gracefuldeleteManager.MoveRSOutofGracefulDeleteList(uniqueRS)
 			if err != nil {
-				glog.Errorf("Failed to add destination: %v, error: %v", newDest, err)
+				glog.Errorf("Failed to delete endpoint: %v in gracefulDeleteQueue, error: %v", ep, err)
 				continue
 			}
 		}
-		// Delete old endpoints
-		for _, ep := range curEndpoints.Difference(newEndpoints).UnsortedList() {
-			ip, port, err := net.SplitHostPort(ep)
-			if err != nil {
-				glog.Errorf("Failed to parse endpoint: %v, error: %v", ep, err)
-				continue
-			}
-			portNum, err := strconv.Atoi(port)
-			if err != nil {
-				glog.Errorf("Failed to parse endpoint port %s, error: %v", port, err)
-				continue
-			}
+		err = proxier.ipvs.AddRealServer(appliedVirtualServer, newDest)
+		if err != nil {
+			glog.Errorf("Failed to add destination: %v, error: %v", newDest, err)
+			continue
+		}
+	}
+	// Delete old endpoints
+	for _, ep := range curEndpoints.Difference(newEndpoints).UnsortedList() {
+		// if curEndpoint is in gracefulDelete, skip
+		uniqueRS := vs.String() + "/" + ep
+		if proxier.gracefuldeleteManager.InTerminationList(uniqueRS) {
+			continue
+		}
+		ip, port, err := net.SplitHostPort(ep)
+		if err != nil {
+			glog.Errorf("Failed to parse endpoint: %v, error: %v", ep, err)
+			continue
+		}
+		portNum, err := strconv.Atoi(port)
+		if err != nil {
+			glog.Errorf("Failed to parse endpoint port %s, error: %v", port, err)
+			continue
+		}
 
-			delDest := &utilipvs.RealServer{
-				Address: net.ParseIP(ip),
-				Port:    uint16(portNum),
-			}
-			err = proxier.ipvs.DeleteRealServer(appliedVirtualServer, delDest)
-			if err != nil {
-				glog.Errorf("Failed to delete destination: %v, error: %v", delDest, err)
-				continue
-			}
+		delDest := &utilipvs.RealServer{
+			Address: net.ParseIP(ip),
+			Port:    uint16(portNum),
+		}
+
+		glog.V(5).Infof("Using graceful delete to delete: %v", delDest)
+		err = proxier.gracefuldeleteManager.GracefulDeleteRS(appliedVirtualServer, delDest)
+		if err != nil {
+			glog.Errorf("Failed to delete destination: %v, error: %v", delDest, err)
+			continue
 		}
 	}
 	return nil
@@ -1563,6 +1601,15 @@ func (proxier *Proxier) cleanLegacyService(activeServices map[string]bool, curre
 			// This service was not processed in the latest sync loop so before deleting it,
 			// make sure it does not fall within an excluded CIDR range.
 			okayToDelete := true
+			rsList, _ := proxier.ipvs.GetRealServers(svc)
+			for _, rs := range rsList {
+				uniqueRS := GetUniqueRSName(svc, rs)
+				// if there are in terminating real server in this service, then handle it later
+				if proxier.gracefuldeleteManager.InTerminationList(uniqueRS) {
+					okayToDelete = false
+					break
+				}
+			}
 			for _, excludedCIDR := range proxier.excludeCIDRs {
 				// Any validation of this CIDR already should have occurred.
 				_, n, _ := net.ParseCIDR(excludedCIDR)

@@ -43,9 +43,9 @@ import (
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/kubectl"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/util/i18n"
+	"k8s.io/kubernetes/pkg/kubectl/util/templates"
 	"k8s.io/kubernetes/pkg/printers"
 	"k8s.io/kubernetes/pkg/util/interrupt"
 )
@@ -150,11 +150,11 @@ func NewCmdGet(parent string, f cmdutil.Factory, streams genericclioptions.IOStr
 	o := NewGetOptions(parent, streams)
 
 	cmd := &cobra.Command{
-		Use: "get [(-o|--output=)json|yaml|wide|custom-columns=...|custom-columns-file=...|go-template=...|go-template-file=...|jsonpath=...|jsonpath-file=...] (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
+		Use:                   "get [(-o|--output=)json|yaml|wide|custom-columns=...|custom-columns-file=...|go-template=...|go-template-file=...|jsonpath=...|jsonpath-file=...] (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
 		DisableFlagsInUseLine: true,
-		Short:   i18n.T("Display one or many resources"),
-		Long:    getLong + "\n\n" + cmdutil.SuggestApiResources(parent),
-		Example: getExample,
+		Short:                 i18n.T("Display one or many resources"),
+		Long:                  getLong + "\n\n" + cmdutil.SuggestApiResources(parent),
+		Example:               getExample,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(o.Complete(f, cmd, args))
 			cmdutil.CheckErr(o.Validate(cmd))
@@ -381,7 +381,7 @@ func NewRuntimeSorter(objects []runtime.Object, sortBy string) *RuntimeSorter {
 
 	return &RuntimeSorter{
 		field:   parsedField,
-		decoder: cmdutil.InternalVersionDecoder(),
+		decoder: legacyscheme.Codecs.UniversalDecoder(),
 		objects: objects,
 	}
 }

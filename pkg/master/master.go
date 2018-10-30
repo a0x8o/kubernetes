@@ -29,6 +29,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	appsv1beta1 "k8s.io/api/apps/v1beta1"
 	appsv1beta2 "k8s.io/api/apps/v1beta2"
+	auditregistrationv1alpha1 "k8s.io/api/auditregistration/v1alpha1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authenticationv1beta1 "k8s.io/api/authentication/v1beta1"
 	authorizationapiv1 "k8s.io/api/authorization/v1"
@@ -57,6 +58,7 @@ import (
 	storageapiv1beta1 "k8s.io/api/storage/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/endpoints/discovery"
 	"k8s.io/apiserver/pkg/registry/generic"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -67,7 +69,6 @@ import (
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	coreclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
-	internalinformers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	kubeoptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
 	kubeletclient "k8s.io/kubernetes/pkg/kubelet/client"
 	"k8s.io/kubernetes/pkg/master/reconcilers"
@@ -83,6 +84,7 @@ import (
 	// RESTStorage installers
 	admissionregistrationrest "k8s.io/kubernetes/pkg/registry/admissionregistration/rest"
 	appsrest "k8s.io/kubernetes/pkg/registry/apps/rest"
+	auditregistrationrest "k8s.io/kubernetes/pkg/registry/auditregistration/rest"
 	authenticationrest "k8s.io/kubernetes/pkg/registry/authentication/rest"
 	authorizationrest "k8s.io/kubernetes/pkg/registry/authorization/rest"
 	autoscalingrest "k8s.io/kubernetes/pkg/registry/autoscaling/rest"
@@ -167,11 +169,11 @@ type ExtraConfig struct {
 	EndpointReconcilerType reconcilers.Type
 
 	ServiceAccountIssuer        serviceaccount.TokenGenerator
-	ServiceAccountAPIAudiences  []string
 	ServiceAccountMaxExpiration time.Duration
 
+	APIAudiences authenticator.Audiences
+
 	VersionedInformers informers.SharedInformerFactory
-	InternalInformers  internalinformers.SharedInformerFactory
 }
 
 type Config struct {
@@ -332,8 +334,8 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 			ServiceNodePortRange:        c.ExtraConfig.ServiceNodePortRange,
 			LoopbackClientConfig:        c.GenericConfig.LoopbackClientConfig,
 			ServiceAccountIssuer:        c.ExtraConfig.ServiceAccountIssuer,
-			ServiceAccountAPIAudiences:  c.ExtraConfig.ServiceAccountAPIAudiences,
 			ServiceAccountMaxExpiration: c.ExtraConfig.ServiceAccountMaxExpiration,
+			APIAudiences:                c.ExtraConfig.APIAudiences,
 		}
 		m.InstallLegacyAPI(&c, c.GenericConfig.RESTOptionsGetter, legacyRESTStorageProvider)
 	}
@@ -346,6 +348,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 	// TODO: describe the priority all the way down in the RESTStorageProviders and plumb it back through the various discovery
 	// handlers that we have.
 	restStorageProviders := []RESTStorageProvider{
+		auditregistrationrest.RESTStorageProvider{},
 		authenticationrest.RESTStorageProvider{Authenticator: c.GenericConfig.Authentication.Authenticator},
 		authorizationrest.RESTStorageProvider{Authorizer: c.GenericConfig.Authorization.Authorizer, RuleResolver: c.GenericConfig.RuleResolver},
 		autoscalingrest.RESTStorageProvider{},
@@ -372,12 +375,6 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 	}
 
 	m.GenericAPIServer.AddPostStartHookOrDie("ca-registration", c.ExtraConfig.ClientCARegistrationHook.PostStartHook)
-	m.GenericAPIServer.AddPostStartHookOrDie("start-kube-apiserver-informers", func(context genericapiserver.PostStartHookContext) error {
-		if c.ExtraConfig.InternalInformers != nil {
-			c.ExtraConfig.InternalInformers.Start(context.StopCh)
-		}
-		return nil
-	})
 
 	return m, nil
 }
@@ -505,6 +502,7 @@ func DefaultAPIResourceConfigSource() *serverstorage.ResourceConfig {
 	)
 	// disable alpha versions explicitly so we have a full list of what's possible to serve
 	ret.DisableVersions(
+		auditregistrationv1alpha1.SchemeGroupVersion,
 		admissionregistrationv1alpha1.SchemeGroupVersion,
 		batchapiv2alpha1.SchemeGroupVersion,
 		rbacv1alpha1.SchemeGroupVersion,

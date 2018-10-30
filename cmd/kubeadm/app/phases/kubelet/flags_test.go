@@ -79,7 +79,7 @@ var (
 	errCgroupExecer = fakeExecer{
 		ioMap: map[string]fakeCmd{
 			"docker info": {
-				err: fmt.Errorf("no such binary: docker"),
+				err: errors.New("no such binary: docker"),
 			},
 		},
 	}
@@ -206,9 +206,9 @@ func TestBuildKubeletArgMap(t *testing.T) {
 					},
 				},
 				registerTaintsUsingFlags: true,
-				execer:          cgroupfsCgroupExecer,
-				pidOfFunc:       binaryNotRunningPidOfFunc,
-				defaultHostname: "foo",
+				execer:                   cgroupfsCgroupExecer,
+				pidOfFunc:                binaryNotRunningPidOfFunc,
+				defaultHostname:          "foo",
 			},
 			expected: map[string]string{
 				"container-runtime":          "remote",
