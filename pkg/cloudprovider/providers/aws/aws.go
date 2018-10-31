@@ -22,12 +22,11 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	gcfg "gopkg.in/gcfg.v1"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -44,10 +43,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/kms"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/golang/glog"
-	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/record"
-
-	"path"
+	gcfg "gopkg.in/gcfg.v1"
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -55,8 +51,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/kubernetes/pkg/api/v1/service"
 	"k8s.io/kubernetes/pkg/controller"
@@ -2177,7 +2175,6 @@ func (c *Cloud) CreateDisk(volumeOptions *VolumeOptions) (KubernetesVolumeID, er
 		return "", fmt.Errorf("invalid AWS VolumeType %q", volumeOptions.VolumeType)
 	}
 
-	// TODO: Should we tag this with the cluster id (so it gets deleted when the cluster does?)
 	request := &ec2.CreateVolumeInput{}
 	request.AvailabilityZone = aws.String(volumeOptions.AvailabilityZone)
 	request.Size = aws.Int64(int64(volumeOptions.CapacityGB))
@@ -2190,6 +2187,21 @@ func (c *Cloud) CreateDisk(volumeOptions *VolumeOptions) (KubernetesVolumeID, er
 	if iops > 0 {
 		request.Iops = aws.Int64(iops)
 	}
+
+	tags := volumeOptions.Tags
+	tags = c.tagging.buildTags(ResourceLifecycleOwned, tags)
+
+	var tagList []*ec2.Tag
+	for k, v := range tags {
+		tagList = append(tagList, &ec2.Tag{
+			Key: aws.String(k), Value: aws.String(v),
+		})
+	}
+	request.TagSpecifications = append(request.TagSpecifications, &ec2.TagSpecification{
+		Tags:         tagList,
+		ResourceType: aws.String(ec2.ResourceTypeVolume),
+	})
+
 	response, err := c.ec2.CreateVolume(request)
 	if err != nil {
 		return "", err
@@ -2200,17 +2212,6 @@ func (c *Cloud) CreateDisk(volumeOptions *VolumeOptions) (KubernetesVolumeID, er
 		return "", fmt.Errorf("VolumeID was not returned by CreateVolume")
 	}
 	volumeName := KubernetesVolumeID("aws://" + aws.StringValue(response.AvailabilityZone) + "/" + string(awsID))
-
-	// apply tags
-	if err := c.tagging.createTags(c.ec2, string(awsID), ResourceLifecycleOwned, volumeOptions.Tags); err != nil {
-		// delete the volume and hope it succeeds
-		_, delerr := c.DeleteDisk(volumeName)
-		if delerr != nil {
-			// delete did not succeed, we have a stray volume!
-			return "", fmt.Errorf("error tagging volume %s, could not delete the volume: %q", volumeName, delerr)
-		}
-		return "", fmt.Errorf("error tagging volume %s: %q", volumeName, err)
-	}
 
 	// AWS has a bad habbit of reporting success when creating a volume with
 	// encryption keys that either don't exists or have wrong permissions.
