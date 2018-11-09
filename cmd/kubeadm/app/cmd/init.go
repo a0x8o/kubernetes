@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -47,10 +47,9 @@ import (
 	clusterinfophase "k8s.io/kubernetes/cmd/kubeadm/app/phases/bootstraptoken/clusterinfo"
 	nodebootstraptokenphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/bootstraptoken/node"
 	certsphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/certs"
+	kubeconfigphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/kubeconfig"
 	kubeletphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/kubelet"
 	markmasterphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/markmaster"
-	patchnodephase "k8s.io/kubernetes/cmd/kubeadm/app/phases/patchnode"
-	selfhostingphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/selfhosting"
 	uploadconfigphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/uploadconfig"
 	"k8s.io/kubernetes/cmd/kubeadm/app/preflight"
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
@@ -182,6 +181,7 @@ func NewCmdInit(out io.Writer) *cobra.Command {
 	initRunner.AppendPhase(phases.NewControlPlanePhase())
 	initRunner.AppendPhase(phases.NewEtcdPhase())
 	initRunner.AppendPhase(phases.NewWaitControlPlanePhase())
+	initRunner.AppendPhase(phases.NewUploadConfigPhase())
 	// TODO: add other phases to the runner.
 
 	// sets the data builder function, that will be used by the runner
@@ -331,6 +331,15 @@ func newInitData(cmd *cobra.Command, options *initOptions, out io.Writer) (initD
 
 	// Checks if an external CA is provided by the user.
 	externalCA, _ := certsphase.UsingExternalCA(cfg)
+	if externalCA {
+		kubeconfigDir := kubeadmconstants.KubernetesDir
+		if options.dryRun {
+			kubeconfigDir = dryRunDir
+		}
+		if err := kubeconfigphase.ValidateKubeconfigsForExternalCA(kubeconfigDir, cfg); err != nil {
+			return initData{}, err
+		}
+	}
 
 	return initData{
 		cfg:                   cfg,
@@ -453,7 +462,7 @@ func runInit(i *initData, out io.Writer) error {
 
 	// Get directories to write files to; can be faked if we're dry-running
 	glog.V(1).Infof("[init] Getting certificates directory from configuration")
-	certsDirToWriteTo, kubeConfigDir, manifestDir, _, err := getDirectoriesToUse(i.dryRun, i.dryRunDir, i.cfg.CertificatesDir)
+	certsDirToWriteTo, kubeConfigDir, _, _, err := getDirectoriesToUse(i.dryRun, i.dryRunDir, i.cfg.CertificatesDir)
 	if err != nil {
 		return errors.Wrap(err, "error getting directories to use")
 	}
@@ -468,13 +477,6 @@ func runInit(i *initData, out io.Writer) error {
 	client, err := i.Client()
 	if err != nil {
 		return errors.Wrap(err, "failed to create client")
-	}
-
-	// TODO: NewControlPlaneWaiter should be converted to private after the self-hosting phase is removed.
-	timeout := i.cfg.ClusterConfiguration.APIServer.TimeoutForControlPlane.Duration
-	waiter, err := phases.NewControlPlaneWaiter(i.dryRun, timeout, client, i.outputWriter)
-	if err != nil {
-		return errors.Wrap(err, "failed to create waiter")
 	}
 
 	// Upload currently used configuration to the cluster
@@ -494,11 +496,6 @@ func runInit(i *initData, out io.Writer) error {
 	glog.V(1).Infof("[init] marking the master with right label")
 	if err := markmasterphase.MarkMaster(client, i.cfg.NodeRegistration.Name, i.cfg.NodeRegistration.Taints); err != nil {
 		return errors.Wrap(err, "error marking master")
-	}
-
-	glog.V(1).Infof("[init] preserving the crisocket information for the master")
-	if err := patchnodephase.AnnotateCRISocket(client, i.cfg.NodeRegistration.Name, i.cfg.NodeRegistration.CRISocket); err != nil {
-		return errors.Wrap(err, "error uploading crisocket")
 	}
 
 	// This feature is disabled by default
@@ -567,17 +564,6 @@ func runInit(i *initData, out io.Writer) error {
 	glog.V(1).Infof("[init] ensuring proxy addon")
 	if err := proxyaddonphase.EnsureProxyAddon(i.cfg, client); err != nil {
 		return errors.Wrap(err, "error ensuring proxy addon")
-	}
-
-	// PHASE 7: Make the control plane self-hosted if feature gate is enabled
-	if features.Enabled(i.cfg.FeatureGates, features.SelfHosting) {
-		glog.V(1).Infof("[init] feature gate is enabled. Making control plane self-hosted")
-		// Temporary control plane is up, now we create our self hosted control
-		// plane components and remove the static manifests:
-		fmt.Println("[self-hosted] creating self-hosted control plane")
-		if err := selfhostingphase.CreateSelfHostedControlPlane(manifestDir, kubeConfigDir, i.cfg, client, waiter, i.dryRun); err != nil {
-			return errors.Wrap(err, "error creating self hosted control plane")
-		}
 	}
 
 	// Exit earlier if we're dryrunning

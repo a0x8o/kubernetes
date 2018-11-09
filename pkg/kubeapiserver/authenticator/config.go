@@ -38,13 +38,15 @@ import (
 	"k8s.io/apiserver/plugin/pkg/authenticator/request/basicauth"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
+	// Initialize all known client auth plugins.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	certutil "k8s.io/client-go/util/cert"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/serviceaccount"
 )
 
-type AuthenticatorConfig struct {
+// Config contains the data on how to authenticate a request to the Kube API Server
+type Config struct {
 	Anonymous                   bool
 	BasicAuthFile               string
 	BootstrapToken              bool
@@ -78,7 +80,7 @@ type AuthenticatorConfig struct {
 
 // New returns an authenticator.Request or an error that supports the standard
 // Kubernetes authentication mechanisms.
-func (config AuthenticatorConfig) New() (authenticator.Request, *spec.SecurityDefinitions, error) {
+func (config Config) New() (authenticator.Request, *spec.SecurityDefinitions, error) {
 	var authenticators []authenticator.Request
 	var tokenAuthenticators []authenticator.Token
 	securityDefinitions := spec.SecurityDefinitions{}
@@ -178,7 +180,7 @@ func (config AuthenticatorConfig) New() (authenticator.Request, *spec.SecurityDe
 		tokenAuth := tokenunion.New(tokenAuthenticators...)
 		// Optionally cache authentication results
 		if config.TokenSuccessCacheTTL > 0 || config.TokenFailureCacheTTL > 0 {
-			tokenAuth = tokencache.New(tokenAuth, config.TokenSuccessCacheTTL, config.TokenFailureCacheTTL)
+			tokenAuth = tokencache.New(tokenAuth, true, config.TokenSuccessCacheTTL, config.TokenFailureCacheTTL)
 		}
 		authenticators = append(authenticators, bearertoken.New(tokenAuth), websocket.NewProtocolAuthenticator(tokenAuth))
 		securityDefinitions["BearerToken"] = &spec.SecurityScheme{
@@ -316,10 +318,10 @@ func newAuthenticatorFromClientCAFile(clientCAFile string) (authenticator.Reques
 }
 
 func newWebhookTokenAuthenticator(webhookConfigFile string, ttl time.Duration) (authenticator.Token, error) {
-	webhookTokenAuthenticator, err := webhook.New(webhookConfigFile, ttl)
+	webhookTokenAuthenticator, err := webhook.New(webhookConfigFile)
 	if err != nil {
 		return nil, err
 	}
 
-	return webhookTokenAuthenticator, nil
+	return tokencache.New(webhookTokenAuthenticator, false, ttl, ttl), nil
 }

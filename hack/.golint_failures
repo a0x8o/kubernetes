@@ -134,10 +134,6 @@ pkg/credentialprovider/gcp
 pkg/credentialprovider/rancher
 pkg/features
 pkg/kubeapiserver
-pkg/kubeapiserver/admission
-pkg/kubeapiserver/authenticator
-pkg/kubeapiserver/authorizer
-pkg/kubeapiserver/authorizer/modes
 pkg/kubeapiserver/options
 pkg/kubectl
 pkg/kubectl/apps
@@ -397,8 +393,6 @@ pkg/version/verflag
 pkg/volume
 pkg/volume/azure_dd
 pkg/volume/azure_file
-pkg/volume/cephfs
-pkg/volume/configmap
 pkg/volume/csi/fake
 pkg/volume/git_repo
 pkg/volume/host_path
@@ -409,7 +403,6 @@ pkg/volume/photon_pd
 pkg/volume/portworx
 pkg/volume/rbd
 pkg/volume/scaleio
-pkg/volume/secret
 pkg/volume/storageos
 pkg/volume/testing
 pkg/volume/util/fs
