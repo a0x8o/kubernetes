@@ -41,9 +41,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/golang/glog"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/net/websocket"
+	"k8s.io/klog"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -3419,8 +3419,8 @@ func IssueSSHCommandWithResult(cmd, provider string, node *v1.Node) (*SSHResult,
 	LogSSHResult(result)
 
 	if result.Code != 0 || err != nil {
-		return nil, fmt.Errorf("failed running %q: %v (exit code %d)",
-			cmd, err, result.Code)
+		return nil, fmt.Errorf("failed running %q: %v (exit code %d, stderr %v)",
+			cmd, err, result.Code, result.Stderr)
 	}
 
 	return &result, nil
@@ -4865,7 +4865,7 @@ func ListNamespaceEvents(c clientset.Interface, ns string) error {
 		return err
 	}
 	for _, event := range ls.Items {
-		glog.Infof("Event(%#v): type: '%v' reason: '%v' %v", event.InvolvedObject, event.Type, event.Reason, event.Message)
+		klog.Infof("Event(%#v): type: '%v' reason: '%v' %v", event.InvolvedObject, event.Type, event.Reason, event.Message)
 	}
 	return nil
 }
@@ -4904,7 +4904,7 @@ func (p *E2ETestNodePreparer) PrepareNodes() error {
 		sum += v.Count
 		for ; index < sum; index++ {
 			if err := testutils.DoPrepareNode(p.client, &nodes.Items[index], v.Strategy); err != nil {
-				glog.Errorf("Aborting node preparation: %v", err)
+				klog.Errorf("Aborting node preparation: %v", err)
 				return err
 			}
 			p.nodeToAppliedStrategy[nodes.Items[index].Name] = v.Strategy
@@ -4922,7 +4922,7 @@ func (p *E2ETestNodePreparer) CleanupNodes() error {
 		strategy, found := p.nodeToAppliedStrategy[name]
 		if found {
 			if err = testutils.DoCleanupNode(p.client, name, strategy); err != nil {
-				glog.Errorf("Skipping cleanup of Node: failed update of %v: %v", name, err)
+				klog.Errorf("Skipping cleanup of Node: failed update of %v: %v", name, err)
 				encounteredError = err
 			}
 		}
