@@ -20,7 +20,9 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -113,27 +115,58 @@ func New(endpoints []string, ca, cert, key string) (*Client, error) {
 	return &client, nil
 }
 
-// NewFromStaticPod creates a GenericClient from the given endpoints, manifestDir, and certificatesDir
-func NewFromStaticPod(endpoints []string, manifestDir string, certificatesDir string) (*Client, error) {
-	hasTLS, err := PodManifestsHaveTLS(manifestDir)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not read manifests from: %s, error", manifestDir)
-	}
-	if hasTLS {
-		return New(
-			endpoints,
-			filepath.Join(certificatesDir, constants.EtcdCACertName),
-			filepath.Join(certificatesDir, constants.EtcdHealthcheckClientCertName),
-			filepath.Join(certificatesDir, constants.EtcdHealthcheckClientKeyName),
-		)
-	}
-	return New(endpoints, "", "", "")
-}
-
 // NewFromCluster creates an etcd client for the the etcd endpoints defined in the ClusterStatus value stored in
 // the kubeadm-config ConfigMap in kube-system namespace.
 // Once created, the client synchronizes client's endpoints with the known endpoints from the etcd membership API (reality check).
 func NewFromCluster(client clientset.Interface, certificatesDir string) (*Client, error) {
+
+	// Kubeadm v1.13 should manage v1.12 clusters and v1.13 clusters
+	// v1.12 clusters can be have etcd listening on localhost only (if the cluster was created with kubeadm v1.12)
+	// or etcd listening on localhost and API server advertise address (if the cluster was created with kubeadm v1.13).
+	// The first case should be dropped in v1.14 when support for v1.12 clusters can be removed from the codebase.
+
+	// Detect which type of etcd we are dealing with
+	// Please note that this test can be executed only on master nodes during upgrades;
+	// For nodes where we are joining a new control plane node instead we should tolerate that the etcd manifest does not
+	// exists and try to connect to etcd using API server advertise address; as described above this will lead to a know isse
+	// for cluster created with v1.12, but a documented workaround will be provided
+	oldManifest := false
+	klog.V(1).Infoln("checking etcd manifest")
+
+	etcdManifestFile := constants.GetStaticPodFilepath(constants.Etcd, constants.GetStaticPodDirectory())
+	etcdPod, err := staticpod.ReadStaticPodFromDisk(etcdManifestFile)
+	if err == nil {
+		etcdContainer := etcdPod.Spec.Containers[0]
+		for _, arg := range etcdContainer.Command {
+			if arg == "--listen-client-urls=https://127.0.0.1:2379" {
+				klog.V(1).Infoln("etcd manifest created by kubeadm v1.12")
+				oldManifest = true
+			}
+		}
+
+		// if etcd is listening on localhost only
+		if oldManifest == true {
+			// etcd cluster has a single member "by design"
+			endpoints := []string{fmt.Sprintf("localhost:%d", constants.EtcdListenClientPort)}
+
+			etcdClient, err := New(
+				endpoints,
+				filepath.Join(certificatesDir, constants.EtcdCACertName),
+				filepath.Join(certificatesDir, constants.EtcdHealthcheckClientCertName),
+				filepath.Join(certificatesDir, constants.EtcdHealthcheckClientKeyName),
+			)
+			if err != nil {
+				return nil, errors.Wrapf(err, "error creating etcd client for %v endpoint", endpoints)
+			}
+
+			return etcdClient, nil
+		}
+	}
+
+	// etcd is listening on localhost and API server advertise address, and
+	// the etcd cluster can have more than one etcd members, so it is necessary to get the
+	// list of endpoints from kubeadm cluster status before connecting
+
 	// Gets the cluster status
 	clusterStatus, err := config.GetClusterStatus(client)
 	if err != nil {
@@ -143,7 +176,7 @@ func NewFromCluster(client clientset.Interface, certificatesDir string) (*Client
 	// Get the list of etcd endpoints from cluster status
 	endpoints := []string{}
 	for _, e := range clusterStatus.APIEndpoints {
-		endpoints = append(endpoints, fmt.Sprintf("https://%s:%d", e.AdvertiseAddress, constants.EtcdListenClientPort))
+		endpoints = append(endpoints, GetClientURLByIP(e.AdvertiseAddress))
 	}
 	klog.V(1).Infof("etcd endpoints read from pods: %s", strings.Join(endpoints, ","))
 
@@ -155,13 +188,13 @@ func NewFromCluster(client clientset.Interface, certificatesDir string) (*Client
 		filepath.Join(certificatesDir, constants.EtcdHealthcheckClientKeyName),
 	)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "error creating etcd client for %v endpoints", endpoints)
 	}
 
 	// synchronizes client's endpoints with the known endpoints from the etcd membership.
 	err = etcdClient.Sync()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "error syncing endpoints with etc")
 	}
 
 	return etcdClient, nil
@@ -329,4 +362,22 @@ func (c Client) WaitForClusterAvailable(delay time.Duration, retries int, retryI
 // CheckConfigurationIsHA returns true if the given InitConfiguration etcd block appears to be an HA configuration.
 func CheckConfigurationIsHA(cfg *kubeadmapi.Etcd) bool {
 	return cfg.External != nil && len(cfg.External.Endpoints) > 1
+}
+
+// GetClientURL creates an HTTPS URL that uses the configured advertise
+// address and client port for the API controller
+func GetClientURL(cfg *kubeadmapi.InitConfiguration) string {
+	return "https://" + net.JoinHostPort(cfg.LocalAPIEndpoint.AdvertiseAddress, strconv.Itoa(constants.EtcdListenClientPort))
+}
+
+// GetPeerURL creates an HTTPS URL that uses the configured advertise
+// address and peer port for the API controller
+func GetPeerURL(cfg *kubeadmapi.InitConfiguration) string {
+	return "https://" + net.JoinHostPort(cfg.LocalAPIEndpoint.AdvertiseAddress, strconv.Itoa(constants.EtcdListenPeerPort))
+}
+
+// GetClientURLByIP creates an HTTPS URL based on an IP address
+// and the client listening port.
+func GetClientURLByIP(ip string) string {
+	return "https://" + net.JoinHostPort(ip, strconv.Itoa(constants.EtcdListenClientPort))
 }

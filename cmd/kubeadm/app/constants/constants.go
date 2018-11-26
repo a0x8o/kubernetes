@@ -26,10 +26,10 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/version"
 	bootstrapapi "k8s.io/cluster-bootstrap/token/api"
+	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 	"k8s.io/kubernetes/pkg/registry/core/service/ipallocator"
 )
 
@@ -283,10 +283,29 @@ const (
 	// DefaultCIImageRepository points to image registry where CI uploads images from ci-cross build job
 	DefaultCIImageRepository = "gcr.io/kubernetes-ci-images"
 
-	// CoreDNS defines a variable used internally when referring to the CoreDNS addon for a cluster
-	CoreDNS = "coredns"
-	// KubeDNS defines a variable used internally when referring to the kube-dns addon for a cluster
-	KubeDNS = "kube-dns"
+	// CoreDNSConfigMap specifies in what ConfigMap in the kube-system namespace the CoreDNS config should be stored
+	CoreDNSConfigMap = "coredns"
+
+	// CoreDNSDeploymentName specifies the name of the Deployment for CoreDNS add-on
+	CoreDNSDeploymentName = "coredns"
+
+	// CoreDNSImageName specifies the name of the image for CoreDNS add-on
+	CoreDNSImageName = "coredns"
+
+	// KubeDNSConfigMap specifies in what ConfigMap in the kube-system namespace the kube-dns config should be stored
+	KubeDNSConfigMap = "kube-dns"
+
+	// KubeDNSDeploymentName specifies the name of the Deployment for kube-dns add-on
+	KubeDNSDeploymentName = "kube-dns"
+
+	// KubeDNSKubeDNSImageName specifies the name of the image for the kubedns container in the kube-dns add-on
+	KubeDNSKubeDNSImageName = "k8s-dns-kube-dns"
+
+	// KubeDNSSidecarImageName specifies the name of the image for the sidecar container in the kube-dns add-on
+	KubeDNSSidecarImageName = "k8s-dns-sidecar"
+
+	// KubeDNSDnsMasqNannyImageName specifies the name of the image for the dnsmasq container in the kube-dns add-on
+	KubeDNSDnsMasqNannyImageName = "k8s-dns-dnsmasq-nanny"
 
 	// CRICtlPackage defines the go package that installs crictl
 	CRICtlPackage = "github.com/kubernetes-incubator/cri-tools/cmd/crictl"
@@ -358,16 +377,17 @@ var (
 	MasterComponents = []string{KubeAPIServer, KubeControllerManager, KubeScheduler}
 
 	// MinimumControlPlaneVersion specifies the minimum control plane version kubeadm can deploy
-	MinimumControlPlaneVersion = version.MustParseSemantic("v1.11.0")
+	MinimumControlPlaneVersion = version.MustParseSemantic("v1.12.0")
 
 	// MinimumKubeletVersion specifies the minimum version of kubelet which kubeadm supports
-	MinimumKubeletVersion = version.MustParseSemantic("v1.11.0")
+	MinimumKubeletVersion = version.MustParseSemantic("v1.12.0")
 
 	// SupportedEtcdVersion lists officially supported etcd versions with corresponding Kubernetes releases
 	SupportedEtcdVersion = map[uint8]string{
 		10: "3.1.12",
 		11: "3.2.18",
 		12: "3.2.24",
+		13: "3.2.24",
 	}
 )
 
@@ -474,12 +494,12 @@ func GetStaticPodAuditPolicyFile() string {
 }
 
 // GetDNSVersion is a handy function that returns the DNS version by DNS type
-func GetDNSVersion(dnsType string) string {
+func GetDNSVersion(dnsType kubeadmapi.DNSAddOnType) string {
 	switch dnsType {
-	case CoreDNS:
-		return CoreDNSVersion
-	default:
+	case kubeadmapi.KubeDNS:
 		return KubeDNSVersion
+	default:
+		return CoreDNSVersion
 	}
 }
 
