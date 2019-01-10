@@ -137,7 +137,7 @@ type StreamingRuntime interface {
 type ImageService interface {
 	// PullImage pulls an image from the network to local storage using the supplied
 	// secrets if necessary. It returns a reference (digest or ID) to the pulled image.
-	PullImage(image ImageSpec, pullSecrets []v1.Secret) (string, error)
+	PullImage(image ImageSpec, pullSecrets []v1.Secret, podSandboxConfig *runtimeapi.PodSandboxConfig) (string, error)
 	// GetImageRef gets the reference (digest or ID) of the image which has already been in
 	// the local storage. It returns ("", nil) if the image isn't in the local storage.
 	GetImageRef(image ImageSpec) (string, error)
@@ -254,13 +254,6 @@ const (
 	ContainerStateUnknown ContainerState = "unknown"
 )
 
-type ContainerType string
-
-const (
-	ContainerTypeInit    ContainerType = "INIT"
-	ContainerTypeRegular ContainerType = "REGULAR"
-)
-
 // Container provides the runtime information for a container, such as ID, hash,
 // state of the container.
 type Container struct {
@@ -289,7 +282,7 @@ type PodStatus struct {
 	ID types.UID
 	// Name of the pod.
 	Name string
-	// Namspace of the pod.
+	// Namespace of the pod.
 	Namespace string
 	// IP of the pod.
 	IP string
