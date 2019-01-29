@@ -1039,9 +1039,6 @@ func validateProjectionSources(projection *core.ProjectedVolumeSource, projectio
 		}
 		if projPath := srcPath.Child("serviceAccountToken"); source.ServiceAccountToken != nil {
 			numSources++
-			if !utilfeature.DefaultFeatureGate.Enabled(features.TokenRequestProjection) {
-				allErrs = append(allErrs, field.Forbidden(projPath, "TokenRequestProjection feature is not enabled"))
-			}
 			if source.ServiceAccountToken.ExpirationSeconds < 10*60 {
 				allErrs = append(allErrs, field.Invalid(projPath.Child("expirationSeconds"), source.ServiceAccountToken.ExpirationSeconds, "may not specify a duration less than 10 minutes"))
 			}
@@ -1929,10 +1926,6 @@ func ValidatePersistentVolumeClaimStatusUpdate(newPvc, oldPvc *core.PersistentVo
 	}
 	if len(newPvc.Spec.AccessModes) == 0 {
 		allErrs = append(allErrs, field.Required(field.NewPath("Spec", "accessModes"), ""))
-	}
-	if !utilfeature.DefaultFeatureGate.Enabled(features.ExpandPersistentVolumes) && len(newPvc.Status.Conditions) > 0 {
-		conditionPath := field.NewPath("status", "conditions")
-		allErrs = append(allErrs, field.Forbidden(conditionPath, "invalid field"))
 	}
 	capPath := field.NewPath("status", "capacity")
 	for r, qty := range newPvc.Status.Capacity {

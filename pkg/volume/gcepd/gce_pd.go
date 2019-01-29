@@ -98,6 +98,11 @@ func (plugin *gcePersistentDiskPlugin) CanSupport(spec *volume.Spec) bool {
 		(spec.Volume != nil && spec.Volume.GCEPersistentDisk != nil)
 }
 
+func (plugin *gcePersistentDiskPlugin) IsMigratedToCSI() bool {
+	return utilfeature.DefaultFeatureGate.Enabled(features.CSIMigration) &&
+		utilfeature.DefaultFeatureGate.Enabled(features.CSIMigrationGCE)
+}
+
 func (plugin *gcePersistentDiskPlugin) RequiresRemount() bool {
 	return false
 }
@@ -454,7 +459,7 @@ func (c *gcePersistentDiskUnmounter) TearDown() error {
 
 // TearDownAt unmounts the bind mount
 func (c *gcePersistentDiskUnmounter) TearDownAt(dir string) error {
-	return util.UnmountPath(dir, c.mounter)
+	return mount.CleanupMountPoint(dir, c.mounter, false)
 }
 
 type gcePersistentDiskDeleter struct {

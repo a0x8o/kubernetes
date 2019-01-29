@@ -50,6 +50,7 @@ import (
 	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm/predicates"
+	"k8s.io/kubernetes/pkg/scheduler/algorithm/priorities"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 	"k8s.io/kubernetes/pkg/scheduler/api/validation"
 	"k8s.io/kubernetes/pkg/scheduler/core"
@@ -72,7 +73,7 @@ var (
 	matchInterPodAffinitySet      = sets.NewString(predicates.MatchInterPodAffinityPred)
 	generalPredicatesSets         = sets.NewString(predicates.GeneralPred)
 	noDiskConflictSet             = sets.NewString(predicates.NoDiskConflictPred)
-	maxPDVolumeCountPredicateKeys = []string{predicates.MaxGCEPDVolumeCountPred, predicates.MaxAzureDiskVolumeCountPred, predicates.MaxEBSVolumeCountPred}
+	maxPDVolumeCountPredicateKeys = []string{predicates.MaxGCEPDVolumeCountPred, predicates.MaxAzureDiskVolumeCountPred, predicates.MaxEBSVolumeCountPred, predicates.MaxCinderVolumeCountPred}
 )
 
 // Binder knows how to write a binding.
@@ -150,8 +151,6 @@ type PodPreemptor interface {
 type Configurator interface {
 	// Exposed for testing
 	GetHardPodAffinitySymmetricWeight() int32
-	// Exposed for testing
-	MakeDefaultErrorFunc(backoff *util.PodBackoff, podQueue internalqueue.SchedulingQueue) func(pod *v1.Pod, err error)
 
 	// Predicate related accessors to be exposed for use by k8s.io/autoscaler/cluster-autoscaler
 	GetPredicateMetadataProducer() (predicates.PredicateMetadataProducer, error)
@@ -883,7 +882,7 @@ func (c *configFactory) CreateFromKeys(predicateKeys, priorityKeys sets.String, 
 			return cache.WaitForCacheSync(c.StopEverything, c.scheduledPodsHasSynced)
 		},
 		NextPod:         internalqueue.MakeNextPodFunc(c.podQueue),
-		Error:           c.MakeDefaultErrorFunc(podBackoff, c.podQueue),
+		Error:           MakeDefaultErrorFunc(c.client, podBackoff, c.podQueue, c.schedulerCache, c.StopEverything),
 		StopEverything:  c.StopEverything,
 		VolumeBinder:    c.volumeBinder,
 		SchedulingQueue: c.podQueue,
@@ -916,7 +915,7 @@ func (n *nodeLister) List() ([]*v1.Node, error) {
 	return n.NodeLister.List(labels.Everything())
 }
 
-func (c *configFactory) GetPriorityFunctionConfigs(priorityKeys sets.String) ([]algorithm.PriorityConfig, error) {
+func (c *configFactory) GetPriorityFunctionConfigs(priorityKeys sets.String) ([]priorities.PriorityConfig, error) {
 	pluginArgs, err := c.getPluginArgs()
 	if err != nil {
 		return nil, err
@@ -925,7 +924,7 @@ func (c *configFactory) GetPriorityFunctionConfigs(priorityKeys sets.String) ([]
 	return getPriorityFunctionConfigs(priorityKeys, *pluginArgs)
 }
 
-func (c *configFactory) GetPriorityMetadataProducer() (algorithm.PriorityMetadataProducer, error) {
+func (c *configFactory) GetPriorityMetadataProducer() (priorities.PriorityMetadataProducer, error) {
 	pluginArgs, err := c.getPluginArgs()
 	if err != nil {
 		return nil, err
@@ -1061,7 +1060,8 @@ func NewPodInformer(client clientset.Interface, resyncPeriod time.Duration) core
 	}
 }
 
-func (c *configFactory) MakeDefaultErrorFunc(backoff *util.PodBackoff, podQueue internalqueue.SchedulingQueue) func(pod *v1.Pod, err error) {
+// MakeDefaultErrorFunc construct a function to handle pod scheduler error
+func MakeDefaultErrorFunc(client clientset.Interface, backoff *util.PodBackoff, podQueue internalqueue.SchedulingQueue, schedulerCache schedulerinternalcache.Cache, stopEverything <-chan struct{}) func(pod *v1.Pod, err error) {
 	return func(pod *v1.Pod, err error) {
 		if err == core.ErrNoNodesAvailable {
 			klog.V(4).Infof("Unable to schedule %v/%v: no nodes are registered to the cluster; waiting", pod.Namespace, pod.Name)
@@ -1073,10 +1073,10 @@ func (c *configFactory) MakeDefaultErrorFunc(backoff *util.PodBackoff, podQueue 
 					nodeName := errStatus.Status().Details.Name
 					// when node is not found, We do not remove the node right away. Trying again to get
 					// the node and if the node is still not found, then remove it from the scheduler cache.
-					_, err := c.client.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+					_, err := client.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 					if err != nil && errors.IsNotFound(err) {
 						node := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: nodeName}}
-						c.schedulerCache.RemoveNode(&node)
+						schedulerCache.RemoveNode(&node)
 					}
 				}
 			} else {
@@ -1093,14 +1093,13 @@ func (c *configFactory) MakeDefaultErrorFunc(backoff *util.PodBackoff, podQueue 
 				Namespace: pod.Namespace,
 				Name:      pod.Name,
 			}
-			origPod := pod
 
 			// When pod priority is enabled, we would like to place an unschedulable
 			// pod in the unschedulable queue. This ensures that if the pod is nominated
 			// to run on a node, scheduler takes the pod into account when running
 			// predicates for the node.
 			if !util.PodPriorityEnabled() {
-				if !backoff.TryBackoffAndWait(podID, c.StopEverything) {
+				if !backoff.TryBackoffAndWait(podID, stopEverything) {
 					klog.Warningf("Request for pod %v already in flight, abandoning", podID)
 					return
 				}
@@ -1108,25 +1107,15 @@ func (c *configFactory) MakeDefaultErrorFunc(backoff *util.PodBackoff, podQueue 
 			// Get the pod again; it may have changed/been scheduled already.
 			getBackoff := initialGetBackoff
 			for {
-				pod, err := c.client.CoreV1().Pods(podID.Namespace).Get(podID.Name, metav1.GetOptions{})
+				pod, err := client.CoreV1().Pods(podID.Namespace).Get(podID.Name, metav1.GetOptions{})
 				if err == nil {
 					if len(pod.Spec.NodeName) == 0 {
 						podQueue.AddUnschedulableIfNotPresent(pod)
-					} else {
-						if c.volumeBinder != nil {
-							// Volume binder only wants to keep unassigned pods
-							c.volumeBinder.DeletePodBindings(pod)
-						}
 					}
 					break
 				}
 				if errors.IsNotFound(err) {
 					klog.Warningf("A pod %v no longer exists", podID)
-
-					if c.volumeBinder != nil {
-						// Volume binder only wants to keep unassigned pods
-						c.volumeBinder.DeletePodBindings(origPod)
-					}
 					return
 				}
 				klog.Errorf("Error getting pod %v for retry: %v; retrying...", podID, err)
