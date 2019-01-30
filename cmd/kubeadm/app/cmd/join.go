@@ -203,6 +203,8 @@ func NewCmdJoin(out io.Writer, joinOptions *joinOptions) *cobra.Command {
 			err = data.Run()
 			kubeadmutil.CheckErr(err)
 		},
+		// We accept the master location as an optional positional argument
+		Args: cobra.MaximumNArgs(1),
 	}
 
 	AddJoinConfigFlags(cmd.Flags(), joinOptions.externalcfg)
@@ -358,11 +360,11 @@ func newJoinData(cmd *cobra.Command, args []string, options *joinOptions, out io
 
 	ignorePreflightErrorsSet, err := validation.ValidateIgnorePreflightErrors(options.ignorePreflightErrors)
 	if err != nil {
-		return &joinData{}, err
+		return nil, err
 	}
 
 	if err = validation.ValidateMixedArguments(cmd.Flags()); err != nil {
-		return &joinData{}, err
+		return nil, err
 	}
 
 	// Either use the config file if specified, or convert public kubeadm API to the internal JoinConfiguration
@@ -377,7 +379,7 @@ func newJoinData(cmd *cobra.Command, args []string, options *joinOptions, out io
 
 	cfg, err := configutil.JoinConfigFileAndDefaultsToInternalConfig(options.cfgPath, options.externalcfg)
 	if err != nil {
-		return &joinData{}, err
+		return nil, err
 	}
 
 	// override node name and CRI socket from the command line options
@@ -390,7 +392,7 @@ func newJoinData(cmd *cobra.Command, args []string, options *joinOptions, out io
 
 	if cfg.ControlPlane != nil {
 		if err := configutil.VerifyAPIServerBindAddress(cfg.ControlPlane.LocalAPIEndpoint.AdvertiseAddress); err != nil {
-			return &joinData{}, err
+			return nil, err
 		}
 	}
 
@@ -466,14 +468,14 @@ func (j *joinData) Run() error {
 
 	// Continue with more specific checks based on the init configuration
 	klog.V(1).Infoln("[preflight] Running configuration dependant checks")
-	if err := preflight.RunOptionalJoinNodeChecks(utilsexec.New(), initCfg, j.ignorePreflightErrors); err != nil {
+	if err := preflight.RunOptionalJoinNodeChecks(utilsexec.New(), &initCfg.ClusterConfiguration, j.ignorePreflightErrors); err != nil {
 		return err
 	}
 
 	if j.cfg.ControlPlane != nil {
 		// Checks if the cluster configuration supports
 		// joining a new control plane instance and if all the necessary certificates are provided
-		if err := j.CheckIfReadyForAdditionalControlPlane(initCfg); err != nil {
+		if err := j.CheckIfReadyForAdditionalControlPlane(&initCfg.ClusterConfiguration); err != nil {
 			// outputs the not ready for hosting a new control plane instance message
 			ctx := map[string]string{
 				"Error": err.Error(),
@@ -539,14 +541,14 @@ func (j *joinData) Run() error {
 
 // CheckIfReadyForAdditionalControlPlane ensures that the cluster is in a state that supports
 // joining an additional control plane instance and if the node is ready to join
-func (j *joinData) CheckIfReadyForAdditionalControlPlane(initConfiguration *kubeadmapi.InitConfiguration) error {
+func (j *joinData) CheckIfReadyForAdditionalControlPlane(cfg *kubeadmapi.ClusterConfiguration) error {
 	// blocks if the cluster was created without a stable control plane endpoint
-	if initConfiguration.ControlPlaneEndpoint == "" {
+	if cfg.ControlPlaneEndpoint == "" {
 		return errors.New("unable to add a new control plane instance a cluster that doesn't have a stable controlPlaneEndpoint address")
 	}
 
 	// checks if the certificates that must be equal across contolplane instances are provided
-	if ret, err := certsphase.SharedCertificateExists(initConfiguration); !ret {
+	if ret, err := certsphase.SharedCertificateExists(cfg); !ret {
 		return err
 	}
 
@@ -586,7 +588,7 @@ func (j *joinData) PrepareForHostingControlPlane(initConfiguration *kubeadmapi.I
 			return errors.Wrap(err, "couldn't create Kubernetes client")
 		}
 
-		if err := etcdphase.CheckLocalEtcdClusterStatus(client, initConfiguration); err != nil {
+		if err := etcdphase.CheckLocalEtcdClusterStatus(client, &initConfiguration.ClusterConfiguration); err != nil {
 			return err
 		}
 	}
@@ -638,7 +640,7 @@ func (j *joinData) BootstrapKubelet(tlsBootstrapCfg *clientcmdapi.Config, initCo
 	// register the joining node with the specified taints if the node
 	// is not a master. The markmaster phase will register the taints otherwise.
 	registerTaintsUsingFlags := j.cfg.ControlPlane == nil
-	if err := kubeletphase.WriteKubeletDynamicEnvFile(initConfiguration, registerTaintsUsingFlags, kubeadmconstants.KubeletRunDirectory); err != nil {
+	if err := kubeletphase.WriteKubeletDynamicEnvFile(&initConfiguration.ClusterConfiguration, &initConfiguration.NodeRegistration, registerTaintsUsingFlags, kubeadmconstants.KubeletRunDirectory); err != nil {
 		return err
 	}
 
@@ -690,7 +692,7 @@ func (j *joinData) PostInstallControlPlane(initConfiguration *kubeadmapi.InitCon
 		// because it needs two members as majority to agree on the consensus. You will only see this behavior between the time
 		// etcdctl member add informs the cluster about the new member and the new member successfully establishing a connection to the existing one."
 		klog.V(1).Info("[join] adding etcd")
-		if err := etcdphase.CreateStackedEtcdStaticPodManifestFile(client, kubeadmconstants.GetStaticPodDirectory(), initConfiguration); err != nil {
+		if err := etcdphase.CreateStackedEtcdStaticPodManifestFile(client, kubeadmconstants.GetStaticPodDirectory(), initConfiguration.NodeRegistration.Name, &initConfiguration.ClusterConfiguration, &initConfiguration.LocalAPIEndpoint); err != nil {
 			return errors.Wrap(err, "error creating local etcd static pod manifest file")
 		}
 	}
