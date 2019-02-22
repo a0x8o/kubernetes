@@ -30,6 +30,7 @@ filegroup(
         ":package-srcs",
         "//staging/src/k8s.io/cli-runtime/pkg/kustomize/k8sdeps/configmapandsecret:all-srcs",
         "//staging/src/k8s.io/cli-runtime/pkg/kustomize/k8sdeps/kunstruct:all-srcs",
+        "//staging/src/k8s.io/cli-runtime/pkg/kustomize/k8sdeps/kv:all-srcs",
         "//staging/src/k8s.io/cli-runtime/pkg/kustomize/k8sdeps/transformer:all-srcs",
         "//staging/src/k8s.io/cli-runtime/pkg/kustomize/k8sdeps/validator:all-srcs",
     ],

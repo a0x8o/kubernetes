@@ -4,15 +4,14 @@ go_library(
     name = "go_default_library",
     srcs = [
         "fileloader.go",
-        "gitcloner.go",
         "loader.go",
     ],
     importmap = "k8s.io/kubernetes/vendor/sigs.k8s.io/kustomize/pkg/loader",
     importpath = "sigs.k8s.io/kustomize/pkg/loader",
     visibility = ["//visibility:public"],
     deps = [
-        "//vendor/github.com/pkg/errors:go_default_library",
         "//vendor/sigs.k8s.io/kustomize/pkg/fs:go_default_library",
+        "//vendor/sigs.k8s.io/kustomize/pkg/git:go_default_library",
         "//vendor/sigs.k8s.io/kustomize/pkg/ifc:go_default_library",
     ],
 )

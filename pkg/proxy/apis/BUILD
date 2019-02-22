@@ -7,10 +7,8 @@ load(
 
 go_library(
     name = "go_default_library",
-    srcs = [
-        "well_known_annotations.go",
-        "well_known_labels.go",
-    ],
+    srcs = ["well_known_labels.go"],
+    importpath = "k8s.io/kubernetes/pkg/proxy/apis",
 )
 
 filegroup(
@@ -24,7 +22,7 @@ filegroup(
     name = "all-srcs",
     srcs = [
         ":package-srcs",
-        "//pkg/proxy/apis/kubeproxyconfig:all-srcs",
+        "//pkg/proxy/apis/config:all-srcs",
     ],
     tags = ["automanaged"],
 )

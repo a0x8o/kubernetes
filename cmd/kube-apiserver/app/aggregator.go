@@ -66,12 +66,14 @@ func createAggregatorConfig(
 
 	// override genericConfig.AdmissionControl with kube-aggregator's scheme,
 	// because aggregator apiserver should use its own scheme to convert its own resources.
-	commandOptions.Admission.ApplyTo(
+	err := commandOptions.Admission.ApplyTo(
 		&genericConfig,
 		externalInformers,
 		genericConfig.LoopbackClientConfig,
-		aggregatorscheme.Scheme,
 		pluginInitializers...)
+	if err != nil {
+		return nil, err
+	}
 
 	// copy the etcd options so we don't mutate originals.
 	etcdOptions := *commandOptions.Etcd
@@ -87,7 +89,6 @@ func createAggregatorConfig(
 		return nil, err
 	}
 
-	var err error
 	var certBytes, keyBytes []byte
 	if len(commandOptions.ProxyClientCertFile) > 0 && len(commandOptions.ProxyClientKeyFile) > 0 {
 		certBytes, err = ioutil.ReadFile(commandOptions.ProxyClientCertFile)
@@ -129,11 +130,11 @@ func createAggregatorServer(aggregatorConfig *aggregatorapiserver.Config, delega
 	}
 	autoRegistrationController := autoregister.NewAutoRegisterController(aggregatorServer.APIRegistrationInformers.Apiregistration().InternalVersion().APIServices(), apiRegistrationClient)
 	apiServices := apiServicesToRegister(delegateAPIServer, autoRegistrationController)
-	crdRegistrationController := crdregistration.NewAutoRegistrationController(
+	crdRegistrationController := crdregistration.NewCRDRegistrationController(
 		apiExtensionInformers.Apiextensions().InternalVersion().CustomResourceDefinitions(),
 		autoRegistrationController)
 
-	aggregatorServer.GenericAPIServer.AddPostStartHook("kube-apiserver-autoregistration", func(context genericapiserver.PostStartHookContext) error {
+	err = aggregatorServer.GenericAPIServer.AddPostStartHook("kube-apiserver-autoregistration", func(context genericapiserver.PostStartHookContext) error {
 		go crdRegistrationController.Run(5, context.StopCh)
 		go func() {
 			// let the CRD controller process the initial set of CRDs before starting the autoregistration controller.
@@ -146,14 +147,20 @@ func createAggregatorServer(aggregatorConfig *aggregatorapiserver.Config, delega
 		}()
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	aggregatorServer.GenericAPIServer.AddHealthzChecks(
+	err = aggregatorServer.GenericAPIServer.AddHealthzChecks(
 		makeAPIServiceAvailableHealthzCheck(
 			"autoregister-completion",
 			apiServices,
 			aggregatorServer.APIRegistrationInformers.Apiregistration().InternalVersion().APIServices(),
 		),
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	return aggregatorServer, nil
 }
@@ -251,6 +258,7 @@ var apiVersionPriorities = map[schema.GroupVersion]priority{
 	{Group: "batch", Version: "v2alpha1"}:                       {group: 17400, version: 9},
 	{Group: "certificates.k8s.io", Version: "v1beta1"}:          {group: 17300, version: 9},
 	{Group: "networking.k8s.io", Version: "v1"}:                 {group: 17200, version: 15},
+	{Group: "networking.k8s.io", Version: "v1beta1"}:            {group: 17200, version: 9},
 	{Group: "policy", Version: "v1beta1"}:                       {group: 17100, version: 9},
 	{Group: "rbac.authorization.k8s.io", Version: "v1"}:         {group: 17000, version: 15},
 	{Group: "rbac.authorization.k8s.io", Version: "v1beta1"}:    {group: 17000, version: 12},

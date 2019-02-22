@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["kusttarget.go"],
+    srcs = [
+        "kusttarget.go",
+        "resaccumulator.go",
+    ],
     importmap = "k8s.io/kubernetes/vendor/sigs.k8s.io/kustomize/pkg/target",
     importpath = "sigs.k8s.io/kustomize/pkg/target",
     visibility = ["//visibility:public"],

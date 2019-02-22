@@ -57,6 +57,9 @@ func makeFileConfigMap(name string) *corev1.ConfigMap {
 BAR=baz
 `,
 		},
+		BinaryData: map[string][]byte{
+			"app.bin": {0xff, 0xfd},
+		},
 	}
 }
 
@@ -92,9 +95,11 @@ func TestConstructConfigMap(t *testing.T) {
 		{
 			description: "construct config map from env",
 			input: types.ConfigMapArgs{
-				Name: "envConfigMap",
-				DataSources: types.DataSources{
-					EnvSource: "configmap/app.env",
+				GeneratorArgs: types.GeneratorArgs{
+					Name: "envConfigMap",
+					DataSources: types.DataSources{
+						EnvSource: "configmap/app.env",
+					},
 				},
 			},
 			options:  nil,
@@ -103,9 +108,11 @@ func TestConstructConfigMap(t *testing.T) {
 		{
 			description: "construct config map from file",
 			input: types.ConfigMapArgs{
-				Name: "fileConfigMap",
-				DataSources: types.DataSources{
-					FileSources: []string{"configmap/app-init.ini"},
+				GeneratorArgs: types.GeneratorArgs{
+					Name: "fileConfigMap",
+					DataSources: types.DataSources{
+						FileSources: []string{"configmap/app-init.ini", "configmap/app.bin"},
+					},
 				},
 			},
 			options:  nil,
@@ -114,9 +121,11 @@ func TestConstructConfigMap(t *testing.T) {
 		{
 			description: "construct config map from literal",
 			input: types.ConfigMapArgs{
-				Name: "literalConfigMap",
-				DataSources: types.DataSources{
-					LiteralSources: []string{"a=x", "b=y", "c=\"Hello World\"", "d='true'"},
+				GeneratorArgs: types.GeneratorArgs{
+					Name: "literalConfigMap",
+					DataSources: types.DataSources{
+						LiteralSources: []string{"a=x", "b=y", "c=\"Hello World\"", "d='true'"},
+					},
 				},
 			},
 			options: &types.GeneratorOptions{
@@ -131,7 +140,8 @@ func TestConstructConfigMap(t *testing.T) {
 	fSys := fs.MakeFakeFS()
 	fSys.WriteFile("/configmap/app.env", []byte("DB_USERNAME=admin\nDB_PASSWORD=somepw\n"))
 	fSys.WriteFile("/configmap/app-init.ini", []byte("FOO=bar\nBAR=baz\n"))
-	f := NewConfigMapFactory(fSys, loader.NewFileLoaderAtRoot(fSys))
+	fSys.WriteFile("/configmap/app.bin", []byte{0xff, 0xfd})
+	f := NewConfigMapFactory(loader.NewFileLoaderAtRoot(fSys))
 	for _, tc := range testCases {
 		cm, err := f.MakeConfigMap(&tc.input, tc.options)
 		if err != nil {

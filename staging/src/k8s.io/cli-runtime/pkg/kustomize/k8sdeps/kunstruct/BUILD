@@ -16,7 +16,6 @@ go_library(
         "//staging/src/k8s.io/apimachinery/pkg/runtime:go_default_library",
         "//staging/src/k8s.io/apimachinery/pkg/util/yaml:go_default_library",
         "//staging/src/k8s.io/cli-runtime/pkg/kustomize/k8sdeps/configmapandsecret:go_default_library",
-        "//vendor/sigs.k8s.io/kustomize/pkg/fs:go_default_library",
         "//vendor/sigs.k8s.io/kustomize/pkg/gvk:go_default_library",
         "//vendor/sigs.k8s.io/kustomize/pkg/ifc:go_default_library",
         "//vendor/sigs.k8s.io/kustomize/pkg/types:go_default_library",

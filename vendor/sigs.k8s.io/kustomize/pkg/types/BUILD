@@ -3,6 +3,8 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
+        "genargs.go",
+        "generationbehavior.go",
         "kustomization.go",
         "var.go",
     ],
@@ -11,6 +13,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//vendor/sigs.k8s.io/kustomize/pkg/gvk:go_default_library",
+        "//vendor/sigs.k8s.io/kustomize/pkg/image:go_default_library",
         "//vendor/sigs.k8s.io/kustomize/pkg/patch:go_default_library",
     ],
 )

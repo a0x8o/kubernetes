@@ -10,7 +10,6 @@ go_library(
     importpath = "sigs.k8s.io/kustomize/pkg/resource",
     visibility = ["//visibility:public"],
     deps = [
-        "//vendor/sigs.k8s.io/kustomize/pkg/fs:go_default_library",
         "//vendor/sigs.k8s.io/kustomize/pkg/ifc:go_default_library",
         "//vendor/sigs.k8s.io/kustomize/pkg/internal/error:go_default_library",
         "//vendor/sigs.k8s.io/kustomize/pkg/patch:go_default_library",
