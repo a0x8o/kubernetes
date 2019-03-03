@@ -21,23 +21,13 @@ import (
 
 	"github.com/pkg/errors"
 
-	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
-	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/options"
 	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/phases/workflow"
 	cmdutil "k8s.io/kubernetes/cmd/kubeadm/app/cmd/util"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
-	"k8s.io/kubernetes/cmd/kubeadm/app/phases/uploadcerts"
+	"k8s.io/kubernetes/cmd/kubeadm/app/phases/copycerts"
 )
-
-type uploadCertsData interface {
-	Client() (clientset.Interface, error)
-	UploadCerts() bool
-	Cfg() *kubeadmapi.InitConfiguration
-	CertificateKey() string
-	SetCertificateKey(key string)
-}
 
 // NewUploadCertsPhase returns the uploadCerts phase
 func NewUploadCertsPhase() workflow.Phase {
@@ -54,13 +44,13 @@ func NewUploadCertsPhase() workflow.Phase {
 }
 
 func runUploadCerts(c workflow.RunData) error {
-	data, ok := c.(uploadCertsData)
+	data, ok := c.(InitData)
 	if !ok {
 		return errors.New("upload-certs phase invoked with an invalid data struct")
 	}
 
 	if !data.UploadCerts() {
-		klog.V(1).Infof("[upload-certs] Skipping certs upload")
+		klog.V(1).Infoln("[upload-certs] Skipping certs upload")
 		return nil
 	}
 	client, err := data.Client()
@@ -69,14 +59,14 @@ func runUploadCerts(c workflow.RunData) error {
 	}
 
 	if len(data.CertificateKey()) == 0 {
-		certificateKey, err := uploadcerts.CreateCertificateKey()
+		certificateKey, err := copycerts.CreateCertificateKey()
 		if err != nil {
 			return err
 		}
 		data.SetCertificateKey(certificateKey)
 	}
 
-	if err := uploadcerts.UploadCerts(client, data.Cfg(), data.CertificateKey()); err != nil {
+	if err := copycerts.UploadCerts(client, data.Cfg(), data.CertificateKey()); err != nil {
 		return errors.Wrap(err, "error uploading certs")
 	}
 	return nil

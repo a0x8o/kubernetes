@@ -21,34 +21,31 @@ import (
 
 	"github.com/pkg/errors"
 
-	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
+	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/klog"
 	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/options"
 	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/phases/workflow"
-	cmdutil "k8s.io/kubernetes/cmd/kubeadm/app/cmd/util"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	certsphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/certs"
 	"k8s.io/kubernetes/cmd/kubeadm/app/phases/controlplane"
+	"k8s.io/kubernetes/cmd/kubeadm/app/phases/copycerts"
 	kubeconfigphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/kubeconfig"
+	kubeconfigutil "k8s.io/kubernetes/cmd/kubeadm/app/util/kubeconfig"
 )
-
-type controlPlanePrepareData interface {
-	Cfg() *kubeadmapi.JoinConfiguration
-	InitCfg() (*kubeadmapi.InitConfiguration, error)
-}
 
 // NewControlPlanePreparePhase creates a kubeadm workflow phase that implements the preparation of the node to serve a control plane
 func NewControlPlanePreparePhase() workflow.Phase {
 	return workflow.Phase{
 		Name:  "control-plane-prepare",
 		Short: "Prepares the machine for serving a control plane.",
-		Long:  cmdutil.MacroCommandLongDescription,
 		Phases: []workflow.Phase{
 			{
-				Name:           "all",
+				Name:           "all [api-server-endpoint]",
 				Short:          "Prepares the machine for serving a control plane.",
-				InheritFlags:   getControlPlanePreparePhaseFlags(),
+				InheritFlags:   getControlPlanePreparePhaseFlags("all"),
 				RunAllSiblings: true,
 			},
+			newControlPlanePrepareDownloadCertsSubphase(),
 			newControlPlanePrepareCertsSubphase(),
 			newControlPlanePrepareKubeconfigSubphase(),
 			newControlPlanePrepareManifestsSubphases(),
@@ -56,48 +53,70 @@ func NewControlPlanePreparePhase() workflow.Phase {
 	}
 }
 
-func getControlPlanePreparePhaseFlags() []string {
-	return []string{
+func getControlPlanePreparePhaseFlags(name string) []string {
+	flags := []string{
 		options.APIServerAdvertiseAddress,
 		options.APIServerBindPort,
 		options.CfgPath,
 		options.ControlPlane,
 		options.NodeName,
-		options.TokenDiscovery,
-		options.TokenDiscoveryCAHash,
-		options.TokenDiscoverySkipCAHash,
+	}
+	if name != "manifests" {
+		flags = append(flags,
+			options.FileDiscovery,
+			options.TokenDiscovery,
+			options.TokenDiscoveryCAHash,
+			options.TokenDiscoverySkipCAHash,
+			options.TLSBootstrapToken,
+			options.TokenStr,
+		)
+	}
+	if name == "all" || name == "download-certs" {
+		flags = append(flags,
+			options.CertificateKey,
+		)
+	}
+	return flags
+}
+
+func newControlPlanePrepareDownloadCertsSubphase() workflow.Phase {
+	return workflow.Phase{
+		Name:         "download-certs [api-server-endpoint]",
+		Short:        fmt.Sprintf("[EXPERIMENTAL] Downloads certificates shared among control-plane nodes from the %s Secret", kubeadmconstants.KubeadmCertsSecret),
+		Run:          runControlPlanePrepareDownloadCertsPhaseLocal,
+		InheritFlags: getControlPlanePreparePhaseFlags("download-certs"),
 	}
 }
 
 func newControlPlanePrepareCertsSubphase() workflow.Phase {
 	return workflow.Phase{
-		Name:         "certs",
+		Name:         "certs [api-server-endpoint]",
 		Short:        "Generates the certificates for the new control plane components",
-		Run:          runControlPlanePrepareCertsPhaseLocal,
-		InheritFlags: getControlPlanePreparePhaseFlags(), //NB. eventually in future we would like to break down this in sub phases for each cert or add the --csr option
+		Run:          runControlPlanePrepareCertsPhaseLocal, //NB. eventually in future we would like to break down this in sub phases for each cert or add the --csr option
+		InheritFlags: getControlPlanePreparePhaseFlags("certs"),
 	}
 }
 
 func newControlPlanePrepareKubeconfigSubphase() workflow.Phase {
 	return workflow.Phase{
-		Name:         "kubeconfig",
+		Name:         "kubeconfig [api-server-endpoint]",
 		Short:        "Generates the kubeconfig for the new control plane components",
-		Run:          runControlPlanePrepareKubeconfigPhaseLocal,
-		InheritFlags: getControlPlanePreparePhaseFlags(), //NB. eventually in future we would like to break down this in sub phases for each kubeconfig
+		Run:          runControlPlanePrepareKubeconfigPhaseLocal, //NB. eventually in future we would like to break down this in sub phases for each kubeconfig
+		InheritFlags: getControlPlanePreparePhaseFlags("kubeconfig"),
 	}
 }
 
 func newControlPlanePrepareManifestsSubphases() workflow.Phase {
 	return workflow.Phase{
-		Name:         "manifests",
+		Name:         "control-plane",
 		Short:        "Generates the manifests for the new control plane components",
-		Run:          runControlPlaneSubphase,
-		InheritFlags: getControlPlanePreparePhaseFlags(), //NB. eventually in future we would like to break down this in sub phases for each component
+		Run:          runControlPlanePrepareManifestsSubphase, //NB. eventually in future we would like to break down this in sub phases for each component
+		InheritFlags: getControlPlanePreparePhaseFlags("manifests"),
 	}
 }
 
-func runControlPlaneSubphase(c workflow.RunData) error {
-	data, ok := c.(controlPlanePrepareData)
+func runControlPlanePrepareManifestsSubphase(c workflow.RunData) error {
+	data, ok := c.(JoinData)
 	if !ok {
 		return errors.New("control-plane-prepare phase invoked with an invalid data struct")
 	}
@@ -116,8 +135,35 @@ func runControlPlaneSubphase(c workflow.RunData) error {
 	return controlplane.CreateInitStaticPodManifestFiles(kubeadmconstants.GetStaticPodDirectory(), cfg)
 }
 
+func runControlPlanePrepareDownloadCertsPhaseLocal(c workflow.RunData) error {
+	data, ok := c.(JoinData)
+	if !ok {
+		return errors.New("download-certs phase invoked with an invalid data struct")
+	}
+
+	if data.Cfg().ControlPlane == nil || len(data.CertificateKey()) == 0 {
+		klog.V(1).Infoln("[download-certs] Skipping certs download")
+		return nil
+	}
+
+	cfg, err := data.InitCfg()
+	if err != nil {
+		return err
+	}
+
+	client, err := bootstrapClient(data)
+	if err != nil {
+		return err
+	}
+
+	if err := copycerts.DownloadCerts(client, cfg, data.CertificateKey()); err != nil {
+		return errors.Wrap(err, "error downloading certs")
+	}
+	return nil
+}
+
 func runControlPlanePrepareCertsPhaseLocal(c workflow.RunData) error {
-	data, ok := c.(controlPlanePrepareData)
+	data, ok := c.(JoinData)
 	if !ok {
 		return errors.New("control-plane-prepare phase invoked with an invalid data struct")
 	}
@@ -137,7 +183,7 @@ func runControlPlanePrepareCertsPhaseLocal(c workflow.RunData) error {
 }
 
 func runControlPlanePrepareKubeconfigPhaseLocal(c workflow.RunData) error {
-	data, ok := c.(controlPlanePrepareData)
+	data, ok := c.(JoinData)
 	if !ok {
 		return errors.New("control-plane-prepare phase invoked with an invalid data struct")
 	}
@@ -164,26 +210,14 @@ func runControlPlanePrepareKubeconfigPhaseLocal(c workflow.RunData) error {
 	return nil
 }
 
-func runControlPlanePrepareJoinSubphase(component string) func(c workflow.RunData) error {
-	return func(c workflow.RunData) error {
-		data, ok := c.(controlPlanePrepareData)
-		if !ok {
-			return errors.New("control-plane-prepare phase invoked with an invalid data struct")
-		}
-
-		// Skip if this is not a control plane
-		if data.Cfg().ControlPlane == nil {
-			return nil
-		}
-
-		cfg, err := data.InitCfg()
-		if err != nil {
-			return err
-		}
-
-		// Creates static pod manifests file for the control plane components to be deployed on this node
-		// Static pods will be created and managed by the kubelet as soon as it starts
-		fmt.Printf("[control-plane-prepare] Creating static Pod manifest for %q\n", component)
-		return controlplane.CreateStaticPodFiles(kubeadmconstants.GetStaticPodDirectory(), &cfg.ClusterConfiguration, &cfg.LocalAPIEndpoint, component)
+func bootstrapClient(data JoinData) (clientset.Interface, error) {
+	tlsBootstrapCfg, err := data.TLSBootstrapCfg()
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to access the cluster")
 	}
+	client, err := kubeconfigutil.ToClientSet(tlsBootstrapCfg)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to access the cluster")
+	}
+	return client, nil
 }

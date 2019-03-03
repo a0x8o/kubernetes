@@ -376,14 +376,12 @@ var _ = framework.KubeDescribe("Variable Expansion", func() {
 		}
 
 		By("creating the pod with failed condition")
-		pod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Create(pod)
-		Expect(err).ToNot(HaveOccurred(), "while creating pod")
-
-		err = framework.WaitTimeoutForPodRunningInNamespace(f.ClientSet, pod.Name, pod.Namespace, framework.PodStartShortTimeout)
-		Expect(err).To(HaveOccurred(), "while waiting for pod to be running")
-
 		var podClient *framework.PodClient
 		podClient = f.PodClient()
+		pod = podClient.Create(pod)
+
+		err := framework.WaitTimeoutForPodRunningInNamespace(f.ClientSet, pod.Name, pod.Namespace, framework.PodStartShortTimeout)
+		Expect(err).To(HaveOccurred(), "while waiting for pod to be running")
 
 		By("updating the pod")
 		podClient.Update(podName, func(pod *v1.Pod) {
@@ -470,30 +468,29 @@ var _ = framework.KubeDescribe("Variable Expansion", func() {
 		}
 
 		By("creating the pod")
-		pod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Create(pod)
+		var podClient *framework.PodClient
+		podClient = f.PodClient()
+		pod = podClient.Create(pod)
 
 		By("waiting for pod running")
-		err = framework.WaitTimeoutForPodRunningInNamespace(f.ClientSet, pod.Name, pod.Namespace, framework.PodStartShortTimeout)
+		err := framework.WaitTimeoutForPodRunningInNamespace(f.ClientSet, pod.Name, pod.Namespace, framework.PodStartShortTimeout)
 		Expect(err).NotTo(HaveOccurred(), "while waiting for pod to be running")
 
 		By("creating a file in subpath")
 		cmd := "touch /volume_mount/mypath/foo/test.log"
-		_, err = framework.RunHostCmd(pod.Namespace, pod.Name, cmd)
+		_, _, err = f.ExecShellInPodWithFullOutput(pod.Name, cmd)
 		if err != nil {
 			framework.Failf("expected to be able to write to subpath")
 		}
 
 		By("test for file in mounted path")
 		cmd = "test -f /subpath_mount/test.log"
-		_, err = framework.RunHostCmd(pod.Namespace, pod.Name, cmd)
+		_, _, err = f.ExecShellInPodWithFullOutput(pod.Name, cmd)
 		if err != nil {
 			framework.Failf("expected to be able to verify file")
 		}
 
 		By("updating the annotation value")
-		var podClient *framework.PodClient
-		podClient = f.PodClient()
-
 		podClient.Update(podName, func(pod *v1.Pod) {
 			pod.ObjectMeta.Annotations["mysubpath"] = "mynewpath"
 		})
@@ -609,16 +606,14 @@ var _ = framework.KubeDescribe("Variable Expansion", func() {
 
 		// Start pod
 		By(fmt.Sprintf("Creating pod %s", pod.Name))
-		pod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Create(pod)
-		Expect(err).ToNot(HaveOccurred(), "while creating pod")
+		var podClient *framework.PodClient
+		podClient = f.PodClient()
+		pod = podClient.Create(pod)
 		defer func() {
 			framework.DeletePodWithWait(f, f.ClientSet, pod)
 		}()
-		err = framework.WaitForPodRunningInNamespace(f.ClientSet, pod)
+		err := framework.WaitForPodRunningInNamespace(f.ClientSet, pod)
 		Expect(err).ToNot(HaveOccurred(), "while waiting for pod to be running")
-
-		var podClient *framework.PodClient
-		podClient = f.PodClient()
 
 		By("updating the pod")
 		podClient.Update(podName, func(pod *v1.Pod) {
@@ -630,13 +625,13 @@ var _ = framework.KubeDescribe("Variable Expansion", func() {
 
 		By("test for subpath mounted with old value")
 		cmd := "test -f /volume_mount/foo/test.log"
-		_, err = framework.RunHostCmd(pod.Namespace, pod.Name, cmd)
+		_, _, err = f.ExecShellInPodWithFullOutput(pod.Name, cmd)
 		if err != nil {
 			framework.Failf("expected to be able to verify old file exists")
 		}
 
 		cmd = "test ! -f /volume_mount/newsubpath/test.log"
-		_, err = framework.RunHostCmd(pod.Namespace, pod.Name, cmd)
+		_, _, err = f.ExecShellInPodWithFullOutput(pod.Name, cmd)
 		if err != nil {
 			framework.Failf("expected to be able to verify new file does not exist")
 		}
@@ -645,14 +640,15 @@ var _ = framework.KubeDescribe("Variable Expansion", func() {
 
 func testPodFailSubpath(f *framework.Framework, pod *v1.Pod) {
 
-	pod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Create(pod)
-	Expect(err).ToNot(HaveOccurred(), "while creating pod")
+	var podClient *framework.PodClient
+	podClient = f.PodClient()
+	pod = podClient.Create(pod)
 
 	defer func() {
 		framework.DeletePodWithWait(f, f.ClientSet, pod)
 	}()
 
-	err = framework.WaitTimeoutForPodRunningInNamespace(f.ClientSet, pod.Name, pod.Namespace, framework.PodStartShortTimeout)
+	err := framework.WaitTimeoutForPodRunningInNamespace(f.ClientSet, pod.Name, pod.Namespace, framework.PodStartShortTimeout)
 	Expect(err).To(HaveOccurred(), "while waiting for pod to be running")
 }
 
@@ -660,9 +656,9 @@ func testPodFailSubpath(f *framework.Framework, pod *v1.Pod) {
 func waitForPodContainerRestart(f *framework.Framework, pod *v1.Pod, volumeMount string) {
 
 	By("Failing liveness probe")
-	out, err := framework.RunKubectl("exec", fmt.Sprintf("--namespace=%s", pod.Namespace), pod.Name, "--container", pod.Spec.Containers[0].Name, "--", "/bin/sh", "-c", fmt.Sprintf("rm %v", volumeMount))
+	stdout, stderr, err := f.ExecShellInPodWithFullOutput(pod.Name, fmt.Sprintf("rm %v", volumeMount))
 
-	framework.Logf("Pod exec output: %v", out)
+	framework.Logf("Pod exec output: %v / %v", stdout, stderr)
 	Expect(err).ToNot(HaveOccurred(), "while failing liveness probe")
 
 	// Check that container has restarted
@@ -689,8 +685,8 @@ func waitForPodContainerRestart(f *framework.Framework, pod *v1.Pod, volumeMount
 
 	// Fix liveness probe
 	By("Rewriting the file")
-	out, err = framework.RunKubectl("exec", fmt.Sprintf("--namespace=%s", pod.Namespace), pod.Name, "--container", pod.Spec.Containers[0].Name, "--", "/bin/sh", "-c", fmt.Sprintf("echo test-after > %v", volumeMount))
-	framework.Logf("Pod exec output: %v", out)
+	stdout, _, err = f.ExecShellInPodWithFullOutput(pod.Name, fmt.Sprintf("echo test-after > %v", volumeMount))
+	framework.Logf("Pod exec output: %v", stdout)
 	Expect(err).ToNot(HaveOccurred(), "while rewriting the probe file")
 
 	// Wait for container restarts to stabilize

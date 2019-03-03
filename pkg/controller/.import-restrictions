@@ -242,6 +242,7 @@
         "k8s.io/kubernetes/pkg/volume/util",
         "k8s.io/kubernetes/pkg/volume/util/operationexecutor",
         "k8s.io/kubernetes/pkg/volume/util/recyclerclient",
+        "k8s.io/kubernetes/pkg/volume/util/subpath",
         "k8s.io/kubernetes/pkg/volume/util/types",
         "k8s.io/kubernetes/pkg/volume/util/volumepathhandler",
         "k8s.io/kubernetes/pkg/api/service",

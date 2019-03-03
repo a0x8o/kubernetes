@@ -36,6 +36,12 @@
     # Execute functions manually or run configure.ps1.
 #>
 
+# IMPORTANT PLEASE NOTE:
+# Any time the file structure in the `windows` directory changes, `windows/BUILD`
+# and `k8s.io/release/lib/releaselib.sh` must be manually updated with the changes.
+# We HIGHLY recommend not changing the file structure, because consumers of
+# Kubernetes releases depend on the release structure remaining stable.
+
 # TODO: update scripts for these style guidelines:
 #  - Remove {} around variable references unless actually needed for clarity.
 #  - Always use single-quoted strings unless actually interpolating variables
@@ -45,7 +51,7 @@
 #  - Document functions using proper syntax:
 #    https://technet.microsoft.com/en-us/library/hh847834(v=wps.620).aspx
 
-$INFRA_CONTAINER = "kubeletwin/pause"
+$INFRA_CONTAINER = "e2eteam/pause:3.1"
 $GCE_METADATA_SERVER = "169.254.169.254"
 # The "management" interface is used by the kubelet and by Windows pods to talk
 # to the rest of the Kubernetes cluster *without NAT*. This interface does not
@@ -128,6 +134,19 @@ function Add_GceMetadataServerRoute {
   }
 }
 
+# Writes debugging information, such as Windows version and patch info, to the
+# console.
+function Dump-DebugInfoToConsole {
+  Try {
+    $version = "$([System.Environment]::OSVersion.Version | Out-String)"
+    $hotfixes = "$(Get-Hotfix | Out-String)"
+    $image = "$(Get-InstanceMetadata 'image' | Out-String)"
+    Log-Output "Windows version:`n$version"
+    Log-Output "Installed hotfixes:`n$hotfixes"
+    Log-Output "GCE Windows image:`n$image"
+  } Catch { }
+}
+
 # Fetches the kube-env from the instance metadata.
 #
 # Returns: a PowerShell Hashtable object containing the key-value pairs from
@@ -135,7 +154,7 @@ function Add_GceMetadataServerRoute {
 function Fetch-KubeEnv {
   # Testing / debugging:
   # First:
-  #   ${kube_env} = Get-InstanceMetadataValue 'kube-env'
+  #   ${kube_env} = Get-InstanceMetadataAttribute 'kube-env'
   # or:
   #   ${kube_env} = [IO.File]::ReadAllText(".\kubeEnv.txt")
   # ${kube_env_table} = ConvertFrom-Yaml ${kube_env}
@@ -143,7 +162,7 @@ function Fetch-KubeEnv {
   # ${kube_env_table}.GetType()
 
   # The type of kube_env is a powershell String.
-  $kube_env = Get-InstanceMetadataValue 'kube-env'
+  $kube_env = Get-InstanceMetadataAttribute 'kube-env'
   $kube_env_table = ConvertFrom-Yaml ${kube_env}
   return ${kube_env_table}
 }
@@ -221,13 +240,6 @@ function Set-PrerequisiteOptions {
   sc.exe config wuauserv start=disabled
   sc.exe stop wuauserv
 
-  # Windows Defender periodically consumes 100% of the CPU.
-  # TODO(pjh): this (all of a sudden, ugh) started failing with "The term
-  # 'Set-MpPreference' is not recognized...". Investigate and fix or remove.
-  #Log-Output "Disabling Windows Defender service"
-  #Set-MpPreference -DisableRealtimeMonitoring $true
-  #Uninstall-WindowsFeature -Name 'Windows-Defender'
-
   # Use TLS 1.2: needed for Invoke-WebRequest downloads from github.com.
   [Net.ServicePointManager]::SecurityProtocol = `
       [Net.SecurityProtocolType]::Tls12
@@ -237,13 +249,32 @@ function Set-PrerequisiteOptions {
   Install-Module -Name powershell-yaml -Force
 }
 
+# Disables Windows Defender realtime scanning if this Windows node is part of a
+# test cluster.
+#
+# ${kube_env} must have already been set.
+function Disable-WindowsDefender {
+  # Windows Defender periodically consumes 100% of the CPU, so disable realtime
+  # scanning. Uninstalling the Windows Feature will prevent the service from
+  # starting after a reboot.
+  # TODO(pjh): move this step to image preparation, since we don't want to do a
+  # full reboot here.
+  if ((Test-IsTestCluster ${kube_env}) -and
+      ((Get-WindowsFeature -Name 'Windows-Defender').Installed)) {
+    Log-Output "Disabling Windows Defender service"
+    Set-MpPreference -DisableRealtimeMonitoring $true
+    Uninstall-WindowsFeature -Name 'Windows-Defender'
+  }
+}
+
 # Creates directories where other functions in this module will read and write
 # data.
+# Note: C:\tmp is required for running certain kubernetes tests.
 function Create-Directories {
   Log-Output "Creating ${env:K8S_DIR} and its subdirectories."
   ForEach ($dir in ("${env:K8S_DIR}", "${env:NODE_DIR}", "${env:LOGS_DIR}",
     "${env:CNI_DIR}", "${env:CNI_CONFIG_DIR}", "${env:MANIFESTS_DIR}",
-    "${env:PKI_DIR}")) {
+    "${env:PKI_DIR}"), "C:\tmp") {
     mkdir -Force $dir
   }
 }
@@ -274,41 +305,6 @@ function Get_ContainerVersionLabel {
   }
   Throw ("Unknown Windows version $WinVersion, don't know its container " +
          "version label")
-}
-
-# Builds the pause image with name $INFRA_CONTAINER.
-function Create-PauseImage {
-  $win_version = $(Get-InstanceMetadataValue 'win-version')
-  if ($win_version -match '2019') {
-    # TODO(pjh): update this function to properly support 2019 vs. 1809 vs.
-    # future Windows versions. For example, Windows Server 2019 does not
-    # support the nanoserver container
-    # (https://blogs.technet.microsoft.com/virtualization/2018/11/13/windows-server-2019-now-available/).
-    Log_NotImplemented "Need to update Create-PauseImage for WS2019"
-  }
-
-  $version_label = Get_ContainerVersionLabel $win_version
-  $pause_dir = "${env:K8S_DIR}\pauseimage"
-  $dockerfile = "$pause_dir\Dockerfile"
-  mkdir -Force $pause_dir
-  if (ShouldWrite-File $dockerfile) {
-    New-Item -Force -ItemType file $dockerfile | Out-Null
-    Set-Content `
-        $dockerfile `
-        ("FROM mcr.microsoft.com/windows/nanoserver:${version_label}`n`n" +
-         "CMD cmd /c ping -t localhost > nul")
-  }
-
-  if (($(docker images -a) -like "*${INFRA_CONTAINER}*") -and
-      (-not $REDO_STEPS)) {
-    Log-Output "Skip: ${INFRA_CONTAINER} already built"
-    return
-  }
-  docker build -t ${INFRA_CONTAINER} $pause_dir
-  if ($LastExitCode -ne 0) {
-    Log-Output -Fatal `
-        "docker build -t ${INFRA_CONTAINER} $pause_dir failed"
-  }
 }
 
 # Downloads the Kubernetes binaries from kube-env's NODE_BINARY_TAR_URL and
@@ -823,9 +819,15 @@ function Configure-CniNetworking {
   Log-Output ("using mgmt IP ${mgmt_ip} and mgmt subnet ${mgmt_subnet} for " +
               "CNI config")
 
+  # We reserve .1 and .2 for gateways. Start the CIDR range from ".3" so that
+  # IPAM does not allocate those IPs to pods.
+  $cidr_range_start = `
+      ${env:POD_CIDR}.substring(0, ${env:POD_CIDR}.lastIndexOf('.')) + '.3'
+
   # Explanation of the CNI config values:
   #   CLUSTER_CIDR: the cluster CIDR from which pod CIDRs are allocated.
   #   POD_CIDR: the pod CIDR assigned to this node.
+  #   CIDR_RANGE_START: start of the pod CIDR range.
   #   MGMT_SUBNET: the subnet on which the Windows pods + kubelet will
   #     communicate with the rest of the cluster without NAT (i.e. the subnet
   #     that VM internal IPs are allocated from).
@@ -845,7 +847,8 @@ function Configure-CniNetworking {
   },
   "ipam":  {
     "type": "host-local",
-    "subnet": "POD_CIDR"
+    "subnet": "POD_CIDR",
+    "rangeStart": "CIDR_RANGE_START"
   },
   "dns":  {
     "Nameservers":  [
@@ -885,6 +888,7 @@ function Configure-CniNetworking {
     }
   ]
 }'.replace('POD_CIDR', ${env:POD_CIDR}).`
+  replace('CIDR_RANGE_START', ${cidr_range_start}).`
   replace('DNS_SERVER_IP', ${kube_env}['DNS_SERVER_IP']).`
   replace('DNS_DOMAIN', ${kube_env}['DNS_DOMAIN']).`
   replace('MGMT_IP', ${mgmt_ip}).`
@@ -905,7 +909,7 @@ function Configure-Kubelet {
   # The Kubelet config is built by build-kubelet-config() in
   # cluster/gce/util.sh, and stored in the metadata server under the
   # 'kubelet-config' key.
-  $kubelet_config = Get-InstanceMetadataValue 'kubelet-config'
+  $kubelet_config = Get-InstanceMetadataAttribute 'kubelet-config'
   Set-Content ${env:KUBELET_CONFIG} $kubelet_config
   Log-Output "Kubelet config:`n$(Get-Content -Raw ${env:KUBELET_CONFIG})"
 }
@@ -918,14 +922,24 @@ function Configure-Kubelet {
 #   KUBERNETES_MASTER_NAME
 #   CLUSTER_IP_RANGE
 function Start-WorkerServices {
+  # Compute kubelet args
   $kubelet_args_str = ${kube_env}['KUBELET_ARGS']
   $kubelet_args = $kubelet_args_str.Split(" ")
   Log-Output "kubelet_args from metadata: ${kubelet_args}"
-
-  $additional_arg_list = @(`
+  $default_kubelet_args = @(`
       "--pod-infra-container-image=${INFRA_CONTAINER}"
   )
-  $kubelet_args = ${kubelet_args} + ${additional_arg_list}
+  $kubelet_args = ${default_kubelet_args} + ${kubelet_args}
+  Log-Output "Final kubelet_args: ${kubelet_args}"
+
+  # Compute kube-proxy args
+  $kubeproxy_args_str = ${kube_env}['KUBEPROXY_ARGS']
+  Try {
+    $kubeproxy_args = $kubeproxy_args_str.Split(" ")
+  } Catch {
+    $kubeproxy_args = ""
+  }
+  Log-Output "kubeproxy_args from metadata: ${kubeproxy_args}"
 
   # kubeproxy is started on Linux nodes using
   # kube-manifests/kubernetes/gci-trusty/kube-proxy.manifest, which is
@@ -938,12 +952,11 @@ function Start-WorkerServices {
   #   --ipvs-sync-period=1m --ipvs-min-sync-period=10s
   # And also with various volumeMounts and "securityContext: privileged: true".
   $apiserver_address = ${kube_env}['KUBERNETES_MASTER_NAME']
-  $kubeproxy_args = @(`
+  $default_kubeproxy_args = @(`
       "--v=4",
       "--master=https://${apiserver_address}",
       "--kubeconfig=${env:KUBEPROXY_KUBECONFIG}",
       "--proxy-mode=kernelspace",
-      "--hostname-override=$(hostname)",
       "--cluster-cidr=$(${kube_env}['CLUSTER_IP_RANGE'])",
 
       # Configure kube-proxy to run as a windows service.
@@ -964,6 +977,8 @@ function Start-WorkerServices {
       # of string delimiters.
       "--resource-container="
   )
+  $kubeproxy_args = ${default_kubeproxy_args} + ${kubeproxy_args}
+  Log-Output "Final kubeproxy_args: ${kubeproxy_args}"
 
   # TODO(pjh): kubelet is emitting these messages:
   # I1023 23:44:11.761915    2468 kubelet.go:274] Adding pod path:
@@ -1028,6 +1043,26 @@ function Verify-WorkerServices {
               "$(& ${env:NODE_DIR}\kubectl.exe get nodes | Out-String)")
   Verify_GceMetadataServerRouteIsPresent
   Log_Todo "run more verification commands."
+}
+
+# Add a registry key for docker in EventLog so that log messages are mapped
+# correctly. This is a workaround since the key is missing in the base image.
+# https://github.com/MicrosoftDocs/Virtualization-Documentation/pull/503
+# TODO: Fix this in the base image.
+function Create-DockerRegistryKey {
+  $tmp_dir = 'C:\tmp_docker_reg'
+  New-Item -Force -ItemType 'directory' ${tmp_dir} | Out-Null
+  $reg_file = 'docker.reg'
+  Set-Content ${tmp_dir}\${reg_file} `
+'Windows Registry Editor Version 5.00
+ [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\EventLog\Application\docker]
+"CustomSource"=dword:00000001
+"EventMessageFile"="C:\\Program Files\\docker\\dockerd.exe"
+"TypesSupported"=dword:00000007'
+
+  Log-Output "Importing registry key for Docker"
+  reg import ${tmp_dir}\${reg_file}
+  Remove-Item -Force -Recurse ${tmp_dir}
 }
 
 # Export all public functions:
