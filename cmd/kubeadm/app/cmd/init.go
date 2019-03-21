@@ -19,7 +19,6 @@ package cmd
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,11 +62,25 @@ var (
 		Run "kubectl apply -f [podnetwork].yaml" with one of the options listed at:
 		  https://kubernetes.io/docs/concepts/cluster-administration/addons/
 
-		You can now join any number of machines by running the following on each node
-		as root:
-
-		  {{.joinCommand}}
-
+		{{if .ControlPlaneEndpoint -}}
+		{{if .UploadCerts -}}
+		You can now join any number of the control-plane node running the following command on each as root:
+					  
+		  {{.joinControlPlaneCommand}}
+					
+		Please note that the certificate-key gives access to cluster sensitive data, keep it secret!
+		As a safeguard, uploaded-certs will be deleted in two hours; If necessary, you can use 
+		"kubeadm init phase upload-certs --experimental-upload-certs" to reload certs afterward.
+		  
+		{{else -}}
+		You can now join any number of control-plane nodes by copying certificate authorities 
+		and service account keys on each node and then running the following as root:
+				  
+		  {{.joinControlPlaneCommand}}	  
+		  
+		{{end}}{{end}}Then you can join any number of worker nodes by running the following on each as root:
+						  
+		{{.joinWorkerCommand}}
 		`)))
 )
 
@@ -327,14 +340,22 @@ func newInitData(cmd *cobra.Command, args []string, options *initOptions, out io
 	// if dry running creates a temporary folder for saving kubeadm generated files
 	dryRunDir := ""
 	if options.dryRun {
-		if dryRunDir, err = ioutil.TempDir("", "kubeadm-init-dryrun"); err != nil {
+		if dryRunDir, err = kubeadmconstants.CreateTempDirForKubeadm("kubeadm-init-dryrun"); err != nil {
 			return nil, errors.Wrap(err, "couldn't create a temporary directory")
 		}
 	}
 
-	// Checks if an external CA is provided by the user.
-	externalCA, _ := certsphase.UsingExternalCA(&cfg.ClusterConfiguration)
+	// Checks if an external CA is provided by the user (when the CA Cert is present but the CA Key is not)
+	externalCA, err := certsphase.UsingExternalCA(&cfg.ClusterConfiguration)
 	if externalCA {
+		// In case the certificates signed by CA (that should be provided by the user) are missing or invalid,
+		// returns, because kubeadm can't regenerate them without the CA Key
+		if err != nil {
+			return nil, errors.Wrapf(err, "invalid or incomplete external CA")
+		}
+
+		// Validate that also the required kubeconfig files exists and are invalid, because
+		// kubeadm can't regenerate them without the CA Key
 		kubeconfigDir := options.kubeconfigDir
 		if options.dryRun {
 			kubeconfigDir = dryRunDir
@@ -342,9 +363,20 @@ func newInitData(cmd *cobra.Command, args []string, options *initOptions, out io
 		if err := kubeconfigphase.ValidateKubeconfigsForExternalCA(kubeconfigDir, cfg); err != nil {
 			return nil, err
 		}
-		if options.uploadCerts {
-			return nil, errors.New("can't use externalCA mode and upload-certs")
+	}
+
+	// Checks if an external Front-Proxy CA is provided by the user (when the Front-Proxy CA Cert is present but the Front-Proxy CA Key is not)
+	externalFrontProxyCA, err := certsphase.UsingExternalFrontProxyCA(&cfg.ClusterConfiguration)
+	if externalFrontProxyCA {
+		// In case the certificates signed by Front-Proxy CA (that should be provided by the user) are missing or invalid,
+		// returns, because kubeadm can't regenerate them without the Front-Proxy CA Key
+		if err != nil {
+			return nil, errors.Wrapf(err, "invalid or incomplete external front-proxy CA")
 		}
+	}
+
+	if options.uploadCerts && (externalCA || externalFrontProxyCA) {
+		return nil, errors.New("can't use upload-certs with an external CA or an external front-proxy CA")
 	}
 
 	return &initData{
@@ -490,14 +522,22 @@ func (d *initData) Tokens() []string {
 }
 
 func printJoinCommand(out io.Writer, adminKubeConfigPath, token string, i *initData) error {
-	joinCommand, err := cmdutil.GetJoinCommand(adminKubeConfigPath, token, i.certificateKey, i.skipTokenPrint, i.uploadCerts, i.skipCertificateKeyPrint)
+	joinControlPlaneCommand, err := cmdutil.GetJoinControlPlaneCommand(adminKubeConfigPath, token, i.certificateKey, i.skipTokenPrint, i.skipCertificateKeyPrint)
 	if err != nil {
 		return err
 	}
 
-	ctx := map[string]string{
-		"KubeConfigPath": adminKubeConfigPath,
-		"joinCommand":    joinCommand,
+	joinWorkerCommand, err := cmdutil.GetJoinWorkerCommand(adminKubeConfigPath, token, i.skipTokenPrint)
+	if err != nil {
+		return err
+	}
+
+	ctx := map[string]interface{}{
+		"KubeConfigPath":          adminKubeConfigPath,
+		"ControlPlaneEndpoint":    i.Cfg().ControlPlaneEndpoint,
+		"UploadCerts":             i.uploadCerts,
+		"joinControlPlaneCommand": joinControlPlaneCommand,
+		"joinWorkerCommand":       joinWorkerCommand,
 	}
 
 	return initDoneTempl.Execute(out, ctx)
