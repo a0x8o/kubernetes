@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"strings"
 
 	"github.com/lithammer/dedent"
 	"github.com/pkg/errors"
@@ -515,11 +514,7 @@ func (i *ImagesList) Run(out io.Writer) error {
 
 // AddImagesCommonConfigFlags adds the flags that configure kubeadm (and affect the images kubeadm will use)
 func AddImagesCommonConfigFlags(flagSet *flag.FlagSet, cfg *kubeadmapiv1beta1.InitConfiguration, cfgPath *string, featureGatesString *string) {
-	flagSet.StringVar(
-		&cfg.ClusterConfiguration.KubernetesVersion, "kubernetes-version", cfg.ClusterConfiguration.KubernetesVersion,
-		`Choose a specific Kubernetes version for the control plane.`,
-	)
-	flagSet.StringVar(featureGatesString, "feature-gates", *featureGatesString, "A set of key=value pairs that describe feature gates for various features. "+
-		"Options are:\n"+strings.Join(features.KnownFeatures(&features.InitFeatureGates), "\n"))
+	options.AddKubernetesVersionFlag(flagSet, &cfg.ClusterConfiguration.KubernetesVersion)
+	options.AddFeatureGatesStringFlag(flagSet, featureGatesString)
 	flagSet.StringVar(cfgPath, "config", *cfgPath, "Path to kubeadm config file.")
 }
