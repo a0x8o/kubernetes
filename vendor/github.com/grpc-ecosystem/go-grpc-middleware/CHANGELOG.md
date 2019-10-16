@@ -18,7 +18,11 @@ Types of changes:
 
 ## 1.0.0 - 2018-05-08
 ### Added
+<<<<<<< HEAD
 - grpc_auth 
+=======
+- grpc_auth
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 - grpc_ctxtags
 - grpc_zap
 - grpc_logrus
@@ -27,4 +31,8 @@ Types of changes:
 - grpc_validator
 - grpc_recovery
 
+<<<<<<< HEAD
 [Unreleased]: https://github.com/grpc-ecosystem/go-grpc-middleware/compare/v1.0.0...HEAD 
+=======
+[Unreleased]: https://github.com/grpc-ecosystem/go-grpc-middleware/compare/v1.0.0...HEAD
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

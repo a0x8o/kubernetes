@@ -7,10 +7,17 @@ This example demonstrates how to use the leader election package.
 Run the following three commands in separate terminals. Each terminal needs a unique `id`.
 
 ```bash
+<<<<<<< HEAD
 # first terminal 
 go run *.go -kubeconfig=/my/config -logtostderr=true -id=1
 
 # second terminal 
+=======
+# first terminal
+go run *.go -kubeconfig=/my/config -logtostderr=true -id=1
+
+# second terminal
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 go run *.go -kubeconfig=/my/config -logtostderr=true -id=2
 
 # third terminal

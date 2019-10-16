@@ -18,7 +18,11 @@ reviewers:
 - dixudx
 - rosti
 - yagonobre
+<<<<<<< HEAD
 - ereslibre 
+=======
+- ereslibre
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 # Might want to add @xiangpengzhao and @stealthybox back in the future
 labels:
 - area/kubeadm

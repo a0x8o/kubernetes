@@ -88,4 +88,7 @@ data:
   NannyConfiguration: |-
     apiVersion: nannyconfig/v1alpha1
     kind: NannyConfiguration
+<<<<<<< HEAD
 
+=======
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

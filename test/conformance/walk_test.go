@@ -83,7 +83,11 @@ being executed in a pod MUST be sent to the pod's logs.` + "\n\n"}},
 	{"e2e/foo.go", `
 var _ = framework.KubeDescribe("Feature", func() {
 	Context("with context and extra spaces before It block should still pick up Testname", func() {
+<<<<<<< HEAD
 		//					Testname: Test with spaces		
+=======
+		//					Testname: Test with spaces
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 		//Description: Should pick up testname even if it is not within 3 spaces
 		//even when executed from memory.
 		framework.ConformanceIt("should work", func() {})

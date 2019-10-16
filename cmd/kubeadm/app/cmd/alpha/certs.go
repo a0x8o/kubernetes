@@ -43,7 +43,11 @@ var (
 	genericCertRenewLongDesc = normalizer.LongDesc(`
 	Renew the %s.
 
+<<<<<<< HEAD
 	Renewals run unconditionally, regardless of certificate expiration date; extra attributes such as SANs will 
+=======
+	Renewals run unconditionally, regardless of certificate expiration date; extra attributes such as SANs will
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 	be based on the existing file/certificates, there is no need to resupply them.
 
 	Renewal by default tries to use the certificate authority in the local PKI managed by kubeadm; as alternative

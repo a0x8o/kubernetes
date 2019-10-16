@@ -761,7 +761,11 @@ type: object
 x-kubernetes-embedded-resource: true
 properties:
   apiVersion:
+<<<<<<< HEAD
     type: string 
+=======
+    type: string
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
   kind:
     type: string
   metadata:
@@ -833,7 +837,11 @@ not:
   nullable: true
 allOf:
 - properties:
+<<<<<<< HEAD
     foo: 
+=======
+    foo:
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
       type: string
       additionalProperties: true
       title: hello
@@ -848,7 +856,11 @@ anyOf:
     nullable: true
 oneOf:
 - properties:
+<<<<<<< HEAD
     foo: 
+=======
+    foo:
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
       type: string
       additionalProperties: true
       title: hello

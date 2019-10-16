@@ -40,10 +40,17 @@ var (
 
 	cronjobExample = templates.Examples(`
 		# Create a cronjob
+<<<<<<< HEAD
 		kubectl create cronjob my-job --image=busybox 
 
 		# Create a cronjob with command
 		kubectl create cronjob my-job --image=busybox -- date 
+=======
+		kubectl create cronjob my-job --image=busybox
+
+		# Create a cronjob with command
+		kubectl create cronjob my-job --image=busybox -- date
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 
 		# Create a cronjob with schedule
 		kubectl create cronjob test-job --image=busybox --schedule="*/1 * * * *"`)

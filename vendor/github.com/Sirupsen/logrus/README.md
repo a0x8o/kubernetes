@@ -84,7 +84,11 @@ time="2015-03-26T01:27:38-04:00" level=fatal method=github.com/sirupsen/arcticcr
 ```
 Note that this does add measurable overhead - the cost will depend on the version of Go, but is
 between 20 and 40% in recent tests with 1.6 and 1.7.  You can validate this in your
+<<<<<<< HEAD
 environment via benchmarks: 
+=======
+environment via benchmarks:
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 ```
 go test -bench=.*CallerTracing
 ```

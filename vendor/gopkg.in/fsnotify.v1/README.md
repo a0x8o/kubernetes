@@ -27,7 +27,11 @@ Please see [the documentation](https://godoc.org/github.com/fsnotify/fsnotify) a
 
 ## API stability
 
+<<<<<<< HEAD
 fsnotify is a fork of [howeyc/fsnotify](https://godoc.org/github.com/howeyc/fsnotify) with a new API as of v1.0. The API is based on [this design document](http://goo.gl/MrYxyA). 
+=======
+fsnotify is a fork of [howeyc/fsnotify](https://godoc.org/github.com/howeyc/fsnotify) with a new API as of v1.0. The API is based on [this design document](http://goo.gl/MrYxyA).
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 
 All [releases](https://github.com/fsnotify/fsnotify/releases) are tagged based on [Semantic Versioning](http://semver.org/). Further API changes are [planned](https://github.com/fsnotify/fsnotify/milestones), and will be tagged with a new major revision number.
 
@@ -76,4 +80,7 @@ There are OS-specific limits as to how many watches can be created:
 
 * [notify](https://github.com/rjeczalik/notify)
 * [fsevents](https://github.com/fsnotify/fsevents)
+<<<<<<< HEAD
 
+=======
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

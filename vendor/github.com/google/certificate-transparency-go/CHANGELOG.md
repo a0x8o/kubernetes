@@ -205,4 +205,7 @@ Published 2018-06-01 13:59:00 +0000 UTC
 This is the point that corresponds to the 1.0 release in the trillian repo.
 
 Commit [abb79e468b6f3bbd48d1ab0c9e68febf80d52c4d](https://api.github.com/repos/google/certificate-transparency-go/commits/abb79e468b6f3bbd48d1ab0c9e68febf80d52c4d) Download [zip](https://api.github.com/repos/google/certificate-transparency-go/zipball/v1.0)
+<<<<<<< HEAD
 
+=======
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

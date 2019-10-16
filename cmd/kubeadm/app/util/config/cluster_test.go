@@ -49,8 +49,13 @@ kubernetesVersion: ` + k8sVersionString + `
 	"ClusterStatus_v1beta1": []byte(`
 apiVersion: kubeadm.k8s.io/v1beta1
 kind: ClusterStatus
+<<<<<<< HEAD
 apiEndpoints: 
   ` + nodeName + `: 
+=======
+apiEndpoints:
+  ` + nodeName + `:
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     advertiseAddress: 1.2.3.4
     bindPort: 1234
 `),
@@ -70,8 +75,13 @@ kubernetesVersion: ` + k8sVersionString + `
 	"ClusterStatus_v1beta2": []byte(`
 apiVersion: kubeadm.k8s.io/v1beta2
 kind: ClusterStatus
+<<<<<<< HEAD
 apiEndpoints: 
   ` + nodeName + `: 
+=======
+apiEndpoints:
+  ` + nodeName + `:
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     advertiseAddress: 1.2.3.4
     bindPort: 1234
 `),

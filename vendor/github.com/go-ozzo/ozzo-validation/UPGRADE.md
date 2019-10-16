@@ -28,17 +28,29 @@ data := "example"
 
 // 2.x usage
 rules := validation.Rules{
+<<<<<<< HEAD
 	validation.Required,      
 	validation.Length(5, 100),
 	is.URL,                   
+=======
+	validation.Required,
+	validation.Length(5, 100),
+	is.URL,
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 }
 err := rules.Validate(data)
 
 // 3.x usage
 err := validation.Validate(data,
+<<<<<<< HEAD
 	validation.Required,      
 	validation.Length(5, 100),
 	is.URL,                   
+=======
+	validation.Required,
+	validation.Length(5, 100),
+	is.URL,
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 )
 ```
 

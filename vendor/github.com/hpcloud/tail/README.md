@@ -1,9 +1,17 @@
 [![Build Status](https://travis-ci.org/hpcloud/tail.svg)](https://travis-ci.org/hpcloud/tail)
+<<<<<<< HEAD
 [![Build status](https://ci.appveyor.com/api/projects/status/kohpsf3rvhjhrox6?svg=true)](https://ci.appveyor.com/project/HelionCloudFoundry/tail) 
 
 # Go package for tail-ing files
 
 A Go package striving to emulate the features of the BSD `tail` program. 
+=======
+[![Build status](https://ci.appveyor.com/api/projects/status/kohpsf3rvhjhrox6?svg=true)](https://ci.appveyor.com/project/HelionCloudFoundry/tail)
+
+# Go package for tail-ing files
+
+A Go package striving to emulate the features of the BSD `tail` program.
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 
 ```Go
 t, err := tail.TailFile("/var/log/nginx.log", tail.Config{Follow: true})

@@ -82,4 +82,7 @@ message MetricValueList {
   // the value of the metric across the described objects
   repeated MetricValue items = 2;
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

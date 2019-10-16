@@ -37,6 +37,7 @@ import (
    The test environment is illustrated below:
 
    datacenter
+<<<<<<< HEAD
    	--->cluster-vsan-1 (zone-a)          	 ____________________	 _________________
    		--->host-1 : master             |                    |	|		  |
    		--->host-2 : node1      	|   vsanDatastore    |	|		  |
@@ -47,6 +48,18 @@ import (
    		--->host-4 : node3      	|                    |	|		  |
    		--->host-5 : node4      	|  vsanDatastore (1) |	|		  |
    		--->host-6       		|____________________|	|_________________|
+=======
+	--->cluster-vsan-1 (zone-a)          	 ____________________	 _________________
+		--->host-1 : master             |                    |	|		  |
+		--->host-2 : node1      	|   vsanDatastore    |	|		  |
+		--->host-3 : node2      	|____________________|	|		  |
+									|		  |
+									|   sharedVmfs-0  |
+	--->cluster-vsan-2 (zone-b) 	  	 ____________________	|		  |
+		--->host-4 : node3      	|                    |	|		  |
+		--->host-5 : node4      	|  vsanDatastore (1) |	|		  |
+		--->host-6       		|____________________|	|_________________|
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 
 	--->cluster-3 (zone-c)			 ________________
 		--->host-7 : node5       	|                |
@@ -55,7 +68,11 @@ import (
 						 ____________________
         --->host-8 (zone-c) : node6          	|		     |
 						| localDatastore (1) |
+<<<<<<< HEAD
         					|____________________|
+=======
+						|____________________|
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 
 
 	Testbed description :

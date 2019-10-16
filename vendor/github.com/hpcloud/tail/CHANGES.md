@@ -4,7 +4,11 @@
 
 * Migrated to godep, as depman is not longer supported
 * Introduced golang vendoring feature
+<<<<<<< HEAD
 * Fixed issue [#57](https://github.com/hpcloud/tail/issues/57) related to reopen deleted file 
+=======
+* Fixed issue [#57](https://github.com/hpcloud/tail/issues/57) related to reopen deleted file
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 
 ## July, 2015
 

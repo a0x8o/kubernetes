@@ -43,4 +43,7 @@ start "$@"
 while true; do
     sleep 5
 done
+<<<<<<< HEAD
 
+=======
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

@@ -6,4 +6,7 @@ reviewers:
 - sig-auth-authorizers-reviewers
 labels:
 - sig/auth
+<<<<<<< HEAD
 
+=======
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

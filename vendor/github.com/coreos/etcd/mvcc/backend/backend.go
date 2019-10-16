@@ -292,7 +292,11 @@ func (b *backend) Defrag() error {
 
 func (b *backend) defrag() error {
 	now := time.Now()
+<<<<<<< HEAD
 	
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 	// TODO: make this non-blocking?
 	// lock batchTx to ensure nobody is using previous tx, and then
 	// close previous ongoing tx.

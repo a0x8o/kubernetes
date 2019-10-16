@@ -6,7 +6,11 @@ Fork, then clone the repo:
 
 ```bash
 git clone git@github.com:your-username/go-grpc-middleware.git
+<<<<<<< HEAD
 ```    
+=======
+```
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 
 Before checking in please run the following:
 

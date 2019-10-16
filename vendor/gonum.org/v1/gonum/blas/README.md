@@ -41,7 +41,11 @@ func main() {
 
 ### blas/cblas128 and blas/cblas64
 
+<<<<<<< HEAD
 Wrappers for an implementation of the double (i.e., `complex128`) and single (`complex64`) 
+=======
+Wrappers for an implementation of the double (i.e., `complex128`) and single (`complex64`)
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 precision complex parts of the blas API.
 
 Currently blas/cblas64 and blas/cblas128 require gonum.org/v1/netlib/blas.

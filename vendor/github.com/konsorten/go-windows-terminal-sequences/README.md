@@ -9,7 +9,11 @@ See [Console Virtual Terminal Sequences](https://docs.microsoft.com/en-us/window
 ```go
 import (
 	"syscall"
+<<<<<<< HEAD
 	
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 	sequences "github.com/konsorten/go-windows-terminal-sequences"
 )
 

@@ -64,4 +64,7 @@ message PriorityClassList {
   // items is the list of PriorityClasses
   repeated PriorityClass items = 2;
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

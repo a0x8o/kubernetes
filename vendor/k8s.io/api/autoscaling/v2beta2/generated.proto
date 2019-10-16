@@ -366,4 +366,7 @@ message ResourceMetricStatus {
   // current contains the current value for the given metric
   optional MetricValueStatus current = 2;
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

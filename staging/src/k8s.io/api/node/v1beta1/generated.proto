@@ -63,4 +63,7 @@ message RuntimeClassList {
   // Items is a list of schema objects.
   repeated RuntimeClass items = 2;
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

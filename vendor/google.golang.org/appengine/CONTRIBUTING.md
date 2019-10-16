@@ -12,7 +12,11 @@
 
     `git remote add fork git@github.com:GITHUB_USERNAME/appengine.git`
 1. Make changes, commit to your fork.
+<<<<<<< HEAD
 1. Send a pull request with your changes. 
+=======
+1. Send a pull request with your changes.
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
    The first line of your commit message is conventionally a one-line summary of the change, prefixed by the primary affected package, and is used as the title of your pull request.
 
 # Testing

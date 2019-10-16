@@ -43,16 +43,28 @@ function New-LocalUser
         [string]
         $password
     )
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     $system = [ADSI]"WinNT://$env:COMPUTERNAME";
     $user = $system.Create("user",$userName);
     $user.SetPassword($password);
     $user.SetInfo();
+<<<<<<< HEAD
  
     $flag=$user.UserFlags.value -bor 0x10000;
     $user.put("userflags",$flag);
     $user.SetInfo();
  
+=======
+
+    $flag=$user.UserFlags.value -bor 0x10000;
+    $user.put("userflags",$flag);
+    $user.SetInfo();
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     $group = [ADSI]("WinNT://$env:COMPUTERNAME/Users");
     $group.PSBase.Invoke("Add", $user.PSBase.Path);
 }
@@ -70,7 +82,11 @@ function Register-NativeMethod
                    ValueFromPipelineByPropertyName=$true,
                    Position=0)]
         [string]$dll,
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
         # Param2 help description
         [Parameter(Mandatory=$true,
                    ValueFromPipelineByPropertyName=$true,
@@ -78,7 +94,11 @@ function Register-NativeMethod
         [string]
         $methodSignature
     )
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     $script:nativeMethods += [PSCustomObject]@{ Dll = $dll; Signature = $methodSignature; }
 }
 function Get-Win32LastError
@@ -110,12 +130,20 @@ function Add-NativeMethods
     [Alias()]
     [OutputType([int])]
     Param($typeName = 'NativeMethods')
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     $nativeMethodsCode = $script:nativeMethods | ForEach-Object { "
         [DllImport(`"$($_.Dll)`")]
         public static extern $($_.Signature);
     " }
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     Add-Type @"
         using System;
         using System.Text;
@@ -128,7 +156,11 @@ function Add-NativeMethods
 
 #Main function to create the new user profile
 function Create-NewProfile {
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     [CmdletBinding()]
     [Alias()]
     [OutputType([int])]
@@ -139,7 +171,11 @@ function Create-NewProfile {
                    ValueFromPipelineByPropertyName=$true,
                    Position=0)]
         [string]$UserName,
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
         # Param2 help description
         [Parameter(Mandatory=$true,
                    ValueFromPipelineByPropertyName=$true,
@@ -147,9 +183,15 @@ function Create-NewProfile {
         [string]
         $Password
     )
+<<<<<<< HEAD
   
     Write-Verbose "Creating local user $Username";
   
+=======
+
+    Write-Verbose "Creating local user $Username";
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     try
     {
         New-LocalUser -username $UserName -password $Password;
@@ -161,23 +203,40 @@ function Create-NewProfile {
     }
     $methodName = 'UserEnvCP'
     $script:nativeMethods = @();
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     if (-not ([System.Management.Automation.PSTypeName]$MethodName).Type)
     {
         Register-NativeMethod "userenv.dll" "int CreateProfile([MarshalAs(UnmanagedType.LPWStr)] string pszUserSid,`
          [MarshalAs(UnmanagedType.LPWStr)] string pszUserName,`
          [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszProfilePath, uint cchProfilePath)";
+<<<<<<< HEAD
  
         Add-NativeMethods -typeName $MethodName;
     }
  
+=======
+
+        Add-NativeMethods -typeName $MethodName;
+    }
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     $localUser = New-Object System.Security.Principal.NTAccount("$UserName");
     $userSID = $localUser.Translate([System.Security.Principal.SecurityIdentifier]);
     $sb = new-object System.Text.StringBuilder(260);
     $pathLen = $sb.Capacity;
+<<<<<<< HEAD
  
     Write-Verbose "Creating user profile for $Username";
  
+=======
+
+    Write-Verbose "Creating user profile for $Username";
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     try
     {
         [UserEnvCP]::CreateProfile($userSID.Value, $Username, $sb, $pathLen) | Out-Null;
@@ -190,7 +249,11 @@ function Create-NewProfile {
 }
 
 function New-ProfileFromSID {
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     [CmdletBinding()]
     [Alias()]
     [OutputType([int])]
@@ -205,12 +268,17 @@ function New-ProfileFromSID {
     )
     $methodname = 'UserEnvCP2'
     $script:nativeMethods = @();
+<<<<<<< HEAD
     
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     if (-not ([System.Management.Automation.PSTypeName]$methodname).Type)
     {
         Register-NativeMethod "userenv.dll" "int CreateProfile([MarshalAs(UnmanagedType.LPWStr)] string pszUserSid,`
          [MarshalAs(UnmanagedType.LPWStr)] string pszUserName,`
          [Out][MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszProfilePath, uint cchProfilePath)";
+<<<<<<< HEAD
  
         Add-NativeMethods -typeName $methodname;
     }
@@ -218,6 +286,15 @@ function New-ProfileFromSID {
     $sb = new-object System.Text.StringBuilder(260);
     $pathLen = $sb.Capacity;
  
+=======
+
+        Add-NativeMethods -typeName $methodname;
+    }
+
+    $sb = new-object System.Text.StringBuilder(260);
+    $pathLen = $sb.Capacity;
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     Write-Verbose "Creating user profile for $Username";
     #$SID= ((get-aduser -id $UserName -ErrorAction Stop).sid.value)
   if($domain)
@@ -226,7 +303,11 @@ function New-ProfileFromSID {
         $strSID = $objUser.Translate([System.Security.Principal.SecurityIdentifier])
         $SID = $strSID.Value
    }
+<<<<<<< HEAD
    else 
+=======
+   else
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
    {
        $objUser = New-Object System.Security.Principal.NTAccount($UserName)
        $strSID = $objUser.Translate([System.Security.Principal.SecurityIdentifier])
@@ -235,7 +316,11 @@ function New-ProfileFromSID {
     Write-Verbose "$UserName SID: $SID"
     try
     {
+<<<<<<< HEAD
        $result = [UserEnvCP2]::CreateProfile($SID, $Username, $sb, $pathLen) 
+=======
+       $result = [UserEnvCP2]::CreateProfile($SID, $Username, $sb, $pathLen)
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
        if($result -eq '-2147024713')
        {
            $status = "$userName already exists"
@@ -264,7 +349,11 @@ function New-ProfileFromSID {
     $status
 }
 Function Remove-Profile {
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     [CmdletBinding()]
     [Alias()]
     [OutputType([int])]
@@ -280,7 +369,11 @@ Function Remove-Profile {
     )
     $methodname = 'userenvDP'
     $script:nativeMethods = @();
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     if (-not ([System.Management.Automation.PSTypeName]"$methodname.profile").Type)
     {
       add-type @"
@@ -320,7 +413,11 @@ namespace $typename
         $strSID = $objUser.Translate([System.Security.Principal.SecurityIdentifier])
         $SID = $strSID.Value
    }
+<<<<<<< HEAD
    else 
+=======
+   else
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
    {
        $objUser = New-Object System.Security.Principal.NTAccount($UserName)
        $strSID = $objUser.Translate([System.Security.Principal.SecurityIdentifier])

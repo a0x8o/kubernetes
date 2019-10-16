@@ -303,7 +303,11 @@ func TestTranslateStubDomainKubeDNSToCoreDNS(t *testing.T) {
        loop
        forward . 1.2.3.4:5300
     }
+<<<<<<< HEAD
     
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     my.cluster.local:53 {
        errors
        cache 30
@@ -317,7 +321,11 @@ func TestTranslateStubDomainKubeDNSToCoreDNS(t *testing.T) {
        loop
        forward . 2.3.4.5
     }
+<<<<<<< HEAD
     
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     bar.com:53 {
        errors
        cache 30

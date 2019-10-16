@@ -49,4 +49,7 @@ def genfile_check_test(src, gen):
       data = [src, gen],
       args = ["$(location " + src + ")", "$(location " + gen + ")"],
   )
+<<<<<<< HEAD
 
+=======
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

@@ -397,9 +397,15 @@ runTests() {
 
    if [[ -n "${WHAT-}" ]]; then
     for pkg in ${WHAT}
+<<<<<<< HEAD
     do 
       # running of kubeadm is captured in hack/make-targets/test-cmd.sh
       if [[ "${pkg}" != "kubeadm" ]]; then 
+=======
+    do
+      # running of kubeadm is captured in hack/make-targets/test-cmd.sh
+      if [[ "${pkg}" != "kubeadm" ]]; then
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
         record_command run_${pkg}_tests
       fi
     done

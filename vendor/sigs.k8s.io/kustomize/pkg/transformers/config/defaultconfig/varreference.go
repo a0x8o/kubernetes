@@ -45,7 +45,11 @@ varReference:
 
 - path: spec/template/spec/initContainers/args
   kind: StatefulSet
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 - path: spec/template/spec/containers/args
   kind: StatefulSet
 

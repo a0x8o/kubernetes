@@ -68,4 +68,7 @@ roleRef:
   kind: ClusterRole
   name: cluster-autoscaler
   apiGroup: rbac.authorization.k8s.io
+<<<<<<< HEAD
 
+=======
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

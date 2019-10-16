@@ -55,7 +55,11 @@ if [[ ! -d "${artifacts}" ]]; then
 fi
 echo "Test artifacts will be written to ${artifacts}"
 
+<<<<<<< HEAD
 # Test 
+=======
+# Test
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 kube::golang::verify_go_version
 
 go run test/e2e_kubeadm/runner/local/run_local.go \

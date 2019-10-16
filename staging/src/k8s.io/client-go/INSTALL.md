@@ -20,7 +20,11 @@ and detailed dependency version info will be added to your `go.mod` file
 This assumes you are using go modules with go 1.11+.
 If you get a message like `cannot use path@version syntax in GOPATH mode`,
 you can choose to [opt into using go modules](#go-modules).
+<<<<<<< HEAD
 If you are using a version of go prior to 1.11, or do not wish to use 
+=======
+If you are using a version of go prior to 1.11, or do not wish to use
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 go modules, you can download `k8s.io/client-go` to your `$GOPATH` instead:
 
 ```sh

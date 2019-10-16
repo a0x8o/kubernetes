@@ -73,4 +73,7 @@ message RuntimeClassSpec {
   // and is immutable.
   optional string runtimeHandler = 1;
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
