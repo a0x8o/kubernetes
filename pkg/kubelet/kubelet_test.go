@@ -36,10 +36,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	utilfeaturetesting "k8s.io/apiserver/pkg/util/feature/testing"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/flowcontrol"
+	"k8s.io/component-base/featuregate"
+	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/kubernetes/pkg/capabilities"
 	cadvisortest "k8s.io/kubernetes/pkg/kubelet/cadvisor/testing"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
@@ -134,22 +135,6 @@ func newTestKubelet(t *testing.T, controllerAttachDetachEnabled bool) *TestKubel
 		},
 	}
 	return newTestKubeletWithImageList(t, imageList, controllerAttachDetachEnabled, true /*initFakeVolumePlugin*/)
-}
-
-func newTestKubeletWithoutFakeVolumePlugin(t *testing.T, controllerAttachDetachEnabled bool) *TestKubelet {
-	imageList := []kubecontainer.Image{
-		{
-			ID:       "abc",
-			RepoTags: []string{"k8s.gcr.io:v1", "k8s.gcr.io:v2"},
-			Size:     123,
-		},
-		{
-			ID:       "efg",
-			RepoTags: []string{"k8s.gcr.io:v3", "k8s.gcr.io:v4"},
-			Size:     456,
-		},
-	}
-	return newTestKubeletWithImageList(t, imageList, controllerAttachDetachEnabled, false /*initFakeVolumePlugin*/)
 }
 
 func newTestKubeletWithImageList(
@@ -2256,11 +2241,11 @@ func runVolumeManager(kubelet *Kubelet) chan struct{} {
 	return stopCh
 }
 
-func forEachFeatureGate(t *testing.T, fs []utilfeature.Feature, tf func(t *testing.T)) {
+func forEachFeatureGate(t *testing.T, fs []featuregate.Feature, tf func(t *testing.T)) {
 	for _, fg := range fs {
 		for _, f := range []bool{true, false} {
 			func() {
-				defer utilfeaturetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, fg, f)()
+				defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, fg, f)()
 				t.Run(fmt.Sprintf("%v(%t)", fg, f), tf)
 			}()
 		}

@@ -37,11 +37,12 @@ import (
 	bootstraputil "k8s.io/cluster-bootstrap/token/util"
 	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 	kubeadmscheme "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/scheme"
-	kubeadmapiv1beta1 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta1"
+	kubeadmapiv1beta2 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta2"
 	"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/validation"
 	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/options"
 	phaseutil "k8s.io/kubernetes/cmd/kubeadm/app/cmd/phases"
 	cmdutil "k8s.io/kubernetes/cmd/kubeadm/app/cmd/util"
+	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	tokenphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/bootstraptoken/node"
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
 	"k8s.io/kubernetes/cmd/kubeadm/app/util/apiclient"
@@ -55,7 +56,7 @@ func NewCmdToken(out io.Writer, errW io.Writer) *cobra.Command {
 	var dryRun bool
 	tokenCmd := &cobra.Command{
 		Use:   "token",
-		Short: "Manage bootstrap tokens.",
+		Short: "Manage bootstrap tokens",
 		Long: dedent.Dedent(`
 			This command manages bootstrap tokens. It is optional and needed only for advanced use cases.
 
@@ -85,9 +86,9 @@ func NewCmdToken(out io.Writer, errW io.Writer) *cobra.Command {
 
 	options.AddKubeConfigFlag(tokenCmd.PersistentFlags(), &kubeConfigFile)
 	tokenCmd.PersistentFlags().BoolVar(&dryRun,
-		"dry-run", dryRun, "Whether to enable dry-run mode or not")
+		options.DryRun, dryRun, "Whether to enable dry-run mode or not")
 
-	cfg := &kubeadmapiv1beta1.InitConfiguration{}
+	cfg := &kubeadmapiv1beta2.InitConfiguration{}
 
 	// Default values for the cobra help text
 	kubeadmscheme.Scheme.Default(cfg)
@@ -99,7 +100,7 @@ func NewCmdToken(out io.Writer, errW io.Writer) *cobra.Command {
 	createCmd := &cobra.Command{
 		Use:                   "create [token]",
 		DisableFlagsInUseLine: true,
-		Short:                 "Create bootstrap tokens on the server.",
+		Short:                 "Create bootstrap tokens on the server",
 		Long: dedent.Dedent(`
 			This command will create a bootstrap token for you.
 			You can specify the usages for this token, the "time to live" and an optional human friendly description.
@@ -142,7 +143,7 @@ func NewCmdToken(out io.Writer, errW io.Writer) *cobra.Command {
 
 	listCmd := &cobra.Command{
 		Use:   "list",
-		Short: "List bootstrap tokens on the server.",
+		Short: "List bootstrap tokens on the server",
 		Long: dedent.Dedent(`
 			This command will list all bootstrap tokens for you.
 		`),
@@ -160,7 +161,7 @@ func NewCmdToken(out io.Writer, errW io.Writer) *cobra.Command {
 	deleteCmd := &cobra.Command{
 		Use:                   "delete [token-value] ...",
 		DisableFlagsInUseLine: true,
-		Short:                 "Delete bootstrap tokens on the server.",
+		Short:                 "Delete bootstrap tokens on the server",
 		Long: dedent.Dedent(`
 			This command will delete a list of bootstrap tokens for you.
 
@@ -188,7 +189,7 @@ func NewCmdToken(out io.Writer, errW io.Writer) *cobra.Command {
 func NewCmdTokenGenerate(out io.Writer) *cobra.Command {
 	return &cobra.Command{
 		Use:   "generate",
-		Short: "Generate and print a bootstrap token, but do not create it on the server.",
+		Short: "Generate and print a bootstrap token, but do not create it on the server",
 		Long: dedent.Dedent(`
 			This command will print out a randomly-generated bootstrap token that can be used with
 			the "init" and "join" commands.
@@ -208,13 +209,19 @@ func NewCmdTokenGenerate(out io.Writer) *cobra.Command {
 }
 
 // RunCreateToken generates a new bootstrap token and stores it as a secret on the server.
-func RunCreateToken(out io.Writer, client clientset.Interface, cfgPath string, cfg *kubeadmapiv1beta1.InitConfiguration, printJoinCommand bool, kubeConfigFile string) error {
+func RunCreateToken(out io.Writer, client clientset.Interface, cfgPath string, cfg *kubeadmapiv1beta2.InitConfiguration, printJoinCommand bool, kubeConfigFile string) error {
 	// KubernetesVersion is not used, but we set it explicitly to avoid the lookup
 	// of the version from the internet when executing LoadOrDefaultInitConfiguration
 	phaseutil.SetKubernetesVersion(&cfg.ClusterConfiguration)
 
 	// This call returns the ready-to-use configuration based on the configuration file that might or might not exist and the default cfg populated by flags
 	klog.V(1).Infoln("[token] loading configurations")
+
+	// In fact, we don't do any CRI ops at all.
+	// This is just to force skipping the CRI detection.
+	// Ref: https://github.com/kubernetes/kubeadm/issues/1559
+	cfg.NodeRegistration.CRISocket = kubeadmconstants.DefaultDockerCRISocket
+
 	internalcfg, err := configutil.LoadOrDefaultInitConfiguration(cfgPath, cfg)
 	if err != nil {
 		return err
@@ -304,7 +311,7 @@ func RunDeleteTokens(out io.Writer, client clientset.Interface, tokenIDsOrTokens
 		klog.V(1).Infof("[token] parsing token %q", tokenIDOrToken)
 		if !bootstraputil.IsValidBootstrapTokenID(tokenIDOrToken) {
 			// Okay, the full token with both id and secret was probably passed. Parse it and extract the ID only
-			bts, err := kubeadmapiv1beta1.NewBootstrapTokenString(tokenIDOrToken)
+			bts, err := kubeadmapiv1beta2.NewBootstrapTokenString(tokenIDOrToken)
 			if err != nil {
 				return errors.Errorf("given token %q didn't match pattern %q or %q",
 					tokenIDOrToken, bootstrapapi.BootstrapTokenIDPattern, bootstrapapi.BootstrapTokenIDPattern)

@@ -22,14 +22,14 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	"k8s.io/kubernetes/pkg/kubelet/events"
 	"k8s.io/kubernetes/pkg/kubelet/sysctl"
@@ -38,6 +38,7 @@ import (
 	"github.com/onsi/gomega"
 )
 
+// DefaultPodDeletionTimeout is the default timeout for deleting pod
 const DefaultPodDeletionTimeout = 3 * time.Minute
 
 // ImageWhiteList is the images used in the current test suite. It should be initialized in test suite and
@@ -247,11 +248,28 @@ func (c *PodClient) WaitForFailure(name string, timeout time.Duration) {
 	)).To(gomega.Succeed(), "wait for pod %q to fail", name)
 }
 
+// WaitForFinish waits for pod to finish running, regardless of success or failure.
+func (c *PodClient) WaitForFinish(name string, timeout time.Duration) {
+	f := c.f
+	gomega.Expect(WaitForPodCondition(f.ClientSet, f.Namespace.Name, name, "success or failure", timeout,
+		func(pod *v1.Pod) (bool, error) {
+			switch pod.Status.Phase {
+			case v1.PodFailed:
+				return true, nil
+			case v1.PodSucceeded:
+				return true, nil
+			default:
+				return false, nil
+			}
+		},
+	)).To(gomega.Succeed(), "wait for pod %q to finish running", name)
+}
+
 // WaitForErrorEventOrSuccess waits for pod to succeed or an error event for that pod.
 func (c *PodClient) WaitForErrorEventOrSuccess(pod *v1.Pod) (*v1.Event, error) {
 	var ev *v1.Event
 	err := wait.Poll(Poll, PodStartTimeout, func() (bool, error) {
-		evnts, err := c.f.ClientSet.CoreV1().Events(pod.Namespace).Search(legacyscheme.Scheme, pod)
+		evnts, err := c.f.ClientSet.CoreV1().Events(pod.Namespace).Search(scheme.Scheme, pod)
 		if err != nil {
 			return false, fmt.Errorf("error in listing events: %s", err)
 		}

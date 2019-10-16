@@ -46,6 +46,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/healthz"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientset "k8s.io/client-go/kubernetes"
@@ -96,6 +97,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/rlimit"
 	"k8s.io/kubernetes/pkg/version"
 	"k8s.io/kubernetes/pkg/version/verflag"
+	nsutil "k8s.io/kubernetes/pkg/volume/util/nsenter"
 	"k8s.io/kubernetes/pkg/volume/util/subpath"
 	"k8s.io/utils/exec"
 	"k8s.io/utils/nsenter"
@@ -107,7 +109,7 @@ const (
 )
 
 // NewKubeletCommand creates a *cobra.Command object with default parameters
-func NewKubeletCommand(stopCh <-chan struct{}) *cobra.Command {
+func NewKubeletCommand() *cobra.Command {
 	cleanFlagSet := pflag.NewFlagSet(componentKubelet, pflag.ContinueOnError)
 	cleanFlagSet.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
 	kubeletFlags := options.NewKubeletFlags()
@@ -253,6 +255,9 @@ HTTP server: The kubelet can also listen for HTTP and respond to a simple API
 			// add the kubelet config controller to kubeletDeps
 			kubeletDeps.KubeletConfigController = kubeletConfigController
 
+			// set up stopCh here in order to be reused by kubelet and docker shim
+			stopCh := genericapiserver.SetupSignalHandler()
+
 			// start the experimental docker shim, if enabled
 			if kubeletServer.KubeletFlags.ExperimentalDockershim {
 				if err := RunDockershim(&kubeletServer.KubeletFlags, kubeletConfig, stopCh); err != nil {
@@ -373,7 +378,7 @@ func UnsecuredDependencies(s *options.KubeletServer) (*kubelet.Dependencies, err
 		if err != nil {
 			return nil, err
 		}
-		mounter = mount.NewNsenterMounter(s.RootDirectory, ne)
+		mounter = nsutil.NewMounter(s.RootDirectory, ne)
 		// NSenter only valid on Linux
 		subpather = subpath.NewNSEnter(mounter, ne, s.RootDirectory)
 		// an exec interface which can use nsenter for flex plugin calls
@@ -710,7 +715,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 		go wait.Until(func() {
 			err := http.ListenAndServe(net.JoinHostPort(s.HealthzBindAddress, strconv.Itoa(int(s.HealthzPort))), nil)
 			if err != nil {
-				klog.Errorf("Starting health server failed: %v", err)
+				klog.Errorf("Starting healthz server failed: %v", err)
 			}
 		}, 5*time.Second, wait.NeverStop)
 	}

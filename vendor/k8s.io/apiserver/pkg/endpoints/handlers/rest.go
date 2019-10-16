@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"net/url"
 	goruntime "runtime"
-	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -79,7 +78,7 @@ func (scope *RequestScope) err(err error, w http.ResponseWriter, req *http.Reque
 
 func (scope *RequestScope) AllowsConversion(gvk schema.GroupVersionKind, mimeType, mimeSubType string) bool {
 	// TODO: this is temporary, replace with an abstraction calculated at endpoint installation time
-	if gvk.GroupVersion() == metav1beta1.SchemeGroupVersion {
+	if gvk.GroupVersion() == metav1beta1.SchemeGroupVersion || gvk.GroupVersion() == metav1.SchemeGroupVersion {
 		switch gvk.Kind {
 		case "Table":
 			return scope.TableConvertor != nil &&
@@ -138,14 +137,14 @@ func ConnectResource(connecter rest.Connecter, scope *RequestScope, admit admiss
 			userInfo, _ := request.UserFrom(ctx)
 			// TODO: remove the mutating admission here as soon as we have ported all plugin that handle CONNECT
 			if mutatingAdmission, ok := admit.(admission.MutationInterface); ok {
-				err = mutatingAdmission.Admit(admission.NewAttributesRecord(opts, nil, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Connect, false, userInfo), scope)
+				err = mutatingAdmission.Admit(admission.NewAttributesRecord(opts, nil, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Connect, nil, false, userInfo), scope)
 				if err != nil {
 					scope.err(err, w, req)
 					return
 				}
 			}
 			if validatingAdmission, ok := admit.(admission.ValidationInterface); ok {
-				err = validatingAdmission.Validate(admission.NewAttributesRecord(opts, nil, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Connect, false, userInfo), scope)
+				err = validatingAdmission.Validate(admission.NewAttributesRecord(opts, nil, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Connect, nil, false, userInfo), scope)
 				if err != nil {
 					scope.err(err, w, req)
 					return
@@ -195,10 +194,12 @@ func finishRequest(timeout time.Duration, fn resultFunc) (result runtime.Object,
 		defer func() {
 			panicReason := recover()
 			if panicReason != nil {
+				// Same as stdlib http server code. Manually allocate stack
+				// trace buffer size to prevent excessively large logs
 				const size = 64 << 10
 				buf := make([]byte, size)
 				buf = buf[:goruntime.Stack(buf, false)]
-				panicReason = strings.TrimSuffix(fmt.Sprintf("%v\n%s", panicReason, string(buf)), "\n")
+				panicReason = fmt.Sprintf("%v\n%s", panicReason, buf)
 				// Propagate to parent goroutine
 				panicCh <- panicReason
 			}
@@ -228,11 +229,11 @@ func finishRequest(timeout time.Duration, fn resultFunc) (result runtime.Object,
 	}
 }
 
-// transformDecodeError adds additional information when a decode fails.
+// transformDecodeError adds additional information into a bad-request api error when a decode fails.
 func transformDecodeError(typer runtime.ObjectTyper, baseErr error, into runtime.Object, gvk *schema.GroupVersionKind, body []byte) error {
 	objGVKs, _, err := typer.ObjectKinds(into)
 	if err != nil {
-		return err
+		return errors.NewBadRequest(err.Error())
 	}
 	objGVK := objGVKs[0]
 	if gvk != nil && len(gvk.Kind) > 0 {

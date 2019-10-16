@@ -17,7 +17,6 @@ limitations under the License.
 package scheduler
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -40,6 +39,7 @@ import (
 	kubeschedulerconfig "k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/core"
 	"k8s.io/kubernetes/pkg/scheduler/factory"
+	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	internalcache "k8s.io/kubernetes/pkg/scheduler/internal/cache"
 	"k8s.io/kubernetes/pkg/scheduler/metrics"
 	"k8s.io/kubernetes/pkg/scheduler/util"
@@ -132,6 +132,9 @@ func New(client clientset.Interface,
 	recorder record.EventRecorder,
 	schedulerAlgorithmSource kubeschedulerconfig.SchedulerAlgorithmSource,
 	stopCh <-chan struct{},
+	registry framework.Registry,
+	plugins *kubeschedulerconfig.Plugins,
+	pluginConfig []kubeschedulerconfig.PluginConfig,
 	opts ...func(o *schedulerOptions)) (*Scheduler, error) {
 
 	options := defaultSchedulerOptions
@@ -156,6 +159,9 @@ func New(client clientset.Interface,
 		DisablePreemption:              options.disablePreemption,
 		PercentageOfNodesToScore:       options.percentageOfNodesToScore,
 		BindTimeoutSeconds:             options.bindTimeoutSeconds,
+		Registry:                       registry,
+		Plugins:                        plugins,
+		PluginConfig:                   pluginConfig,
 	})
 	var config *factory.Config
 	source := schedulerAlgorithmSource
@@ -196,7 +202,7 @@ func New(client clientset.Interface,
 	// Create the scheduler.
 	sched := NewFromConfig(config)
 
-	AddAllEventHandlers(sched, options.schedulerName, nodeInformer, podInformer, pvInformer, pvcInformer, replicationControllerInformer, replicaSetInformer, statefulSetInformer, serviceInformer, pdbInformer, storageClassInformer)
+	AddAllEventHandlers(sched, options.schedulerName, nodeInformer, podInformer, pvInformer, pvcInformer, serviceInformer, storageClassInformer)
 	return sched, nil
 }
 
@@ -434,11 +440,7 @@ func (sched *Scheduler) bind(assumed *v1.Pod, b *v1.Binding) error {
 
 // scheduleOne does the entire scheduling workflow for a single pod.  It is serialized on the scheduling algorithm's host fitting.
 func (sched *Scheduler) scheduleOne() {
-	plugins := sched.config.PluginSet
-	// Remove all plugin context data at the beginning of a scheduling cycle.
-	if plugins.Data().Ctx != nil {
-		plugins.Data().Ctx.Reset()
-	}
+	fwk := sched.config.Framework
 
 	pod := sched.config.NextPod()
 	// pod could be nil when schedulerQueue is closed
@@ -455,6 +457,7 @@ func (sched *Scheduler) scheduleOne() {
 
 	// Synchronously attempt to find a fit for the pod.
 	start := time.Now()
+	pluginContext := framework.NewPluginContext()
 	scheduleResult, err := sched.schedule(pod)
 	if err != nil {
 		// schedule() may have failed because the pod would not fit on any host, so we try to
@@ -505,20 +508,19 @@ func (sched *Scheduler) scheduleOne() {
 	}
 
 	// Run "reserve" plugins.
-	for _, pl := range plugins.ReservePlugins() {
-		if err := pl.Reserve(plugins, assumedPod, scheduleResult.SuggestedHost); err != nil {
-			klog.Errorf("error while running %v reserve plugin for pod %v: %v", pl.Name(), assumedPod.Name, err)
-			sched.recordSchedulingFailure(assumedPod, err, SchedulerError,
-				fmt.Sprintf("reserve plugin %v failed", pl.Name()))
-			metrics.PodScheduleErrors.Inc()
-			return
-		}
+	if sts := fwk.RunReservePlugins(pluginContext, assumedPod, scheduleResult.SuggestedHost); !sts.IsSuccess() {
+		sched.recordSchedulingFailure(assumedPod, sts.AsError(), SchedulerError, sts.Message())
+		metrics.PodScheduleErrors.Inc()
+		return
 	}
+
 	// assume modifies `assumedPod` by setting NodeName=scheduleResult.SuggestedHost
 	err = sched.assume(assumedPod, scheduleResult.SuggestedHost)
 	if err != nil {
 		klog.Errorf("error assuming pod: %v", err)
 		metrics.PodScheduleErrors.Inc()
+		// trigger un-reserve plugins to clean up state associated with the reserved Pod
+		fwk.RunUnreservePlugins(pluginContext, assumedPod, scheduleResult.SuggestedHost)
 		return
 	}
 	// bind the pod to its host asynchronously (we can do this b/c of the assumption step above).
@@ -529,34 +531,48 @@ func (sched *Scheduler) scheduleOne() {
 			if err != nil {
 				klog.Errorf("error binding volumes: %v", err)
 				metrics.PodScheduleErrors.Inc()
+				// trigger un-reserve plugins to clean up state associated with the reserved Pod
+				fwk.RunUnreservePlugins(pluginContext, assumedPod, scheduleResult.SuggestedHost)
 				return
 			}
 		}
 
-		// Run "prebind" plugins.
-		for _, pl := range plugins.PrebindPlugins() {
-			approved, err := pl.Prebind(plugins, assumedPod, scheduleResult.SuggestedHost)
-			if err != nil {
-				approved = false
-				klog.Errorf("error while running %v prebind plugin for pod %v: %v", pl.Name(), assumedPod.Name, err)
+		// Run "permit" plugins.
+		permitStatus := fwk.RunPermitPlugins(pluginContext, assumedPod, scheduleResult.SuggestedHost)
+		if !permitStatus.IsSuccess() {
+			var reason string
+			if permitStatus.Code() == framework.Unschedulable {
+				reason = v1.PodReasonUnschedulable
+			} else {
 				metrics.PodScheduleErrors.Inc()
+				reason = SchedulerError
 			}
-			if !approved {
-				if forgetErr := sched.Cache().ForgetPod(assumedPod); forgetErr != nil {
-					klog.Errorf("scheduler cache ForgetPod failed: %v", forgetErr)
-				}
-				var reason string
-				if err == nil {
-					msg := fmt.Sprintf("prebind plugin %v rejected pod %v.", pl.Name(), assumedPod.Name)
-					klog.V(4).Infof(msg)
-					err = errors.New(msg)
-					reason = v1.PodReasonUnschedulable
-				} else {
-					reason = SchedulerError
-				}
-				sched.recordSchedulingFailure(assumedPod, err, reason, err.Error())
-				return
+			if forgetErr := sched.Cache().ForgetPod(assumedPod); forgetErr != nil {
+				klog.Errorf("scheduler cache ForgetPod failed: %v", forgetErr)
 			}
+			sched.recordSchedulingFailure(assumedPod, permitStatus.AsError(), reason, permitStatus.Message())
+			// trigger un-reserve plugins to clean up state associated with the reserved Pod
+			fwk.RunUnreservePlugins(pluginContext, assumedPod, scheduleResult.SuggestedHost)
+			return
+		}
+
+		// Run "prebind" plugins.
+		prebindStatus := fwk.RunPrebindPlugins(pluginContext, assumedPod, scheduleResult.SuggestedHost)
+		if !prebindStatus.IsSuccess() {
+			var reason string
+			if prebindStatus.Code() == framework.Unschedulable {
+				reason = v1.PodReasonUnschedulable
+			} else {
+				metrics.PodScheduleErrors.Inc()
+				reason = SchedulerError
+			}
+			if forgetErr := sched.Cache().ForgetPod(assumedPod); forgetErr != nil {
+				klog.Errorf("scheduler cache ForgetPod failed: %v", forgetErr)
+			}
+			sched.recordSchedulingFailure(assumedPod, prebindStatus.AsError(), reason, prebindStatus.Message())
+			// trigger un-reserve plugins to clean up state associated with the reserved Pod
+			fwk.RunUnreservePlugins(pluginContext, assumedPod, scheduleResult.SuggestedHost)
+			return
 		}
 
 		err := sched.bind(assumedPod, &v1.Binding{
@@ -571,6 +587,8 @@ func (sched *Scheduler) scheduleOne() {
 		if err != nil {
 			klog.Errorf("error binding pod: %v", err)
 			metrics.PodScheduleErrors.Inc()
+			// trigger un-reserve plugins to clean up state associated with the reserved Pod
+			fwk.RunUnreservePlugins(pluginContext, assumedPod, scheduleResult.SuggestedHost)
 		} else {
 			klog.V(2).Infof("pod %v/%v is bound successfully on node %v, %d nodes evaluated, %d nodes were found feasible", assumedPod.Namespace, assumedPod.Name, scheduleResult.SuggestedHost, scheduleResult.EvaluatedNodes, scheduleResult.FeasibleNodes)
 			metrics.PodScheduleSuccesses.Inc()

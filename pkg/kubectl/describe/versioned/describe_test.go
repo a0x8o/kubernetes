@@ -28,7 +28,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	autoscalingv2beta2 "k8s.io/api/autoscaling/v2beta2"
-	"k8s.io/api/core/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
@@ -1506,9 +1505,9 @@ func TestDescribeDeployment(t *testing.T) {
 		Spec: appsv1.DeploymentSpec{
 			Replicas: utilpointer.Int32Ptr(1),
 			Selector: &metav1.LabelSelector{},
-			Template: v1.PodTemplateSpec{
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
 						{Image: "mytest-image:latest"},
 					},
 				},
@@ -2595,7 +2594,11 @@ func TestDescribeUnstructuredContent(t *testing.T) {
 	}{
 		{
 			expected: `API Version:	v1
-Dummy 2:	present
+Dummy - Dummy:	present
+dummy-dummy@dummy:	present
+dummy/dummy:	present
+dummy2:	present
+Dummy Dummy:	present
 Items:
   Item Bool:	true
   Item Int:	42
@@ -2633,10 +2636,14 @@ URL:	http://localhost
 	w := NewPrefixWriter(out)
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "v1",
-			"kind":       "Test",
-			"dummy1":     "present",
-			"dummy2":     "present",
+			"apiVersion":        "v1",
+			"kind":              "Test",
+			"dummyDummy":        "present",
+			"dummy/dummy":       "present",
+			"dummy-dummy@dummy": "present",
+			"dummy-dummy":       "present",
+			"dummy1":            "present",
+			"dummy2":            "present",
 			"metadata": map[string]interface{}{
 				"name":              "MyName",
 				"namespace":         "MyNamespace",
@@ -3080,12 +3087,6 @@ func TestDescribeStatefulSet(t *testing.T) {
 	}
 }
 
-// boolPtr returns a pointer to a bool
-func boolPtr(b bool) *bool {
-	o := b
-	return &o
-}
-
 func TestControllerRef(t *testing.T) {
 	var replicas int32 = 1
 	f := fake.NewSimpleClientset(
@@ -3115,7 +3116,7 @@ func TestControllerRef(t *testing.T) {
 				Name:            "barpod",
 				Namespace:       "foo",
 				Labels:          map[string]string{"abc": "xyz"},
-				OwnerReferences: []metav1.OwnerReference{{Name: "bar", UID: "123456", Controller: boolPtr(true)}},
+				OwnerReferences: []metav1.OwnerReference{{Name: "bar", UID: "123456", Controller: utilpointer.BoolPtr(true)}},
 			},
 			TypeMeta: metav1.TypeMeta{
 				Kind: "Pod",
@@ -3152,7 +3153,7 @@ func TestControllerRef(t *testing.T) {
 				Name:            "buzpod",
 				Namespace:       "foo",
 				Labels:          map[string]string{"abc": "xyz"},
-				OwnerReferences: []metav1.OwnerReference{{Name: "buz", UID: "654321", Controller: boolPtr(true)}},
+				OwnerReferences: []metav1.OwnerReference{{Name: "buz", UID: "654321", Controller: utilpointer.BoolPtr(true)}},
 			},
 			TypeMeta: metav1.TypeMeta{
 				Kind: "Pod",

@@ -1,16 +1,11 @@
-package(default_visibility = ["//visibility:public"])
-
-licenses(["notice"])
-
-load(
-    "@io_bazel_rules_go//go:def.bzl",
-    "go_library",
-)
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
     srcs = ["api_base.pb.go"],
-    tags = ["automanaged"],
+    importmap = "k8s.io/kubernetes/vendor/google.golang.org/appengine/internal/base",
+    importpath = "google.golang.org/appengine/internal/base",
+    visibility = ["//vendor/google.golang.org/appengine:__subpackages__"],
     deps = ["//vendor/github.com/golang/protobuf/proto:go_default_library"],
 )
 
@@ -25,4 +20,5 @@ filegroup(
     name = "all-srcs",
     srcs = [":package-srcs"],
     tags = ["automanaged"],
+    visibility = ["//visibility:public"],
 )

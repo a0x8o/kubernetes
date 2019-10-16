@@ -1,5 +1,28 @@
+workspace(name = "io_k8s_kubernetes")
+
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
 load("//build:workspace_mirror.bzl", "mirror")
+
+http_archive(
+    name = "bazel_toolchains",
+    sha256 = "3a6ffe6dd91ee975f5d5bc5c50b34f58e3881dfac59a7b7aba3323bd8f8571a8",
+    strip_prefix = "bazel-toolchains-92dd8a7",
+    urls = [
+        "https://mirror.bazel.build/github.com/bazelbuild/bazel-toolchains/archive/92dd8a7.tar.gz",
+        "https://github.com/bazelbuild/bazel-toolchains/archive/92dd8a7.tar.gz",
+    ],
+)
+
+load("@bazel_toolchains//rules:rbe_repo.bzl", "rbe_autoconfig")
+
+rbe_autoconfig(
+    name = "rbe_default",
+    base_container_digest = "sha256:677c1317f14c6fd5eba2fd8ec645bfdc5119f64b3e5e944e13c89e0525cc8ad1",
+    digest = "sha256:b7c2e7a18968b9df2db43eda722c5ae592aafbf774ba2766074a9c96926743d8",
+    registry = "gcr.io",
+    repository = "k8s-testimages/bazel-krte",
+    # tag = "latest",
+)
 
 http_archive(
     name = "bazel_skylib",
@@ -21,8 +44,8 @@ http_archive(
 
 http_archive(
     name = "io_bazel_rules_go",
-    sha256 = "6433336b4c5feb54e2f45df4c1c84ea4385b2dc0b6f274ec2cd5d745045eae1f",
-    urls = mirror("https://github.com/bazelbuild/rules_go/releases/download/0.17.2/rules_go-0.17.2.tar.gz"),
+    sha256 = "87a089eabf919de29eb4711daa52ffbc4b22b2c045949c20503357a3cadf1037",
+    urls = mirror("https://github.com/bazelbuild/rules_go/releases/download/0.17.5/rules_go-0.17.5.tar.gz"),
 )
 
 load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_dependencies")
@@ -30,7 +53,7 @@ load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_depe
 go_rules_dependencies()
 
 go_register_toolchains(
-    go_version = "1.12.1",
+    go_version = "1.12.5",
 )
 
 http_archive(
@@ -51,7 +74,7 @@ load("@io_bazel_rules_docker//container:container.bzl", "container_pull")
 
 container_pull(
     name = "official_busybox",
-    digest = "sha256:cb63aa0641a885f54de20f61d152187419e8f6b159ed11a251a09d115fdff9bd",
+    digest = "sha256:5e8e0509e829bb8f990249135a36e81a3ecbe94294e7a185cc14616e5fad96bd",
     registry = "index.docker.io",
     repository = "library/busybox",
     tag = "latest",  # ignored, but kept here for documentation

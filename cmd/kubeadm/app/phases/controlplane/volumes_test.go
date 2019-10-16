@@ -30,7 +30,7 @@ import (
 
 func TestGetEtcdCertVolumes(t *testing.T) {
 	hostPathDirectoryOrCreate := v1.HostPathDirectoryOrCreate
-	k8sCertifcatesDir := "/etc/kubernetes/pki"
+	k8sCertificatesDir := "/etc/kubernetes/pki"
 	var tests = []struct {
 		name, ca, cert, key string
 		vol                 []v1.Volume
@@ -62,9 +62,9 @@ func TestGetEtcdCertVolumes(t *testing.T) {
 		},
 		{
 			name:     "Should ignore files in Kubernetes PKI directory (and subdirs)",
-			ca:       k8sCertifcatesDir + "/ca/my-etcd-ca.crt",
-			cert:     k8sCertifcatesDir + "/my-etcd.crt",
-			key:      k8sCertifcatesDir + "/my-etcd.key",
+			ca:       k8sCertificatesDir + "/ca/my-etcd-ca.crt",
+			cert:     k8sCertificatesDir + "/my-etcd.crt",
+			key:      k8sCertificatesDir + "/my-etcd.key",
 			vol:      []v1.Volume{},
 			volMount: []v1.VolumeMount{},
 		},
@@ -238,7 +238,7 @@ func TestGetEtcdCertVolumes(t *testing.T) {
 				CAFile:   rt.ca,
 				CertFile: rt.cert,
 				KeyFile:  rt.key,
-			}, k8sCertifcatesDir)
+			}, k8sCertificatesDir)
 			if !reflect.DeepEqual(actualVol, rt.vol) {
 				t.Errorf(
 					"failed getEtcdCertVolumes:\n\texpected: %v\n\t  actual: %v",
@@ -521,12 +521,8 @@ func TestGetHostPathVolumesForTheControlPlane(t *testing.T) {
 			mounts := getHostPathVolumesForTheControlPlane(rt.cfg)
 
 			// Avoid unit test errors when the flexvolume is mounted
-			if _, ok := mounts.volumes[kubeadmconstants.KubeControllerManager][flexvolumeDirVolumeName]; ok {
-				delete(mounts.volumes[kubeadmconstants.KubeControllerManager], flexvolumeDirVolumeName)
-			}
-			if _, ok := mounts.volumeMounts[kubeadmconstants.KubeControllerManager][flexvolumeDirVolumeName]; ok {
-				delete(mounts.volumeMounts[kubeadmconstants.KubeControllerManager], flexvolumeDirVolumeName)
-			}
+			delete(mounts.volumes[kubeadmconstants.KubeControllerManager], flexvolumeDirVolumeName)
+			delete(mounts.volumeMounts[kubeadmconstants.KubeControllerManager], flexvolumeDirVolumeName)
 			if !reflect.DeepEqual(mounts.volumes, rt.vol) {
 				t.Errorf(
 					"failed getHostPathVolumesForTheControlPlane:\n\texpected: %v\n\t  actual: %v",
@@ -632,7 +628,7 @@ func TestAddExtraHostPathMounts(t *testing.T) {
 			if *vol.HostPath.Type != v1.HostPathType(hostMount.PathType) {
 				t.Errorf("Expected to host path type %q", hostMount.PathType)
 			}
-			volMount, _ := mounts.volumeMounts["component"][volumeName]
+			volMount := mounts.volumeMounts["component"][volumeName]
 			if volMount.Name != volumeName {
 				t.Errorf("Expected volume mount name %q", volumeName)
 			}
