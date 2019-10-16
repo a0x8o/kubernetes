@@ -18,10 +18,9 @@ package get
 
 import (
 	"github.com/spf13/cobra"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/kubernetes/pkg/kubectl/scheme"
 	"k8s.io/kubernetes/pkg/printers"
 	printersinternal "k8s.io/kubernetes/pkg/printers/internalversion"
 )
@@ -61,14 +60,17 @@ func (f *HumanPrintFlags) EnsureWithNamespace() error {
 	return nil
 }
 
+// AllowedFormats returns more customized formating options
+func (f *HumanPrintFlags) AllowedFormats() []string {
+	return []string{"wide"}
+}
+
 // ToPrinter receives an outputFormat and returns a printer capable of
 // handling human-readable output.
 func (f *HumanPrintFlags) ToPrinter(outputFormat string) (printers.ResourcePrinter, error) {
 	if len(outputFormat) > 0 && outputFormat != "wide" {
-		return nil, genericclioptions.NoCompatiblePrinterError{Options: f}
+		return nil, genericclioptions.NoCompatiblePrinterError{Options: f, AllowedFormats: f.AllowedFormats()}
 	}
-
-	decoder := scheme.Codecs.UniversalDecoder()
 
 	showKind := false
 	if f.ShowKind != nil {
@@ -85,7 +87,7 @@ func (f *HumanPrintFlags) ToPrinter(outputFormat string) (printers.ResourcePrint
 		columnLabels = *f.ColumnLabels
 	}
 
-	p := printers.NewHumanReadablePrinter(decoder, printers.PrintOptions{
+	p := printers.NewTablePrinter(printers.PrintOptions{
 		Kind:          f.Kind,
 		WithKind:      showKind,
 		NoHeaders:     f.NoHeaders,

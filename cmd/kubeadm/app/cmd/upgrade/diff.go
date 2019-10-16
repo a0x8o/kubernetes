@@ -17,20 +17,21 @@ limitations under the License.
 package upgrade
 
 import (
-	"fmt"
+	"io"
 	"io/ioutil"
 
-	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
-	kubeadmv1alpha2 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha2"
+	"k8s.io/apimachinery/pkg/util/version"
+	"k8s.io/klog"
+	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/options"
 	cmdutil "k8s.io/kubernetes/cmd/kubeadm/app/cmd/util"
 	"k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/cmd/kubeadm/app/phases/controlplane"
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
 	configutil "k8s.io/kubernetes/cmd/kubeadm/app/util/config"
-	"k8s.io/kubernetes/pkg/util/version"
 )
 
 type diffFlags struct {
@@ -39,7 +40,8 @@ type diffFlags struct {
 	schedulerManifestPath         string
 	newK8sVersionStr              string
 	contextLines                  int
-	parent                        *cmdUpgradeFlags
+	cfgPath                       string
+	out                           io.Writer
 }
 
 var (
@@ -49,19 +51,21 @@ var (
 )
 
 // NewCmdDiff returns the cobra command for `kubeadm upgrade diff`
-func NewCmdDiff(parentflags *cmdUpgradeFlags) *cobra.Command {
+func NewCmdDiff(out io.Writer) *cobra.Command {
 	flags := &diffFlags{
-		parent: parentflags,
+		out: out,
 	}
 
 	cmd := &cobra.Command{
 		Use:   "diff [version]",
 		Short: "Show what differences would be applied to existing static pod manifests. See also: kubeadm upgrade apply --dry-run",
 		Run: func(cmd *cobra.Command, args []string) {
+			// TODO: Run preflight checks for diff to check that the manifests already exist.
 			kubeadmutil.CheckErr(runDiff(flags, args))
 		},
 	}
 
+	options.AddConfigFlag(cmd.Flags(), &flags.cfgPath)
 	cmd.Flags().StringVar(&flags.apiServerManifestPath, "api-server-manifest", defaultAPIServerManifestPath, "path to API server manifest")
 	cmd.Flags().StringVar(&flags.controllerManagerManifestPath, "controller-manager-manifest", defaultControllerManagerManifestPath, "path to controller manifest")
 	cmd.Flags().StringVar(&flags.schedulerManifestPath, "scheduler-manifest", defaultSchedulerManifestPath, "path to scheduler manifest")
@@ -73,8 +77,7 @@ func NewCmdDiff(parentflags *cmdUpgradeFlags) *cobra.Command {
 func runDiff(flags *diffFlags, args []string) error {
 
 	// If the version is specified in config file, pick up that value.
-	glog.V(1).Infof("fetching configuration from file", flags.parent.cfgPath)
-	cfg, err := configutil.ConfigFileAndDefaultsToInternalConfig(flags.parent.cfgPath, &kubeadmv1alpha2.MasterConfiguration{})
+	cfg, err := configutil.LoadInitConfigurationFromFile(flags.cfgPath)
 	if err != nil {
 		return err
 	}
@@ -100,7 +103,7 @@ func runDiff(flags *diffFlags, args []string) error {
 		return err
 	}
 
-	specs := controlplane.GetStaticPodSpecs(cfg, k8sVer)
+	specs := controlplane.GetStaticPodSpecs(&cfg.ClusterConfiguration, &cfg.LocalAPIEndpoint, k8sVer)
 	for spec, pod := range specs {
 		var path string
 		switch spec {
@@ -111,7 +114,7 @@ func runDiff(flags *diffFlags, args []string) error {
 		case constants.KubeScheduler:
 			path = flags.schedulerManifestPath
 		default:
-			glog.Errorf("[diff] unknown spec %v", spec)
+			klog.Errorf("[diff] unknown spec %v", spec)
 			continue
 		}
 
@@ -120,7 +123,7 @@ func runDiff(flags *diffFlags, args []string) error {
 			return err
 		}
 		if path == "" {
-			return fmt.Errorf("empty manifest path")
+			return errors.New("empty manifest path")
 		}
 		existingManifest, err := ioutil.ReadFile(path)
 		if err != nil {
@@ -136,7 +139,7 @@ func runDiff(flags *diffFlags, args []string) error {
 			Context:  flags.contextLines,
 		}
 
-		difflib.WriteUnifiedDiff(flags.parent.out, diff)
+		difflib.WriteUnifiedDiff(flags.out, diff)
 	}
 	return nil
 }

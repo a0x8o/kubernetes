@@ -27,9 +27,8 @@ import (
 	"time"
 
 	"github.com/evanphx/json-patch"
-	"github.com/golang/glog"
 	"github.com/spf13/cobra"
-
+	"github.com/spf13/pflag"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,21 +36,19 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/scale"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
-	"k8s.io/kubernetes/pkg/kubectl"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions/resource"
-	"k8s.io/kubernetes/pkg/printers"
-	printersinternal "k8s.io/kubernetes/pkg/printers/internalversion"
+	"k8s.io/klog"
 	utilexec "k8s.io/utils/exec"
 )
 
 const (
-	ApplyAnnotationsFlag     = "save-config"
-	DefaultErrorExitCode     = 1
-	IncludeUninitializedFlag = "include-uninitialized"
+	ApplyAnnotationsFlag = "save-config"
+	DefaultErrorExitCode = 1
 )
 
 type debugError interface {
@@ -89,10 +86,10 @@ func DefaultBehaviorOnFatal() {
 }
 
 // fatal prints the message (if provided) and then exits. If V(2) or greater,
-// glog.Fatal is invoked for extended information.
+// klog.Fatal is invoked for extended information.
 func fatal(msg string, code int) {
-	if glog.V(2) {
-		glog.FatalDepth(2, msg)
+	if klog.V(2) {
+		klog.FatalDepth(2, msg)
 	}
 	if len(msg) > 0 {
 		// add newline if needed
@@ -135,6 +132,9 @@ func checkErr(err error, handleErr func(string, int)) {
 	case kerrors.IsInvalid(err):
 		details := err.(*kerrors.StatusError).Status().Details
 		s := fmt.Sprintf("The %s %q is invalid", details.Kind, details.Name)
+		if len(details.Kind) == 0 && len(details.Name) == 0 {
+			s = "The request is invalid"
+		}
 		if len(details.Causes) > 0 {
 			errs := statusCausesToAggrError(details.Causes)
 			handleErr(MultilineError(s+": ", errs), DefaultErrorExitCode)
@@ -190,13 +190,13 @@ func statusCausesToAggrError(scs []metav1.StatusCause) utilerrors.Aggregate {
 
 // StandardErrorMessage translates common errors into a human readable message, or returns
 // false if the error is not one of the recognized types. It may also log extended
-// information to glog.
+// information to klog.
 //
 // This method is generic to the command in use and may be used by non-Kubectl
 // commands.
 func StandardErrorMessage(err error) (string, bool) {
 	if debugErr, ok := err.(debugError); ok {
-		glog.V(4).Infof(debugErr.DebugError())
+		klog.V(4).Infof(debugErr.DebugError())
 	}
 	status, isStatus := err.(kerrors.APIStatus)
 	switch {
@@ -214,7 +214,7 @@ func StandardErrorMessage(err error) (string, bool) {
 	}
 	switch t := err.(type) {
 	case *url.Error:
-		glog.V(4).Infof("Connection error: %s %s: %v", t.Op, t.URL, t.Err)
+		klog.V(4).Infof("Connection error: %s %s: %v", t.Op, t.URL, t.Err)
 		switch {
 		case strings.Contains(t.Err.Error(), "connection refused"):
 			host := t.URL
@@ -291,27 +291,17 @@ func messageForError(err error) string {
 
 func UsageErrorf(cmd *cobra.Command, format string, args ...interface{}) error {
 	msg := fmt.Sprintf(format, args...)
-	return fmt.Errorf("%s\nSee '%s -h' for help and examples.", msg, cmd.CommandPath())
+	return fmt.Errorf("%s\nSee '%s -h' for help and examples", msg, cmd.CommandPath())
 }
 
-func IsFilenameSliceEmpty(filenames []string) bool {
-	return len(filenames) == 0
-}
-
-// Whether this cmd need watching objects.
-func isWatch(cmd *cobra.Command) bool {
-	if w, err := cmd.Flags().GetBool("watch"); err == nil && w {
-		return true
-	}
-
-	wo, err := cmd.Flags().GetBool("watch-only")
-	return err == nil && wo
+func IsFilenameSliceEmpty(filenames []string, directory string) bool {
+	return len(filenames) == 0 && directory == ""
 }
 
 func GetFlagString(cmd *cobra.Command, flag string) string {
 	s, err := cmd.Flags().GetString(flag)
 	if err != nil {
-		glog.Fatalf("error accessing flag %s for command %s: %v", flag, cmd.Name(), err)
+		klog.Fatalf("error accessing flag %s for command %s: %v", flag, cmd.Name(), err)
 	}
 	return s
 }
@@ -320,7 +310,7 @@ func GetFlagString(cmd *cobra.Command, flag string) string {
 func GetFlagStringSlice(cmd *cobra.Command, flag string) []string {
 	s, err := cmd.Flags().GetStringSlice(flag)
 	if err != nil {
-		glog.Fatalf("error accessing flag %s for command %s: %v", flag, cmd.Name(), err)
+		klog.Fatalf("error accessing flag %s for command %s: %v", flag, cmd.Name(), err)
 	}
 	return s
 }
@@ -329,24 +319,15 @@ func GetFlagStringSlice(cmd *cobra.Command, flag string) []string {
 func GetFlagStringArray(cmd *cobra.Command, flag string) []string {
 	s, err := cmd.Flags().GetStringArray(flag)
 	if err != nil {
-		glog.Fatalf("err accessing flag %s for command %s: %v", flag, cmd.Name(), err)
+		klog.Fatalf("error accessing flag %s for command %s: %v", flag, cmd.Name(), err)
 	}
 	return s
-}
-
-// GetWideFlag is used to determine if "-o wide" is used
-func GetWideFlag(cmd *cobra.Command) bool {
-	f := cmd.Flags().Lookup("output")
-	if f != nil && f.Value != nil && f.Value.String() == "wide" {
-		return true
-	}
-	return false
 }
 
 func GetFlagBool(cmd *cobra.Command, flag string) bool {
 	b, err := cmd.Flags().GetBool(flag)
 	if err != nil {
-		glog.Fatalf("error accessing flag %s for command %s: %v", flag, cmd.Name(), err)
+		klog.Fatalf("error accessing flag %s for command %s: %v", flag, cmd.Name(), err)
 	}
 	return b
 }
@@ -355,7 +336,7 @@ func GetFlagBool(cmd *cobra.Command, flag string) bool {
 func GetFlagInt(cmd *cobra.Command, flag string) int {
 	i, err := cmd.Flags().GetInt(flag)
 	if err != nil {
-		glog.Fatalf("error accessing flag %s for command %s: %v", flag, cmd.Name(), err)
+		klog.Fatalf("error accessing flag %s for command %s: %v", flag, cmd.Name(), err)
 	}
 	return i
 }
@@ -364,7 +345,7 @@ func GetFlagInt(cmd *cobra.Command, flag string) int {
 func GetFlagInt32(cmd *cobra.Command, flag string) int32 {
 	i, err := cmd.Flags().GetInt32(flag)
 	if err != nil {
-		glog.Fatalf("error accessing flag %s for command %s: %v", flag, cmd.Name(), err)
+		klog.Fatalf("error accessing flag %s for command %s: %v", flag, cmd.Name(), err)
 	}
 	return i
 }
@@ -373,7 +354,7 @@ func GetFlagInt32(cmd *cobra.Command, flag string) int32 {
 func GetFlagInt64(cmd *cobra.Command, flag string) int64 {
 	i, err := cmd.Flags().GetInt64(flag)
 	if err != nil {
-		glog.Fatalf("error accessing flag %s for command %s: %v", flag, cmd.Name(), err)
+		klog.Fatalf("error accessing flag %s for command %s: %v", flag, cmd.Name(), err)
 	}
 	return i
 }
@@ -381,7 +362,7 @@ func GetFlagInt64(cmd *cobra.Command, flag string) int64 {
 func GetFlagDuration(cmd *cobra.Command, flag string) time.Duration {
 	d, err := cmd.Flags().GetDuration(flag)
 	if err != nil {
-		glog.Fatalf("error accessing flag %s for command %s: %v", flag, cmd.Name(), err)
+		klog.Fatalf("error accessing flag %s for command %s: %v", flag, cmd.Name(), err)
 	}
 	return d
 }
@@ -403,8 +384,23 @@ func AddValidateOptionFlags(cmd *cobra.Command, options *ValidateOptions) {
 }
 
 func AddFilenameOptionFlags(cmd *cobra.Command, options *resource.FilenameOptions, usage string) {
-	kubectl.AddJsonFilenameFlag(cmd, &options.Filenames, "Filename, directory, or URL to files "+usage)
+	AddJsonFilenameFlag(cmd.Flags(), &options.Filenames, "Filename, directory, or URL to files "+usage)
+	AddKustomizeFlag(cmd.Flags(), &options.Kustomize)
 	cmd.Flags().BoolVarP(&options.Recursive, "recursive", "R", options.Recursive, "Process the directory used in -f, --filename recursively. Useful when you want to manage related manifests organized within the same directory.")
+}
+
+func AddJsonFilenameFlag(flags *pflag.FlagSet, value *[]string, usage string) {
+	flags.StringSliceVarP(value, "filename", "f", *value, usage)
+	annotations := make([]string, 0, len(resource.FileExtensions))
+	for _, ext := range resource.FileExtensions {
+		annotations = append(annotations, strings.TrimLeft(ext, "."))
+	}
+	flags.SetAnnotation("filename", cobra.BashCompFilenameExt, annotations)
+}
+
+// AddKustomizeFlag adds kustomize flag to a command
+func AddKustomizeFlag(flags *pflag.FlagSet, value *string) {
+	flags.StringVarP(value, "kustomize", "k", *value, "Process the kustomization directory. This flag can't be used together with -f or -R.")
 }
 
 // AddDryRunFlag adds dry-run flag to a command. Usually used by mutations.
@@ -412,8 +408,15 @@ func AddDryRunFlag(cmd *cobra.Command) {
 	cmd.Flags().Bool("dry-run", false, "If true, only print the object that would be sent, without sending it.")
 }
 
+func AddServerSideApplyFlags(cmd *cobra.Command) {
+	cmd.Flags().Bool("experimental-server-side", false, "If true, apply runs in the server instead of the client. This is an alpha feature and flag.")
+	cmd.Flags().Bool("experimental-force-conflicts", false, "If true, server-side apply will force the changes against conflicts. This is an alpha feature and flag.")
+	cmd.Flags().String("experimental-field-manager", "kubectl", "Name of the manager used to track field ownership. This is an alpha feature and flag.")
+}
+
 func AddIncludeUninitializedFlag(cmd *cobra.Command) {
-	cmd.Flags().Bool(IncludeUninitializedFlag, false, `If true, the kubectl command applies to uninitialized objects. If explicitly set to false, this flag overrides other flags that make the kubectl commands apply to uninitialized objects, e.g., "--all". Objects with empty metadata.initializers are regarded as initialized.`)
+	cmd.Flags().Bool("include-uninitialized", false, `If true, the kubectl command applies to uninitialized objects. If explicitly set to false, this flag overrides other flags that make the kubectl commands apply to uninitialized objects, e.g., "--all". Objects with empty metadata.initializers are regarded as initialized.`)
+	cmd.Flags().MarkDeprecated("include-uninitialized", "The Initializers feature has been removed. This flag is now a no-op, and will be removed in v1.15")
 }
 
 func AddPodRunningTimeoutFlag(cmd *cobra.Command, defaultTimeout time.Duration) {
@@ -482,6 +485,18 @@ func DumpReaderToFile(reader io.Reader, filename string) error {
 		}
 	}
 	return nil
+}
+
+func GetServerSideApplyFlag(cmd *cobra.Command) bool {
+	return GetFlagBool(cmd, "experimental-server-side")
+}
+
+func GetForceConflictsFlag(cmd *cobra.Command) bool {
+	return GetFlagBool(cmd, "experimental-force-conflicts")
+}
+
+func GetFieldManagerFlag(cmd *cobra.Command) string {
+	return GetFlagString(cmd, "experimental-field-manager")
 }
 
 func GetDryRunFlag(cmd *cobra.Command) bool {
@@ -605,71 +620,43 @@ func ManualStrip(file []byte) []byte {
 	return stripped
 }
 
-// ShouldIncludeUninitialized identifies whether to include uninitialized objects.
-// includeUninitialized is the default value.
-// Assume we can parse `all` and `selector` from cmd.
-func ShouldIncludeUninitialized(cmd *cobra.Command, includeUninitialized bool) bool {
-	shouldIncludeUninitialized := includeUninitialized
-	if cmd.Flags().Lookup("all") != nil && GetFlagBool(cmd, "all") {
-		// include the uninitialized objects by default
-		// unless explicitly set --include-uninitialized=false
-		shouldIncludeUninitialized = true
-	}
-	if cmd.Flags().Lookup("selector") != nil && GetFlagString(cmd, "selector") != "" {
-		// does not include the uninitialized objects by default
-		// unless explicitly set --include-uninitialized=true
-		shouldIncludeUninitialized = false
-	}
-	if cmd.Flags().Changed(IncludeUninitializedFlag) {
-		// get explicit value
-		shouldIncludeUninitialized = GetFlagBool(cmd, IncludeUninitializedFlag)
-	}
-	return shouldIncludeUninitialized
-}
+// ScaleClientFunc provides a ScalesGetter
+type ScaleClientFunc func(genericclioptions.RESTClientGetter) (scale.ScalesGetter, error)
 
-// DescriberFunc gives a way to display the specified RESTMapping type
-type DescriberFunc func(restClientGetter genericclioptions.RESTClientGetter, mapping *meta.RESTMapping) (printers.Describer, error)
+// ScaleClientFn gives a way to easily override the function for unit testing if needed.
+var ScaleClientFn ScaleClientFunc = scaleClient
 
-// DescriberFn gives a way to easily override the function for unit testing if needed
-var DescriberFn DescriberFunc = describer
-
-// Returns a Describer for displaying the specified RESTMapping type or an error.
-func describer(restClientGetter genericclioptions.RESTClientGetter, mapping *meta.RESTMapping) (printers.Describer, error) {
-	clientConfig, err := restClientGetter.ToRESTConfig()
+// scaleClient gives you back scale getter
+func scaleClient(restClientGetter genericclioptions.RESTClientGetter) (scale.ScalesGetter, error) {
+	discoveryClient, err := restClientGetter.ToDiscoveryClient()
 	if err != nil {
 		return nil, err
 	}
-	// try to get a describer
-	if describer, ok := printersinternal.DescriberFor(mapping.GroupVersionKind.GroupKind(), clientConfig); ok {
-		return describer, nil
-	}
-	// if this is a kind we don't have a describer for yet, go generic if possible
-	if genericDescriber, genericErr := genericDescriber(restClientGetter, mapping); genericErr == nil {
-		return genericDescriber, nil
-	}
-	// otherwise return an unregistered error
-	return nil, fmt.Errorf("no description has been implemented for %s", mapping.GroupVersionKind.String())
-}
 
-// helper function to make a generic describer, or return an error
-func genericDescriber(restClientGetter genericclioptions.RESTClientGetter, mapping *meta.RESTMapping) (printers.Describer, error) {
 	clientConfig, err := restClientGetter.ToRESTConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	// used to fetch the resource
-	dynamicClient, err := dynamic.NewForConfig(clientConfig)
+	setKubernetesDefaults(clientConfig)
+	restClient, err := rest.RESTClientFor(clientConfig)
+	if err != nil {
+		return nil, err
+	}
+	resolver := scale.NewDiscoveryScaleKindResolver(discoveryClient)
+	mapper, err := restClientGetter.ToRESTMapper()
 	if err != nil {
 		return nil, err
 	}
 
-	// used to get events for the resource
-	clientSet, err := internalclientset.NewForConfig(clientConfig)
-	if err != nil {
-		return nil, err
-	}
+	return scale.New(restClient, mapper, dynamic.LegacyAPIPathResolverFunc, resolver), nil
+}
 
-	eventsClient := clientSet.Core()
-	return printersinternal.GenericDescriberFor(mapping, dynamicClient, eventsClient), nil
+func Warning(cmdErr io.Writer, newGeneratorName, oldGeneratorName string) {
+	fmt.Fprintf(cmdErr, "WARNING: New generator %q specified, "+
+		"but it isn't available. "+
+		"Falling back to %q.\n",
+		newGeneratorName,
+		oldGeneratorName,
+	)
 }

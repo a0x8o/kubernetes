@@ -1,8 +1,11 @@
 package(default_visibility = ["//visibility:public"])
 
 load(
+    "//build:go.bzl",
+    go_binary = "go_binary_conditional_pure",
+)
+load(
     "@io_bazel_rules_go//go:def.bzl",
-    "go_binary",
     "go_library",
     "go_test",
 )
@@ -31,7 +34,6 @@ go_library(
         "//vendor/github.com/spf13/cobra:go_default_library",
         "//vendor/github.com/spf13/cobra/doc:go_default_library",
         "//vendor/github.com/spf13/pflag:go_default_library",
-        "//vendor/k8s.io/apiserver/pkg/server:go_default_library",
     ],
 )
 

@@ -17,15 +17,20 @@ limitations under the License.
 package util
 
 import (
-	"errors"
-	"fmt"
+	"bufio"
+	"bytes"
+	"io"
 
-	yaml "gopkg.in/yaml.v2"
+	"github.com/pkg/errors"
+	"sigs.k8s.io/yaml"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	errorsutil "k8s.io/apimachinery/pkg/util/errors"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	clientsetscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/kubernetes/cmd/kubeadm/app/constants"
 )
 
 // MarshalToYaml marshals an object into yaml.
@@ -34,11 +39,13 @@ func MarshalToYaml(obj runtime.Object, gv schema.GroupVersion) ([]byte, error) {
 }
 
 // MarshalToYamlForCodecs marshals an object into yaml using the specified codec
+// TODO: Is specifying the gv really needed here?
+// TODO: Can we support json out of the box easily here?
 func MarshalToYamlForCodecs(obj runtime.Object, gv schema.GroupVersion, codecs serializer.CodecFactory) ([]byte, error) {
-	mediaType := "application/yaml"
+	const mediaType = runtime.ContentTypeYAML
 	info, ok := runtime.SerializerInfoForMediaType(codecs.SupportedMediaTypes(), mediaType)
 	if !ok {
-		return []byte{}, fmt.Errorf("unsupported media type %q", mediaType)
+		return []byte{}, errors.Errorf("unsupported media type %q", mediaType)
 	}
 
 	encoder := codecs.EncoderForVersion(info.Serializer, gv)
@@ -51,45 +58,106 @@ func UnmarshalFromYaml(buffer []byte, gv schema.GroupVersion) (runtime.Object, e
 }
 
 // UnmarshalFromYamlForCodecs unmarshals yaml into an object using the specified codec
+// TODO: Is specifying the gv really needed here?
+// TODO: Can we support json out of the box easily here?
 func UnmarshalFromYamlForCodecs(buffer []byte, gv schema.GroupVersion, codecs serializer.CodecFactory) (runtime.Object, error) {
-	mediaType := "application/yaml"
+	const mediaType = runtime.ContentTypeYAML
 	info, ok := runtime.SerializerInfoForMediaType(codecs.SupportedMediaTypes(), mediaType)
 	if !ok {
-		return nil, fmt.Errorf("unsupported media type %q", mediaType)
+		return nil, errors.Errorf("unsupported media type %q", mediaType)
 	}
 
 	decoder := codecs.DecoderToVersion(info.Serializer, gv)
 	return runtime.Decode(decoder, buffer)
 }
 
-// LoadYAML is a small wrapper around go-yaml that ensures all nested structs are map[string]interface{} instead of map[interface{}]interface{}.
-func LoadYAML(bytes []byte) (map[string]interface{}, error) {
-	var decoded map[interface{}]interface{}
-	if err := yaml.Unmarshal(bytes, &decoded); err != nil {
-		return map[string]interface{}{}, fmt.Errorf("couldn't unmarshal YAML: %v", err)
-	}
+// SplitYAMLDocuments reads the YAML bytes per-document, unmarshals the TypeMeta information from each document
+// and returns a map between the GroupVersionKind of the document and the document bytes
+func SplitYAMLDocuments(yamlBytes []byte) (map[schema.GroupVersionKind][]byte, error) {
+	gvkmap := map[schema.GroupVersionKind][]byte{}
+	knownKinds := map[string]bool{}
+	errs := []error{}
+	buf := bytes.NewBuffer(yamlBytes)
+	reader := utilyaml.NewYAMLReader(bufio.NewReader(buf))
+	for {
+		typeMetaInfo := runtime.TypeMeta{}
+		// Read one YAML document at a time, until io.EOF is returned
+		b, err := reader.Read()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+		if len(b) == 0 {
+			break
+		}
+		// Deserialize the TypeMeta information of this byte slice
+		if err := yaml.Unmarshal(b, &typeMetaInfo); err != nil {
+			return nil, err
+		}
+		// Require TypeMeta information to be present
+		if len(typeMetaInfo.APIVersion) == 0 || len(typeMetaInfo.Kind) == 0 {
+			errs = append(errs, errors.New("invalid configuration: kind and apiVersion is mandatory information that needs to be specified in all YAML documents"))
+			continue
+		}
+		// Check whether the kind has been registered before. If it has, throw an error
+		if known := knownKinds[typeMetaInfo.Kind]; known {
+			errs = append(errs, errors.Errorf("invalid configuration: kind %q is specified twice in YAML file", typeMetaInfo.Kind))
+			continue
+		}
+		knownKinds[typeMetaInfo.Kind] = true
 
-	converted, ok := convert(decoded).(map[string]interface{})
-	if !ok {
-		return map[string]interface{}{}, errors.New("yaml is not a map")
-	}
+		// Build a GroupVersionKind object from the deserialized TypeMeta object
+		gv, err := schema.ParseGroupVersion(typeMetaInfo.APIVersion)
+		if err != nil {
+			errs = append(errs, errors.Wrap(err, "unable to parse apiVersion"))
+			continue
+		}
+		gvk := gv.WithKind(typeMetaInfo.Kind)
 
-	return converted, nil
+		// Save the mapping between the gvk and the bytes that object consists of
+		gvkmap[gvk] = b
+	}
+	if err := errorsutil.NewAggregate(errs); err != nil {
+		return nil, err
+	}
+	return gvkmap, nil
 }
 
-// https://stackoverflow.com/questions/40737122/convert-yaml-to-json-without-struct-golang
-func convert(i interface{}) interface{} {
-	switch x := i.(type) {
-	case map[interface{}]interface{}:
-		m2 := map[string]interface{}{}
-		for k, v := range x {
-			m2[k.(string)] = convert(v)
-		}
-		return m2
-	case []interface{}:
-		for i, v := range x {
-			x[i] = convert(v)
+// GroupVersionKindsFromBytes parses the bytes and returns a gvk slice
+func GroupVersionKindsFromBytes(b []byte) ([]schema.GroupVersionKind, error) {
+	gvkmap, err := SplitYAMLDocuments(b)
+	if err != nil {
+		return nil, err
+	}
+	gvks := []schema.GroupVersionKind{}
+	for gvk := range gvkmap {
+		gvks = append(gvks, gvk)
+	}
+	return gvks, nil
+}
+
+// GroupVersionKindsHasKind returns whether the following gvk slice contains the kind given as a parameter
+func GroupVersionKindsHasKind(gvks []schema.GroupVersionKind, kind string) bool {
+	for _, gvk := range gvks {
+		if gvk.Kind == kind {
+			return true
 		}
 	}
-	return i
+	return false
+}
+
+// GroupVersionKindsHasClusterConfiguration returns whether the following gvk slice contains a ClusterConfiguration object
+func GroupVersionKindsHasClusterConfiguration(gvks ...schema.GroupVersionKind) bool {
+	return GroupVersionKindsHasKind(gvks, constants.ClusterConfigurationKind)
+}
+
+// GroupVersionKindsHasInitConfiguration returns whether the following gvk slice contains a InitConfiguration object
+func GroupVersionKindsHasInitConfiguration(gvks ...schema.GroupVersionKind) bool {
+	return GroupVersionKindsHasKind(gvks, constants.InitConfigurationKind)
+}
+
+// GroupVersionKindsHasJoinConfiguration returns whether the following gvk slice contains a JoinConfiguration object
+func GroupVersionKindsHasJoinConfiguration(gvks ...schema.GroupVersionKind) bool {
+	return GroupVersionKindsHasKind(gvks, constants.JoinConfigurationKind)
 }

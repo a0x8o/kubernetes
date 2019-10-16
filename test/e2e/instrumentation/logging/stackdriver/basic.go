@@ -22,6 +22,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubernetes/test/e2e/framework"
+	e2elog "k8s.io/kubernetes/test/e2e/framework/log"
 	instrumentation "k8s.io/kubernetes/test/e2e/instrumentation/common"
 	"k8s.io/kubernetes/test/e2e/instrumentation/logging/utils"
 
@@ -42,7 +43,7 @@ var _ = instrumentation.SIGDescribe("Cluster level logging implemented by Stackd
 		framework.SkipUnlessProviderIs("gce", "gke")
 	})
 
-	ginkgo.It("should ingest logs", func() {
+	ginkgo.It("should ingest logs [Feature:StackdriverLogging]", func() {
 		withLogProviderForScope(f, podsScope, func(p *sdLogProvider) {
 			ginkgo.By("Checking ingesting text logs", func() {
 				pod, err := utils.StartAndReturnSelf(utils.NewRepeatingLoggingPod("synthlogger-1", "hey"), f)
@@ -138,7 +139,7 @@ var _ = instrumentation.SIGDescribe("Cluster level logging implemented by Stackd
 		})
 	})
 
-	ginkgo.It("should ingest events", func() {
+	ginkgo.It("should ingest events [Feature:StackdriverLogging]", func() {
 		eventCreationInterval := 10 * time.Second
 
 		withLogProviderForScope(f, eventsScope, func(p *sdLogProvider) {
@@ -155,7 +156,7 @@ var _ = instrumentation.SIGDescribe("Cluster level logging implemented by Stackd
 					podName := fmt.Sprintf("synthlogger-%s", string(uuid.NewUUID()))
 					err := utils.NewLoadLoggingPod(podName, "", 1, 1*time.Second).Start(f)
 					if err != nil {
-						framework.Logf("Failed to create a logging pod: %v", err)
+						e2elog.Logf("Failed to create a logging pod: %v", err)
 					}
 					return false, nil
 				}, stopCh)

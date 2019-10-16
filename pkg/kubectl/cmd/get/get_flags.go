@@ -23,9 +23,9 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/printers"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util/openapi"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
-	"k8s.io/kubernetes/pkg/printers"
 )
 
 // PrintFlags composes common printer flag structs
@@ -33,9 +33,9 @@ import (
 type PrintFlags struct {
 	JSONYamlPrintFlags *genericclioptions.JSONYamlPrintFlags
 	NamePrintFlags     *genericclioptions.NamePrintFlags
-	TemplateFlags      *printers.KubeTemplatePrintFlags
-	CustomColumnsFlags *printers.CustomColumnsPrintFlags
+	CustomColumnsFlags *CustomColumnsPrintFlags
 	HumanReadableFlags *HumanPrintFlags
+	TemplateFlags      *genericclioptions.KubeTemplatePrintFlags
 
 	NoHeaders    *bool
 	OutputFormat *string
@@ -62,6 +62,16 @@ func (f *PrintFlags) EnsureWithKind() error {
 func (f *PrintFlags) Copy() PrintFlags {
 	printFlags := *f
 	return printFlags
+}
+
+// AllowedFormats is the list of formats in which data can be displayed
+func (f *PrintFlags) AllowedFormats() []string {
+	formats := f.JSONYamlPrintFlags.AllowedFormats()
+	formats = append(formats, f.NamePrintFlags.AllowedFormats()...)
+	formats = append(formats, f.TemplateFlags.AllowedFormats()...)
+	formats = append(formats, f.CustomColumnsFlags.AllowedFormats()...)
+	formats = append(formats, f.HumanReadableFlags.AllowedFormats()...)
+	return formats
 }
 
 // UseOpenAPIColumns modifies the output format, as well as the
@@ -108,6 +118,15 @@ func (f *PrintFlags) ToPrinter() (printers.ResourcePrinter, error) {
 	f.HumanReadableFlags.NoHeaders = noHeaders
 	f.CustomColumnsFlags.NoHeaders = noHeaders
 
+	// for "get.go" we want to support a --template argument given, even when no --output format is provided
+	if f.TemplateFlags.TemplateArgument != nil && len(*f.TemplateFlags.TemplateArgument) > 0 && len(outputFormat) == 0 {
+		outputFormat = "go-template"
+	}
+
+	if p, err := f.TemplateFlags.ToPrinter(outputFormat); !genericclioptions.IsNoCompatiblePrinterError(err) {
+		return p, err
+	}
+
 	if f.TemplateFlags.TemplateArgument != nil {
 		f.CustomColumnsFlags.TemplateArgument = *f.TemplateFlags.TemplateArgument
 	}
@@ -120,10 +139,6 @@ func (f *PrintFlags) ToPrinter() (printers.ResourcePrinter, error) {
 		return p, err
 	}
 
-	if p, err := f.TemplateFlags.ToPrinter(outputFormat); !genericclioptions.IsNoCompatiblePrinterError(err) {
-		return p, err
-	}
-
 	if p, err := f.CustomColumnsFlags.ToPrinter(outputFormat); !genericclioptions.IsNoCompatiblePrinterError(err) {
 		return p, err
 	}
@@ -132,7 +147,7 @@ func (f *PrintFlags) ToPrinter() (printers.ResourcePrinter, error) {
 		return p, err
 	}
 
-	return nil, genericclioptions.NoCompatiblePrinterError{Options: f}
+	return nil, genericclioptions.NoCompatiblePrinterError{OutputFormat: &outputFormat, AllowedFormats: f.AllowedFormats()}
 }
 
 // AddFlags receives a *cobra.Command reference and binds
@@ -150,10 +165,6 @@ func (f *PrintFlags) AddFlags(cmd *cobra.Command) {
 	if f.NoHeaders != nil {
 		cmd.Flags().BoolVar(f.NoHeaders, "no-headers", *f.NoHeaders, "When using the default or custom-column output format, don't print headers (default print headers).")
 	}
-
-	// TODO(juanvallejo): This is deprecated - remove
-	cmd.Flags().BoolP("show-all", "a", true, "When printing, show all resources (default show all pods including terminated one.)")
-	cmd.Flags().MarkDeprecated("show-all", "will be removed in an upcoming release")
 }
 
 // NewGetPrintFlags returns flags associated with humanreadable,
@@ -168,9 +179,9 @@ func NewGetPrintFlags() *PrintFlags {
 
 		JSONYamlPrintFlags: genericclioptions.NewJSONYamlPrintFlags(),
 		NamePrintFlags:     genericclioptions.NewNamePrintFlags(""),
-		TemplateFlags:      printers.NewKubeTemplatePrintFlags(),
+		TemplateFlags:      genericclioptions.NewKubeTemplatePrintFlags(),
 
 		HumanReadableFlags: NewHumanPrintFlags(),
-		CustomColumnsFlags: printers.NewCustomColumnsPrintFlags(),
+		CustomColumnsFlags: NewCustomColumnsPrintFlags(),
 	}
 }

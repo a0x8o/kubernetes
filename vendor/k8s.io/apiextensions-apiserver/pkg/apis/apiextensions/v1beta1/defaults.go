@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	utilpointer "k8s.io/utils/pointer"
 )
 
 func addDefaultingFuncs(scheme *runtime.Scheme) error {
@@ -62,5 +63,23 @@ func SetDefaults_CustomResourceDefinitionSpec(obj *CustomResourceDefinitionSpec)
 	// For backward compatibility set the version field to the first item in versions list.
 	if len(obj.Version) == 0 && len(obj.Versions) != 0 {
 		obj.Version = obj.Versions[0].Name
+	}
+	if obj.Conversion == nil {
+		obj.Conversion = &CustomResourceConversion{
+			Strategy: NoneConverter,
+		}
+	}
+	if obj.Conversion.Strategy == WebhookConverter && len(obj.Conversion.ConversionReviewVersions) == 0 {
+		obj.Conversion.ConversionReviewVersions = []string{SchemeGroupVersion.Version}
+	}
+	if obj.PreserveUnknownFields == nil {
+		obj.PreserveUnknownFields = utilpointer.BoolPtr(true)
+	}
+}
+
+// SetDefaults_ServiceReference sets defaults for Webhook's ServiceReference
+func SetDefaults_ServiceReference(obj *ServiceReference) {
+	if obj.Port == nil {
+		obj.Port = utilpointer.Int32Ptr(443)
 	}
 }

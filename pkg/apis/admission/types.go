@@ -63,7 +63,8 @@ type AdmissionRequest struct {
 	// Namespace is the namespace associated with the request (if any).
 	// +optional
 	Namespace string
-	// Operation is the operation being performed
+	// Operation is the operation being performed. This may be different than the operation
+	// requested. e.g. a patch can result in either a CREATE or UPDATE Operation.
 	Operation Operation
 	// UserInfo is information about the requesting user
 	UserInfo authentication.UserInfo
@@ -73,6 +74,18 @@ type AdmissionRequest struct {
 	// OldObject is the existing object. Only populated for UPDATE requests.
 	// +optional
 	OldObject runtime.Object
+	// DryRun indicates that modifications will definitely not be persisted for this request.
+	// Calls to webhooks must have no side effects if DryRun is true.
+	// Defaults to false.
+	// +optional
+	DryRun *bool
+	// Options is the operation option structure of the operation being performed.
+	// e.g. `meta.k8s.io/v1.DeleteOptions` or `meta.k8s.io/v1.CreateOptions`. This may be
+	// different than the options the caller provided. e.g. for a patch request the performed
+	// Operation might be a CREATE, in which case the Options will a
+	// `meta.k8s.io/v1.CreateOptions` even though the caller provided `meta.k8s.io/v1.PatchOptions`.
+	// +optional
+	Options runtime.Object
 }
 
 // AdmissionResponse describes an admission response.
@@ -92,6 +105,12 @@ type AdmissionResponse struct {
 	// PatchType indicates the form the Patch will take. Currently we only support "JSONPatch".
 	// +optional
 	PatchType *PatchType
+	// AuditAnnotations is an unstructured key value map set by remote admission controller (e.g. error=image-blacklisted).
+	// MutatingAdmissionWebhook and ValidatingAdmissionWebhook admission controller will prefix the keys with
+	// admission webhook name (e.g. imagepolicy.example.com/error=image-blacklisted). AuditAnnotations will be provided by
+	// the admission webhook to add additional context to the audit log for this request.
+	// +optional
+	AuditAnnotations map[string]string
 }
 
 // PatchType is the type of patch being used to represent the mutated object
