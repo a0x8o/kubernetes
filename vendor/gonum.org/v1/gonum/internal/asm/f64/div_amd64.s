@@ -64,7 +64,4 @@ div_tail: // do {
 
 div_end:
 	RET
-<<<<<<< HEAD
 
-=======
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

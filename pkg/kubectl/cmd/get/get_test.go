@@ -1145,11 +1145,7 @@ func TestGetMultipleTypeObjectsWithDirectReference(t *testing.T) {
 	expected := `NAME          TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
 service/baz   ClusterIP   <none>       <none>        <none>    <unknown>
 NAME       STATUS    ROLES    AGE         VERSION
-<<<<<<< HEAD
 node/foo   Unknown   <none>   <unknown>   
-=======
-node/foo   Unknown   <none>   <unknown>
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 `
 	if e, a := expected, buf.String(); e != a {
 		t.Errorf("expected\n%v\ngot\n%v", e, a)

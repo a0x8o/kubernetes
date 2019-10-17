@@ -301,11 +301,7 @@ filename | sha512 hash
     *   reflector_short_watches_total
     *   reflector_watch_duration_seconds
     *   reflector_watches_total
-<<<<<<< HEAD
     * While this is a backwards-incompatible change, it would have been impossible to setup reliable monitoring around these metrics since the labels were not stable. 
-=======
-    * While this is a backwards-incompatible change, it would have been impossible to setup reliable monitoring around these metrics since the labels were not stable.
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 * Fix keymutex issues which may crash in some platforms. ([#74386](https://github.com/kubernetes/kubernetes/pull/74386), [@danielqsj](https://github.com/danielqsj))
 
 
@@ -2197,7 +2193,4 @@ filename | sha256 hash
 * Fix kubectl drain --timeout option when eviction is used. ([#64378](https://github.com/kubernetes/kubernetes/pull/64378), [@wrdls](https://github.com/wrdls))
 * This PR will leverage subtests on the existing table tests for the scheduler units. ([#63659](https://github.com/kubernetes/kubernetes/pull/63659), [@xchapter7x](https://github.com/xchapter7x))
     * Some refactoring of error/status messages and functions to align with new approach.
-<<<<<<< HEAD
 
-=======
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

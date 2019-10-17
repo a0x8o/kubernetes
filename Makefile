@@ -81,11 +81,7 @@ define ALL_HELP_INFO
 #   make all GOLDFLAGS=""
 #     Note: Specify GOLDFLAGS as an empty string for building unstripped binaries, which allows
 #           you to use code debugging tools like delve. When GOLDFLAGS is unspecified, it defaults
-<<<<<<< HEAD
 #           to "-s -w" which strips debug information. Other flags that can be used for GOLDFLAGS 
-=======
-#           to "-s -w" which strips debug information. Other flags that can be used for GOLDFLAGS
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 #           are documented at https://golang.org/cmd/link/
 endef
 .PHONY: all
@@ -294,22 +290,13 @@ define TEST_E2E_KUBEADM_HELP_INFO
 #  RUN_UNTIL_FAILURE: If true, pass --untilItFails to ginkgo so tests are run
 #    repeatedly until they fail. Defaults to false.
 #  ARTIFACTS: Local directory to save test artifacts into. Defaults to "/tmp/_artifacts".
-<<<<<<< HEAD
 #  PARALLELISM: The number of gingko nodes to run.  If empty ginkgo default 
-=======
-#  PARALLELISM: The number of gingko nodes to run.  If empty ginkgo default
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 #    parallelism (cores - 1) is used
 #  BUILD: Build kubeadm end-to-end tests. Defaults to true.
 #
 # Example:
-<<<<<<< HEAD
 #   make test-e2e-kubeadm 
 #   make test-e2e-kubeadm FOCUS=kubeadm-config 
-=======
-#   make test-e2e-kubeadm
-#   make test-e2e-kubeadm FOCUS=kubeadm-config
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 #   make test-e2e-kubeadm SKIP=kubeadm-config
 #
 # Build and run tests.
@@ -319,11 +306,7 @@ ifeq ($(PRINT_HELP),y)
 test-e2e-kubeadm:
 	@echo "$$TEST_E2E_KUBEADM_HELP_INFO"
 else
-<<<<<<< HEAD
 test-e2e-kubeadm: 
-=======
-test-e2e-kubeadm:
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 	hack/make-rules/test-e2e-kubeadm.sh
 endif
 

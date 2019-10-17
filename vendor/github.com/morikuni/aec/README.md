@@ -12,13 +12,8 @@ go get github.com/morikuni/aec
 
 ## Features
 
-<<<<<<< HEAD
 ANSI escape codes depend on terminal environment.  
 Some of these features may not work.  
-=======
-ANSI escape codes depend on terminal environment.
-Some of these features may not work.
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 Check supported Font-Style/Font-Color features with [checkansi](./checkansi).
 
 [Wikipedia](https://en.wikipedia.org/wiki/ANSI_escape_code) for more detail.
@@ -179,8 +174,5 @@ func main() {
 ## License
 
 [MIT](./LICENSE)
-<<<<<<< HEAD
 
 
-=======
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

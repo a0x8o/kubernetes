@@ -16,10 +16,6 @@ install:
 
 script:
  - make test
-<<<<<<< HEAD
  
-=======
-
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 after_success:
   - bash <(curl -s https://codecov.io/bash)

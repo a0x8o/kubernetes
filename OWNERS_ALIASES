@@ -353,27 +353,16 @@ aliases:
 
   # api-reviewers targeted by sig area
   # see https://git.k8s.io/community/sig-architecture/api-review-process.md#training-reviews
-<<<<<<< HEAD
   
-=======
-
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
   sig-api-machinery-api-reviewers:
     - caesarxuchao
     - deads2k
     - jpbetz
     - sttts
-<<<<<<< HEAD
   
   # sig-apps-api-reviewers:
   #   - 
   #   - 
-=======
-
-  # sig-apps-api-reviewers:
-  #   -
-  #   -
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 
   sig-auth-api-reviewers:
     - enj
@@ -386,47 +375,27 @@ aliases:
   sig-cloud-provider-api-reviewers:
     - andrewsykim
     - cheftako
-<<<<<<< HEAD
   
   # sig-cluster-lifecycle-api-reviewers:
   #   - 
   #   -
   
-=======
-
-  # sig-cluster-lifecycle-api-reviewers:
-  #   -
-  #   -
-
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
   sig-node-api-reviewers:
     - dchen1107
     - derekwaynecarr
     - tallclair
     - yujuhong
-<<<<<<< HEAD
   
   sig-scheduling-api-reviewers:
       - bsalamat
       - k82cn
   
-=======
-
-  sig-scheduling-api-reviewers:
-      - bsalamat
-      - k82cn
-
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
   sig-storage-api-reviewers:
     - saad-ali
     - msau42
     - jsafrane
 
-<<<<<<< HEAD
   
-=======
-
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
   sig-windows-api-reviewers:
     - patricklang
     - michmike

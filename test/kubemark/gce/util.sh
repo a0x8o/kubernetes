@@ -149,11 +149,7 @@ function delete-master-instance-and-resources {
 
   if [ "${SEPARATE_EVENT_MACHINE:-false}" == "true" ]; then
 	  gcloud compute instances delete "${EVENT_STORE_NAME}" \
-<<<<<<< HEAD
     	  "${GCLOUD_COMMON_ARGS[@]}" || true
-=======
-	  "${GCLOUD_COMMON_ARGS[@]}" || true
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 
 	  gcloud compute disks delete "${EVENT_STORE_NAME}-pd" \
         "${GCLOUD_COMMON_ARGS[@]}" || true

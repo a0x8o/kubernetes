@@ -31,7 +31,4 @@ spec:
             path: /var/lib/kubelet/plugins/csi-mock
             type: DirectoryOrCreate
           name: socket-dir
-<<<<<<< HEAD
 
-=======
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

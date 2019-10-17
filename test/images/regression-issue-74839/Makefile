@@ -24,7 +24,4 @@ export
 .PHONY: bin
 bin:
 	../image-util.sh bin $(SRCS)
-<<<<<<< HEAD
 
-=======
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

@@ -48,7 +48,4 @@ else
   } >&2
   exit 1
 fi
-<<<<<<< HEAD
 
-=======
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

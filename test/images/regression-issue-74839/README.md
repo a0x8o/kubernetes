@@ -10,8 +10,5 @@ RSTing the connection.
 ## Reference
 
 https://github.com/kubernetes/kubernetes/issues/74839
-<<<<<<< HEAD
 
 
-=======
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

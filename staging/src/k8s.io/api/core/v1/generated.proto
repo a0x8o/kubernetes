@@ -4864,7 +4864,4 @@ message WeightedPodAffinityTerm {
 // WindowsSecurityContextOptions contain Windows-specific options and credentials.
 message WindowsSecurityContextOptions {
 }
-<<<<<<< HEAD
 
-=======
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

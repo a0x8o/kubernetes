@@ -35,13 +35,8 @@ kube::golang::verify_go_version
 kube::util::require-jq
 
 outdated=$(go list -m -json all | jq -r '
-<<<<<<< HEAD
   select(.Replace.Version != null) | 
   select(.Version != .Replace.Version) | 
-=======
-  select(.Replace.Version != null) |
-  select(.Version != .Replace.Version) |
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
   "\(.Path)
     pinned:    \(.Replace.Version)
     preferred: \(.Version)

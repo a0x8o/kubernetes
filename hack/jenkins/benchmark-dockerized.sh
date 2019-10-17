@@ -22,11 +22,7 @@ set -o xtrace
 retry() {
   for i in {1..5}; do
     if "$@"
-<<<<<<< HEAD
     then      
-=======
-    then
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
       return 0
     else
       sleep "${i}"

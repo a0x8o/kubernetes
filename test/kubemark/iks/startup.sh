@@ -165,19 +165,11 @@ EOF
   # Create kubemark namespace.
   spawn-config
   if kubectl get ns | grep -Fq "kubemark"; then
-<<<<<<< HEAD
   	 kubectl delete ns kubemark
   	 while kubectl get ns | grep -Fq "kubemark"
   	 do
   	 	sleep 10
   	 done
-=======
-	 kubectl delete ns kubemark
-	 while kubectl get ns | grep -Fq "kubemark"
-	 do
-		sleep 10
-	 done
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
   fi
   "${KUBECTL}" create -f "${RESOURCE_DIRECTORY}/kubemark-ns.json"
   # Create configmap for configuring hollow- kubelet, proxy and npd.

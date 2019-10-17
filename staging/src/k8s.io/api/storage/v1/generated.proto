@@ -183,7 +183,4 @@ message VolumeError {
   // +optional
   optional string message = 2;
 }
-<<<<<<< HEAD
 
-=======
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

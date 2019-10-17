@@ -27,11 +27,7 @@ if kube::test::if_supports_resource "${replicasets}" ; then
 fi
 ```
 
-<<<<<<< HEAD
 Be sure to validate any supported resouces required for the test by using the `kube::test::if_supports_resource` function. 
-=======
-Be sure to validate any supported resouces required for the test by using the `kube::test::if_supports_resource` function.
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 
 
 ### New File

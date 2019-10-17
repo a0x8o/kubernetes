@@ -39,7 +39,4 @@ osd max object namespace len = 64
 [osd.0]
 osd host = cephbox
 " > /etc/ceph/ceph.conf
-<<<<<<< HEAD
 
-=======
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

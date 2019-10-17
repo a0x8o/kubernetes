@@ -246,7 +246,4 @@ message PolicyRule {
   // +optional
   repeated string omitStages = 8;
 }
-<<<<<<< HEAD
 
-=======
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

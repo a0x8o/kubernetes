@@ -9,11 +9,7 @@
 
 package hcsschema
 
-<<<<<<< HEAD
 //   By default the basic properties will be returned. This query provides a way to  request specific properties. 
-=======
-//   By default the basic properties will be returned. This query provides a way to  request specific properties.
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 type PropertyQuery struct {
 
 	PropertyTypes []string `json:"PropertyTypes,omitempty"`

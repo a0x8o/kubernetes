@@ -274,7 +274,4 @@ The return code is:
   * `edit/fix.go`:  Functions for various fixes for the `buildozer 'fix <fix(es)>'`
    command, like cleaning unused loads, changing labels to canonical notation, etc.
   * `edit/types.go`: Type information for attributes
-<<<<<<< HEAD
 
-=======
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

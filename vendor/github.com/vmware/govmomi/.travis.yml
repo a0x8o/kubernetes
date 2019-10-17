@@ -35,11 +35,7 @@ jobs:
     - <<:            *lint-stage
       env:           LINTER=goimports
 
-<<<<<<< HEAD
     # The "build" stage verifies the program can be built against the 
-=======
-    # The "build" stage verifies the program can be built against the
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     # various GOOS and GOARCH combinations found in the Go releaser
     # config file, ".goreleaser.yml".
     - &build-stage

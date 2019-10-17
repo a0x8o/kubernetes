@@ -25,11 +25,7 @@ Custom Information - if you're copying this template for the first time you can 
 
 ## Contact Information
 
-<<<<<<< HEAD
 - [Slack channel](https://kubernetes.slack.com/messages/kubernetes-users) - Replace `kubernetes-users` with your slack channel string, this will send users directly to your channel. 
-=======
-- [Slack channel](https://kubernetes.slack.com/messages/kubernetes-users) - Replace `kubernetes-users` with your slack channel string, this will send users directly to your channel.
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 - [Mailing list](URL)
 
 -->

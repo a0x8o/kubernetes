@@ -55,7 +55,4 @@ l1_end:
 	ADDSD  X3, X2         // X2 = X3[1] + X3[0]
 	MOVSD  X2, ret+48(FP) // return X2
 	RET
-<<<<<<< HEAD
 
-=======
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

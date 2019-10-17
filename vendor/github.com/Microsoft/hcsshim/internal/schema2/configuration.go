@@ -34,7 +34,6 @@ var (
 	ContextAccessToken 	= contextKey("accesstoken")
 
 	// ContextAPIKey takes an APIKey as authentication for the request
-<<<<<<< HEAD
  	ContextAPIKey 		= contextKey("apikey")
 )
 
@@ -42,15 +41,6 @@ var (
 type BasicAuth struct {
 	UserName      string            `json:"userName,omitempty"`
 	Password      string            `json:"password,omitempty"`	
-=======
-	ContextAPIKey 		= contextKey("apikey")
-)
-
-// BasicAuth provides basic http authentication to a request passed via context using ContextBasicAuth
-type BasicAuth struct {
-	UserName      string            `json:"userName,omitempty"`
-	Password      string            `json:"password,omitempty"`
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 }
 
 // APIKey provides API key based authentication to a request passed via context using ContextAPIKey

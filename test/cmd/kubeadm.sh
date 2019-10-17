@@ -28,11 +28,7 @@ run_kubeadm_tests() {
   # comment this out to save yourself from needlessly building here.
   make -C "${KUBE_ROOT}" WHAT=cmd/kubeadm
 
-<<<<<<< HEAD
   #TODO(runyontr): Remove the the KUBE_TIMEOUT override when 
-=======
-  #TODO(runyontr): Remove the the KUBE_TIMEOUT override when
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
   # kubernetes/kubeadm/issues/1430 is fixed
   make -C "${KUBE_ROOT}" test \
   WHAT=k8s.io/kubernetes/cmd/kubeadm/test/cmd \

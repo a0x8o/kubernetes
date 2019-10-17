@@ -9,11 +9,7 @@ well as for calculating & applying [RFC7396 JSON merge patches](https://tools.ie
 
 # Get It!
 
-<<<<<<< HEAD
 **Latest and greatest**: 
-=======
-**Latest and greatest**:
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 ```bash
 go get -u github.com/evanphx/json-patch
 ```
@@ -44,15 +40,9 @@ go get -u github.com/evanphx/json-patch
 
 ## Create and apply a merge patch
 Given both an original JSON document and a modified JSON document, you can create
-<<<<<<< HEAD
 a [Merge Patch](https://tools.ietf.org/html/rfc7396) document. 
 
 It can describe the changes needed to convert from the original to the 
-=======
-a [Merge Patch](https://tools.ietf.org/html/rfc7396) document.
-
-It can describe the changes needed to convert from the original to the
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 modified JSON document.
 
 Once you have a merge patch, you can apply it to other JSON documents using the
@@ -96,11 +86,7 @@ updated tina doc: {"age":28,"name":"Jane"}
 ```
 
 ## Create and apply a JSON Patch
-<<<<<<< HEAD
 You can create patch objects using `DecodePatch([]byte)`, which can then 
-=======
-You can create patch objects using `DecodePatch([]byte)`, which can then
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 be applied against JSON documents.
 
 The following is an example of creating a patch from two operations, and
@@ -147,15 +133,9 @@ Modified document: {"age":24,"name":"Jane"}
 
 ## Comparing JSON documents
 Due to potential whitespace and ordering differences, one cannot simply compare
-<<<<<<< HEAD
 JSON strings or byte-arrays directly. 
 
 As such, you can instead use `jsonpatch.Equal(document1, document2)` to 
-=======
-JSON strings or byte-arrays directly.
-
-As such, you can instead use `jsonpatch.Equal(document1, document2)` to
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 determine if two JSON documents are _structurally_ equal. This ignores
 whitespace differences, and key-value ordering.
 
@@ -197,20 +177,12 @@ $ go run main.go
 ```
 
 ## Combine merge patches
-<<<<<<< HEAD
 Given two JSON merge patch documents, it is possible to combine them into a 
-=======
-Given two JSON merge patch documents, it is possible to combine them into a
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 single merge patch which can describe both set of changes.
 
 The resulting merge patch can be used such that applying it results in a
 document structurally similar as merging each merge patch to the document
-<<<<<<< HEAD
 in succession. 
-=======
-in succession.
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 
 ```go
 package main
@@ -270,13 +242,8 @@ combined merge patch: {"age":4.23,"eyes":"blue","height":null,"name":"Jane"}
 # CLI for comparing JSON documents
 You can install the commandline program `json-patch`.
 
-<<<<<<< HEAD
 This program can take multiple JSON patch documents as arguments, 
 and fed a JSON document from `stdin`. It will apply the patch(es) against 
-=======
-This program can take multiple JSON patch documents as arguments,
-and fed a JSON document from `stdin`. It will apply the patch(es) against
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 the document and output the modified doc.
 
 **patch.1.json**
@@ -326,9 +293,5 @@ Contributors can run tests using:
 go test -cover ./...
 ```
 
-<<<<<<< HEAD
 Builds for pull requests are tested automatically 
-=======
-Builds for pull requests are tested automatically
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 using [TravisCI](https://travis-ci.org/evanphx/json-patch).

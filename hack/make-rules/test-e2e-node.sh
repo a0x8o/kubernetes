@@ -38,11 +38,7 @@ extra_envs=${EXTRA_ENVS:-}
 
 # Parse the flags to pass to ginkgo
 ginkgoflags=""
-<<<<<<< HEAD
 if [[ ${parallelism} -gt 1 ]]; then  
-=======
-if [[ ${parallelism} -gt 1 ]]; then
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
   ginkgoflags="${ginkgoflags} -nodes=${parallelism} "
 fi
 

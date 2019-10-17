@@ -91,11 +91,7 @@ function get_bin() {
     locations+=( "${line}" )
   done < <(find "${KUBE_ROOT}/bazel-bin/${srcdir}" -type f -executable \
     -path "*/${host_os}_${host_arch}*/${bin}" 2>/dev/null || true)
-<<<<<<< HEAD
   
-=======
-
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
   (ls -t "${locations[@]}" 2>/dev/null || true) | head -1
 }
 

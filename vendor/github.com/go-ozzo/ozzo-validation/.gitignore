@@ -22,8 +22,4 @@ _testmain.go
 *.exe
 *.test
 *.prof
-<<<<<<< HEAD
 .DS_Store
-=======
-.DS_Store
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes

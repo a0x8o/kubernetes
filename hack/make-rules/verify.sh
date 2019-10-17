@@ -191,11 +191,7 @@ function missing-target-checks {
   for v in "${TARGET_LIST[@]}"
   do
     [[ -z "${v}" ]] && continue
-<<<<<<< HEAD
       
-=======
-
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     FAILED_TESTS+=("${v}")
     ret=1
   done

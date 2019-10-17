@@ -99,17 +99,10 @@ function group_replace_directives() {
      /^replace [(]/      { inreplace=1; next                   }
      inreplace && /^[)]/ { inreplace=0; next                   }
      inreplace           { print > \"${go_mod_replace}\"; next }
-<<<<<<< HEAD
      
      # print ungrouped replace directives with the replace directive trimmed
      /^replace [^(]/ { sub(/^replace /,\"\"); print > \"${go_mod_replace}\"; next }
      
-=======
-
-     # print ungrouped replace directives with the replace directive trimmed
-     /^replace [^(]/ { sub(/^replace /,\"\"); print > \"${go_mod_replace}\"; next }
-
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
      # otherwise print to the noreplace file
      { print > \"${go_mod_noreplace}\" }
   "
@@ -139,11 +132,7 @@ function add_generated_comments() {
   echo "${comments}"         >  go.mod
   echo ""                    >> go.mod
   cat "${go_mod_nocomments}" >> go.mod
-<<<<<<< HEAD
   
-=======
-
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
   # Format
   go mod edit -fmt
 }
@@ -231,11 +220,7 @@ for repo in $(cat "${TMP_DIR}/tidy_unordered.txt"); do
     echo "=== computing tools imports for ${repo}" >> "${LOG_FILE}"
     go list -tags=tools all >>"${LOG_FILE}" 2>&1
 
-<<<<<<< HEAD
     # capture module dependencies 
-=======
-    # capture module dependencies
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
     go list -m -f '{{if not .Main}}{{.Path}}{{end}}' all > "${tmp_go_deps}"
 
     # restore the original go.mod file
@@ -258,7 +243,6 @@ for repo in $(tsort "${TMP_DIR}/tidy_deps.txt"); do
 
     # prune replace directives that pin to the naturally selected version.
     # do this before tidying, since tidy removes unused modules that
-<<<<<<< HEAD
     # don't provide any relevant packages, which forgets which version of the 
     # unused transitive dependency we had a require directive for,
     # and prevents pruning the matching replace directive after tidying.
@@ -266,15 +250,6 @@ for repo in $(tsort "${TMP_DIR}/tidy_deps.txt"); do
       jq -r 'select(.Replace != null) | 
              select(.Path == .Replace.Path) | 
              select(.Version == .Replace.Version) | 
-=======
-    # don't provide any relevant packages, which forgets which version of the
-    # unused transitive dependency we had a require directive for,
-    # and prevents pruning the matching replace directive after tidying.
-    go list -m -json all |
-      jq -r 'select(.Replace != null) |
-             select(.Path == .Replace.Path) |
-             select(.Version == .Replace.Version) |
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
              "-dropreplace \(.Replace.Path)"' |
     xargs -L 100 go mod edit -fmt
 
@@ -297,15 +272,9 @@ $(go mod why ${loopback_deps})"
 
     # prune replace directives that pin to the naturally selected version
     go list -m -json all |
-<<<<<<< HEAD
       jq -r 'select(.Replace != null) | 
              select(.Path == .Replace.Path) | 
              select(.Version == .Replace.Version) | 
-=======
-      jq -r 'select(.Replace != null) |
-             select(.Path == .Replace.Path) |
-             select(.Version == .Replace.Version) |
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
              "-dropreplace \(.Replace.Path)"' |
     xargs -L 100 go mod edit -fmt
 

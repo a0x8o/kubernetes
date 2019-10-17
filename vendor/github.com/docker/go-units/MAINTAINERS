@@ -34,11 +34,7 @@
 	Name = "Daniel Nephin"
 	Email = "dnephin@gmail.com"
 	GitHub = "dnephin"
-<<<<<<< HEAD
 	
-=======
-
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 	[people.thajeztah]
 	Name = "Sebastiaan van Stijn"
 	Email = "github@gone.nl"

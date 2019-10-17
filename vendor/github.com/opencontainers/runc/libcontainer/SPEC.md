@@ -249,11 +249,7 @@ that is allocated is also dependent on the CPU model and can be looked up at
 min_bw + N * bw_gran. Intermediate values are rounded to the next control
 step available on the hardware.
 
-<<<<<<< HEAD
 For more information about Intel RDT kernel interface:  
-=======
-For more information about Intel RDT kernel interface:
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 https://www.kernel.org/doc/Documentation/x86/intel_rdt_ui.txt
 
 ```

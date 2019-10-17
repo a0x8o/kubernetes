@@ -68,11 +68,7 @@ function run_kube_apiserver() {
 }
 
 # Runs run_kube_controller_manager
-<<<<<<< HEAD
 # 
-=======
-#
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 # Exports:
 #   CTLRMGR_PID
 function run_kube_controller_manager() {
@@ -92,11 +88,7 @@ function run_kube_controller_manager() {
 
 # Creates a node object with name 127.0.0.1. This is required because we do not
 # run kubelet.
-<<<<<<< HEAD
 # 
-=======
-#
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
 # Exports:
 #   SUPPORTED_RESOURCES(Array of all resources supported by the apiserver).
 function create_node() {
@@ -121,11 +113,7 @@ __EOF__
 # 2) $WHAT is not empty and kubeadm is part of $WHAT
 WHAT=${WHAT:-}
 if [[ ${WHAT} == "" || ${WHAT} =~ .*kubeadm.* ]] ; then
-<<<<<<< HEAD
   kube::log::status "Running kubeadm tests"  
-=======
-  kube::log::status "Running kubeadm tests"
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
   run_kubeadm_tests
   # if we ONLY want to run kubeadm, then exit here.
   if [[ ${WHAT} == "kubeadm" ]]; then

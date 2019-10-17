@@ -25,7 +25,4 @@ Go implementation of the LAPACK API (incomplete, implements the `float64` API).
 
 Wrappers for an implementation of the double (i.e., `float64`) precision real parts of
 the LAPACK API.
-<<<<<<< HEAD
 
-=======
->>>>>>> Merge branch 'master' of https://github.com/kubernetes/kubernetes
